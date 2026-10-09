@@ -10,7 +10,7 @@ Native Expo/React Native client of the Consuela family dashboard, designed for o
 | React Native | 0.86.3 |
 | React | 19.2.3 |
 | Node (dev machine) | v24.13.1 |
-| Package manager | npm (dev deps installed once with `--legacy-peer-deps`; `react-test-renderer` pinned to 19.2.3 to match React) |
+| Package manager | npm (dev deps installed once with `--legacy-peer-deps`; `react-test-renderer` pinned to 19.2.3 to match React, `@react-native/jest-preset` pinned to 0.86.3 to match RN) |
 
 ## Toolchain rules
 

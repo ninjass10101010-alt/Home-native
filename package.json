@@ -22,11 +22,12 @@
     "react-native-screens": "~4.26.0"
   },
   "devDependencies": {
-    "@testing-library/jest-native": "^5.4.3",
+    "@react-native/jest-preset": "^0.86.3",
     "@testing-library/react-native": "^14.1.0",
     "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.5",
     "@types/react": "~19.2.2",
-    "eslint": "^10.12.0",
+    "eslint": "^9.39.5",
     "eslint-config-expo": "^57.0.2",
     "jest-expo": "^57.0.5",
     "playwright": "^1.64.0",
@@ -37,7 +38,16 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "jest --watchAll=false && npm run tokens:check",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "tokens:gen": "node scripts/gen-tokens.mjs",
+    "tokens:check": "node scripts/check-token-literals.mjs --check",
+    "push:safe": "bash scripts/security/push-safe.sh"
   },
-  "private": true
+  "private": true,
+  "jest": {
+    "preset": "jest-expo"
+  }
 }
