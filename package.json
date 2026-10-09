@@ -43,7 +43,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "tokens:gen": "node scripts/gen-tokens.mjs",
-    "tokens:check": "node scripts/check-token-literals.mjs --check",
+    "tokens:check": "node scripts/check-token-literals.mjs --check && node scripts/gen-tokens.mjs --check",
     "push:safe": "bash scripts/security/push-safe.sh"
   },
   "private": true,
