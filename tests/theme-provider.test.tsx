@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
 import { renderHook, act, waitFor } from "@testing-library/react-native";
 import { AccessibilityInfo } from "react-native";

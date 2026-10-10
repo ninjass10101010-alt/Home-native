@@ -20,6 +20,8 @@ const ALLOW = new Set([
   // Token-level descriptor tables (the .material-* CSS-class contract is not a
   // custom property, so the generator can't emit it). Specular helpers too.
   "src/theme/materials.ts",
+  // Token math (zero-alpha sentinel string is a helper, not a design color).
+  "src/theme/mix.ts",
 ]);
 const PATTERN = /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+/g;
 const COMMENT_LINE = /^\s*(\/\/|\/\*|\*)/;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import { render } from "@testing-library/react-native";
 import React from "react";
 import { Text } from "react-native";
@@ -5,7 +6,6 @@ import { MATERIALS, specularOpacity } from "../src/theme/materials";
 import { Material } from "../src/theme/Material";
 import { perfTier } from "../src/theme/perf";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
-import { TOKENS } from "../src/theme/tokens";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")

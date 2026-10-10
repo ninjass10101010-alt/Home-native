@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports, import/first -- jest.mock factories hoist; mocks stay visibly on top */
 jest.mock("../src/theme/perf", () => ({ perfTier: () => "reduced" }));
 
 import { render } from "@testing-library/react-native";
