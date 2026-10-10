@@ -19,13 +19,15 @@ import { TasksWidget } from "../src/home/widgets/TasksWidget";
 import { TodayEventsWidget } from "../src/home/widgets/TodayEventsWidget";
 import { CurrentMealWidget } from "../src/home/widgets/CurrentMealWidget";
 import { BriefingWidget } from "../src/home/widgets/BriefingWidget";
+import { WeatherWidget } from "../src/home/widgets/WeatherWidget";
 
-/** Wave 1 Task 2 live widgets; the rest of the wall keeps honest placeholders. */
+/** Wave 1 live widgets; the rest of the wall keeps honest placeholders. */
 const WALL_WIDGETS: Partial<Record<WidgetId, React.ComponentType>> = {
   tasks: TasksWidget,
   todayEvents: TodayEventsWidget,
   currentMeal: CurrentMealWidget,
   morningBriefing: BriefingWidget,
+  weather: WeatherWidget,
 };
 
 const WRONG_PIN_COPY = "Wrong PIN — try again.";

@@ -64,12 +64,22 @@ export interface WidgetData<T> {
   retry: () => void;
 }
 
+export interface WidgetDataOptions {
+  /**
+   * Public widgets (weather — client-direct Open-Meteo) render for the
+   * signed-out wall too; every session-backed widget keeps the PIN gate.
+   * The reference guest capture shows the weather card live.
+   */
+  guestVisible?: boolean;
+}
+
 /**
  * The Wave 1 widget read contract: fetch on mount + on every SyncManager pulse,
  * classify failures honestly, keep last-good data badged instead of hiding it.
- * A signed-out wall short-circuits to the PIN gate WITHOUT firing doomed 401s.
+ * A signed-out wall short-circuits to the PIN gate WITHOUT firing doomed 401s
+ * (unless the data source is public — guestVisible).
  */
-export function useWidgetData<T>(load: () => Promise<T>): WidgetData<T> {
+export function useWidgetData<T>(load: () => Promise<T>, opts: WidgetDataOptions = {}): WidgetData<T> {
   const { member, hydrated } = useAuth();
   const sync = useSync();
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -98,18 +108,19 @@ export function useWidgetData<T>(load: () => Promise<T>): WidgetData<T> {
   }, []);
 
   useEffect(() => {
-    if (!hydrated || !member) return; // the guest gate is derived below, not stored
+    if (!hydrated) return;
+    if (!member && !opts.guestVisible) return; // session widgets: no doomed 401s for guests
     void run();
     return sync.onPulse(() => void run());
-  }, [hydrated, member, run, sync]);
+  }, [hydrated, member, run, sync, opts.guestVisible]);
 
   const retry = useCallback(() => {
-    void sync.refreshNow();
+    if (!opts.guestVisible) void sync.refreshNow();
     void run();
-  }, [sync, run]);
+  }, [sync, run, opts.guestVisible]);
 
-  // Signed-out wall: no doomed 401s — every widget lands on the PIN gate.
-  const guest = hydrated && !member;
+  // Signed-out wall: session widgets land on the PIN gate; guestVisible ones render.
+  const guest = hydrated && !member && !opts.guestVisible;
   return {
     status: guest ? "error" : status,
     data: guest ? null : data,
