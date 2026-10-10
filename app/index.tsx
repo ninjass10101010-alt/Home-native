@@ -14,6 +14,19 @@ import { useAuth, pinRequiredFor } from "../src/state/AuthProvider";
 import { listMembersSmart, type MembersResult } from "../src/api/members";
 import { ApiError } from "../src/api/client";
 import { PinRequired } from "../src/api/auth";
+import type { WidgetId } from "../src/home/widgets";
+import { TasksWidget } from "../src/home/widgets/TasksWidget";
+import { TodayEventsWidget } from "../src/home/widgets/TodayEventsWidget";
+import { CurrentMealWidget } from "../src/home/widgets/CurrentMealWidget";
+import { BriefingWidget } from "../src/home/widgets/BriefingWidget";
+
+/** Wave 1 Task 2 live widgets; the rest of the wall keeps honest placeholders. */
+const WALL_WIDGETS: Partial<Record<WidgetId, React.ComponentType>> = {
+  tasks: TasksWidget,
+  todayEvents: TodayEventsWidget,
+  currentMeal: CurrentMealWidget,
+  morningBriefing: BriefingWidget,
+};
 
 const WRONG_PIN_COPY = "Wrong PIN — try again.";
 const UNREACHABLE_COPY = "Couldn't reach Consuela — check the connection and try again.";
@@ -89,6 +102,7 @@ export default function HomePlaceholder() {
         members={roster.members}
         onSelectMember={(m) => void onSelect(m)}
         onSignOut={member ? () => void signOut() : undefined}
+        widgets={WALL_WIDGETS}
       />
       {roster.source !== "live" || railError ? (
         <View style={{ position: "absolute", top: 12, left: 24, right: 24, alignItems: "center" }}>
