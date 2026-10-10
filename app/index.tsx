@@ -2,11 +2,12 @@ import React from "react";
 import { Text, View } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 import { Screen } from "../src/theme/Screen";
+import { HomeWall } from "../src/home/HomeWall";
 import { CapsuleDock } from "../src/nav/CapsuleDock";
 import { MoreSheet } from "../src/nav/MoreSheet";
 import { useTheme } from "../src/theme/ThemeProvider";
 import { TYPOGRAPHY } from "../src/theme/tokens";
-import { MemberRail, type RailMember } from "../src/ui/MemberRail";
+import { type RailMember } from "../src/ui/MemberRail";
 import { PinPad } from "../src/ui/PinPad";
 import { Modal } from "../src/ui/Modal";
 import { useAuth, pinRequiredFor } from "../src/state/AuthProvider";
@@ -84,43 +85,27 @@ export default function HomePlaceholder() {
 
   return (
     <Screen>
-      <View style={{ paddingTop: 16, paddingHorizontal: 24 }}>
-        <MemberRail
-          members={roster.members}
-          currentName={member?.name ?? null}
-          onSelect={(m) => void onSelect(m)}
-          onSignOut={member ? () => void signOut() : undefined}
-        />
-      </View>
-
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
-        <Text style={{ fontSize: 40 }}>🏠</Text>
-        <Text
-          style={{
-            color: colors["color-text-primary"],
-            fontSize: TYPOGRAPHY.title.fontSize,
-            fontWeight: "700",
-          }}
-        >
-          Consuela
-        </Text>
-        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>
-          {member ? `Hi ${member.name.split(" ")[0]} — Home builds in Wave 1.` : "Home builds in Wave 1 — tap your picture to sign in."}
-        </Text>
-        {roster.source !== "live" ? (
-          <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
-            offline roster (cached)
-          </Text>
-        ) : null}
-        {railError ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, textAlign: "center" }}
-          >
-            {railError}
-          </Text>
-        ) : null}
-      </View>
+      <HomeWall
+        members={roster.members}
+        onSelectMember={(m) => void onSelect(m)}
+        onSignOut={member ? () => void signOut() : undefined}
+      />
+      {roster.source !== "live" || railError ? (
+        <View style={{ position: "absolute", top: 12, left: 24, right: 24, alignItems: "center" }}>
+          {railError ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, textAlign: "center" }}
+            >
+              {railError}
+            </Text>
+          ) : (
+            <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
+              offline roster (cached)
+            </Text>
+          )}
+        </View>
+      ) : null}
 
       <CapsuleDock
         role={member ? (member.role === "parent" ? "parent" : "child") : "guest"}
