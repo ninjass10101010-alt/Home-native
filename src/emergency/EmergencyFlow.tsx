@@ -39,6 +39,7 @@ interface EmergencyOk {
   partial?: boolean;
   warning?: string;
   message?: string;
+  contactsSource?: ContactsSource;
   houseAlert?: HouseAlert;
 }
 
@@ -52,9 +53,18 @@ interface EmergencyContact {
   emoji?: string;
 }
 
+type ContactsSource = "live" | "cache";
+
 type EmergencyResult =
-  | { outcome: "success"; partial: boolean; message: string; warning?: string; houseAlert?: HouseAlert }
-  | { outcome: "failure"; message: string };
+  | {
+      outcome: "success";
+      partial: boolean;
+      message: string;
+      warning?: string;
+      houseAlert?: HouseAlert;
+      contactsSource?: ContactsSource;
+    }
+  | { outcome: "failure"; message: string; contactsSource?: ContactsSource };
 
 /** The emergency route takes ANY family member's PIN — guests get the neutral identity. */
 const GENERIC_MEMBER = { name: "Family member", emoji: "🔐" };
@@ -62,20 +72,51 @@ const GENERIC_MEMBER = { name: "Family member", emoji: "🔐" };
 const WRONG_PIN_COPY = "Wrong PIN — try again.";
 const PIN_REQUIRED_COPY = "Enter the family PIN to send this alert.";
 const UNREACHABLE_COPY = "Couldn't reach Consuela — check the connection and try again.";
-const CONTACTS_CALM_COPY =
-  "Couldn't reach the emergency contacts right now — check the Settings → Safety contacts.";
 const COOLDOWN_COPY = "An emergency alert was sent recently. Wait a moment before trying again.";
-const IN_FLIGHT_COPY = "An alert is already sending…";
+const IN_FLIGHT_COPY = "An emergency alert is already sending. Wait for it to finish before trying again.";
 const GENERIC_FAILURE_COPY = "Emergency alert failed. Please try again or call emergency services directly.";
-const DELIVERY_PARTIAL_COPY =
-  "Only some emergency channels confirmed delivery — treat this as not fully sent.";
 const GUEST_CONTACTS_COPY = "Sign in with your PIN to see your emergency contacts.";
 const CONTACTS_UNAVAILABLE_COPY = "Couldn't load your emergency contacts right now.";
+const CONTACTS_CACHE_BADGE_COPY = "Live emergency contacts are unavailable — showing this device's saved list.";
+const CONTACTS_EMPTY_TITLE = "No emergency contacts yet";
+const CONTACTS_EMPTY_COPY = "Ask a parent to add or manage emergency contacts.";
+const STALE_RECIPIENTS_WARNING =
+  "Warning: stale cached contacts were used. Recipients may be out of date; verify them before retrying.";
 const NINE_ELEVEN_COPY = "If this is a life-threatening emergency, call 911.";
 const DEFAULT_COOLDOWN_MS = 30_000; // the server's documented cooldown window
 const MAX_COOLDOWN_S = 600;
 
 const RETRY_NOTICE = (s: number) => `You can try again in ${s} second${s === 1 ? "" : "s"}.`;
+
+// Port of the web's EMERGENCY_ERROR_COPY (Home-ai EmergencyButton.tsx:46-54):
+// a parent mid-emergency never reads a snake_case code off the result screen —
+// every route error code gets its own human sentence + remediation.
+const EMERGENCY_ERROR_COPY: Record<string, string> = {
+  emergency_cooldown: "An emergency alert was sent recently. Wait a moment before trying again.",
+  emergency_in_flight: "An emergency alert is already sending. Wait for it to finish before trying again.",
+  pin_check_failed: "Could not check the family PIN. Please try again or call emergency services directly.",
+  contacts_unavailable: "Emergency contacts could not be read. No alert was sent — please call emergency services directly.",
+  delivery_failed: "No emergency channel confirmed delivery. Please call emergency services directly.",
+  service_not_configured: "SMS and email are not configured for alerts. Please call emergency services directly.",
+  config_resolution_failed: "SMS and email could not be configured. Please call emergency services directly.",
+};
+
+// machine_code / machine_code_with_digits — anything shaped like an internal
+// identifier rather than a sentence (web ERROR_CODE_SHAPE).
+const ERROR_CODE_SHAPE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
+
+/** Web humanizeError port: a human sentence wins; a code-shaped string is
+ *  translated via the copy map; anything else falls back to the generic copy. */
+function humanizeServerMessage(message: unknown, code: string): string {
+  const text = typeof message === "string" ? message.trim() : "";
+  if (text && !ERROR_CODE_SHAPE.test(text)) return text;
+  return EMERGENCY_ERROR_COPY[text || code] ?? GENERIC_FAILURE_COPY;
+}
+
+/** Web parseContactsSource port: only the two declared sources count. */
+function parseContactsSource(value: unknown): ContactsSource | undefined {
+  return value === "live" || value === "cache" ? value : undefined;
+};
 
 /** E.164/10-digit → (XXX) XXX-XXXX (port of the web's formatPhoneForDisplay). */
 function formatPhoneForDisplay(phone: string): string {
@@ -102,19 +143,23 @@ export function EmergencyFlow() {
 
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [contactsState, setContactsState] = useState<"loading" | "ready" | "unavailable">("loading");
+  const [contactsSource, setContactsSource] = useState<ContactsSource>("live");
   const [selectedType, setSelectedType] = useState<TypeDef | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<EmergencyResult | null>(null);
   const [retrySeconds, setRetrySeconds] = useState(0);
 
-  // Contacts preview: session-gated — guests never fire the doomed 401.
+  // Contacts preview: session-gated — guests never fire the doomed 401. The
+  // server declares which source answered; "cache" is badged honestly below.
   useEffect(() => {
     if (!member) return;
     let alive = true;
-    api<{ contacts?: EmergencyContact[] }>("/api/emergency-contacts")
+    api<{ contacts?: EmergencyContact[]; contactsSource?: ContactsSource }>("/api/emergency-contacts")
       .then((res) => {
         if (!alive) return;
+        const source = parseContactsSource(res?.contactsSource);
+        if (source) setContactsSource(source);
         if (Array.isArray(res?.contacts)) {
           setContacts(res.contacts);
           setContactsState("ready");
@@ -148,22 +193,28 @@ export function EmergencyFlow() {
     if (!selectedType || busy) return;
     setBusy(true);
     setPinError(null);
+    const fail = (message: string, source?: ContactsSource) =>
+      setResult({ outcome: "failure", message, ...(source ? { contactsSource: source } : {}) });
     try {
       const res = await api<EmergencyOk>("/api/emergency", { method: "POST", body: { type: selectedType.id, pin } });
       if (res && res.success === true) {
+        const source = parseContactsSource(res.contactsSource);
         setResult({
           outcome: "success",
           partial: res.partial === true,
           message: res.message || "Emergency alert sent.",
           ...(res.warning ? { warning: res.warning } : {}),
           ...(res.houseAlert ? { houseAlert: res.houseAlert } : {}),
+          ...(source ? { contactsSource: source } : {}),
         });
       } else {
-        setResult({ outcome: "failure", message: res?.message || GENERIC_FAILURE_COPY });
+        fail(humanizeServerMessage(res?.message, ""), parseContactsSource(res?.contactsSource));
       }
     } catch (e) {
       if (e instanceof ApiError) {
         const body = (e.body ?? {}) as Record<string, unknown>;
+        const source = parseContactsSource(body.contactsSource);
+        const errorCode = typeof body.error === "string" ? body.error : e.code;
         if (e.status === 401) {
           // Stay in the pad — it shakes + clears; the family keeps their place.
           setPinError(e.code === "Invalid PIN" ? WRONG_PIN_COPY : PIN_REQUIRED_COPY);
@@ -171,24 +222,25 @@ export function EmergencyFlow() {
           const ms =
             typeof body.retryAfterMs === "number" && body.retryAfterMs > 0 ? body.retryAfterMs : DEFAULT_COOLDOWN_MS;
           setRetrySeconds(Math.min(Math.ceil(ms / 1000), MAX_COOLDOWN_S));
-          setResult({ outcome: "failure", message: COOLDOWN_COPY });
+          fail(COOLDOWN_COPY, source);
         } else if (e.status === 409) {
-          setResult({ outcome: "failure", message: IN_FLIGHT_COPY });
+          fail(IN_FLIGHT_COPY, source);
         } else if (e.status === 503) {
-          setResult({ outcome: "failure", message: CONTACTS_CALM_COPY });
+          // Web parity: each 503 code gets its own sentence + remediation.
+          fail(EMERGENCY_ERROR_COPY[errorCode] ?? humanizeServerMessage(body.message, errorCode), source);
         } else if (e.status === 502) {
-          if (body.partial === true) {
-            setResult({ outcome: "success", partial: true, message: (body.message as string) || DELIVERY_PARTIAL_COPY });
-          } else {
-            setResult({ outcome: "failure", message: (body.message as string) || GENERIC_FAILURE_COPY });
-          }
+          // The route only 502s when ZERO channels delivered (its
+          // `if (!anyDelivered)` branch) — that is a failure whatever the
+          // body's `partial` claims. Partial-success UI is reserved for
+          // 200s with partial:true.
+          fail(humanizeServerMessage(body.message, errorCode), source);
         } else if (e.status === 0) {
-          setResult({ outcome: "failure", message: UNREACHABLE_COPY });
+          fail(UNREACHABLE_COPY);
         } else {
-          setResult({ outcome: "failure", message: (body.message as string) || GENERIC_FAILURE_COPY });
+          fail(humanizeServerMessage(body.message, errorCode), source);
         }
       } else {
-        setResult({ outcome: "failure", message: GENERIC_FAILURE_COPY });
+        fail(GENERIC_FAILURE_COPY);
       }
     } finally {
       setBusy(false);
@@ -240,18 +292,56 @@ export function EmergencyFlow() {
             </Text>
           </Material>
         ) : contactsState === "ready" ? (
-          <View>
-            <Text
-              style={{
-                color: colors["color-text-secondary"],
-                fontSize: TYPOGRAPHY.label.fontSize,
-                fontWeight: "700",
-                letterSpacing: 2,
-                marginBottom: 10,
-              }}
-            >
-              EMERGENCY CONTACTS
-            </Text>
+          contacts.length === 0 ? (
+            // Web empty-state parity (page.tsx): honest, no invented contacts,
+            // plain copy — the Safety deep-link is WS-10's to add.
+            <Material tier="thin" style={{ borderRadius: 20, paddingHorizontal: 20, paddingVertical: 24, alignItems: "center" }}>
+              <Text style={{ fontSize: 40, marginBottom: 8 }}>📋</Text>
+              <Text
+                style={{
+                  color: colors["color-text-primary"],
+                  fontSize: TYPOGRAPHY.title.fontSize,
+                  fontWeight: "700",
+                }}
+              >
+                {CONTACTS_EMPTY_TITLE}
+              </Text>
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.body.fontSize,
+                  marginTop: 4,
+                  textAlign: "center",
+                }}
+              >
+                {CONTACTS_EMPTY_COPY}
+              </Text>
+            </Material>
+          ) : (
+            <View>
+              {contactsSource === "cache" ? (
+                <Text
+                  accessibilityRole="alert"
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.body.fontSize,
+                    marginBottom: 10,
+                  }}
+                >
+                  {CONTACTS_CACHE_BADGE_COPY}
+                </Text>
+              ) : null}
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  fontWeight: "700",
+                  letterSpacing: 2,
+                  marginBottom: 10,
+                }}
+              >
+                EMERGENCY CONTACTS
+              </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
               {contacts.map((c) => (
                 <Material key={String(c.id)} tier="thin" style={{ borderRadius: 999, paddingHorizontal: 20, paddingVertical: 14 }}>
@@ -269,7 +359,8 @@ export function EmergencyFlow() {
                 </Material>
               ))}
             </ScrollView>
-          </View>
+            </View>
+          )
         ) : contactsState === "unavailable" ? (
           <Material tier="thin" style={{ borderRadius: 20, paddingHorizontal: 20, paddingVertical: 16 }}>
             <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>
@@ -402,6 +493,15 @@ export function EmergencyFlow() {
             >
               {result.message}
             </Text>
+            {result.contactsSource === "cache" ? (
+              // Web parity (EmergencyButton): stale cached recipients are
+              // warned about on the result, success or failure.
+              <View style={amberChip} accessibilityRole="alert">
+                <Text style={{ color: amberInk, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
+                  {STALE_RECIPIENTS_WARNING}
+                </Text>
+              </View>
+            ) : null}
             {result.outcome === "success" && result.partial && result.warning ? (
               <View style={amberChip} accessibilityRole="alert">
                 <Text style={{ color: amberInk, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>{result.warning}</Text>

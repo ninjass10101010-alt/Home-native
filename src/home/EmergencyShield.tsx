@@ -41,8 +41,11 @@ export function EmergencyShield({ style }: EmergencyShieldProps) {
 const styles = StyleSheet.create({
   shield: {
     position: "absolute",
-    top: 0,
-    right: 0,
+    // Yoga positions absolute children by inset + border only (parent padding
+    // is ignored — see yoga AbsoluteLayout.cpp), so the 24s ARE the wall's
+    // edge rhythm (GRID_H_PAD/header pad), not 24 more on top of it.
+    top: 24,
+    right: 24,
     width: SHIELD_DP,
     height: SHIELD_DP,
     borderRadius: SHIELD_DP / 2,

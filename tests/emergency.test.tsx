@@ -168,21 +168,55 @@ describe("EmergencyFlow — sending states", () => {
     expect(getByText("SMS to one contact failed")).toBeTruthy();
   });
 
-  it("502 delivery_failed with partial:true → partial honesty, never silent success", async () => {
+  // The route 502s ONLY when zero channels delivered (Home-ai emergency/route.ts
+  // `if (!anyDelivered)`), so a 502 is a FAILURE whatever body.partial claims —
+  // partial-success UI is reserved for 200s with partial:true.
+  it("502 delivery_failed (partial:true in the body) → honest FAILURE, never a partial success", async () => {
     route({
       ...CONTACTS_BODY,
       "/api/emergency": new ApiError({
         message: "delivery_failed",
         status: 502,
         code: "delivery_failed",
-        body: { error: "delivery_failed", partial: true, message: "1 of 2 contacts confirmed — the rest failed." },
+        body: {
+          ok: false,
+          success: false,
+          error: "delivery_failed",
+          partial: true,
+          message: "No emergency channel confirmed delivery.",
+          warning: "All delivery channels failed.",
+          contactsSource: "live",
+          houseAlert: { sent: 0, failed: 1, notes: ["SMS gateway failed"] },
+        },
       }),
     });
-    const { getByTestId, getByLabelText, findByText, getByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    const { getByTestId, getByLabelText, findByText, getByText, queryByText } = render(<EmergencyFlow />, {
+      wrapper: wrap,
+    });
     selectType(getByTestId, "fire");
     typePin(getByLabelText, "1234");
-    expect(await findByText("Alert Partially Sent")).toBeTruthy();
-    expect(getByText("1 of 2 contacts confirmed — the rest failed.")).toBeTruthy();
+    expect(await findByText("Alert Failed")).toBeTruthy();
+    expect(getByText("No emergency channel confirmed delivery.")).toBeTruthy();
+    expect(queryByText("Alert Partially Sent")).toBeNull();
+    expect(queryByText("Alert Sent")).toBeNull();
+  });
+
+  it("502 with only a code-shaped error → the ported copy-map sentence, never snake_case on screen", async () => {
+    route({
+      ...CONTACTS_BODY,
+      "/api/emergency": new ApiError({
+        message: "delivery_failed",
+        status: 502,
+        code: "delivery_failed",
+        body: { error: "delivery_failed", partial: true },
+      }),
+    });
+    const { getByTestId, getByLabelText, findByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    selectType(getByTestId, "general");
+    typePin(getByLabelText, "1234");
+    expect(
+      await findByText("No emergency channel confirmed delivery. Please call emergency services directly.")
+    ).toBeTruthy();
   });
 
   it("cooldown → countdown disables Try again, then re-enables after the server's window", async () => {
@@ -217,21 +251,73 @@ describe("EmergencyFlow — sending states", () => {
     }
   });
 
-  it("contacts_unavailable → the calm Settings→Safety copy", async () => {
+  // Web parity (EmergencyButton EMERGENCY_ERROR_COPY): each 503 code gets its
+  // own sentence + remediation — never one contacts-centric line for all three.
+  it("503 contacts_unavailable → its own sentence + call-911 remediation", async () => {
     route({
       ...CONTACTS_BODY,
-      "/api/emergency": new ApiError({ message: "contacts_unavailable", status: 503, code: "contacts_unavailable" }),
+      "/api/emergency": new ApiError({
+        message: "contacts_unavailable",
+        status: 503,
+        code: "contacts_unavailable",
+        body: {
+          ok: false,
+          error: "contacts_unavailable",
+          message: "Live emergency contacts are unavailable. No emergency alert was sent.",
+        },
+      }),
     });
-    const { getByTestId, getByLabelText, findByText, getByTestId: g } = render(<EmergencyFlow />, { wrapper: wrap });
+    const { getByTestId, getByLabelText, findByText } = render(<EmergencyFlow />, { wrapper: wrap });
     selectType(getByTestId, "fire");
     typePin(getByLabelText, "1234");
     expect(
-      await findByText("Couldn't reach the emergency contacts right now — check the Settings → Safety contacts.")
+      await findByText(
+        "Emergency contacts could not be read. No alert was sent — please call emergency services directly."
+      )
     ).toBeTruthy();
-    expect(g("emergency-retry")).toBeTruthy();
   });
 
-  it("in-flight → honest already-sending copy, retry stays open", async () => {
+  it("503 pin_check_failed → its own sentence, not the contacts copy", async () => {
+    route({
+      ...CONTACTS_BODY,
+      "/api/emergency": new ApiError({
+        message: "pin_check_failed",
+        status: 503,
+        code: "pin_check_failed",
+        body: { ok: false, error: "pin_check_failed" },
+      }),
+    });
+    const { getByTestId, getByLabelText, findByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    selectType(getByTestId, "water");
+    typePin(getByLabelText, "1234");
+    expect(
+      await findByText("Could not check the family PIN. Please try again or call emergency services directly.")
+    ).toBeTruthy();
+  });
+
+  it("503 service_not_configured → its own sentence, not the contacts copy", async () => {
+    route({
+      ...CONTACTS_BODY,
+      "/api/emergency": new ApiError({
+        message: "service_not_configured",
+        status: 503,
+        code: "service_not_configured",
+        body: {
+          ok: false,
+          error: "service_not_configured",
+          message: "Emergency notification service is unavailable.",
+        },
+      }),
+    });
+    const { getByTestId, getByLabelText, findByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    selectType(getByTestId, "injury");
+    typePin(getByLabelText, "1234");
+    expect(
+      await findByText("SMS and email are not configured for alerts. Please call emergency services directly.")
+    ).toBeTruthy();
+  });
+
+  it("in-flight → honest already-sending copy with the wait-for-it remediation", async () => {
     route({
       ...CONTACTS_BODY,
       "/api/emergency": new ApiError({ message: "emergency_in_flight", status: 409, code: "emergency_in_flight" }),
@@ -239,7 +325,9 @@ describe("EmergencyFlow — sending states", () => {
     const { getByTestId, getByLabelText, findByText } = render(<EmergencyFlow />, { wrapper: wrap });
     selectType(getByTestId, "general");
     typePin(getByLabelText, "1234");
-    expect(await findByText("An alert is already sending…")).toBeTruthy();
+    expect(
+      await findByText("An emergency alert is already sending. Wait for it to finish before trying again.")
+    ).toBeTruthy();
     expect(getByTestId("emergency-retry").props.accessibilityState?.disabled).toBe(false);
   });
 
@@ -270,6 +358,29 @@ describe("EmergencyFlow — contacts preview strip", () => {
     expect(getByText("(555) 987-6543")).toBeTruthy();
   });
 
+  it("contacts served from the device cache → honest stale badge over the strip (web parity)", async () => {
+    route({
+      "/api/emergency-contacts": {
+        contacts: CONTACTS_BODY["/api/emergency-contacts"].contacts,
+        contactsSource: "cache",
+      },
+    });
+    const { findByText, getByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(
+      await findByText("Live emergency contacts are unavailable — showing this device's saved list.")
+    ).toBeTruthy();
+    expect(getByText("Rebecca (Mom)")).toBeTruthy();
+    expect(getByText("(555) 123-4567")).toBeTruthy();
+  });
+
+  it("no contacts configured → honest empty state with ask-a-parent copy, flow intact", async () => {
+    route({ "/api/emergency-contacts": { contacts: [], contactsSource: "live" } });
+    const { findByText, getByText, getByTestId } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(await findByText("No emergency contacts yet")).toBeTruthy();
+    expect(getByText("Ask a parent to add or manage emergency contacts.")).toBeTruthy();
+    expect(getByTestId("emergency-type-fire")).toBeTruthy();
+  });
+
   it("signed-in but unreadable contacts → honest unavailable line, flow intact", async () => {
     route({
       "/api/emergency-contacts": new ApiError({ message: "unauthorized", status: 401, code: "http_401" }),
@@ -277,6 +388,34 @@ describe("EmergencyFlow — contacts preview strip", () => {
     const { findByText, getByTestId } = render(<EmergencyFlow />, { wrapper: wrap });
     expect(await findByText("Couldn't load your emergency contacts right now.")).toBeTruthy();
     expect(getByTestId("emergency-type-fire")).toBeTruthy();
+  });
+});
+
+describe("EmergencyFlow — stale-recipient honesty on the result screen", () => {
+  it("200 success with contactsSource cache → amber stale-recipients warning (web parity)", async () => {
+    route({
+      ...CONTACTS_BODY,
+      "/api/emergency": { ...SUCCESS_BODY, contactsSource: "cache" },
+    });
+    const { getByTestId, getByLabelText, findByText, getByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    selectType(getByTestId, "water");
+    typePin(getByLabelText, "1234");
+    expect(await findByText("Alert Sent")).toBeTruthy();
+    expect(
+      getByText("Warning: stale cached contacts were used. Recipients may be out of date; verify them before retrying.")
+    ).toBeTruthy();
+  });
+
+  it("200 success with live contacts → no stale warning", async () => {
+    route({
+      ...CONTACTS_BODY,
+      "/api/emergency": { ...SUCCESS_BODY, contactsSource: "live" },
+    });
+    const { getByTestId, getByLabelText, findByText, queryByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    selectType(getByTestId, "water");
+    typePin(getByLabelText, "1234");
+    expect(await findByText("Alert Sent")).toBeTruthy();
+    expect(queryByText(/stale cached contacts were used/)).toBeNull();
   });
 });
 
