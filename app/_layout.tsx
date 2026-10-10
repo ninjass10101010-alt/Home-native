@@ -6,6 +6,7 @@ import * as ScreenOrientation from "expo-screen-orientation";
 import { NavigationBar } from "expo-navigation-bar";
 import { activateKeepAwakeAsync } from "expo-keep-awake";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
+import { AuthProvider } from "../src/state/AuthProvider";
 import { ToastProvider } from "../src/ui/Toast";
 
 /**
@@ -24,11 +25,13 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
-        <ToastProvider>
-          <StatusBar hidden />
-          <NavigationBar hidden />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }} />
-        </ToastProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <StatusBar hidden />
+            <NavigationBar hidden />
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }} />
+          </ToastProvider>
+        </AuthProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
   );
