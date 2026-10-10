@@ -20,6 +20,7 @@ import { TodayEventsWidget } from "../src/home/widgets/TodayEventsWidget";
 import { CurrentMealWidget } from "../src/home/widgets/CurrentMealWidget";
 import { BriefingWidget } from "../src/home/widgets/BriefingWidget";
 import { WeatherWidget } from "../src/home/widgets/WeatherWidget";
+import { PhotosWidget } from "../src/home/widgets/PhotosWidget";
 
 /** Wave 1 live widgets; the rest of the wall keeps honest placeholders. */
 const WALL_WIDGETS: Partial<Record<WidgetId, React.ComponentType>> = {
@@ -28,6 +29,7 @@ const WALL_WIDGETS: Partial<Record<WidgetId, React.ComponentType>> = {
   currentMeal: CurrentMealWidget,
   morningBriefing: BriefingWidget,
   weather: WeatherWidget,
+  photos: PhotosWidget,
 };
 
 const WRONG_PIN_COPY = "Wrong PIN — try again.";
