@@ -44,7 +44,8 @@
     "lint": "eslint .",
     "tokens:gen": "node scripts/gen-tokens.mjs",
     "tokens:check": "node scripts/check-token-literals.mjs --check && node scripts/gen-tokens.mjs --check",
-    "push:safe": "bash scripts/security/push-safe.sh"
+    "push:safe": "bash scripts/security/push-safe.sh",
+    "reference:capture": "node scripts/capture-reference.mjs"
   },
   "private": true,
   "jest": {

@@ -21,8 +21,8 @@ describe("CapsuleDock", () => {
     expect(toJSON()).toBeNull();
   });
 
-  it("renders 7 caps + More, active cap labelled, others icon-only", () => {
-    const { getByLabelText, getByText, queryByText } = render(
+  it("renders 7 caps + More; wall labels ALWAYS visible; exactly one selected cap", () => {
+    const { getByLabelText, getByText, getAllByRole } = render(
       <CapsuleDock role="parent" hydrated pathname="/tasks" onNavigate={() => {}} onOpenMore={() => {}} />,
       { wrapper: wrap }
     );
@@ -34,9 +34,14 @@ describe("CapsuleDock", () => {
     expect(getByLabelText("House")).toBeTruthy();
     expect(getByLabelText("Settings")).toBeTruthy();
     expect(getByLabelText("More")).toBeTruthy();
-    // Only the ACTIVE cap shows its label
+    // wall rule: every cap shows its label…
     expect(getByText("Tasks")).toBeTruthy();
-    expect(queryByText("Meals")).toBeNull();
+    expect(getByText("Meals")).toBeTruthy();
+    // …but exactly one cap is marked selected (the accessibility contract
+    // carries state; labels alone must not fake it)
+    const selected = getAllByRole("button").filter((b: any) => b.props.accessibilityState?.selected);
+    expect(selected).toHaveLength(1);
+    expect(selected[0].props.accessibilityLabel).toBe("Tasks");
   });
 
   it("kid dock swaps House→Rewards", () => {
@@ -62,12 +67,11 @@ describe("CapsuleDock", () => {
   });
 
   it("/meals/archive lights NO cap (own-destination route)", () => {
-    const { queryByText } = render(
+    const { getAllByRole } = render(
       <CapsuleDock role="parent" hydrated pathname="/meals/archive" onNavigate={() => {}} onOpenMore={() => {}} />,
       { wrapper: wrap }
     );
-    // no active cap → zero visible labels
-    expect(queryByText("Meals")).toBeNull();
-    expect(queryByText("Home")).toBeNull();
+    const selected = getAllByRole("button").filter((b: any) => b.props.accessibilityState?.selected);
+    expect(selected).toHaveLength(0);
   });
 });

@@ -93,6 +93,7 @@ export function CapsuleDock({ role, hydrated, pathname, onNavigate, onOpenMore, 
               activeBg={activeBg}
               activeBorder={activeBorder}
               activeLabelInk={activeLabelInk}
+              inactiveInk={colors["color-text-secondary"]}
               onPress={() => (isMore ? onOpenMore() : onNavigate(item.path))}
               reduceMotion={reduceMotion}
               testID={isMore ? "dock-more" : `dock-${(item as NavItemDefinition).label.toLowerCase()}`}
@@ -111,6 +112,7 @@ interface DockCapProps {
   activeBg: string;
   activeBorder: string;
   activeLabelInk: string;
+  inactiveInk: string;
   onPress: () => void;
   reduceMotion: boolean;
   testID?: string;
@@ -121,7 +123,7 @@ function accentInkSafe(accent: string, textPrimary: string): string {
   return mix(accent, textPrimary, 55);
 }
 
-function DockCap({ icon, label, active, activeBg, activeBorder, activeLabelInk, onPress, reduceMotion, testID }: DockCapProps) {
+function DockCap({ icon, label, active, activeBg, activeBorder, activeLabelInk, inactiveInk, onPress, reduceMotion, testID }: DockCapProps) {
   const scale = useSharedValue(1);
   const aStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
@@ -163,17 +165,19 @@ function DockCap({ icon, label, active, activeBg, activeBorder, activeLabelInk, 
         }}
       >
         {icon}
-        {active ? (
-          <Text
-            style={{
-              color: activeLabelInk,
-              fontSize: TYPOGRAPHY.label.fontSize,
-              fontWeight: "600",
-            }}
-          >
-            {label}
-          </Text>
-        ) : null}
+        {/* Wall profile contract: labels are ALWAYS visible (this app IS the
+            wall). Active label reads the accent-ink mix; inactive read the
+            secondary ink. */}
+        <Text
+          style={{
+            color: active ? activeLabelInk : inactiveInk,
+            fontSize: TYPOGRAPHY.label.fontSize,
+            fontWeight: active ? "700" : "500",
+            marginTop: 2,
+          }}
+        >
+          {label}
+        </Text>
       </Pressable>
     </Animated.View>
   );
