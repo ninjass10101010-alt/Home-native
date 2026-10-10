@@ -119,13 +119,36 @@ describe("SyncManager", () => {
     expect(result.current.syncError).toBeNull();
   });
 
-  it("NEVER synthesizes success: failed refresh leaves stale, not a green lastSync", async () => {
+  it("NEVER synthesizes success: failed refresh leaves stale AND lastSyncAt stays null", async () => {
+    api.mockRejectedValue(new ApiError({ message: "down", status: 0, code: "unreachable", retryable: true }));
+    const { result } = renderHook(() => useSync(), { wrapper: wrap });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(api).toHaveBeenCalledTimes(1);
+    expect(result.current.lastSyncAt).toBeNull();
+    expect(result.current.stale).toBe(true);
+  });
+
+  it("backoff: 5s burst ×3 consecutive failures, then back to the 60s cadence", async () => {
     api.mockRejectedValue(new ApiError({ message: "down", status: 0, code: "unreachable", retryable: true }));
     renderHook(() => useSync(), { wrapper: wrap });
     await act(async () => {
       await Promise.resolve();
     });
     expect(api).toHaveBeenCalledTimes(1);
-    // initial failure → lastSyncAt stays null until a real success
+    api.mockClear();
+    // failure #1 → next poll at 5s (burst 1)
+    await act(async () => { jest.advanceTimersByTime(5_000); await Promise.resolve(); });
+    expect(api).toHaveBeenCalledTimes(1);
+    await act(async () => { jest.advanceTimersByTime(5_000); await Promise.resolve(); });
+    expect(api).toHaveBeenCalledTimes(2);
+    await act(async () => { jest.advanceTimersByTime(5_000); await Promise.resolve(); });
+    expect(api).toHaveBeenCalledTimes(3);
+    // 4th consecutive failure → cadence back to 60s, NOT another 5s burst
+    await act(async () => { jest.advanceTimersByTime(5_000); await Promise.resolve(); });
+    expect(api).toHaveBeenCalledTimes(3); // nothing at 5s
+    await act(async () => { jest.advanceTimersByTime(55_000); await Promise.resolve(); });
+    expect(api).toHaveBeenCalledTimes(4); // the 60s poll fired
   });
 });

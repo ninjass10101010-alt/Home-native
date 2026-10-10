@@ -41,7 +41,7 @@ export function Material({ tier, children, style, testID }: MaterialProps) {
       colors={[SPECULAR_AT(d.specular), SPECULAR_CLEAR]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.6, y: 0.45 }}
-      style={[{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: "inherit" as any }]}
+      style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
     />
   );
 
@@ -50,7 +50,7 @@ export function Material({ tier, children, style, testID }: MaterialProps) {
     const [r, g, b, a] = rgbaOf(d.background);
     const baked = `rgba(${r},${g},${b},${Math.min(1, a + 0.35)})`;
     return (
-      <View testID={testID} style={[{ backgroundColor: baked }, border, style]}>
+      <View testID={testID} style={[{ backgroundColor: baked, overflow: "hidden" }, border, style]}>
         {specularOverlay}
         <View style={{ zIndex: 1 }}>{children}</View>
       </View>
@@ -58,7 +58,7 @@ export function Material({ tier, children, style, testID }: MaterialProps) {
   }
 
   return (
-    <View testID={testID} style={[border, style]}>
+    <View testID={testID} style={[border, { overflow: "hidden" }, style]}>
       <BlurView
         intensity={blurToIntensity(d.blur)}
         tint={theme}

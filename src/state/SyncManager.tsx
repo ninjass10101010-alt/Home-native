@@ -82,7 +82,7 @@ export function SyncManager({ children }: { children: React.ReactNode }) {
         setSyncError("unauthorized");
         void signOut();
       } else if (e instanceof ApiError && e.retryable) {
-        backoffRef.current = Math.min(backoffRef.current + 1, BACKOFF_MAX);
+        backoffRef.current += 1; // consecutive count; the poll loop bursts 5s ×3 then resumes 60s
         setSyncError("unreachable");
       } else if (e instanceof ApiError) {
         setSyncError("unreachable");
@@ -94,7 +94,9 @@ export function SyncManager({ children }: { children: React.ReactNode }) {
     }
   }, [member, pulse, signOut]);
 
-  // Poll while signed in; simple interval with backoff dwell between bursts.
+  // Poll while signed in: retryable failures burst at BACKOFF_MS up to
+  // BACKOFF_MAX consecutive times, then settle back to the 60s cadence (the
+  // kiosk must not hammer a dead NAS). Success resets the burst counter.
   useEffect(() => {
     if (!hydrated || !member) return;
     let cancelled = false;
@@ -104,8 +106,8 @@ export function SyncManager({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
       await refreshNow();
       if (cancelled) return;
-      const delay = backoffRef.current > 0 ? BACKOFF_MS : POLL_MS;
-      timer = setTimeout(loop, delay);
+      const burst = backoffRef.current > 0 && backoffRef.current <= BACKOFF_MAX;
+      timer = setTimeout(loop, burst ? BACKOFF_MS : POLL_MS);
     };
     void loop();
     return () => {

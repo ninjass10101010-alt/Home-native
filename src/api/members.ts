@@ -9,16 +9,19 @@ import type { ServerMember } from "./types";
  * fallbacks. Fallback rows carry NO credentials (that file's SECURITY note);
  * live rows win, fallbacks fill missing first names.
  */
+// Verbatim port of ../Home-ai/src/lib/member-fallback.ts (no credentials; live
+// rows win by first name). Fallback rows intentionally carry NO color — the
+// rail resolves member colors via memberAccentHex (name → accent token).
 export const FALLBACK_MEMBERS: ServerMember[] = [
-  { id: 1, name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" } as ServerMember,
-  { id: 2, name: "Jeffery (Dad)", role: "parent", emoji: "👨", color: "blue" } as ServerMember,
-  { id: 3, name: "Emily", role: "child", emoji: "👧", color: "purple", age: 14 } as ServerMember,
-  { id: 4, name: "Bailey", role: "child", emoji: "👧", color: "green", age: 12 } as ServerMember,
-  { id: 5, name: "Jasmine", role: "child", emoji: "👧", color: "orange", age: 10 } as ServerMember,
-  { id: 6, name: "Aurora", role: "child", emoji: "👧", color: "purple", age: 7 } as ServerMember,
-  { id: 7, name: "Caspian", role: "child", emoji: "🧒", color: "green", age: 5 } as ServerMember,
-  { id: 8, name: "Rocco", role: "pet", emoji: "🐶", color: "brown", age: 3 } as ServerMember,
-  { id: 9, name: "Rico", role: "pet", emoji: "🐩", color: "grey", age: 5 } as ServerMember,
+  { id: 1, name: "Rebecca (Mom)", role: "parent", emoji: "🐱", age: 38 } as ServerMember,
+  { id: 2, name: "Jeffery (Dad)", role: "parent", emoji: "👨", age: 40 } as ServerMember,
+  { id: 3, name: "Emily", role: "child", emoji: "👧", age: 14 } as ServerMember,
+  { id: 4, name: "Bailey", role: "child", emoji: "👧", age: 12 } as ServerMember,
+  { id: 5, name: "Jasmine", role: "child", emoji: "👧", age: 10 } as ServerMember,
+  { id: 6, name: "Aurora", role: "child", emoji: "👧", age: 7 } as ServerMember,
+  { id: 7, name: "Caspian", role: "child", emoji: "🧒", age: 5 } as ServerMember,
+  { id: 8, name: "Rocco", role: "pet", emoji: "🐶", age: 3 } as ServerMember,
+  { id: 9, name: "Rico", role: "pet", emoji: "🐩", age: 5 } as ServerMember,
 ].map((m) => m);
 
 const CACHE_KEY = "consuela-members";

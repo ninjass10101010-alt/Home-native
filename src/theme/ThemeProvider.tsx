@@ -97,6 +97,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       ...TOKENS[theme],
       ...(boost ? TOKENS.boost[theme] : {}),
     };
+    // Keep token-space consumers honest: --color-accent-selected mirrors the
+    // live accent, not the default nori (the web's inline-style hazard, fixed here).
+    colors["color-accent-selected"] = ACCENTS[theme][accent] ?? ACCENTS[theme].nori;
     return {
       theme,
       boost,

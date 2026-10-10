@@ -55,6 +55,12 @@ describe("ThemeProvider", () => {
     (AccessibilityInfo.isReduceMotionEnabled as jest.Mock).mockRestore?.();
   });
 
+  it("color-accent-selected mirrors the live accent (not nori)", () => {
+    const { result } = renderHook(() => useTheme(), { wrapper: wrap });
+    act(() => result.current.setAccent("amber"));
+    expect(result.current.colors["color-accent-selected"]).toBe(ACCENTS[result.current.theme].amber);
+  });
+
   it("boost overlays only the boost keys (canvas unchanged)", () => {
     const { result } = renderHook(() => useTheme(), { wrapper: wrap });
     act(() => {

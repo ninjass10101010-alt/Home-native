@@ -6,9 +6,11 @@ import * as ScreenOrientation from "expo-screen-orientation";
 import { NavigationBar } from "expo-navigation-bar";
 import { activateKeepAwakeAsync } from "expo-keep-awake";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
-import { AuthProvider } from "../src/state/AuthProvider";
+import { AuthProvider, useAuth } from "../src/state/AuthProvider";
 import { SyncManager } from "../src/state/SyncManager";
 import { ToastProvider } from "../src/ui/Toast";
+import { hydrateBaseUrl } from "../src/api/config";
+import { View } from "react-native";
 
 /**
  * Root layout. Provider chain (final order as more providers land):
@@ -17,8 +19,19 @@ import { ToastProvider } from "../src/ui/Toast";
  * Device locks per the single-device contract (spec decision 7): portrait
  * only, always-on while the app runs, immersive navigation bar.
  */
+/** Wall-touch activity → idle timers reset (the web's activity-listener parity). */
+function PokeBoundary({ children }: { children: React.ReactNode }) {
+  const { poke } = useAuth();
+  return (
+    <View style={{ flex: 1 }} onTouchStart={poke}>
+      {children}
+    </View>
+  );
+}
+
 export default function RootLayout() {
   useEffect(() => {
+    hydrateBaseUrl().catch(() => {});
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     activateKeepAwakeAsync("consuela-wall").catch(() => {});
   }, []);
@@ -31,7 +44,9 @@ export default function RootLayout() {
             <ToastProvider>
               <StatusBar hidden />
               <NavigationBar hidden />
-              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }} />
+              <PokeBoundary>
+                <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }} />
+              </PokeBoundary>
             </ToastProvider>
           </SyncManager>
         </AuthProvider>

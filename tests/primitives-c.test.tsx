@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 import { Text } from "react-native";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { Modal } from "../src/ui/Modal";
@@ -76,7 +76,9 @@ describe("Toast", () => {
     const { getByTestId, queryByText } = render(<ToastHarness />, { wrapper: wrap });
     fireEvent.press(getByTestId("fire"));
     expect(queryByText("Saved!")).toBeTruthy();
-    jest.runAllTimers();
+    act(() => {
+      jest.runAllTimers();
+    });
     jest.useRealTimers();
   });
   it("useToast throws outside provider", () => {
@@ -161,5 +163,14 @@ describe("MemberRail", () => {
     );
     fireEvent.press(getByLabelText("Sign out"));
     expect(onSignOut).toHaveBeenCalled();
+  });
+
+  it("regression: current member with a NAMED color (green) renders without crashing", () => {
+    const named = [{ name: "Rebecca (Mom)", emoji: "🐱", color: "green" }];
+    const { getByLabelText } = render(
+      <MemberRail members={named} currentName="Rebecca (Mom)" onSelect={() => {}} />,
+      { wrapper: wrap }
+    );
+    expect(getByLabelText("Signed in as Rebecca (Mom)")).toBeTruthy();
   });
 });

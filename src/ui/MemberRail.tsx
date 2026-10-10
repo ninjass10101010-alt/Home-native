@@ -4,6 +4,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { Material } from "../theme/Material";
 import { mix } from "../theme/mix";
+import { memberAccentHex } from "../theme/memberColor";
 
 export interface RailMember {
   name: string;
@@ -26,12 +27,14 @@ export interface MemberRailProps {
  * Sign out at the rail's end. Tiles ≥ 64dp (rail tiles run 88).
  */
 export function MemberRail({ members, currentName = null, onSelect, onSignOut, style, testID }: MemberRailProps) {
-  const { colors } = useTheme();
+  const { colors, theme, accentColor } = useTheme();
   return (
     <View testID={testID} style={style} accessibilityLabel="Family members">
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, alignItems: "center" }}>
         {members.map((m) => {
           const current = m.name === currentName;
+          // color arrives as a NAME from the roster — resolve to a token first
+          const memberHex = memberAccentHex(m.color, theme, accentColor);
           return (
             <Pressable
               key={m.name}
@@ -48,10 +51,8 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
                   alignItems: "center",
                   justifyContent: "center",
                   borderWidth: 3,
-                  borderColor: current ? m.color ?? colors["color-accent-selected"] ?? colors["color-text-primary"] : "transparent",
-                  backgroundColor: current
-                    ? mix(m.color ?? colors["color-accent-selected"] ?? colors["color-text-primary"], "transparent", 20)
-                    : "transparent",
+                  borderColor: current ? memberHex : "transparent",
+                  backgroundColor: current ? mix(memberHex, "transparent", 20) : "transparent",
                 }}
               >
                 <Material tier="regular" style={{ width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" }}>

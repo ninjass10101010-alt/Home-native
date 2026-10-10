@@ -68,7 +68,7 @@ export function Modal({
     }
   }, [visible, reduceMotion, opacity, translateY]);
 
-  const scrimStyle = useAnimatedStyle(() => ({ opacity: opacity.value * 0.55 }));
+  const scrimStyle = useAnimatedStyle(() => ({ opacity: opacity.value * 0.5 }));
   const panelStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
     transform: [{ translateY: translateY.value }],
@@ -85,7 +85,7 @@ export function Modal({
       statusBarTranslucent
       testID={testID}
     >
-      <View style={{ flex: 1, justifyContent: "center", padding: 24 }}>
+      <View accessibilityViewIsModal style={{ flex: 1, justifyContent: "center", padding: 24 }}>
         <Animated.View
           style={[
             { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "black" },

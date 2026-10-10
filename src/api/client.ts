@@ -32,6 +32,8 @@ export interface ApiInit {
   body?: unknown;
   timeoutMs?: number;
   headers?: Record<string, string>;
+  /** Called with the raw Response before body parsing (cookie capture etc.). */
+  onResponse?: (res: Response) => void;
 }
 
 /** Injectable for tests. */
@@ -78,6 +80,8 @@ export async function api<T = unknown>(path: string, init: ApiInit = {}): Promis
         retryable: true,
       });
     }
+
+    init.onResponse?.(res);
 
     let body: any = null;
     try {

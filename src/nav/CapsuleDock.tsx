@@ -14,7 +14,7 @@ import {
 } from "./nav-items";
 
 /** Emoji placeholder glyphs until Wave 2 ports the web's NavIcon SVG paths. */
-export const NAV_ICONS: Record<NavIconKey, string> = {
+export const NAV_ICONS: Record<NavIconKey | "more", string> = {
   home: "🏠",
   ask: "💬",
   meals: "🍽️",
@@ -30,6 +30,7 @@ export const NAV_ICONS: Record<NavIconKey, string> = {
   mountain: "⛰️",
   memory: "🧠",
   photos: "📸",
+  more: "☰",
 };
 
 export interface CapsuleDockProps {
@@ -57,7 +58,7 @@ export function CapsuleDock({ role, hydrated, pathname, onNavigate, onOpenMore, 
   const caps = navItemsForRole(role);
   const items: (NavItemDefinition | { path: "__more__"; label: string; iconKey: NavIconKey })[] = [
     ...caps,
-    { path: "__more__", label: "More", iconKey: "memory" as NavIconKey },
+    { path: "__more__", label: "More", iconKey: "more" as NavIconKey },
   ];
 
   const activeBg = mix(accentColor, "transparent", 8);      // wash ≈ 6–8%

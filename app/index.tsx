@@ -31,6 +31,7 @@ export default function HomePlaceholder() {
   const [roster, setRoster] = React.useState<MembersResult>({ members: [], source: "fallback" });
   const [pinTarget, setPinTarget] = React.useState<RailMember | null>(null);
   const [pinError, setPinError] = React.useState<string | null>(null);
+  const [railError, setRailError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
@@ -46,22 +47,23 @@ export default function HomePlaceholder() {
     const asMember = roster.members.find((r) => r.name === m.name) ?? (m as any);
     if (!pinRequiredFor(asMember)) {
       setBusy(true);
+      setRailError(null);
       try {
         await signIn(m.name);
       } catch (e: any) {
         if (e instanceof PinRequired) {
           setPinTarget(m);
           setPinError(null);
-        } else if (e instanceof ApiError && e.code === "unreachable") {
-          setPinError(UNREACHABLE_COPY);
         } else {
-          setPinError(UNREACHABLE_COPY);
+          // honest failure at the RAIL — the tap visibly failed, the copy stays calm
+          setRailError(UNREACHABLE_COPY);
         }
       } finally {
         setBusy(false);
       }
       return;
     }
+    setRailError(null);
     setPinTarget(m);
     setPinError(null);
   };
@@ -108,6 +110,14 @@ export default function HomePlaceholder() {
         {roster.source !== "live" ? (
           <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
             offline roster (cached)
+          </Text>
+        ) : null}
+        {railError ? (
+          <Text
+            accessibilityLiveRegion="polite"
+            style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, textAlign: "center" }}
+          >
+            {railError}
           </Text>
         ) : null}
       </View>
