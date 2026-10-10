@@ -44,7 +44,8 @@ export function PinPad({ member, onVerified, onCancel, busy = false, error = nul
       withTiming(8, { duration: 50 }),
       withTiming(0, { duration: MOTION.fast })
     );
-  }, [error, reduceMotion, shake]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- shake is a stable Reanimated shared value (a ref-like mutable, correctly omitted; listing it made the clear re-fire on every render under the jest mock where useSharedValue is per-render)
+  }, [error, reduceMotion]);
 
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shake.value }] }));
 

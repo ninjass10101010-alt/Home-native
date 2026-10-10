@@ -15,6 +15,9 @@ jest.mock("expo-secure-store", () => ({
   setItemAsync: jest.fn(async () => {}),
   deleteItemAsync: jest.fn(async () => {}),
 }));
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ push: jest.fn() }),
+}));
 jest.mock("../src/state/AuthProvider", () => {
   const actual = jest.requireActual("../src/state/AuthProvider");
   return {

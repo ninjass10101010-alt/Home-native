@@ -32,7 +32,7 @@ function rankWeek(weekData: WeekData | undefined, rosterNames: string[]): Ranked
  */
 export function LeaderboardWidget() {
   const { colors } = useTheme();
-  const { snapshot, stale, lastSyncAt } = useSync();
+  const { snapshot, stale } = useSync();
 
   const weekData = snapshot?.weekData as WeekData | undefined;
   const ranked = rankWeek(weekData, []);

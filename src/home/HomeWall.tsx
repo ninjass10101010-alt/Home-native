@@ -5,6 +5,7 @@ import { TYPOGRAPHY } from "../theme/tokens";
 import { Material } from "../theme/Material";
 import { MemberRail, type RailMember } from "../ui/MemberRail";
 import { useAuth } from "../state/AuthProvider";
+import { EmergencyShield } from "./EmergencyShield";
 import { visibleOnWall, WidgetId, WidgetPlaceholder, WALL_SPANS } from "./widgets";
 
 const WALL_WIDTH = 1080; // locked to the panel (spec decision 7)
@@ -54,6 +55,8 @@ export function HomeWall({ members, onSelectMember, onSignOut, widgets = {}, gre
 
   return (
     <View style={{ flex: 1, paddingHorizontal: GRID_H_PAD, paddingTop: 24 }}>
+      {/* Emergency shield: 64dp, top-right of the header area, never over the rail */}
+      <EmergencyShield />
       {/* Wall header (per 2026-09-09 wall spec §5): date kicker, greeting, rail */}
       <View>
         <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", letterSpacing: 2 }}>
