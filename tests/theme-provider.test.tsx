@@ -1,0 +1,79 @@
+import React from "react";
+import { renderHook, act, waitFor } from "@testing-library/react-native";
+import { AccessibilityInfo } from "react-native";
+import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
+import { TOKENS, ACCENTS } from "../src/theme/tokens";
+import { contrastRatio } from "../src/lib/contrast";
+
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
+
+const wrap = ({ children }: { children: React.ReactNode }) => (
+  <ThemeProvider>{children}</ThemeProvider>
+);
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+describe("ThemeProvider", () => {
+  it("defaults to system scheme, nori accent, boost off", () => {
+    const { result } = renderHook(() => useTheme(), { wrapper: wrap });
+    expect(["light", "dark"]).toContain(result.current.theme);
+    expect(result.current.accent).toBe("nori");
+    expect(result.current.boost).toBe(false);
+  });
+
+  it("accent switch re-derives accentColor from the ACCENTS table", () => {
+    const { result } = renderHook(() => useTheme(), { wrapper: wrap });
+    act(() => result.current.setAccent("amber"));
+    expect(result.current.accent).toBe("amber");
+    expect(result.current.accentColor).toBe(ACCENTS[result.current.theme].amber);
+  });
+
+  it("contract: body text clears AA 4.5:1 on canvas in ALL four theme variants", () => {
+    const { result } = renderHook(() => useTheme(), { wrapper: wrap });
+    for (const theme of ["light", "dark"] as const) {
+      for (const boost of [false, true]) {
+        act(() => {
+          result.current.setTheme(theme);
+          result.current.setBoost(boost);
+        });
+        const c = result.current.colors;
+        expect(contrastRatio(c["color-text-primary"], c["color-canvas"])).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(c["color-text-muted"], c["color-canvas"])).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("reduceMotion follows the Android accessibility setting", async () => {
+    jest.spyOn(AccessibilityInfo, "isReduceMotionEnabled").mockResolvedValue(true);
+    const { result } = renderHook(() => useTheme(), { wrapper: wrap });
+    await waitFor(() => expect(result.current.reduceMotion).toBe(true));
+    (AccessibilityInfo.isReduceMotionEnabled as jest.Mock).mockRestore?.();
+  });
+
+  it("boost overlays only the boost keys (canvas unchanged)", () => {
+    const { result } = renderHook(() => useTheme(), { wrapper: wrap });
+    act(() => {
+      result.current.setTheme("dark");
+      result.current.setBoost(true);
+    });
+    expect(result.current.colors["color-canvas"]).toBe(TOKENS.dark["color-canvas"]);
+    // boost dark lifts text ladder per globals.css boost block
+    expect(result.current.colors["color-text-primary"]).toBe(TOKENS.boost.dark["color-text-primary"]);
+  });
+
+  it("throws when used outside the provider", () => {
+    const { result } = renderHook(() => {
+      try {
+        useTheme();
+        return null;
+      } catch (e: any) {
+        return e.message;
+      }
+    });
+    expect(result.current).toMatch(/useTheme must be used within ThemeProvider/);
+  });
+});

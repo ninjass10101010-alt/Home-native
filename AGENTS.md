@@ -14,7 +14,7 @@ This repo's remote is public-ish (`github.com/ninjass10101010-alt/Home-native`).
 
 ## Toolchain (Expo SDK 57 — do not trust training data)
 
-Expo ships breaking changes per SDK. Before writing code touching Expo/RN APIs: read the `expo` major version in `package.json`, consult versioned docs (`https://docs.expo.dev/versions/v<major>.0.0/` or `docs.expo.dev/llms.txt`). Recorded baseline: Expo SDK ~57, RN 0.86.3, React 19.2.3, Node 24. Dev deps were installed with `--legacy-peer-deps` and `react-test-renderer` is pinned to 19.2.3 to match React — keep that pin.
+Expo ships breaking changes per SDK. Before writing code touching Expo/RN APIs: read the `expo` major version in `package.json`, consult versioned docs (`https://docs.expo.dev/versions/v<major>.0.0/` or `docs.expo.dev/llms.txt`). Recorded baseline: Expo SDK ~57, RN 0.86.3, React 19.2.3, Node 24. Dev deps were installed with `--legacy-peer-deps`; pins that MUST hold: `react-test-renderer@19.2.3` (matches React), `@react-native/jest-preset@0.86.3` (matches RN), `@testing-library/react-native@12.9.x` (v14 requires the `test-renderer` package and silently never-renders under our jest-expo wiring — do NOT upgrade past 12.x without proving `renderHook` works).
 
 Routes live in `app/` (repo-root, expo-router). Non-route code lives in `src/`. Never create `src/app/`. ios/ and android/ are generated (CNG) — never hand-edit; configure via `app.json` + plugins. Local APK builds only (`expo prebuild` + Gradle); no EAS account, no Play Store.
 
