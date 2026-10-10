@@ -18,9 +18,21 @@ export interface SyncValue {
   /** True when the last refresh failed — surfaces MUST badge or hide stale data. */
   stale: boolean;
   syncError: SyncError;
+  /** The latest /api/tasks/sync snapshot (tasks + weekData) — ONE poll serves
+   *  every snapshot consumer (web CacheRefresher parity). */
+  snapshot: { tasks?: unknown[]; weekData?: WeekData } | null;
   refreshNow: () => Promise<void>;
   /** Subscribe to data pulses (fired only on snapshot-bearing responses). */
   onPulse: (listener: () => void) => () => void;
+}
+
+/** WeekData shape (Home-ai src/types/tasks.ts:129-135). */
+export interface WeekData {
+  weekStart: string;
+  points: Record<string, number>;
+  streak: Record<string, number>;
+  lastActive: Record<string, string>;
+  history?: unknown[];
 }
 
 const Ctx = createContext<SyncValue | null>(null);
@@ -39,6 +51,7 @@ export function SyncManager({ children }: { children: React.ReactNode }) {
   const { member, hydrated, signOut } = useAuth();
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<SyncError>(null);
+  const [snapshot, setSnapshot] = useState<SyncValue["snapshot"]>(null);
 
   const listenersRef = useRef(new Set<() => void>());
   const backoffRef = useRef(0);
@@ -66,7 +79,7 @@ export function SyncManager({ children }: { children: React.ReactNode }) {
     busyRef.current = true;
     try {
       const res = await api<{
-        snapshot?: unknown | null;
+        snapshot?: { tasks?: unknown[]; weekData?: WeekData } | null;
         error?: string;
         reconciled?: boolean;
         retryable?: boolean;
@@ -74,7 +87,10 @@ export function SyncManager({ children }: { children: React.ReactNode }) {
       setLastSyncAt(Date.now());
       setSyncError(null);
       backoffRef.current = 0;
-      if (res && res.snapshot != null) pulse();
+      if (res && res.snapshot != null) {
+        setSnapshot(res.snapshot as SyncValue["snapshot"]);
+        pulse();
+      }
       // reconciled:false → server is catching up; snapshot may still be present
       // and is already the last-good one — keep it (see Home-ai ARCHITECTURE §5.6).
     } catch (e: any) {
@@ -129,10 +145,11 @@ export function SyncManager({ children }: { children: React.ReactNode }) {
       lastSyncAt,
       stale: syncError !== null,
       syncError,
+      snapshot,
       refreshNow,
       onPulse,
     }),
-    [lastSyncAt, syncError, refreshNow, onPulse]
+    [lastSyncAt, syncError, snapshot, refreshNow, onPulse]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

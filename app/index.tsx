@@ -21,8 +21,13 @@ import { CurrentMealWidget } from "../src/home/widgets/CurrentMealWidget";
 import { BriefingWidget } from "../src/home/widgets/BriefingWidget";
 import { WeatherWidget } from "../src/home/widgets/WeatherWidget";
 import { PhotosWidget } from "../src/home/widgets/PhotosWidget";
+import { HomeSecurityWidget } from "../src/home/widgets/HomeSecurityWidget";
+import { HomeClimateWidget } from "../src/home/widgets/HomeClimateWidget";
+import { HomeLightsWidget } from "../src/home/widgets/HomeLightsWidget";
+import { LeaderboardWidget } from "../src/home/widgets/LeaderboardWidget";
+import { QuickAskWidget } from "../src/home/widgets/QuickAskWidget";
 
-/** Wave 1 live widgets; the rest of the wall keeps honest placeholders. */
+/** Wave 1 live widgets — the full 11-cell wall is live as of Task 5/6. */
 const WALL_WIDGETS: Partial<Record<WidgetId, React.ComponentType>> = {
   tasks: TasksWidget,
   todayEvents: TodayEventsWidget,
@@ -30,6 +35,11 @@ const WALL_WIDGETS: Partial<Record<WidgetId, React.ComponentType>> = {
   morningBriefing: BriefingWidget,
   weather: WeatherWidget,
   photos: PhotosWidget,
+  homeSecurity: HomeSecurityWidget,
+  homeClimate: HomeClimateWidget,
+  homeLights: HomeLightsWidget,
+  leaderboard: LeaderboardWidget,
+  aiQuickAsk: QuickAskWidget,
 };
 
 const WRONG_PIN_COPY = "Wrong PIN — try again.";
