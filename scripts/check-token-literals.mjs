@@ -15,7 +15,12 @@ import { join, extname } from "node:path";
 
 const args = process.argv.slice(2).filter((a) => a !== "--check");
 const ROOTS = args.length ? args : ["app", "src"];
-const ALLOW = new Set(["src/theme/tokens.generated.ts"]);
+const ALLOW = new Set([
+  "src/theme/tokens.generated.ts",
+  // Token-level descriptor tables (the .material-* CSS-class contract is not a
+  // custom property, so the generator can't emit it). Specular helpers too.
+  "src/theme/materials.ts",
+]);
 const PATTERN = /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+/g;
 const COMMENT_LINE = /^\s*(\/\/|\/\*|\*)/;
 
