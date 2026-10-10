@@ -4,7 +4,9 @@ import snap from "../src/theme/tokens.snapshot.json";
 describe("tokens", () => {
   it("pins dark truth", () => {
     expect(TOKENS.dark["color-canvas"]).toBe("#0f1117");
-    expect(TOKENS.dark["color-text-muted"]).toBe("#8892aa");
+    expect(TOKENS.dark["color-text-muted"]).toBe("#a3adc4"); // final cascade (globals.css:465-503 lifts the ladder)
+    expect(TOKENS.dark["color-text-secondary"]).toBe("#a8b2c8");
+    expect(TOKENS.dark["color-text-dim"]).toBe("#a0aac2");
     expect(TOKENS.dark["glass-tint-strong"]).toBe("rgba(255,255,255,0.10)");
   });
   it("pins light truth", () => {

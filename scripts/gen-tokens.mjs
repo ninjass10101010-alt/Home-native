@@ -42,8 +42,12 @@ const PINNED_TOKENS = {
     "color-surface-0": "#0f1117",
     "color-surface-1": "#181c24",
     "color-text-primary": "#f0f4ff",
-    "color-text-muted": "#8892aa",
-    "color-text-dim": "#828da6",
+    // FINAL dark cascade values — globals.css:465-503 (the `:root[data-theme="dark"]`
+    // block) deliberately lifts the sub-primary ladder over the base `:root`
+    // values (measured-AA fix, 2026-10). These pins assert the final cascade.
+    "color-text-secondary": "#a8b2c8",
+    "color-text-muted": "#a3adc4",
+    "color-text-dim": "#a0aac2",
     "radius-md": "16px",
     "glass-tint-strong": "rgba(255,255,255,0.10)",
     "motion-fast": "150ms",
@@ -129,6 +133,11 @@ function parseRules(css, context) {
 function classifySelector(sel) {
   if (sel === ":root" || sel === "@theme") return "base";
   if (sel === ":root:not([data-theme=\"light\"])") return "base"; // dark base
+  // The explicit dark block (globals.css:465-503) is the FINAL dark cascade:
+  // it deliberately lifts the sub-primary text ladder over the base values
+  // (measured-AA fix, 2026-10). Separate bucket — merging into "base" would
+  // poison the LIGHT view (lightView spreads base).
+  if (sel === ":root[data-theme=\"dark\"]") return "dark";
   if (sel === ":root[data-theme=\"light\"]") return "light";
   if (sel === ":root:not([data-theme=\"dark\"])") return "light"; // pre-hydration light
   if (sel === ":root:not([data-theme=\"light\"])[data-contrast=\"boost\"]") return "boostDark";
@@ -145,7 +154,7 @@ const DECL_RE = /(--[\w-]+)\s*:\s*([^;]+);/g;
 function extract(css) {
   const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
   const rules = parseRules(stripped, []);
-  const raw = { base: {}, light: {}, boostDark: {}, boostLight: {} };
+  const raw = { base: {}, dark: {}, light: {}, boostDark: {}, boostLight: {} };
   const accentRgb = { dark: {}, light: {} };
   for (const rule of rules) {
     if (rule.context.some((c) => /^@media/.test(c))) continue;
@@ -287,9 +296,9 @@ function main() {
   const css = readFileSync(SOURCE, "utf8");
   const { raw, accentRgb } = extract(css);
 
-  const darkView = { ...raw.base };
+  const darkView = { ...raw.base, ...raw.dark };
   const lightView = { ...raw.base, ...raw.light };
-  const boostDarkView = { ...raw.base, ...raw.boostDark };
+  const boostDarkView = { ...raw.base, ...raw.dark, ...raw.boostDark };
   const boostLightView = { ...raw.base, ...raw.light, ...raw.boostLight };
 
   const dark = resolveAll(darkView);
