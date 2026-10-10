@@ -1,0 +1,176 @@
+import React from "react";
+import { Pressable, Text, View, ViewStyle } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { useTheme } from "../theme/ThemeProvider";
+import { MOTION, TYPOGRAPHY } from "../theme/tokens";
+import { accentDeepened } from "../theme/mix";
+
+export interface SegmentedOption {
+  id: string;
+  label: React.ReactNode;
+  icon?: React.ReactNode;
+}
+
+export interface SegmentedControlProps {
+  options: SegmentedOption[];
+  value: string;
+  onChange: (id: string) => void;
+  /** Active option gets the accent-gradient pill with white text + glow. */
+  emphasize?: boolean;
+  compact?: boolean;
+  style?: ViewStyle;
+  testID?: string;
+  accessibilityLabel?: string;
+}
+
+/**
+ * RN port of ui/SegmentedControl.tsx. The sliding pill is measured per-option
+ * (onLayout, like the web's getBoundingClientRect path) and animated with
+ * withTiming(MOTION.base); reduced-motion zeroes the animation. Emphasize uses
+ * the accent deepened 60%/46% toward black (the measured AA pill); inactive
+ * labels read text-secondary (the 6.16:1 light fix).
+ */
+export function SegmentedControl({
+  options,
+  value,
+  onChange,
+  emphasize = false,
+  compact = false,
+  style,
+  testID,
+  accessibilityLabel,
+}: SegmentedControlProps) {
+  const { colors, accentColor, reduceMotion } = useTheme();
+  const activeIndex = Math.max(options.findIndex((o) => o.id === value), 0);
+
+  const [boxes, setBoxes] = React.useState<{ x: number; w: number }[]>([]);
+  const pillX = useSharedValue(4);
+  const pillW = useSharedValue(0);
+
+  React.useEffect(() => {
+    const b = boxes[activeIndex];
+    if (!b) return;
+    const dur = reduceMotion ? 0 : MOTION.base;
+    pillX.value = withTiming(b.x, { duration: dur });
+    pillW.value = withTiming(b.w, { duration: dur });
+  }, [activeIndex, boxes, reduceMotion, pillX, pillW]);
+
+  const pillStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pillX.value }],
+    width: pillW.value,
+    opacity: pillW.value > 0 ? 1 : 0,
+  }));
+
+  const pillBg = emphasize
+    ? ([accentDeepened(accentColor, 60), accentDeepened(accentColor, 46)] as const)
+    : null;
+
+  return (
+    <View
+      testID={testID}
+      accessibilityRole="radiogroup"
+      accessibilityLabel={accessibilityLabel}
+      style={[
+        {
+          flexDirection: "row",
+          flexWrap: "wrap",
+          borderRadius: 20,
+          backgroundColor: colors["color-surface-2"],
+          padding: 6,
+          maxWidth: 640,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          {
+            position: "absolute",
+            top: 6,
+            bottom: 6,
+            left: 0,
+            borderRadius: 16,
+            overflow: "hidden",
+          },
+          pillStyle,
+        ]}
+      >
+        {pillBg ? (
+          <LinearGradient
+            colors={pillBg as unknown as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+        ) : (
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: colors["color-surface-0"],
+            }}
+          />
+        )}
+      </Animated.View>
+      {options.map((option, index) => {
+        const active = option.id === value;
+        return (
+          <Pressable
+            key={option.id}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: active }}
+            onPress={() => onChange(option.id)}
+            onLayout={(e) => {
+              const { x, width } = e.nativeEvent.layout;
+              setBoxes((prev) => {
+                const next = [...prev];
+                next[index] = { x: x - 6, w: width };
+                return next;
+              });
+            }}
+            style={{
+              flex: 1,
+              minWidth: compact ? 0 : 96,
+              minHeight: 64,
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "row",
+              gap: 6,
+              paddingHorizontal: compact ? 8 : 16,
+              paddingVertical: 12,
+              borderRadius: 16,
+              zIndex: 1,
+            }}
+          >
+            {option.icon}
+            {typeof option.label === "string" ? (
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: active
+                    ? emphasize
+                      ? colors["color-primary-foreground"]
+                      : colors["color-text-primary"]
+                    : colors["color-text-secondary"],
+                  fontSize: compact ? TYPOGRAPHY.label.fontSize : TYPOGRAPHY.body.fontSize,
+                  fontWeight: "600",
+                }}
+              >
+                {option.label}
+              </Text>
+            ) : (
+              option.label
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export default SegmentedControl;
