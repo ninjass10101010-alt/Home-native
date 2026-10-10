@@ -11,12 +11,16 @@ export class ApiError extends Error {
   code: string;
   retryable: boolean;
   queued: boolean;
+  /** Parsed response body when the server answered with one (502 partials can
+   *  still carry live data — e.g. google-calendar events on a partial sync). */
+  body?: unknown;
   constructor(args: {
     message: string;
     status: number;
     code: string;
     retryable?: boolean;
     queued?: boolean;
+    body?: unknown;
   }) {
     super(args.message);
     this.name = "ApiError";
@@ -24,6 +28,7 @@ export class ApiError extends Error {
     this.code = args.code;
     this.retryable = args.retryable ?? false;
     this.queued = args.queued ?? false;
+    this.body = args.body;
   }
 }
 
@@ -97,6 +102,7 @@ export async function api<T = unknown>(path: string, init: ApiInit = {}): Promis
         code: typeof body?.error === "string" ? body.error : `http_${res.status}`,
         retryable: res.status >= 500 || body?.retryable === true,
         queued: body?.queued === true,
+        body,
       });
     }
     return body as T;

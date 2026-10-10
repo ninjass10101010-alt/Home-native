@@ -167,6 +167,23 @@ export function TodayEventsWidget() {
       }
     } catch (e) {
       googleFailure = e instanceof ApiError ? classifyFailure(e) : "error";
+      // 502 partial: the server attached the events it still has — keep them
+      // (honesty means showing what's live + the failure pill, not dropping data).
+      if (e instanceof ApiError && Array.isArray((e.body as any)?.events)) {
+        google = ((e.body as any).events as GoogleEventRow[])
+          .filter((row) => googleCoversDay(row, today))
+          .map((row, i) => {
+            const clock = googleClock(row);
+            return {
+              id: `g_${row.google_id ?? i}`,
+              title: row.summary || "(no title)",
+              time: clock.time ?? ALL_DAY_TIME,
+              sortMinutes: clock.sortMinutes,
+              icon: "📅",
+              member: "Google",
+            };
+          });
+      }
     }
 
     const events = [...family, ...google].sort((a, b) => a.sortMinutes - b.sortMinutes);

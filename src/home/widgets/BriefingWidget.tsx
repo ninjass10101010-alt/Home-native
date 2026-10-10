@@ -51,7 +51,7 @@ export function BriefingWidget() {
   const { status, data, failure, stale, retry } = useWidgetData(async () => {
     // Body-over-status: ok:false means the read is not truth even on a 200.
     const res = await api<BriefingBody>(`/api/consuela/briefing?scopeDate=${localTodayISO()}`);
-    if (!res || res.ok === false) throw Object.assign(new Error("briefing not ok"), { status: 502 });
+    if (!res || res.ok === false) throw new Error("briefing not ok");
     return res.briefing ?? null;
   });
 

@@ -90,6 +90,19 @@ describe("api client", () => {
     await expect(api("/api/auth/whoami")).rejects.toMatchObject({ code: "unreachable", status: 0 });
   });
 
+  it("ApiError carries the parsed body (502 partials keep their data)", async () => {
+    installFetch(() => mockRes(502, { ok: false, partial: true, events: [{ id: "x" }] }));
+    try {
+      await api("/api/google-calendar");
+      throw new Error("expected ApiError");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(Error);
+      expect(e.status).toBe(502);
+      expect((e.body as any)?.partial).toBe(true);
+      expect(Array.isArray((e.body as any)?.events)).toBe(true);
+    }
+  });
+
   it("200 with {ok:false, degraded:true} RESOLVES (body truth over status)", async () => {
     installFetch(() => mockRes(200, { ok: false, degraded: true, settings: {} }));
     const res: any = await api("/api/photos/settings");

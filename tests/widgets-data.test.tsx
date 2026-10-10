@@ -191,6 +191,34 @@ describe("TodayEventsWidget", () => {
     expect(getByText(/Google Calendar/)).toBeTruthy();
     expect(getByText(/couldn't load/i)).toBeTruthy();
   });
+
+  it("502 partial keeps the server's surviving Google rows (body on ApiError)", async () => {
+    route({
+      "/api/db/events": { items: [] },
+      "/api/google-calendar": new ApiError({
+        message: "calendar_partial_failure",
+        status: 502,
+        code: "http_502",
+        retryable: true,
+        body: {
+          ok: false,
+          partial: true,
+          stale: true,
+          error: "calendar_partial_failure",
+          events: [{ google_id: "g9", summary: "Soccer game", start_iso: `${today}T15:00:00`, all_day: false, calendar_id: "primary" }],
+        },
+      }),
+    });
+    const { findByText, getByText, queryByText } = render(<TodayEventsWidget />, { wrapper: wrap });
+    // the partial row still renders…
+    expect(await findByText("Soccer game")).toBeTruthy();
+    expect(getByText("3:00 PM")).toBeTruthy();
+    // …the failure pill admits the partial honestly…
+    expect(getByText(/couldn't load/i)).toBeTruthy();
+    // …and the count includes the surviving row
+    expect(getByText("1 event on the family calendar")).toBeTruthy();
+    expect(queryByText("0 events")).toBeNull();
+  });
 });
 
 describe("CurrentMealWidget", () => {
