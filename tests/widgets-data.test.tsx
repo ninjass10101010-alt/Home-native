@@ -301,7 +301,6 @@ describe("BriefingWidget", () => {
 });
 
 describe("TodayEventsWidget — Google not-connected honesty (Wave-2 critic fix)", () => {
-  const today = localTodayISO();
   it("200 {ok:true, connected:false} → the connected pill, never a silent empty", async () => {
     route({
       "/api/db/events": { items: [] },
