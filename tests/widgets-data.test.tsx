@@ -89,7 +89,7 @@ describe("TasksWidget", () => {
     route({
       "/api/tasks/sync": syncBody([
         { id: 1, title: "Make bed", assignee: "Aurora", due: "Today", points: 5, completed: false, assigneeEmoji: "👧" },
-        { id: 2, title: "Dishes", assignee: "Alex", due: "", points: 10, completed: false, assigneeEmoji: "👦", pendingApproval: { byName: "Alex", at: "2026-10-10T10:00:00Z", points: 10 } },
+        { id: 2, title: "Dishes", assignee: "Alex", due: "", points: 10, completed: true, assigneeEmoji: "👦", pendingApproval: { byName: "Alex", at: "2026-10-10T10:00:00Z", points: 10 } },
         { id: 3, title: "Old done task", assignee: "", due: "", points: 5, completed: true, assigneeEmoji: "👤" },
       ]),
     });

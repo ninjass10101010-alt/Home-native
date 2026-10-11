@@ -44,7 +44,10 @@ export function TasksWidget() {
   const { status, data, failure, stale, retry } = useWidgetData(async () => {
     const res = await api<TasksSyncBody>("/api/tasks/sync");
     const tasks = Array.isArray(res?.snapshot?.tasks) ? (res.snapshot.tasks as WallTask[]) : [];
-    const pending = tasks.filter((t) => !t.completed);
+    // Pending rows: uncompleted + a kid's LANDED tap (server shape:
+    // completed:true+pendingApproval — task-utils.ts:60) still counts as
+    // "waiting", not done; parents approve it on the Tasks page.
+    const pending = tasks.filter((t) => !t.completed || !!t.pendingApproval);
     return {
       pending,
       // Single pending gate: pendingApproval is the ONLY pending check.

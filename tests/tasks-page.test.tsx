@@ -331,8 +331,29 @@ describe("TasksPage — kid view", () => {
     expect(calls[1][1].body.pin).toBe("2222");
   });
 
-  it("202 durably queued → honest catching-up copy + refreshNow, never an instant-apply claim", async () => {
-    mockMember = kidUnder10;
+  it("PIN-free path with a DEAD SESSION (401 without a pad) → honest 'Sign in again' toast, never a silent no-op", async () => {
+    mockMember = kidUnder10; // pinRequiredFor === false → no pad on this path
+    kidSnapshot();
+    api.mockImplementation((path: string) => {
+      if (path !== "/api/tasks/claim") return Promise.reject(new ApiError({ message: "unmapped", status: 404, code: "not_found" }));
+      // The session cookie died between sync polls — the server answers 401.
+      return Promise.reject(
+        new ApiError({ message: "unauthorized", status: 401, code: "unauthorized", body: { success: false, reason: "unauthorized" } })
+      );
+    });
+    const { getByTestId, findByText, queryByText, findByTestId } = render(<TasksPage />, { wrapper: wrap });
+    await findByText("Make bed");
+    await act(async () => {
+      fireEvent.press(getByTestId("kid-task-1"));
+      await Promise.resolve();
+    });
+    // No pad opened, and the failure was VISIBLE — honest copy, not silence
+    expect(await findByText("Sign in again to finish that.")).toBeTruthy();
+    expect(queryByText(/Nice work/)).toBeNull();
+    expect(queryByText(/tasks-pinpad/)).toBeNull();
+  });
+
+  it("202 durably queued → honest catching-up copy + refreshNow, never an instant-apply claim", async () => {    mockMember = kidUnder10;
     kidSnapshot();
     route({
       "/api/tasks/claim": {
