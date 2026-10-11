@@ -3,6 +3,7 @@ import { Text, View } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 import { Screen } from "../src/theme/Screen";
 import { HomeWall } from "../src/home/HomeWall";
+import { KidHome } from "../src/home/KidHome";
 import { CapsuleDock } from "../src/nav/CapsuleDock";
 import { MoreSheet } from "../src/nav/MoreSheet";
 import { useTheme } from "../src/theme/ThemeProvider";
@@ -151,12 +152,18 @@ export default function HomePlaceholder() {
     <Screen>
       {/* Wall-touch activity resets the screensaver quiet clock. */}
       <View style={{ flex: 1 }} onTouchStart={() => (lastTouchRef.current = Date.now())}>
-      <HomeWall
-        members={roster.members}
-        onSelectMember={(m) => void onSelect(m)}
-        onSignOut={member ? () => void signOut() : undefined}
-        widgets={WALL_WIDGETS}
-      />
+      {/* Mode switch (WS-4): a signed-in child/pet gets the gamified kid wall
+          INSTEAD of the family bento; family (guest) and adult keep HomeWall. */}
+      {member && member.role !== "parent" ? (
+        <KidHome />
+      ) : (
+        <HomeWall
+          members={roster.members}
+          onSelectMember={(m) => void onSelect(m)}
+          onSignOut={member ? () => void signOut() : undefined}
+          widgets={WALL_WIDGETS}
+        />
+      )}
       {roster.source !== "live" || railError ? (
         <View style={{ position: "absolute", top: 12, left: 24, right: 24, alignItems: "center" }}>
           {railError ? (

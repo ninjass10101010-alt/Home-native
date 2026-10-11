@@ -39,8 +39,10 @@ export interface WallTask {
   pendingApproval: { byName: string; points: number } | null;
 }
 
-/** Photo data-URLs never belong in a Text glyph (web safeDisplayEmoji parity) — legacy rows collapse to the silhouette. */
-function displayEmoji(raw: unknown): string {
+/** Photo data-URLs never belong in a Text glyph (web safeDisplayEmoji parity, the 1 MiB
+ *  incident rule) — legacy rows collapse to the silhouette. Shared by the tasks and
+ *  kid-wall surfaces (kid-quest.ts re-exports it as kidEmoji for the hero). */
+export function displayEmoji(raw: unknown): string {
   if (typeof raw !== "string" || raw.length === 0 || raw.length > 16 || raw.startsWith("data:")) return "👤";
   return raw;
 }
