@@ -4,7 +4,6 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { MealsPage } from "../src/meals/MealsPage";
-import { currentSlotForHour } from "../src/meals/plan-grid";
 import MealsRoute from "../app/meals";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
@@ -374,16 +373,6 @@ describe("MealsPage — states", () => {
 });
 
 describe("plan-grid — ported slot math", () => {
-  it("currentSlotForHour follows the PlanTab time-of-day bands", () => {
-    expect(currentSlotForHour(0)).toBe("breakfast");
-    expect(currentSlotForHour(9)).toBe("breakfast");
-    expect(currentSlotForHour(10)).toBe("lunch"); // <10 breakfast band ends
-    expect(currentSlotForHour(13)).toBe("lunch");
-    expect(currentSlotForHour(14)).toBe("snack"); // <14 lunch band ends
-    expect(currentSlotForHour(16)).toBe("snack");
-    expect(currentSlotForHour(17)).toBe("dinner"); // <17 snack band ends
-    expect(currentSlotForHour(23)).toBe("dinner");
-  });
 });
 
 describe("Meals route", () => {

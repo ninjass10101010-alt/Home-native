@@ -93,16 +93,9 @@ export function mapMealRows(rows: MealRow[]): ParsedMeal[] {
 }
 
 /**
- * The current slot by hour band — PlanTab's timeOfDayMeal thresholds
- * (<10 breakfast, <14 lunch, <17 snack, else dinner). Same bands the
- * CurrentMealWidget's fallback rules use, so the cell and the page agree.
+ * The "Now" chip follows the household SCHEDULE, shared with the wall cell in
+ * src/meals/slot.ts (critic's fork-ban: one rule, one source — never bands).
  */
-export function currentSlotForHour(hour: number): MealSlotId {
-  if (hour < 10) return "breakfast";
-  if (hour < 14) return "lunch";
-  if (hour < 17) return "snack";
-  return "dinner";
-}
 
 /**
  * Cell pick — the CurrentMealWidget's selection semantics verbatim:

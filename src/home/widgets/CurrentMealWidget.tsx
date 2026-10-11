@@ -8,6 +8,7 @@ import { mix } from "../../theme/mix";
 import { Chip } from "../../ui/Chip";
 import { WidgetFrame } from "./WidgetFrame";
 import { useWidgetData, weekStartMondayISO } from "./data";
+import { currentSlotFor } from "../../meals/slot";
 
 /** meal_plan_entries row (subset) — see Home-ai src/lib/pb-seed.ts schema. */
 interface MealRow {
@@ -102,26 +103,18 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-  const mealSchedules = (data?.schedules ?? [])
-    .filter((s) => s.mealType && s.mealType !== "none")
-    .map((s) => ({ ...s, minutes: parseTimeToMinutes(s.time) }))
-    .filter((s): s is ScheduleRow & { minutes: number } => s.minutes !== null)
-    .sort((a, b) => a.minutes - b.minutes);
+  // The shared slot rule (src/meals/slot.ts) — the wall cell and the page
+  // agree because there is ONE implementation (the critic's fork-ban).
+  const current: { mealType: string; time?: string; minutes: number | null } = (() => {
+    const slot = currentSlotFor(data?.schedules ?? [], now);
+    const row = (data?.schedules ?? []).find((s) => s.mealType === slot) ?? null;
+    return { mealType: slot, time: row?.time, minutes: row ? parseTimeToMinutes(row.time) : null };
+  })();
 
-  let current = mealSchedules[0];
-  for (const meal of mealSchedules) {
-    if (meal.minutes <= nowMinutes) current = meal;
-  }
-  // A slot that started >60m ago is over — roll forward to the next one.
-  if (current && nowMinutes - current.minutes > 60) {
-    const next = mealSchedules.find((m) => m.minutes > nowMinutes);
-    if (next) current = next;
-  }
-
-  const mealType = current?.mealType ?? "dinner";
+  const mealType = current.mealType as keyof typeof MEAL_THEMES;
   const theme = MEAL_THEMES[mealType] ?? MEAL_THEMES.dinner;
-  const scheduledTime = current?.time ? formatClock(current.time) : "";
-  const minutesUntil = current ? current.minutes - nowMinutes : null;
+  const scheduledTime = current.time ? formatClock(current.time) : "";
+  const minutesUntil = current.minutes === null ? null : current.minutes - nowMinutes;
 
   const todayShort = now.toLocaleDateString("en-US", { weekday: "short" });
   const weekMonday = weekStartMondayISO(now);
