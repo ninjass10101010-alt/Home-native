@@ -52,7 +52,8 @@ const SECTIONS: readonly SectionDef[] = [
 
 /** Kid/pet launcher (web SAFE_NON_PARENT_SECTION_IDS). */
 const SIGNED_IN_SECTIONS: readonly SettingsSectionId[] = ["me", "safety", "appearance"];
-/** The signed-out wall holds the device: no Me exists without a member. */
+/** The signed-out wall holds the device: guests get Me/Safety/Appearance too
+ *  (Home-ai contract) — the Me panel shows the sign-in rail pointer. */
 const GUEST_SECTIONS: readonly SettingsSectionId[] = ["me", "safety", "appearance"];
 
 function sectionsFor(member: ServerMember | null): SectionDef[] {
