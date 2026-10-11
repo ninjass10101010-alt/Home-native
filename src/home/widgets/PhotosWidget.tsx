@@ -2,24 +2,13 @@ import React from "react";
 import { Image, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { api, ApiError } from "../../api/client";
-import { getBaseUrl } from "../../api/config";
-import { getSessionCookie } from "../../api/session";
+import { photoSource, type WallPhoto } from "../../photos/library";
 import { useTheme } from "../../theme/ThemeProvider";
 import { MOTION, TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
 import { useWidgetData } from "./data";
 import { WidgetFrame } from "./WidgetFrame";
 import { useToast } from "../../ui/Toast";
-
-interface WallPhoto {
-  id: string;
-  url: string; // "/api/photos/file?..." — session cookie required
-  width: number;
-  height: number;
-  takenAt: string;
-  caption?: string;
-  album?: string;
-}
 
 interface PhotoSettings {
   rotateSeconds: number; // 10–600, default 75
@@ -63,14 +52,6 @@ async function loadPhotos(): Promise<PhotosState> {
     }
   }
   return { photos, settings, degraded };
-}
-
-function photoSource(p: WallPhoto) {
-  const cookie = getSessionCookie();
-  return {
-    uri: `${getBaseUrl()}${p.url}`,
-    headers: cookie ? { Cookie: `consuela_session=${cookie}` } : undefined,
-  };
 }
 
 /**

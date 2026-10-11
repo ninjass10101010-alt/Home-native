@@ -1,0 +1,303 @@
+import React from "react";
+import { AppState, Pressable, Text, View } from "react-native";
+import { api } from "../api/client";
+import { TOKENS } from "../theme/tokens";
+import { mixAlpha } from "../ui/SoftButton";
+
+/**
+ * The wall's ambient idle board (WS-8) — RN port of Home-ai's
+ * ScreensaverBoard. Read-only: no auth, no nav, no writes (the endpoint is
+ * middleware-exempt, so the signed-OUT wall idles here too — the board must
+ * not ride the session-gated widget/hub patterns).
+ *
+ * Ported contract: poll /api/consuela/screensaver every 60s + on foreground;
+ * malformed ok:true payloads and failures keep the last-good board; after 5min
+ * without a successful fetch the clock dims honestly and a quiet amber dot
+ * appears; the whole board dims after 60s untouched; any tap wakes the wall
+ * back to the previous route.
+ *
+ * The board is FIXED dark in both app themes (web parity: #0f1117 — which is
+ * literally the dark canvas token), so colors come from TOKENS.dark, not the
+ * live ThemeProvider. Nothing animates; reduced-motion is a no-op here.
+ */
+
+export interface ScreensaverProps {
+  onExit?: () => void;
+}
+
+export interface ScreensaverEvent {
+  title: string;
+  time: string; // display form ("4:00 PM" | "All day") — server-formatted
+  allDay: boolean;
+  color?: string;
+}
+
+export interface ScreensaverPayload {
+  ok: true;
+  generatedAt: string;
+  date: string; // YYYY-MM-DD, family-local
+  events: ScreensaverEvent[];
+  dinner: { name: string } | null;
+  tasks: { done: number; total: number };
+  briefing: string[];
+  weather: { tempF: number; hiF: number; loF: number; condition: string } | null;
+}
+
+export const POLL_MS = 60_000;
+export const STALE_MS = 5 * 60_000;
+export const DIM_AFTER_MS = 60_000;
+const TICK_MS = 15_000; // minute-precision clock + dim/stale re-check cadence
+const DIM_OPACITY = 0.35;
+
+const D = TOKENS.dark; // fixed dark board (web parity — see note above)
+const INK = D["color-text-primary"];
+const SUB_INK = D["color-text-secondary"];
+const FAINT_INK = D["color-text-muted"];
+const PANEL_BG = mixAlpha(INK, 0.05);
+const PANEL_RING = mixAlpha(INK, 0.1);
+const STALE_DOT = mixAlpha(D["color-accent-amber"], 0.8);
+const PROGRESS_FILL = mixAlpha(D["color-accent-mint"], 0.8);
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const;
+
+/** Wall-clock "7:05" — built by hand so Hermes Intl quirks can never skew it. */
+function clockLine(now: Date): string {
+  const h = now.getHours() % 12 || 12;
+  const m = String(now.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+/** "Sunday, October 11" (the reference board's date line). */
+function dateLine(now: Date): string {
+  return `${DAY_NAMES[now.getDay()]}, ${MONTH_NAMES[now.getMonth()]} ${now.getDate()}`;
+}
+
+export function Screensaver({ onExit }: ScreensaverProps) {
+  const [data, setData] = React.useState<ScreensaverPayload | null>(null);
+  const [lastOk, setLastOk] = React.useState(0);
+  const [now, setNow] = React.useState(() => new Date());
+  // State (not a ref): the dim is READ during render, so it must subscribe.
+  const [lastTouch, setLastTouch] = React.useState(() => Date.now());
+
+  // Clock/dim/stale re-render cadence (the clock itself is minute-precision).
+  React.useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), TICK_MS);
+    return () => clearInterval(t);
+  }, []);
+
+  // Poll — web board parity: pull on mount + every 60s + on foreground.
+  // Malformed ok:true payloads are ignored; failures keep the last-good board
+  // (the stale state, not a spinner, is the honest report).
+  React.useEffect(() => {
+    let dead = false;
+    const pull = async () => {
+      try {
+        const json = await api<ScreensaverPayload | null>("/api/consuela/screensaver");
+        if (dead || !json || json.ok !== true) return;
+        if (!Array.isArray(json.events) || !json.tasks || !Array.isArray(json.briefing)) return;
+        setData(json);
+        setLastOk(Date.now());
+      } catch {
+        /* keep last-good data — the stale dot reports it */
+      }
+    };
+    void pull();
+    const id = setInterval(pull, POLL_MS);
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") void pull();
+    });
+    return () => {
+      dead = true;
+      clearInterval(id);
+      sub.remove();
+    };
+  }, []);
+
+  const wake = () => {
+    setLastTouch(Date.now());
+    setNow(new Date());
+  };
+
+  const stale = lastOk > 0 && now.getTime() - lastOk > STALE_MS;
+  const dimmed = now.getTime() - lastTouch >= DIM_AFTER_MS;
+
+  const progressPct =
+    data && data.tasks.total > 0 ? Math.round((data.tasks.done / data.tasks.total) * 100) : 0;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: D["color-canvas"] }} onTouchStart={wake}>
+      <Pressable
+        testID="screensaver-root"
+        accessibilityRole="button"
+        accessibilityLabel="Wake — back to the dashboard"
+        onPress={onExit}
+        style={{ flex: 1, padding: 40 }}
+      >
+        <View testID="ss-content" style={{ flex: 1, opacity: dimmed ? DIM_OPACITY : 1 }}>
+          {/* header: clock + date (left), weather (right), stale dot (corner) */}
+          <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
+            <View>
+              <Text
+                testID="ss-clock"
+                style={[
+                  {
+                    color: INK,
+                    fontSize: 128,
+                    fontWeight: "800",
+                    lineHeight: 132,
+                    letterSpacing: -2,
+                    fontVariant: ["tabular-nums"],
+                  },
+                  stale && { opacity: 0.5 },
+                ]}
+              >
+                {clockLine(now)}
+              </Text>
+              <Text testID="ss-date" style={{ color: SUB_INK, fontSize: 26, fontWeight: "500", marginTop: 4 }}>
+                {dateLine(now)}
+              </Text>
+            </View>
+            {data?.weather ? (
+              <View style={{ alignItems: "flex-end" }}>
+                <Text
+                  testID="ss-weather-temp"
+                  style={{ color: INK, fontSize: 84, fontWeight: "700", lineHeight: 88, fontVariant: ["tabular-nums"] }}
+                >
+                  {`${data.weather.tempF}°`}
+                </Text>
+                <Text style={{ color: INK, fontSize: 24, fontWeight: "600" }}>{data.weather.condition}</Text>
+                <Text style={{ color: SUB_INK, fontSize: 18, fontVariant: ["tabular-nums"], marginTop: 2 }}>
+                  {`H ${data.weather.hiF}° · L ${data.weather.loF}°`}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {stale ? (
+            <View
+              testID="ss-stale"
+              accessibilityLabel="Data may be out of date"
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                width: 18,
+                height: 18,
+                borderRadius: 9,
+                backgroundColor: STALE_DOT,
+              }}
+            />
+          ) : null}
+
+          {/* the three panels: Today / Tonight + Chores / Consuela */}
+          <View style={{ flex: 1, flexDirection: "row", gap: 20, marginTop: 32 }}>
+            <View
+              style={{
+                flex: 1,
+                borderRadius: 28,
+                backgroundColor: PANEL_BG,
+                borderWidth: 1,
+                borderColor: PANEL_RING,
+                padding: 24,
+                overflow: "hidden",
+              }}
+            >
+              <Text style={{ color: FAINT_INK, fontSize: 14, fontWeight: "700", letterSpacing: 3, marginBottom: 18 }}>
+                TODAY
+              </Text>
+              <View style={{ gap: 16 }}>
+                {(data?.events ?? []).length === 0 ? (
+                  <Text style={{ color: FAINT_INK, fontSize: 22 }}>
+                    {data ? "Quiet day" : "Waiting for the family server…"}
+                  </Text>
+                ) : null}
+                {(data?.events ?? []).map((e, i) => (
+                  <View key={`${e.title}-${i}`} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    <View
+                      style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 6,
+                        backgroundColor: e.color ?? mixAlpha(INK, 0.4),
+                      }}
+                    />
+                    <Text style={{ width: 96, color: SUB_INK, fontSize: 18, fontVariant: ["tabular-nums"] }} numberOfLines={1}>
+                      {e.time}
+                    </Text>
+                    <Text style={{ flex: 1, color: INK, fontSize: 22, fontWeight: "500" }} numberOfLines={1}>
+                      {e.title}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View
+              style={{
+                flex: 1,
+                borderRadius: 28,
+                backgroundColor: PANEL_BG,
+                borderWidth: 1,
+                borderColor: PANEL_RING,
+                padding: 24,
+              }}
+            >
+              <Text style={{ color: FAINT_INK, fontSize: 14, fontWeight: "700", letterSpacing: 3, marginBottom: 12 }}>
+                TONIGHT
+              </Text>
+              <Text testID="ss-dinner" style={{ color: INK, fontSize: 28, fontWeight: "700" }} numberOfLines={2}>
+                {data ? (data.dinner ? data.dinner.name : "Nothing planned yet") : "…"}
+              </Text>
+              <Text style={{ color: FAINT_INK, fontSize: 14, fontWeight: "700", letterSpacing: 3, marginTop: 32, marginBottom: 12 }}>
+                CHORES
+              </Text>
+              <Text testID="ss-chores" style={{ color: INK, fontSize: 28, fontWeight: "700", fontVariant: ["tabular-nums"] }}>
+                {data ? `${data.tasks.done} of ${data.tasks.total} done` : "…"}
+              </Text>
+              <View
+                style={{
+                  marginTop: 14,
+                  height: 12,
+                  borderRadius: 6,
+                  backgroundColor: mixAlpha(INK, 0.1),
+                  overflow: "hidden",
+                }}
+              >
+                <View style={{ height: 12, borderRadius: 6, width: `${progressPct}%`, backgroundColor: PROGRESS_FILL }} />
+              </View>
+            </View>
+
+            <View
+              style={{
+                flex: 1,
+                borderRadius: 28,
+                backgroundColor: PANEL_BG,
+                borderWidth: 1,
+                borderColor: PANEL_RING,
+                padding: 24,
+                overflow: "hidden",
+              }}
+            >
+              <Text style={{ color: FAINT_INK, fontSize: 14, fontWeight: "700", letterSpacing: 3, marginBottom: 18 }}>
+                CONSUELA
+              </Text>
+              <View style={{ gap: 14 }}>
+                {(data?.briefing ?? []).map((line, i) => (
+                  <Text key={i} style={{ color: INK, fontSize: 20, fontWeight: "500" }} numberOfLines={2}>
+                    {line}
+                  </Text>
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+export default Screensaver;

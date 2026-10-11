@@ -14,6 +14,7 @@ import { useAuth, pinRequiredFor } from "../src/state/AuthProvider";
 import { listMembersSmart, type MembersResult } from "../src/api/members";
 import { ApiError } from "../src/api/client";
 import { PinRequired } from "../src/api/auth";
+import { idleBoardDue, IDLE_CHECK_MS } from "../src/home/idle";
 import type { WidgetId } from "../src/home/widgets";
 import { TasksWidget } from "../src/home/widgets/TasksWidget";
 import { TodayEventsWidget } from "../src/home/widgets/TodayEventsWidget";
@@ -61,6 +62,38 @@ export default function HomePlaceholder() {
   const [pinError, setPinError] = React.useState<string | null>(null);
   const [railError, setRailError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+
+  // Wall idle → ambient board (WS-8): Home is the only route that settles
+  // into /screensaver; any touch here resets the quiet clock, and the board
+  // only opens once per Home visit (src/home/idle.ts holds the rule).
+  // lastTouch starts 0 ("no touch yet") and is armed in the effect below —
+  // Date.now() in render would be an impure read (react-hooks/purity).
+  const lastTouchRef = React.useRef(0);
+  const boardPushedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (pathname === "/") {
+      // mounted or returned-to: the family is at the wall — clock restarts
+      lastTouchRef.current = Date.now();
+      boardPushedRef.current = false;
+    }
+  }, [pathname]);
+
+  React.useEffect(() => {
+    const t = setInterval(() => {
+      if (
+        idleBoardDue({
+          pathname,
+          idleMs: Date.now() - lastTouchRef.current,
+          pushed: boardPushedRef.current,
+        })
+      ) {
+        boardPushedRef.current = true;
+        router.push("/screensaver" as never);
+      }
+    }, IDLE_CHECK_MS);
+    return () => clearInterval(t);
+  }, [pathname, router]);
 
   React.useEffect(() => {
     let alive = true;
@@ -112,6 +145,8 @@ export default function HomePlaceholder() {
 
   return (
     <Screen>
+      {/* Wall-touch activity resets the screensaver quiet clock. */}
+      <View style={{ flex: 1 }} onTouchStart={() => (lastTouchRef.current = Date.now())}>
       <HomeWall
         members={roster.members}
         onSelectMember={(m) => void onSelect(m)}
@@ -154,6 +189,7 @@ export default function HomePlaceholder() {
           <PinPad member={pinTarget} onVerified={(pin) => void onVerified(pin)} onCancel={() => setPinTarget(null)} busy={busy} error={pinError} />
         ) : null}
       </Modal>
+      </View>
     </Screen>
   );
 }
