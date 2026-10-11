@@ -41,8 +41,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /**
  * Dev-only design-kit showcase — the critic loop's calibration target (Task 15).
  * Renders every primitive across variants/materials/ramp in the CURRENT theme
- * (switch theme/boost/accent from Settings when that lands; for now the
- * provider defaults + device prefs drive it).
+ * (theme/boost/accent are switched live from the Settings surface, WS-10).
  */
 export default function DesignKitShowcase() {
   const { colors, theme, boost, accent, setBoost, setAccent, setTheme } = useTheme();
