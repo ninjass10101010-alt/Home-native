@@ -86,6 +86,10 @@ export default function HomePlaceholder() {
           pathname,
           idleMs: Date.now() - lastTouchRef.current,
           pushed: boardPushedRef.current,
+          // The sign-in modal + More sheet live in separate windows — their
+          // taps never reach the touch clock, and pushing the board mid-PIN
+          // is the exact failure the critic caught (modal-aware idle).
+          blocked: !!pinTarget || moreOpen,
         })
       ) {
         boardPushedRef.current = true;

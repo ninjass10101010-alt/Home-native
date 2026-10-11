@@ -215,7 +215,7 @@ export function PhotosPage() {
                 {photos.map(renderCell)}
               </View>
             )}
-            {!isParent ? (
+            {!isParent && photos.length > 0 ? (
               <Text
                 style={{
                   marginTop: 20,

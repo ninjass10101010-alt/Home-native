@@ -151,6 +151,7 @@ describe("Screensaver — the ambient board", () => {
     await findByTestId("ss-clock");
     fireEvent.press(getByTestId("screensaver-root"));
     expect(onExit).toHaveBeenCalledTimes(1);
+
   });
 });
 
@@ -173,18 +174,23 @@ describe("Screensaver route", () => {
 });
 
 describe("home idle rule — the wall idles into the board", () => {
+  it("a modal flow stands the clock down (mid-PIN taps never idle into the board)", () => {
+    expect(
+      idleBoardDue({ pathname: "/", idleMs: SCREENSAVER_IDLE_MS, pushed: false, blocked: true })
+    ).toBe(false);
+  });
   it("fires only from Home, only when quiet long enough, only once", () => {
     // just shy of the threshold: no
     expect(
-      idleBoardDue({ pathname: "/", idleMs: SCREENSAVER_IDLE_MS - 1, pushed: false })
+      idleBoardDue({ pathname: "/", idleMs: SCREENSAVER_IDLE_MS - 1, pushed: false, blocked: false })
     ).toBe(false);
     // quiet long enough at Home: yes
-    expect(idleBoardDue({ pathname: "/", idleMs: SCREENSAVER_IDLE_MS, pushed: false })).toBe(true);
+    expect(idleBoardDue({ pathname: "/", idleMs: SCREENSAVER_IDLE_MS, pushed: false, blocked: false })).toBe(true);
     // already pushed (home stays mounted under the board): never re-fire
-    expect(idleBoardDue({ pathname: "/", idleMs: SCREENSAVER_IDLE_MS * 2, pushed: true })).toBe(false);
+    expect(idleBoardDue({ pathname: "/", idleMs: SCREENSAVER_IDLE_MS * 2, pushed: true, blocked: false })).toBe(false);
     // any other route: no
     expect(
-      idleBoardDue({ pathname: "/meals", idleMs: SCREENSAVER_IDLE_MS * 2, pushed: false })
+      idleBoardDue({ pathname: "/meals", idleMs: SCREENSAVER_IDLE_MS * 2, pushed: false, blocked: false })
     ).toBe(false);
   });
 });

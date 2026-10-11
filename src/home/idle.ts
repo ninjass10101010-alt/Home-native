@@ -22,8 +22,12 @@ export interface IdleBoardArgs {
   idleMs: number;
   /** True once the board has been pushed for this Home visit. */
   pushed: boolean;
+  /** A modal flow is open (PIN pad, More… sheet): modal taps live in a
+   *  separate window and the touch clock never sees them, so the wall MUST
+   *  stand down instead of pushing the board mid-flow. */
+  blocked: boolean;
 }
 
-export function idleBoardDue({ pathname, idleMs, pushed }: IdleBoardArgs): boolean {
-  return pathname === "/" && !pushed && idleMs >= SCREENSAVER_IDLE_MS;
+export function idleBoardDue({ pathname, idleMs, pushed, blocked }: IdleBoardArgs): boolean {
+  return pathname === "/" && !pushed && !blocked && idleMs >= SCREENSAVER_IDLE_MS;
 }
