@@ -134,18 +134,30 @@ describe("SettingsPage — launcher by role", () => {
     }
   });
 
-  it("guest sees Safety + Appearance only, with the signed-out wording and no Me", async () => {
+  it("guest sees Me + Safety + Appearance (web contract: guest Me points at the rail)", async () => {
     mockMember = null;
     const { getByTestId, queryByTestId, getByText } = render(<SettingsPage />, { wrapper: wrap });
     await flush();
     expect(getByTestId("settings-section-safety")).toBeTruthy();
     expect(getByTestId("settings-section-appearance")).toBeTruthy();
-    for (const id of ["me", "family", "home", "system"]) {
+    expect(getByTestId("settings-section-me")).toBeTruthy();
+    for (const id of ["family", "home", "system"]) {
       expect(queryByTestId(`settings-section-${id}`)).toBeNull();
     }
     expect(
       getByText("The signed-out family holds this device — sign in on the rail to see your own settings.")
     ).toBeTruthy();
+  });
+
+  it("guest Me drills into the honest guest branch (no profile controls)", async () => {
+    mockMember = null;
+    const { getByTestId, findByText, findByTestId } = render(<SettingsPage />, { wrapper: wrap });
+    await flush();
+    fireEvent.press(getByTestId("settings-section-me"));
+    expect(await findByText("Sign in to manage your profile")).toBeTruthy();
+    expect(await findByText("Tap your picture on Home and Consuela knows it's you.")).toBeTruthy();
+    // must NOT fall through to the deferred-family copy (the latent landmine)
+    expect((await findByTestId("settings-me-guest"))).toBeTruthy();
   });
 
   it("drilling into a section swaps the launcher for the section, and back returns", async () => {

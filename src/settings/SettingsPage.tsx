@@ -9,6 +9,7 @@ import { useAuth } from "../state/AuthProvider";
 import { useSync } from "../state/SyncManager";
 import { READ_COPY_STALE } from "../home/widgets/data";
 import { Chip } from "../ui/Chip";
+import { EmptyState } from "../ui/EmptyState";
 import { Modal } from "../ui/Modal";
 import { PinPad } from "../ui/PinPad";
 import { SoftButton } from "../ui/SoftButton";
@@ -52,7 +53,7 @@ const SECTIONS: readonly SectionDef[] = [
 /** Kid/pet launcher (web SAFE_NON_PARENT_SECTION_IDS). */
 const SIGNED_IN_SECTIONS: readonly SettingsSectionId[] = ["me", "safety", "appearance"];
 /** The signed-out wall holds the device: no Me exists without a member. */
-const GUEST_SECTIONS: readonly SettingsSectionId[] = ["safety", "appearance"];
+const GUEST_SECTIONS: readonly SettingsSectionId[] = ["me", "safety", "appearance"];
 
 function sectionsFor(member: ServerMember | null): SectionDef[] {
   if (!member) return SECTIONS.filter((s) => GUEST_SECTIONS.includes(s.id));
@@ -163,8 +164,19 @@ export function SettingsPage() {
         </Material>
       ) : open ? (
         <SectionFocus def={open} onBack={() => setOpenId(null)}>
-          {open.id === "me" && member ? (
-            <MeSection member={member} />
+          {open.id === "me" ? (
+            member ? (
+              <MeSection member={member} />
+            ) : (
+              // Guest Me (web parity, MeSettingsSection.tsx:156-157): the guest
+              // holds the family device — sign-in pointer, no profile controls.
+              <EmptyState
+                icon="👤"
+                title="Sign in to manage your profile"
+                body="Tap your picture on Home and Consuela knows it's you."
+                testID="settings-me-guest"
+              />
+            )
           ) : open.id === "safety" ? (
             <SafetySection member={member} />
           ) : open.id === "appearance" ? (
