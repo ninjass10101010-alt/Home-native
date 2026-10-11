@@ -97,7 +97,7 @@ export default function HomePlaceholder() {
       }
     }, IDLE_CHECK_MS);
     return () => clearInterval(t);
-  }, [pathname, router]);
+  }, [pathname, router, pinTarget, moreOpen]);
 
   React.useEffect(() => {
     let alive = true;
