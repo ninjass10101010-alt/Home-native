@@ -2,6 +2,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -40,19 +41,31 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [leaving, setLeaving] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idRef = useRef(0);
+
+  // Unmount clears BOTH timers — a pending show/exit timer firing after the
+  // provider is gone is a leak (web parity: the toast timer is cleaned up).
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+    },
+    []
+  );
 
   const show = useCallback<ToastContextValue["show"]>(
     (message, opts) => {
       const intent = opts?.intent ?? "info";
       const durationMs = opts?.durationMs ?? DEFAULT_MS;
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
       setLeaving(false);
       setToast({ id: ++idRef.current, message, intent });
       timerRef.current = setTimeout(() => {
         const dur = reduceMotion ? 0 : EXIT_MS;
         setLeaving(true);
-        setTimeout(() => {
+        exitTimerRef.current = setTimeout(() => {
           setToast(null);
           setLeaving(false);
         }, dur);
