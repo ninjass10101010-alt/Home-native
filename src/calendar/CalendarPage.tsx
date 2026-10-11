@@ -80,7 +80,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
   const todayISO = localTodayISO(now);
   const [selectedISO, setSelectedISO] = useState(todayISO);
 
-  const { status, data, failure, retry } = useWidgetData<CalendarLoad>(async () => {
+  const { status, data, failure, stale: dataStale, retry } = useWidgetData<CalendarLoad>(async () => {
     // Family events: the failure of this read is the page's failure.
     const db = await api<DbListEnvelope<DbEventRow>>("/api/db/events");
     const dbEvents = Array.isArray(db?.items) ? db.items : [];
@@ -121,6 +121,9 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
 
     return { dbEvents, googleRows, schedules, googleFailure, schedulesFailure };
   });
+
+  // Stale badge: widget truth first (failure with last-good), sync styleness second.
+  const stale = dataStale || syncStale;
 
   const weekStart = weekStartMondayISO(now);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i)), [weekStart]);
@@ -199,7 +202,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
         <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, marginTop: 4 }}>
           {"The family's week at a glance"}
         </Text>
-        {syncStale && member ? (
+        {stale && member ? (
           <Text
             testID="calendar-stale"
             style={{

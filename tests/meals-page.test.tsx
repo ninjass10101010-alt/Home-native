@@ -109,7 +109,21 @@ const MEALS = [
   },
 ];
 
-const fullRoute = () => route({ "/api/db/meal_plan_entries": { items: MEALS } });
+// Household meal schedule (the canonical wall timings: breakfast 7:30,
+// lunch 12:30, snack 3:30, dinner 6:30). The page's Now chip reads THIS —
+// the shared rule: the same slot logic as the CurrentMealWidget.
+const SCHEDULES = [
+  { id: "s1", title: "Breakfast", time: "07:30", mealType: "breakfast" },
+  { id: "s2", title: "Lunch", time: "12:30", mealType: "lunch" },
+  { id: "s3", title: "Snack", time: "15:30", mealType: "snack" },
+  { id: "s4", title: "Dinner", time: "18:30", mealType: "dinner" },
+];
+
+const fullRoute = () =>
+  route({
+    "/api/db/meal_plan_entries": { items: MEALS },
+    "/api/db/schedules": { items: SCHEDULES },
+  });
 
 /** Does the rendered subtree under rootTid contain needleTid? (Now-chip placement) */
 const subtreeHas = (result: { toJSON: () => any }, rootTid: string, needleTid: string): boolean => {
@@ -160,11 +174,12 @@ describe("MealsPage — week grid", () => {
     expect(getByTestId("meals-day-Mon").props.accessibilityLabel).toBe("Mon");
   });
 
-  it("the current slot row carries the Now chip (9am → breakfast; 6pm → dinner)", async () => {
+  it("the current slot row carries the Now chip (schedule rule: 9am → lunch after the 07:30 breakfast rolls forward, 6pm → dinner)", async () => {
     fullRoute();
     const morning = render(<MealsPage now={NOW} />, { wrapper: wrap });
     await morning.findByText("Taco Night");
-    expect(subtreeHas(morning, "meals-slot-breakfast", "meals-now-chip")).toBe(true);
+    // 09:00: breakfast (07:30) started >60m ago → rolled forward to lunch (12:30)
+    expect(subtreeHas(morning, "meals-slot-lunch", "meals-now-chip")).toBe(true);
     expect(subtreeHas(morning, "meals-slot-dinner", "meals-now-chip")).toBe(false);
     morning.unmount();
 
@@ -297,6 +312,45 @@ describe("MealsPage — states", () => {
     expect(getByTestId("meals-stale").props.children).toBe("Showing your saved copy — couldn't refresh.");
   });
 
+  it("failed refresh with last-good data still badges (widget truth, not just sync)", async () => {
+    fullRoute(); // mockStale = false, healthy load
+    const { getByTestId, findByText, queryByTestId, rerender } = render(
+      <MealsPage now={NOW} />,
+      { wrapper: wrap }
+    );
+    await findByText("Taco Night");
+    act(() => {
+      mockPulseListeners.forEach((l) => l()); // a fresh pulse clears nothing (all clean)
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(queryByTestId("meals-stale")).toBeNull(); // data fresh → no badge
+
+    // Swap the route to fail: last-good stays on screen AND the badge appears.
+    route({
+      "/api/db/meal_plan_entries": new ApiError({ message: "db error", status: 502, code: "http_502", retryable: true }),
+      "/api/db/schedules": { items: [] },
+    });
+    await act(async () => {
+      mockPulseListeners.forEach((l) => l());
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(getByTestId("meals-stale").props.children).toBe("Showing your saved copy — couldn't refresh.");
+
+    // recovery clears it: next pulse heals
+    fullRoute();
+    await act(async () => {
+      mockPulseListeners.forEach((l) => l());
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(queryByTestId("meals-stale")).toBeNull();
+    void rerender; // harness requirement
+  });
+
   it("no stale badge when the last refresh succeeded", async () => {
     fullRoute();
     const { queryByTestId, findByText } = render(<MealsPage now={NOW} />, { wrapper: wrap });
@@ -341,5 +395,25 @@ describe("Meals route", () => {
     expect(await findByTestId(`meals-day-${todayShort}`)).toBeTruthy();
     expect(getByTestId("dock-meals")).toBeTruthy();
     expect(getByTestId("dock-meals").props.accessibilityState?.selected).toBe(true);
+  });
+});
+
+describe("MealsPage — malformed payloads (never crash)", () => {
+  it("malformed payload never crashes the grid (parseArrayField → []+fallbacks)", async () => {
+    route({
+      "/api/db/meal_plan_entries": {
+        items: [
+          { id: "bad1", name: "Soup Night", emoji: "", time: "Sat", mealType: "dinner", weekOf: WEEK_MONDAY, tags: "not json", ingredients: 123 },
+          { id: "good1", name: "", emoji: "", time: "Sat", mealType: "lunch", weekOf: WEEK_MONDAY },
+        ],
+      },
+      "/api/db/schedules": { items: SCHEDULES },
+    });
+    const { findByText, getByTestId } = render(<MealsPage now={NOW} />, { wrapper: wrap });
+    // the bad meal lands with empty tags
+    expect(await findByText("Soup Night")).toBeTruthy();
+    expect(getByTestId("meals-cell-Sat-dinner")).toBeTruthy();
+    // the empty-name meal renders honestly (Untitled meal) rather than crashing
+    expect(await findByText("Untitled meal")).toBeTruthy();
   });
 });

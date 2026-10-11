@@ -106,7 +106,7 @@ export function currentSlotForHour(hour: number): MealSlotId {
 
 /**
  * Cell pick — the CurrentMealWidget's selection semantics verbatim:
- * (m.weekOf ?? currentWeekMonday) === currentWeekMonday && m.time === day &&
+ * (m.weekOf || currentWeekMonday) === currentWeekMonday && m.time === day &&
  * m.mealType === slot. A missing weekOf means "the week it was written in"
  * (web parity); no cross-slot fallback.
  */
@@ -117,13 +117,13 @@ export function mealForCell(
   weekMonday: string
 ): ParsedMeal | undefined {
   return meals.find(
-    (m) => (m.weekOf ?? weekMonday) === weekMonday && m.time === day && m.mealType === slot
+    (m) => (m.weekOf || weekMonday) === weekMonday && m.time === day && m.mealType === slot
   );
 }
 
 /** Does this week (Monday key) hold any planned meal? Drives the empty state. */
 export function weekHasMeals(meals: ParsedMeal[], weekMonday: string): boolean {
-  return meals.some((m) => (m.weekOf ?? weekMonday) === weekMonday);
+  return meals.some((m) => (m.weekOf || weekMonday) === weekMonday);
 }
 
 function isoToDate(iso: string): Date {

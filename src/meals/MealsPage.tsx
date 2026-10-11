@@ -25,7 +25,6 @@ import {
   SLOT_ORDER,
   WEEK_DAYS_SHORT,
   addDaysISO,
-  currentSlotForHour,
   mapMealRows,
   mealForCell,
   weekHasMeals,
@@ -33,6 +32,7 @@ import {
   type MealSlotId,
   type ParsedMeal,
 } from "./plan-grid";
+import { currentSlotFor, type SlotScheduleRow } from "./slot";
 
 /**
  * The wall's Meals surface (WS-6): the Plan tab as a read-only week grid —
@@ -62,19 +62,32 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
   const [tab, setTab] = useState<KitchenTab>("plan");
   const [detail, setDetail] = useState<{ meal: ParsedMeal; slot: MealSlotId } | null>(null);
 
-  const { status, data, failure, retry } = useWidgetData<ParsedMeal[]>(async () => {
-    const res = await api<DbListEnvelope<MealRow>>("/api/db/meal_plan_entries");
-    return mapMealRows(Array.isArray(res?.items) ? res.items : []);
+  // Meals + the household schedule so the "Now" chip reads the same rule the
+  // wall cell uses (critic fix: no band math anywhere). A failed schedules
+  // read REMOVES the chip honestly — it never falls back to a guessed rule.
+  const { status, data, failure, stale: dataStale, retry } = useWidgetData<{ meals: ParsedMeal[]; schedules: SlotScheduleRow[] }>(async () => {
+    const [mealsRes, schedulesRes] = await Promise.all([
+      api<DbListEnvelope<MealRow>>("/api/db/meal_plan_entries"),
+      api<DbListEnvelope<SlotScheduleRow>>("/api/db/schedules").catch(() => null), // chip survives a schedules outage with nothing to show, never a lie
+    ]);
+    return {
+      meals: mapMealRows(Array.isArray(mealsRes?.items) ? mealsRes.items : []),
+      schedules: Array.isArray(schedulesRes?.items) ? schedulesRes.items : [],
+    };
   });
 
-  const meals = useMemo(() => data ?? [], [data]);
+  const meals = useMemo(() => data?.meals ?? [], [data]);
+  const schedules = useMemo(() => data?.schedules ?? [], [data]);
+  const stale = dataStale || syncStale; // widget truth first, sync badge second (both are honest signals)
   const weekMonday = weekStartMondayISO(now);
   const days = useMemo(
     () => WEEK_DAYS_SHORT.map((short, i) => ({ short, iso: addDaysISO(weekMonday, i) })),
     [weekMonday]
   );
   const todayShort = WEEK_DAYS_SHORT[(now.getDay() + 6) % 7];
-  const currentSlot = currentSlotForHour(now.getHours());
+  // The "Now" chip follows the household's meal schedule (schedules table),
+  // exactly matching the wall cell — one rule, one source (src/meals/slot.ts).
+  const currentSlot = schedules.length === 0 ? null : currentSlotFor(schedules, now);
 
   const renderCell = (day: (typeof days)[number], slot: MealSlotId) => {
     const meal = mealForCell(meals, day.short, slot, weekMonday);
@@ -144,7 +157,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
         <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, marginTop: 4 }}>
           This week
         </Text>
-        {syncStale && member ? (
+        {stale && member ? (
           <Text
             testID="meals-stale"
             style={{
