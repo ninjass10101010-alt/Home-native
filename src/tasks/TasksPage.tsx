@@ -88,7 +88,12 @@ export function TasksPage() {
   const isKid = !!member && member.role !== "parent";
   const isParent = !!member && member.role === "parent";
 
-  const myTasks = member ? tasks.filter((t) => t.assignee === member.name && !t.completed) : [];
+  // Kid list: uncompleted rows + rows whose tap landed (server sets
+  // completed:true + pendingApproval — the waiting UI must keep showing
+  // them until a parent approves; task-utils.ts:60 shape parity).
+  const myTasks = member
+    ? tasks.filter((t) => t.assignee === member.name && (!t.completed || !!t.pendingApproval))
+    : [];
   const queue = tasks.filter((t) => !!t.pendingApproval);
 
   const loading = !!member && snapshot === null && lastSyncAt === null;
@@ -110,6 +115,13 @@ export function TasksPage() {
     }
     if (outcome.wrongPin) {
       // Stay in the pad — it shakes + clears; the family keeps their place.
+      if (!pinIntent) {
+        // No pad on this path (under-10 session-claim): a wrong-PIN here is a
+        // DEAD SESSION, not a typo — silent no-ops are dishonest. Map says
+        // "Sign in again to finish that."
+        toast.show(taskRefusalCopy("session_required"), { intent: "error" });
+        return true;
+      }
       setPinError(WRONG_PIN_COPY);
       return false;
     }

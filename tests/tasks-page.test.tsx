@@ -94,7 +94,10 @@ const route = (handlers: Record<string, unknown>) =>
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// ── Fixtures: snapshot tasks per Home-ai src/types/tasks.ts (subset) ──
+// ── Fixtures: snapshot tasks per Home-ai src/types/tasks.ts (subset).
+// SERVER SHAPE (task-claim.ts completedFields + task-utils.ts:60): a queued
+// kid tap lands as completed:true + pendingApproval — fixtures must encode
+// the real shape, never an invented completed:false + pendingApproval. ──
 const KID_TASKS = [
   { id: 1, title: "Make bed", assignee: "Aurora", assigneeEmoji: "🛏️", points: 5, completed: false, due: "2026-10-10" },
   {
@@ -103,7 +106,7 @@ const KID_TASKS = [
     assignee: "Aurora",
     assigneeEmoji: "🧼",
     points: 10,
-    completed: false,
+    completed: true,
     pendingApproval: { byName: "Aurora", at: "2026-10-10T10:00:00Z", points: 10 },
   },
   { id: 3, title: "Empty trash", assignee: "Alex", assigneeEmoji: "🗑️", points: 5, completed: false },
@@ -117,7 +120,7 @@ const PARENT_TASKS = [
     assignee: "Aurora",
     assigneeEmoji: "🧼",
     points: 10,
-    completed: false,
+    completed: true,
     pendingApproval: { byName: "Aurora", at: "2026-10-10T10:00:00Z", points: 10 },
   },
   { id: 5, title: "Water plants", assignee: "Aurora", assigneeEmoji: "🪴", points: 8, completed: false },
@@ -142,7 +145,7 @@ const CLAIM_OK = (extra: Record<string, unknown> = {}) => ({
   success: true,
   operationId: "op-1",
   action: "complete",
-  task: { ...KID_TASKS[0], pendingApproval: { byName: "Aurora", at: "2026-10-10T10:00:00Z", points: 5 } },
+  task: { ...KID_TASKS[0], completed: true, pendingApproval: { byName: "Aurora", at: "2026-10-10T10:00:00Z", points: 5 } },
   pending: true,
   revision: { revision: "9", updatedAt: "" },
   reconciled: true,
@@ -519,7 +522,7 @@ describe("TasksPage — parent view", () => {
           assignee: "Alex",
           assigneeEmoji: "📚",
           points: 12,
-          completed: false,
+          completed: true,
           pendingApproval: { byName: "Alex", at: "2026-10-10T11:00:00Z", points: 12 },
         },
       ],
