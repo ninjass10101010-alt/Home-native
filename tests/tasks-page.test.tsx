@@ -341,7 +341,7 @@ describe("TasksPage — kid view", () => {
         new ApiError({ message: "unauthorized", status: 401, code: "unauthorized", body: { success: false, reason: "unauthorized" } })
       );
     });
-    const { getByTestId, findByText, queryByText, findByTestId } = render(<TasksPage />, { wrapper: wrap });
+    const { getByTestId, findByText, queryByText } = render(<TasksPage />, { wrapper: wrap });
     await findByText("Make bed");
     await act(async () => {
       fireEvent.press(getByTestId("kid-task-1"));
