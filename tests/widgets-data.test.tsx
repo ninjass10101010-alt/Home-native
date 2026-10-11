@@ -299,3 +299,17 @@ describe("BriefingWidget", () => {
     expect(api).not.toHaveBeenCalled();
   });
 });
+
+describe("TodayEventsWidget — Google not-connected honesty (Wave-2 critic fix)", () => {
+  const today = localTodayISO();
+  it("200 {ok:true, connected:false} → the connected pill, never a silent empty", async () => {
+    route({
+      "/api/db/events": { items: [] },
+      // The EXACT server shape for "no Google integration" (route.ts:16-23):
+      "/api/google-calendar": { ok: true, connected: false, source: "none", events: [] },
+    });
+    const { findByText } = render(<TodayEventsWidget />, { wrapper: wrap });
+    expect(await findByText("Google Calendar isn't connected.")).toBeTruthy();
+    expect(await findByText("0 events on the family calendar")).toBeTruthy();
+  });
+});

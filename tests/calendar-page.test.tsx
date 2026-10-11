@@ -363,3 +363,31 @@ describe("events-merge — ported schedule math", () => {
     expect(scheduleTimeMinutes("bogus")).toBeNull();
   });
 });
+
+describe("CalendarPage — Google not-connected honesty (the web's fixed bug, twice-removed)", () => {
+  it("200 {ok:true, connected:false} → the not-connected pill, never a silent empty", async () => {
+    route({
+      "/api/db/events": { items: DB_EVENTS },
+      // The EXACT server shape for "no Google integration" (route.ts:16-23):
+      "/api/google-calendar": { ok: true, connected: false, source: "none", events: [] },
+      "/api/db/schedules": { items: SCHEDULES },
+    });
+    const { findByText, queryByText } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
+    expect(await findByText("Google Calendar isn't connected.")).toBeTruthy();
+    // db events still show; the pill explains the google silence
+    expect(await findByText("Piano lesson")).toBeTruthy();
+    expect(queryByText(/couldn't load/i)).toBeNull();
+  });
+});
+
+describe("CalendarPage — month-boundary week", () => {
+  it("a week spanning two months renders November chips (strip rollover math)", async () => {
+    fullRoute();
+    // Thursday 2026-10-29 — the Mon-start week runs Oct 26 → Nov 1
+    const EDGE = new Date(2026, 9, 29, 9, 0);
+    const { findByTestId, getByTestId } = render(<CalendarPage now={EDGE} />, { wrapper: wrap });
+    await findByTestId("cal-day-2026-10-26"); // strip settled
+    expect(getByTestId("cal-day-2026-10-31")).toBeTruthy();
+    expect(getByTestId("cal-day-2026-11-01")).toBeTruthy(); // rollover chip
+  });
+});

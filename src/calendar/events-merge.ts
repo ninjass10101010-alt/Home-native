@@ -49,6 +49,8 @@ export interface WallEvent {
   member?: string;
   /** Theme token key for the row's left rail (routines carry a color). */
   railToken?: string;
+  /** "s_"-prefixed ids are routines (schedules) — counts must not call them events. */
+  isRoutine?: boolean;
 }
 
 export const ALL_DAY_TIME = "All day";
@@ -241,6 +243,7 @@ export function schedulesForDay(rows: ScheduleRow[], date: Date): WallEvent[] {
         icon: s.icon || "⏰",
         member: s.member || undefined,
         railToken: s.color ? SCHEDULE_RAIL_TOKENS[s.color] : undefined,
+        isRoutine: true,
       };
     });
 }

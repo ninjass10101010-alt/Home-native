@@ -38,9 +38,13 @@ export function TodayEventsWidget() {
     let google: WallEvent[] = [];
     let googleFailure: ReadFailure | null = null;
     try {
-      const res = await api<{ ok?: boolean; events?: GoogleEventRow[] }>("/api/google-calendar");
-      // Body fields win over status: ok:false means the read is not truth.
-      if (res && res.ok !== false) {
+      const res = await api<{ ok?: boolean; connected?: boolean; events?: GoogleEventRow[] }>("/api/google-calendar");
+      // Body fields win over status: ok:false means the read is not truth;
+      // connected:false is its own honest state — NOT a silent empty (the
+      // web's fixed bug; 200 shape {ok:true, connected:false, events:[]}).
+      if (res && res.ok !== false && res.connected === false) {
+        googleFailure = "not_connected";
+      } else if (res && res.ok !== false) {
         google = googleEventsForDay(Array.isArray(res.events) ? res.events : [], today);
       } else {
         googleFailure = "error";
@@ -86,7 +90,7 @@ export function TodayEventsWidget() {
             marginBottom: 8,
           }}
         >
-          {googleFailure === "unauthorised"
+          {googleFailure === "unauthorised" || googleFailure === "not_connected"
             ? "Google Calendar isn't connected."
             : "Google Calendar couldn't load — family events may be incomplete."}
         </Text>

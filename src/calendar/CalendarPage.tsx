@@ -89,9 +89,13 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     let googleRows: GoogleEventRow[] = [];
     let googleFailure: ReadFailure | null = null;
     try {
-      const res = await api<{ ok?: boolean; events?: GoogleEventRow[] }>("/api/google-calendar");
-      // Body fields win over status: ok:false means the read is not truth.
-      if (res && res.ok !== false) {
+      const res = await api<{ ok?: boolean; connected?: boolean; events?: GoogleEventRow[] }>("/api/google-calendar");
+      // Body fields win over status; connected:false is its own honest state —
+      // a silent empty calendar must not ship twice (web's fixed bug,
+      // calendar page.tsx:313-348; 200 shape {ok:true, connected:false, events:[]}).
+      if (res && res.ok !== false && res.connected === false) {
+        googleFailure = "not_connected";
+      } else if (res && res.ok !== false) {
         googleRows = Array.isArray(res.events) ? res.events : [];
       } else {
         googleFailure = "error";
@@ -139,7 +143,9 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
           testID="calendar-google-pill"
           style={{ color: pillInk, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}
         >
-          {data.googleFailure === "unauthorised" ? GOOGLE_PILL_CONNECTED : GOOGLE_PILL_ERROR}
+          {data.googleFailure === "unauthorised" || data.googleFailure === "not_connected"
+            ? GOOGLE_PILL_CONNECTED
+            : GOOGLE_PILL_ERROR}
         </Text>
       ) : null}
       {data?.schedulesFailure ? (
@@ -301,7 +307,14 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                       {longDate(isoToDate(selectedISO))}
                     </Text>
                     <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, marginTop: 2 }}>
-                      {selectedRows.length} {selectedRows.length === 1 ? "event" : "events"}
+                      {(() => {
+                        // Routines are not events — the count must not lie
+                        // (a 3-routine, 0-event day is not "3 events").
+                        const events = selectedRows.filter((r) => !r.isRoutine).length;
+                        const routines = selectedRows.length - events;
+                        const eventPart = `${events} ${events === 1 ? "event" : "events"}`;
+                        return routines > 0 ? `${eventPart} · ${routines} ${routines === 1 ? "routine" : "routines"}` : eventPart;
+                      })()}
                     </Text>
                   </View>
                   {pills}

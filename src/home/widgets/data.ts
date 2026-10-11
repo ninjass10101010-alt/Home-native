@@ -7,12 +7,15 @@ import { useSync } from "../../state/SyncManager";
  * Shared honesty vocabulary for widget reads — mirrors Home-ai's
  * src/lib/read-state.ts copy verbatim (guest gate, offline, error, stale).
  */
-export type ReadFailure = "offline" | "unauthorised" | "error";
+export type ReadFailure = "offline" | "unauthorised" | "error" | "not_connected";
 
 export const READ_COPY: Record<ReadFailure, string> = {
   offline: "Offline — no saved copy on this device.",
   unauthorised: "Sign in with your PIN to see the family's data.",
   error: "Couldn't load this right now.",
+  /** 200 {ok:true, connected:false} — a silent empty calendar is the web's
+   *  fixed bug (calendar page.tsx:313-348); it must not ship twice. */
+  not_connected: "Google Calendar isn't connected.",
 };
 /** Reference: READ_COPY_STALE (last good data still on screen). */
 export const READ_COPY_STALE = "Showing your saved copy — couldn't refresh.";
