@@ -191,6 +191,11 @@ describe("auth flows", () => {
 });
 
 describe("members roster", () => {
+  beforeEach(async () => {
+    // the previous test's live read wrote its roster to the device cache
+    await require("@react-native-async-storage/async-storage").clear();
+  });
+
   it("live rows win outright (stand-ins never append beside the real roster)", async () => {
     installFetch(() => mockRes(200, { members: [member] }));
     const r = await listMembersSmart();
@@ -214,7 +219,7 @@ describe("members roster", () => {
     expect(merged.find((m) => m.name.startsWith("Aurora"))!.emoji).toBe("X");
     expect(merged.find((m) => m.name.startsWith("Aurora"))!.pbId).toBe("pb1");
     expect(merged.some((m) => !m.name.trim())).toBe(false);
-    expect(merged.length).toBe(9);
+    expect(merged.length).toBe(10); // live Aurora + all 9 stand-ins (none match by first name)
   });
 
   it("fallback rows carry NO credentials and no pins", () => {

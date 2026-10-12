@@ -6,6 +6,7 @@ import { photoSource, type WallPhoto } from "../../photos/library";
 import { useTheme } from "../../theme/ThemeProvider";
 import { MOTION, TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
+import { mixAlpha } from "../../ui/SoftButton";
 import { useWidgetData } from "./data";
 import { WidgetFrame } from "./WidgetFrame";
 import { useToast } from "../../ui/Toast";
@@ -81,13 +82,9 @@ export function PhotosWidget() {
   const [index, setIndex] = React.useState(0);
   const [pausedByChoice, setPausedByChoice] = React.useState<boolean | null>(null);
   const paused = pausedByChoice ?? reduceMotion;
-  const failedRef = React.useRef(new Set<string>());
+  const [failedIds, setFailedIds] = React.useState<ReadonlySet<string>>(new Set());
   const shownRef = React.useRef<string[]>([]);
   const fade = useSharedValue(1);
-
-  const advance = React.useCallback(() => {
-    setIndex((i) => i + 1);
-  }, []);
 
   React.useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- batch reset on data identity change (last-batch honesty)
@@ -95,23 +92,15 @@ export function PhotosWidget() {
     setOverride(null);
   }, [batch]);
 
-  const seconds = data?.settings.rotateSeconds ?? 75;
-  React.useEffect(() => {
-    if (!data || data.photos.length < 2 || paused) return;
-    const t = setInterval(advance, Math.max(10, seconds) * 1000);
-    return () => clearInterval(t);
-  }, [data, seconds, advance, paused]);
-
   const photos = React.useMemo(
-    () => (data?.photos ?? []).filter((p) => !failedRef.current.has(String(p.id))),
-    [data]
+    () => (data?.photos ?? []).filter((p) => !failedIds.has(p.id)),
+    [data, failedIds]
   );
   const current = photos.length ? photos[index % photos.length] : null;
   const prev = photos.length > 1 ? photos[(index - 1 + photos.length * 1000) % photos.length] : null;
 
   // End-of-rotation refresh: re-read settings + a recent-avoiding batch so a
   // phone change lands within one rotation (the web's advance→refresh loop).
-  // Mount (index 0) skips it — the initial useWidgetData read already did this.
   const refreshBatch = React.useCallback(async () => {
     try {
       setOverride(await loadPhotos(shownRef.current.slice(-12)));
@@ -120,13 +109,17 @@ export function PhotosWidget() {
     }
   }, []);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- rotation-step effect: current/data/photos track index
+  const seconds = data?.settings.rotateSeconds ?? 75;
   React.useEffect(() => {
-    if (index === 0 || !current) return;
-    const id = String(current.id);
-    if (!shownRef.current.includes(id)) shownRef.current.push(id);
-    if (photos.length > 1) void refreshBatch();
-  }, [index]);
+    if (!data || photos.length < 2 || paused || !current) return;
+    const t = setInterval(() => {
+      const id = String(current.id);
+      if (!shownRef.current.includes(id)) shownRef.current.push(id);
+      void refreshBatch();
+      setIndex((i) => i + 1);
+    }, Math.max(10, seconds) * 1000);
+    return () => clearInterval(t);
+  }, [data, photos.length, paused, current, seconds, refreshBatch]);
 
   // Transition: crossfade/dissolve/slide all map to an opacity fade on the
   // wall tile (slide is the web's phone treatment); cut → instant.
@@ -170,7 +163,8 @@ export function PhotosWidget() {
               resizeMode="cover"
               onError={() => {
                 // a broken file must not freeze the tile — fail it and move on
-                failedRef.current.add(String(current.id));
+                const id = String(current.id);
+                setFailedIds((s) => new Set(s).add(id));
                 setIndex((i) => i + 1);
               }}
             />
