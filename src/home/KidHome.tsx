@@ -87,11 +87,14 @@ export function KidHome() {
   const streak = kidStreak(weekData, name);
   // This week's reset horizon: weekStart (Mon) + 7 days, in whole days. The
   // web shows "Resets in N days"; native shows it only when it's knowable.
+  // Render-time Date.now() trips the purity rule — treat the current render's
+  // clock as state (initialised once per mount; the horizon moves daily).
+  const [mountNow] = useState(() => new Date());
   const resetsIn = weekData?.weekStart
     ? (() => {
         const end = new Date(`${weekData.weekStart}T00:00:00`);
         end.setDate(end.getDate() + 7);
-        const days = Math.ceil((end.getTime() - Date.now()) / 86_400_000);
+        const days = Math.ceil((end.getTime() - mountNow.getTime()) / 86_400_000);
         return days > 1 ? `in ${days} days` : days === 1 ? "tomorrow" : null;
       })()
     : null;

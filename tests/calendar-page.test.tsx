@@ -5,6 +5,7 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { CalendarPage } from "../src/calendar/CalendarPage";
 import { scheduleTimeMinutes } from "../src/calendar/events-merge";
+import { localTodayISO } from "../src/home/widgets/data";
 import CalendarRoute from "../app/calendar";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
@@ -346,7 +347,10 @@ describe("Calendar route", () => {
     fullRoute();
     const { getByTestId, findByTestId } = render(<CalendarRoute />, { wrapper: wrap });
     expect(getByTestId("calendar-route")).toBeTruthy();
-    expect(await findByTestId(`cal-day-${new Date().toISOString().slice(0, 10)}`)).toBeTruthy();
+    // The route renders the LOCAL-now week — never UTC (test ran across
+    // 2026-10-11 midnight mid-session and proved UTC slices lie).
+    const todayISO = localTodayISO(new Date());
+    expect(await findByTestId(`cal-day-${todayISO}`)).toBeTruthy();
     expect(getByTestId("dock-calendar")).toBeTruthy();
     expect(getByTestId("dock-calendar").props.accessibilityState?.selected).toBe(true);
   });
