@@ -40,13 +40,14 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
-    "test": "jest --watchAll=false && npm run tokens:check",
+    "test": "npm run tokens:check && jest --watchAll=false && npm run a11y:audit",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "tokens:gen": "node scripts/gen-tokens.mjs",
     "tokens:check": "node scripts/check-token-literals.mjs --check && node scripts/gen-tokens.mjs --check",
     "push:safe": "bash scripts/security/push-safe.sh",
-    "reference:capture": "node scripts/capture-reference.mjs"
+    "reference:capture": "node scripts/capture-reference.mjs",
+    "a11y:audit": "node scripts/a11y-audit.mjs"
   },
   "private": true,
   "jest": {
