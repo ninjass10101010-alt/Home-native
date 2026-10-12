@@ -191,12 +191,12 @@ describe("auth flows", () => {
 });
 
 describe("members roster", () => {
-  it("live wins over cache; cache refreshed on success; source=live", async () => {
+  it("live rows win outright (stand-ins never append beside the real roster)", async () => {
     installFetch(() => mockRes(200, { members: [member] }));
     const r = await listMembersSmart();
     expect(r.source).toBe("live");
     expect(r.members[0].name).toBe("Rebecca (Mom)");
-    expect(r.members.length).toBe(9); // live + fallbacks merged
+    expect(r.members.length).toBe(1);
   });
 
   it("401 signed-out → cache or fallback, source honestly marked", async () => {

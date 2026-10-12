@@ -6,10 +6,9 @@ import { Material } from "../theme/Material";
 import { MemberRail, type RailMember } from "../ui/MemberRail";
 import { useAuth } from "../state/AuthProvider";
 import { EmergencyShield } from "./EmergencyShield";
-import { visibleOnWall, WidgetId, WidgetPlaceholder, WALL_SPANS } from "./widgets";
+import { visibleOnWall, WidgetId, WidgetPlaceholder, WALL_SPANS, wallColumns } from "./widgets";
 
-const WALL_WIDTH = 1080; // locked to the panel (spec decision 7)
-const GRID_COLS = 3;
+// Panel locked to 1080×1920 portrait (spec decision 7); 3×4 dense grid lives in widgets.tsx.
 const GRID_GAP = 16;
 const GRID_H_PAD = 24;
 const HEADER_H = 300; // greeting + member rail (matches the measured header band in reference/home/*)
@@ -51,7 +50,7 @@ export function HomeWall({ members, onSelectMember, onSignOut, widgets = {}, gre
   const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
   const defs = visibleOnWall();
-  const cellW = Math.floor((WALL_WIDTH - GRID_H_PAD * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS);
+  const columns = wallColumns(defs);
 
   return (
     <View style={{ flex: 1, paddingHorizontal: GRID_H_PAD, paddingTop: 24 }}>
@@ -76,23 +75,29 @@ export function HomeWall({ members, onSelectMember, onSignOut, widgets = {}, gre
         <MemberRail members={members} currentName={member?.name ?? null} onSelect={onSelectMember} onSignOut={onSignOut} />
       </View>
 
-      {/* 12-cell bento: photos hero spans 2 rows; everything else 1×1 */}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: GRID_GAP, marginTop: 20 }} testID="wall-grid">
-        {defs.map((def) => {
-          const span = WALL_SPANS[def.id] ?? 1;
-          const Cell = widgets[def.id];
-          return (
-            <View
-              key={def.id}
-              testID={`widget-${def.id}`}
-              style={{ width: cellW, height: span === 2 ? GRID_CELL_H * 2 + GRID_GAP : GRID_CELL_H }}
-            >
-              <Material tier="regular" style={{ flex: 1, borderRadius: 28, padding: 18 }}>
-                {Cell ? <Cell /> : <WidgetPlaceholder def={def} />}
-              </Material>
-            </View>
-          );
-        })}
+      {/* 12-cell bento: three explicit columns (web grid-flow-dense port) so
+          photos can span rows 1–2 in col-1 while cols 2–3 fill beside it.
+          Total height = 4×GRID_CELL_H + 3×GRID_GAP = WALL_HEIGHT − HEADER_H − DOCK_CLEAR. */}
+      <View style={{ flexDirection: "row", gap: GRID_GAP, marginTop: 20 }} testID="wall-grid">
+        {columns.map((col, ci) => (
+          <View key={`col-${ci}`} style={{ flex: 1, gap: GRID_GAP }} testID={`wall-col-${ci}`}>
+            {col.map((def) => {
+              const span = WALL_SPANS[def.id] ?? 1;
+              const Cell = widgets[def.id];
+              return (
+                <View
+                  key={def.id}
+                  testID={`widget-${def.id}`}
+                  style={{ height: span === 2 ? GRID_CELL_H * 2 + GRID_GAP : GRID_CELL_H }}
+                >
+                  <Material tier="regular" style={{ flex: 1, borderRadius: 28, padding: 18 }}>
+                    {Cell ? <Cell /> : <WidgetPlaceholder def={def} />}
+                  </Material>
+                </View>
+              );
+            })}
+          </View>
+        ))}
       </View>
     </View>
   );

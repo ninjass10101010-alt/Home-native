@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { act, render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { ToastProvider } from "../src/ui/Toast";
@@ -110,6 +110,32 @@ describe("PhotosWidget (wall hero)", () => {
     });
     img = await findByTestId("photos-hero-image");
     expect(img.props.source.uri).toContain("ph0"); // wrapped
+  });
+
+  it("pause control stops the rotation and play resumes it (WCAG 2.2.2)", async () => {
+    api.mockImplementation((path: string) => {
+      if (path.startsWith("/api/photos?")) return Promise.resolve({ ok: true, photos: photos(3) });
+      if (path.startsWith("/api/photos/settings"))
+        return Promise.resolve({ ok: true, settings: { rotateSeconds: 10, transition: "cut", order: "shuffle", showCaption: false } });
+      return Promise.reject(new Error("unmapped"));
+    });
+    const { findByTestId, getByTestId, getByLabelText } = render(<PhotosWidget />, { wrapper: wrap });
+    let img = await findByTestId("photos-hero-image");
+    expect(img.props.source.uri).toContain("ph0");
+    // pause → cadence stops
+    fireEvent.press(getByLabelText("Pause photo rotation"));
+    act(() => {
+      jest.advanceTimersByTime(30_000);
+    });
+    img = await findByTestId("photos-hero-image");
+    expect(img.props.source.uri).toContain("ph0"); // frozen on the paused photo
+    // play → cadence resumes
+    fireEvent.press(getByLabelText("Resume photo rotation"));
+    act(() => {
+      jest.advanceTimersByTime(10_000);
+    });
+    img = await findByTestId("photos-hero-image");
+    expect(img.props.source.uri).toContain("ph1");
   });
 
   it("degraded settings fall back to defaults and badge honestly", async () => {

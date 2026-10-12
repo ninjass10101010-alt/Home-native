@@ -58,6 +58,35 @@ export const WALL_HIDDEN_WIDGETS: WidgetId[] = ["schedule", "consuelaSuggestions
 /** Only photos earns 2 cells on the wall board (the portrait hero). */
 export const WALL_SPANS: Partial<Record<WidgetId, number>> = { photos: 2 };
 
+export const WALL_COLS = 3;
+export const WALL_ROWS = 4;
+
+/**
+ * Dense row-major placement — the web's `grid-flow-dense` port. A span-2
+ * widget anchors in the first free slot whose next row cell is also free
+ * (photos → col-1 rows 1–2); every other widget fills the next free slot.
+ * Returns one widget list per column (top→bottom). Exactly WALL_ROWS cells
+ * per column when the registry sums to WALL_COLS × WALL_ROWS.
+ */
+export function wallColumns(defs: WidgetDef[] = visibleOnWall()): WidgetDef[][] {
+  const occupied = new Set<string>();
+  const cols: WidgetDef[][] = Array.from({ length: WALL_COLS }, () => []);
+  for (const def of defs) {
+    const span = WALL_SPANS[def.id] ?? 1;
+    outer: for (let r = 0; r < WALL_ROWS; r++) {
+      for (let c = 0; c < WALL_COLS; c++) {
+        if (occupied.has(`${r},${c}`)) continue;
+        if (span === 2 && (r + 1 >= WALL_ROWS || occupied.has(`${r + 1},${c}`))) continue;
+        occupied.add(`${r},${c}`);
+        if (span === 2) occupied.add(`${r + 1},${c}`);
+        cols[c].push(def);
+        break outer;
+      }
+    }
+  }
+  return cols;
+}
+
 export function visibleOnWall(): WidgetDef[] {
   const off = new Set(WALL_HIDDEN_WIDGETS);
   return WALL_DEFAULT_WIDGETS.map((id) => ALL_WIDGETS.find((w) => w.id === id)!).filter((w) => !off.has(w.id));

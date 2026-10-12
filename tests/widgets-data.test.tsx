@@ -24,6 +24,8 @@ jest.mock("../src/state/AuthProvider", () => ({
 }));
 
 let mockStale = false;
+let mockSnapshot: any = null;
+let mockSyncError: "unreachable" | "unauthorized" | null = null;
 const mockRefreshNow = jest.fn(async () => {});
 const mockPulseListeners = new Set<() => void>();
 // Stable value object — mirrors SyncManager's useMemo so effect deps settle.
@@ -31,7 +33,12 @@ const mockSyncValue = {
   get stale() {
     return mockStale;
   },
-  syncError: null as null,
+  get syncError() {
+    return mockSyncError;
+  },
+  get snapshot() {
+    return mockSnapshot;
+  },
   lastSyncAt: null as null,
   refreshNow: mockRefreshNow,
   onPulse: (l: () => void) => {
@@ -73,75 +80,62 @@ beforeEach(() => {
   mockPulseListeners.clear();
   mockMember = parent;
   mockStale = false;
+  mockSnapshot = null;
+  mockSyncError = null;
   api.mockReset();
 });
 
-describe("TasksWidget", () => {
-  const syncBody = (tasks: any[]) => ({ ok: true, reconciled: true, snapshot: { tasks } });
+describe("TasksWidget (shared snapshot — no widget fetch)", () => {
+  const syncSnapshot = (tasks: any[]) => ({ tasks });
 
-  it("shows a loading skeleton while the first read is in flight", () => {
-    api.mockReturnValue(new Promise(() => {}));
+  it("shows a loading skeleton until the shared snapshot lands", () => {
     const { getByTestId } = render(<TasksWidget />, { wrapper: wrap });
     expect(getByTestId("tasks-loading")).toBeTruthy();
   });
 
   it("renders pending count + rows, and marks pendingApproval honestly", async () => {
-    route({
-      "/api/tasks/sync": syncBody([
-        { id: 1, title: "Make bed", assignee: "Aurora", due: "Today", points: 5, completed: false, assigneeEmoji: "👧" },
-        { id: 2, title: "Dishes", assignee: "Alex", due: "", points: 10, completed: true, assigneeEmoji: "👦", pendingApproval: { byName: "Alex", at: "2026-10-10T10:00:00Z", points: 10 } },
-        { id: 3, title: "Old done task", assignee: "", due: "", points: 5, completed: true, assigneeEmoji: "👤" },
-      ]),
-    });
+    mockSnapshot = syncSnapshot([
+      { id: 1, title: "Make bed", assignee: "Aurora", due: "Today", points: 5, completed: false, assigneeEmoji: "👧" },
+      { id: 2, title: "Dishes", assignee: "Alex", due: "", points: 10, completed: true, assigneeEmoji: "👦", pendingApproval: { byName: "Alex", at: "2026-10-10T10:00:00Z", points: 10 } },
+      { id: 3, title: "Old done task", assignee: "", due: "", points: 5, completed: true, assigneeEmoji: "👤" },
+    ]);
     const { findByText, getByText, queryByText } = render(<TasksWidget />, { wrapper: wrap });
     await findByText("2 pending for the family");
     expect(getByText(/Waiting for approval/)).toBeTruthy(); // kid row is honest
     expect(queryByText(/\+10 pts/)).toBeNull(); // points NOT promised for a pending tap
     expect(getByText("1 needs approval")).toBeTruthy(); // parent footer
     expect(queryByText("Old done task")).toBeNull();
+    expect(api).not.toHaveBeenCalled(); // reads the SHARED snapshot, no fetch
   });
 
   it("renders the reference empty state", async () => {
-    route({ "/api/tasks/sync": syncBody([]) });
+    mockSnapshot = syncSnapshot([]);
     const { findByText } = render(<TasksWidget />, { wrapper: wrap });
     await findByText("All caught up");
     expect(await findByText("No pending tasks right now.")).toBeTruthy();
     expect(await findByText("0 pending for the family")).toBeTruthy();
   });
 
-  it("renders calm error copy and retry re-pulls via refreshNow", async () => {
-    route({ "/api/tasks/sync": new ApiError({ message: "db_error", status: 502, code: "db_error", retryable: true }) });
+  it("sync down, no snapshot → honest offline copy; retry re-pulls via refreshNow", async () => {
+    mockSyncError = "unreachable";
     const { findByText, getByText } = render(<TasksWidget />, { wrapper: wrap });
-    await findByText("Couldn't load this right now.");
+    await findByText("Offline — no saved copy on this device.");
     await act(async () => {
       fireEvent.press(getByText("Try again"));
       await Promise.resolve();
     });
     expect(mockRefreshNow).toHaveBeenCalled();
-    expect(api.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("guest gate: no fetch, PIN copy", async () => {
+  it("guest gate: PIN copy, no doomed fetch", async () => {
     mockMember = null;
     const { findByText } = render(<TasksWidget />, { wrapper: wrap });
     await findByText("Sign in with your PIN to see the family's data.");
     expect(api).not.toHaveBeenCalled();
   });
 
-  it("re-reads on a sync pulse", async () => {
-    route({ "/api/tasks/sync": syncBody([]) });
-    const { findByText } = render(<TasksWidget />, { wrapper: wrap });
-    await findByText("All caught up");
-    expect(api).toHaveBeenCalledTimes(1);
-    await act(async () => {
-      mockPulseListeners.forEach((l) => l());
-      await Promise.resolve();
-    });
-    expect(api).toHaveBeenCalledTimes(2);
-  });
-
   it("badges staleness when the sync layer reports a failed refresh", async () => {
-    route({ "/api/tasks/sync": syncBody([]) });
+    mockSnapshot = syncSnapshot([]);
     mockStale = true;
     const { findByText, getByText } = render(<TasksWidget />, { wrapper: wrap });
     await findByText("All caught up");

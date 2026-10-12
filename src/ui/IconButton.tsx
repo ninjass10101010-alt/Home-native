@@ -59,29 +59,36 @@ export function IconButton({
   const scale = useSharedValue(1);
   const aStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
-  const pressable = (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      onPressIn={() => { // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write is the idiom
-        if (!reduceMotion) scale.value = withTiming(0.92, { duration: MOTION.fast }); }}
-      onPressOut={() => { // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write is the idiom
-        scale.value = withTiming(1, { duration: MOTION.fast }); }}
-      style={[{ opacity: disabled ? 0.5 : 1 }]}
-    >
-      {icon}
-    </Pressable>
-  );
-
   if (variant === "glass" || variant === "surface") {
     return (
       <Animated.View style={aStyle}>
         <Material tier="thin" style={[circle, style]}>
-          {pressable}
+          {/* the Pressable FILLS the circle — the whole 64/72/80dp disc is the
+              tap target, not the glyph inside it (wall contract ≥64dp) */}
+          <Pressable
+            testID={testID}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ disabled }}
+            disabled={disabled}
+            onPress={onPress}
+            onPressIn={() => { // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write is the idiom
+              if (!reduceMotion) scale.value = withTiming(0.92, { duration: MOTION.fast }); }}
+            onPressOut={() => { // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write is the idiom
+              scale.value = withTiming(1, { duration: MOTION.fast }); }}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: disabled ? 0.5 : 1,
+            }}
+          >
+            {icon}
+          </Pressable>
         </Material>
       </Animated.View>
     );

@@ -4,7 +4,7 @@ import { render } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { HomeWall, greetingFor, GRID_CELL_H } from "../src/home/HomeWall";
-import { visibleOnWall, WALL_SPANS, WALL_HIDDEN_WIDGETS, WALL_DEFAULT_WIDGETS } from "../src/home/widgets";
+import { visibleOnWall, wallColumns, WALL_SPANS, WALL_HIDDEN_WIDGETS, WALL_DEFAULT_WIDGETS } from "../src/home/widgets";
 
 
 jest.mock("@react-native-async-storage/async-storage", () =>
@@ -55,9 +55,20 @@ describe("HomeWall (the 12-cell wall bento)", () => {
         expect(getByTestId(`widget-${id}`)).toBeTruthy();
       }
     }
-    // exactly 11 visible cells
+    // 3 explicit columns (dense placement), 11 cells inside them
     const grid = getByTestId("wall-grid");
-    expect(grid.children.length).toBe(11);
+    expect(grid.children.length).toBe(3);
+    expect(getByTestId("wall-col-0").children.length).toBe(3);
+    expect(getByTestId("wall-col-1").children.length).toBe(4);
+    expect(getByTestId("wall-col-2").children.length).toBe(4);
+  });
+
+  it("dense row-major placement fills the 3×4 grid (web grid-flow-dense port)", () => {
+    expect(wallColumns().map((c) => c.map((d) => d.id))).toEqual([
+      ["photos", "currentMeal", "homeSecurity"],
+      ["morningBriefing", "todayEvents", "aiQuickAsk", "homeClimate"],
+      ["weather", "tasks", "leaderboard", "homeLights"],
+    ]);
   });
 
   it("photos spans 2 rows (the wall-hero contract)", () => {

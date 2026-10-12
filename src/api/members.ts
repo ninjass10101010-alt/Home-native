@@ -9,19 +9,20 @@ import type { ServerMember } from "./types";
  * fallbacks. Fallback rows carry NO credentials (that file's SECURITY note);
  * live rows win, fallbacks fill missing first names.
  */
-// Verbatim port of ../Home-ai/src/lib/member-fallback.ts (no credentials; live
-// rows win by first name). Fallback rows intentionally carry NO color — the
-// rail resolves member colors via memberAccentHex (name → accent token).
+// Stand-in roster for the SIGNED-OUT last resort only (no live, no cache).
+// This repo's remote is public-ish — the family's real names live only on the
+// NAS (live rows / device cache), never in committed source. Rows carry NO
+// credentials (that file's SECURITY note) and NO real names/ages.
 export const FALLBACK_MEMBERS: ServerMember[] = [
-  { id: 1, name: "Rebecca (Mom)", role: "parent", emoji: "🐱", age: 38 } as ServerMember,
-  { id: 2, name: "Jeffery (Dad)", role: "parent", emoji: "👨", age: 40 } as ServerMember,
-  { id: 3, name: "Emily", role: "child", emoji: "👧", age: 14 } as ServerMember,
-  { id: 4, name: "Bailey", role: "child", emoji: "👧", age: 12 } as ServerMember,
-  { id: 5, name: "Jasmine", role: "child", emoji: "👧", age: 10 } as ServerMember,
-  { id: 6, name: "Aurora", role: "child", emoji: "👧", age: 7 } as ServerMember,
-  { id: 7, name: "Caspian", role: "child", emoji: "🧒", age: 5 } as ServerMember,
-  { id: 8, name: "Rocco", role: "pet", emoji: "🐶", age: 3 } as ServerMember,
-  { id: 9, name: "Rico", role: "pet", emoji: "🐩", age: 5 } as ServerMember,
+  { id: 1, name: "Mom", role: "parent", emoji: "🐱" } as ServerMember,
+  { id: 2, name: "Dad", role: "parent", emoji: "👨" } as ServerMember,
+  { id: 3, name: "Child 1", role: "child", emoji: "👧" } as ServerMember,
+  { id: 4, name: "Child 2", role: "child", emoji: "👧" } as ServerMember,
+  { id: 5, name: "Child 3", role: "child", emoji: "👧" } as ServerMember,
+  { id: 6, name: "Child 4", role: "child", emoji: "👧" } as ServerMember,
+  { id: 7, name: "Child 5", role: "child", emoji: "🧒" } as ServerMember,
+  { id: 8, name: "Pet 1", role: "pet", emoji: "🐶" } as ServerMember,
+  { id: 9, name: "Pet 2", role: "pet", emoji: "🐩" } as ServerMember,
 ].map((m) => m);
 
 const CACHE_KEY = "consuela-members";
@@ -68,19 +69,23 @@ export interface MembersResult {
   source: "live" | "cache" | "fallback";
 }
 
-/** The roster for the rail: live → cache → fallback (never throws). */
+/** The roster for the rail: live → cache → stand-in fallbacks (never throws). */
 export async function listMembersSmart(): Promise<MembersResult> {
   try {
     const live = await listMembersLive();
-    const merged = mergeMemberFallbacks(live);
-    await writeCachedMembers(merged);
-    return { members: merged, source: "live" };
+    const cleaned = (live || [])
+      .filter((m) => (m.name || "").trim())
+      .map((m) => (typeof m.id === "string" && !m.pbId ? { ...m, pbId: m.id } : m));
+    if (cleaned.length) await writeCachedMembers(cleaned);
+    // Live rows win outright — stand-ins are the LAST resort and must never
+    // be appended beside the real roster (their names can't match it).
+    return { members: cleaned, source: "live" };
   } catch (e: any) {
     if (e instanceof ApiError && e.status === 401) {
       // signed out — cache/fallback is the EXPECTED path, not an error
     } // unreachable also lands here; the badge covers both honestly
     const cached = await readCachedMembers();
-    if (cached.length) return { members: mergeMemberFallbacks(cached), source: "cache" };
+    if (cached.length) return { members: cached, source: "cache" };
     return { members: FALLBACK_MEMBERS.map((m) => ({ ...m })), source: "fallback" };
   }
 }
