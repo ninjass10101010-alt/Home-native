@@ -85,6 +85,16 @@ export function KidHome() {
 
   const points = kidPoints(weekData, name);
   const streak = kidStreak(weekData, name);
+  // This week's reset horizon: weekStart (Mon) + 7 days, in whole days. The
+  // web shows "Resets in N days"; native shows it only when it's knowable.
+  const resetsIn = weekData?.weekStart
+    ? (() => {
+        const end = new Date(`${weekData.weekStart}T00:00:00`);
+        end.setDate(end.getDate() + 7);
+        const days = Math.ceil((end.getTime() - Date.now()) / 86_400_000);
+        return days > 1 ? `in ${days} days` : days === 1 ? "tomorrow" : null;
+      })()
+    : null;
   const level = kidLevel(points);
 
   // Sync-state honesty (TasksPage parity): no snapshot before the first poll
@@ -184,10 +194,20 @@ export function KidHome() {
             >
               {points}
             </Text>
-            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>pts</Text>
+            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>pts this week</Text>
           </View>
-          <View style={{ marginTop: 8 }}>
-            <Chip as="span" size="sm" tone="accent" label={`⭐ Level ${level}`} />
+          {/* The web splits "This Week" from the all-time "Forever" level —
+              the native snapshot only carries this week's figures, so the
+              scope is LABELED instead of lying about permanence
+              (sort-of-forever levels would evaporate every Monday reset). */}
+          <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Chip as="span" size="sm" tone="accent" label={`⭐ Level ${level} this week`} />
+            <Text
+              style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}
+              testID="kid-hero-reset"
+            >
+              {resetsIn ? `Resets ${resetsIn}` : null}
+            </Text>
           </View>
         </View>
         <View style={{ alignItems: "flex-end", gap: 10 }}>

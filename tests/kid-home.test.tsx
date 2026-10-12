@@ -224,7 +224,7 @@ describe("KidHome — hero", () => {
     expect(getByText("Hi Aurora 👋")).toBeTruthy();
     // week points for the EXACT full name key (108 → ⭐ Level 3 by the ported math)
     expect(getByText("108")).toBeTruthy();
-    expect(getByText("⭐ Level 3")).toBeTruthy();
+    expect(getByText("⭐ Level 3 this week")).toBeTruthy();
     // 🔥3-day streak!
     expect(getByText(/3-day streak/)).toBeTruthy();
     expect(queryByTestId("kid-stale")).toBeNull();
@@ -242,7 +242,7 @@ describe("KidHome — hero", () => {
     mockSnapshot = { tasks: [], weekData: EMPTY_WEEK };
     const { getByText, queryByText } = render(<KidHome />, { wrapper: wrap });
     expect(getByText("0")).toBeTruthy();
-    expect(getByText("⭐ Level 1")).toBeTruthy();
+    expect(getByText("⭐ Level 1 this week")).toBeTruthy();
     expect(queryByText(/day streak/)).toBeNull();
   });
 
