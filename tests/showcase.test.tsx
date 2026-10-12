@@ -39,13 +39,13 @@ describe("design-kit showcase", () => {
     const { getByText } = render(<DesignKitShowcase />, { wrapper: wrap });
     for (const s of [
       "Theme controls",
-      "Materials",
-      "Surfaces",
-      "Buttons",
-      "Chips",
-      "Segmented + Toggle + Stepper",
-      "List + Swipe",
-      "Field + Empty + PinPad",
+      "Controls",
+      "Theme preview",
+      "Inputs",
+      "Lists",
+      "Feedback",
+      "Patterns",
+      "Accents",
       "Type ramp",
     ]) {
       expect(getByText(s)).toBeTruthy();
