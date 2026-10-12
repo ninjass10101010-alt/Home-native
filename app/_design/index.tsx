@@ -181,15 +181,15 @@ export default function DesignKitShowcase() {
               padding: 20,
               alignItems: "center",
               gap: 8,
-              backgroundColor: mixAlpha(colors["color-accent-rose"] ?? colors["color-accent"], 0.12),
+              backgroundColor: mixAlpha(colors["color-accent-rose"] ?? accentColor, 0.12),
               borderWidth: 1,
-              borderColor: mixAlpha(colors["color-accent-rose"] ?? colors["color-accent"], 0.3),
+              borderColor: mixAlpha(colors["color-accent-rose"] ?? accentColor, 0.3),
             }}
             testID="sample-error-state"
           >
             <Text style={{ fontSize: 32 }}>⚠️</Text>
             <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>
-              Couldn't sync
+              {"Couldn't sync"}
             </Text>
             <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, textAlign: "center" }}>
               Try again when the connection is back
