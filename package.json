@@ -15,6 +15,7 @@
     "expo-screen-orientation": "~57.0.2",
     "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.4",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
@@ -38,7 +39,7 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
+    "android": "expo run:android",
     "test": "jest --watchAll=false && npm run tokens:check",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

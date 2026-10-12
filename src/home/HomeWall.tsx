@@ -12,7 +12,7 @@ const WALL_WIDTH = 1080; // locked to the panel (spec decision 7)
 const GRID_COLS = 3;
 const GRID_GAP = 16;
 const GRID_H_PAD = 24;
-const HEADER_H = 240;
+const HEADER_H = 300;
 const DOCK_CLEAR = 140;
 const WALL_HEIGHT = 1920;
 
