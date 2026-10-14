@@ -21,7 +21,7 @@ import { TasksWidget } from "../src/home/widgets/TasksWidget";
 import { TodayEventsWidget } from "../src/home/widgets/TodayEventsWidget";
 import { CurrentMealWidget } from "../src/home/widgets/CurrentMealWidget";
 import { BriefingWidget } from "../src/home/widgets/BriefingWidget";
-import { WeatherWidget } from "../src/home/widgets/WeatherWidget";
+import { WeatherHeroCell } from "../src/weather/WidgetHero";
 import { PhotosWidget } from "../src/home/widgets/PhotosWidget";
 import { HomeSecurityWidget } from "../src/home/widgets/HomeSecurityWidget";
 import { HomeClimateWidget } from "../src/home/widgets/HomeClimateWidget";
@@ -35,7 +35,7 @@ const WALL_WIDGETS: Partial<Record<WidgetId, React.ComponentType>> = {
   todayEvents: TodayEventsWidget,
   currentMeal: CurrentMealWidget,
   morningBriefing: BriefingWidget,
-  weather: WeatherWidget,
+  weather: WeatherHeroCell,
   photos: PhotosWidget,
   homeSecurity: HomeSecurityWidget,
   homeClimate: HomeClimateWidget,

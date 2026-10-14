@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
+import { useFonts } from "expo-font";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -30,11 +31,14 @@ function PokeBoundary({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({ Fredoka: require("../assets/fonts/Fredoka.ttf") });
   useEffect(() => {
     hydrateBaseUrl().catch(() => {});
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     activateKeepAwakeAsync("consuela-wall").catch(() => {});
   }, []);
+
+  if (!fontsLoaded) return null; // one blank frame on cold boot; the panel boots once
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
