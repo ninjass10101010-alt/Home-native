@@ -66,12 +66,11 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ] as const;
 
-/** Wall-clock "7:05 AM" — built by hand so Hermes Intl quirks can never skew it. */
+/** Wall-clock "7:05" — built by hand so Hermes Intl quirks can never skew it. */
 function clockLine(now: Date): string {
   const h = now.getHours() % 12 || 12;
   const m = String(now.getMinutes()).padStart(2, "0");
-  const ampm = now.getHours() < 12 ? "AM" : "PM";
-  return `${h}:${m} ${ampm}`;
+  return `${h}:${m}`;
 }
 
 /** "Sunday, October 11" (the reference board's date line). */

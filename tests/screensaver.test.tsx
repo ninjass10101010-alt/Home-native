@@ -78,7 +78,7 @@ describe("Screensaver — the ambient board", () => {
     good();
     const { findByTestId } = render(<Screensaver />, { wrapper: wrap });
     const clock = await findByTestId("ss-clock");
-    expect(clock.props.children).toBe("7:05 AM");
+    expect(clock.props.children).toBe("7:05");
     expect((await findByTestId("ss-date")).props.children).toBe("Sunday, October 11");
   });
 
