@@ -5,7 +5,8 @@ import { render } from "@testing-library/react-native";
 import { ThemeProvider } from "../../src/theme/ThemeProvider";
 import { WeatherGallery, WeatherTimeline, WeatherAirQuality, WeatherMoon } from "../../src/weather/WidgetGallery";
 import type { WeatherSnapshot } from "../../src/weather/data";
-import { AIR_PAYLOAD, FORECAST_PAYLOAD, mockWeatherFetch } from "./fixtures";
+import { AIR_PAYLOAD, mockWeatherFetch } from "./fixtures";
+import { TOKENS } from "../../src/theme/tokens";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"));
@@ -60,6 +61,7 @@ describe("cards (pure, data non-null)", () => {
     // for one rendered cell). getByTestId queries host elements only and still throws
     // on zero/multiple matches, so the exactly-one-now-cell intent is preserved.
     expect(getByTestId("wx-timeline-now")).toBeTruthy();
+    expect(getByTestId("wx-timeline-now").props.style.backgroundColor).toBe(TOKENS.dark["color-monster-blue"]);
     // NOTE (brief deviation): the brief asserts getByText("3 PM"), but the brief's
     // own implementation renders "NOW" for hours[0] (label "3 PM"), so "3 PM" never
     // appears. "4 PM" (hours[1]) proves non-now cells carry their hour labels.

@@ -26,5 +26,6 @@ describe("conditionCode (WMO → ConditionCode, web band parity)", () => {
   });
   it("missing code falls to a neutral cloud — never fabricated art", () => {
     expect(conditionCode(undefined, true)).toBe("cloudy");
+    expect(conditionCode(-1, true)).toBe("cloudy");
   });
 });

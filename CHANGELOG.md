@@ -17,7 +17,7 @@ Full shipped-change history for Home-native (newest first, long-form entries).
   two new payload fields (weatherCode, isDay). Data: one Open-Meteo forecast
   fetch + parallel air-quality fetch (guest-visible; air failure degrades only
   the AQI card; forecast failure shows the honest failure card). Colors flow
-  exclusively through 27 new `--color-monster-*` tokens added to Home-ai
+   exclusively through 26 new `--color-monster-*` tokens added to Home-ai
   globals.css and regenerated via the gen-tokens pipeline (theme-invariant —
   the poster is art, not chrome). Fredoka (OFL) via expo-font for the label
   register, system fallback documented. Ambient motion: one icon bob
