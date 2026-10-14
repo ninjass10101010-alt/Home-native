@@ -4,6 +4,7 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 
 import { Screensaver } from "../src/screensaver/Screensaver";
+import { ThemeProvider } from "../src/theme/ThemeProvider";
 import ScreensaverRoute from "../app/screensaver";
 import { idleBoardDue, SCREENSAVER_IDLE_MS } from "../src/home/idle";
 
@@ -55,6 +56,9 @@ const PAYLOAD = {
 
 const good = () => api.mockResolvedValue(PAYLOAD);
 
+// The weather strip renders monster art, which resolves ink through the theme.
+const wrap = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
+
 /** Flush the mount-time fetch + interval effects. */
 const settle = async (ms = 0) =>
   act(async () => {
@@ -72,15 +76,15 @@ beforeEach(() => {
 describe("Screensaver — the ambient board", () => {
   it("renders the big clock and date from the wall clock", async () => {
     good();
-    const { findByTestId } = render(<Screensaver />);
+    const { findByTestId } = render(<Screensaver />, { wrapper: wrap });
     const clock = await findByTestId("ss-clock");
-    expect(clock.props.children).toBe("7:05");
+    expect(clock.props.children).toBe("7:05 AM");
     expect((await findByTestId("ss-date")).props.children).toBe("Sunday, October 11");
   });
 
   it("renders events, dinner, chores progress, briefing lines and weather", async () => {
     good();
-    const { findByText, findByTestId } = render(<Screensaver />);
+    const { findByText, findByTestId } = render(<Screensaver />, { wrapper: wrap });
     expect(await findByText("Soccer practice")).toBeTruthy();
     expect(await findByText("4:00 PM")).toBeTruthy();
     expect(await findByText("Library books due")).toBeTruthy();
@@ -88,14 +92,16 @@ describe("Screensaver — the ambient board", () => {
     expect((await findByTestId("ss-chores")).props.children).toBe("3 of 5 done");
     expect(await findByText("📅 2 events today")).toBeTruthy();
     expect(await findByText("✅ 2 chores still open")).toBeTruthy();
-    expect((await findByTestId("ss-weather-temp")).props.children).toBe("62°");
+    expect((await findByTestId("ss-weather-temp")).props.testID).toBe("ss-weather-temp");
+    expect(await findByTestId("wx-digit-6")).toBeTruthy();
+    expect(await findByTestId("wx-digit-2")).toBeTruthy();
     expect(await findByText("Partly cloudy")).toBeTruthy();
     expect(await findByText("H 70° · L 48°")).toBeTruthy();
   });
 
   it("polls the family server every 60s", async () => {
     good();
-    const { findByTestId } = render(<Screensaver />);
+    const { findByTestId } = render(<Screensaver />, { wrapper: wrap });
     await findByTestId("ss-clock");
     expect(api).toHaveBeenCalledTimes(1);
     expect(api.mock.calls[0][0]).toBe("/api/consuela/screensaver");
@@ -107,7 +113,7 @@ describe("Screensaver — the ambient board", () => {
 
   it("dims after 60s idle (the wall dims)", async () => {
     good();
-    const { findByTestId, getByTestId } = render(<Screensaver />);
+    const { findByTestId, getByTestId } = render(<Screensaver />, { wrapper: wrap });
     await findByTestId("ss-clock");
     expect(StyleSheet.flatten(getByTestId("ss-content").props.style)?.opacity).toBe(1);
     await settle(61_000);
@@ -116,7 +122,7 @@ describe("Screensaver — the ambient board", () => {
 
   it("keeps the last-good board on failure and dims the clock honestly after 5min stale", async () => {
     good();
-    const { findByText, getByTestId, queryByTestId } = render(<Screensaver />);
+    const { findByText, getByTestId, queryByTestId } = render(<Screensaver />, { wrapper: wrap });
     expect(await findByText("Taco Night")).toBeTruthy();
     expect(queryByTestId("ss-stale")).toBeNull();
     // network dies — the board never lies, it just gets quiet about freshness
@@ -131,13 +137,13 @@ describe("Screensaver — the ambient board", () => {
 
   it("a payload server that never answered shows honest waiting copy (no fake family data)", async () => {
     api.mockRejectedValue(new ApiError({ message: "db_unreachable", status: 503, code: "db_unreachable", retryable: true }));
-    const { findByText } = render(<Screensaver />);
+    const { findByText } = render(<Screensaver />, { wrapper: wrap });
     expect(await findByText("Waiting for the family server…")).toBeTruthy();
   });
 
   it("malformed ok payloads are ignored — the last-good board stays", async () => {
     api.mockResolvedValueOnce({ ok: true, events: null, tasks: null, briefing: "nope" });
-    const { findByText } = render(<Screensaver />);
+    const { findByText } = render(<Screensaver />, { wrapper: wrap });
     expect(await findByText("Waiting for the family server…")).toBeTruthy();
     good();
     await settle(60_000);
@@ -147,7 +153,7 @@ describe("Screensaver — the ambient board", () => {
   it("wake-on-tap exits the board", async () => {
     good();
     const onExit = jest.fn();
-    const { findByTestId, getByTestId } = render(<Screensaver onExit={onExit} />);
+    const { findByTestId, getByTestId } = render(<Screensaver onExit={onExit} />, { wrapper: wrap });
     await findByTestId("ss-clock");
     fireEvent.press(getByTestId("screensaver-root"));
     expect(onExit).toHaveBeenCalledTimes(1);
@@ -158,7 +164,7 @@ describe("Screensaver — the ambient board", () => {
 describe("Screensaver route", () => {
   it("tap exits back; with no history it replaces with Home (never a dead end)", async () => {
     good();
-    const first = render(<ScreensaverRoute />);
+    const first = render(<ScreensaverRoute />, { wrapper: wrap });
     await first.findByTestId("screensaver-root");
     fireEvent.press(first.getByTestId("screensaver-root"));
     expect(mockRouterBack).toHaveBeenCalledTimes(1);
@@ -166,7 +172,7 @@ describe("Screensaver route", () => {
     first.unmount();
 
     mockCanGoBack = false;
-    const second = render(<ScreensaverRoute />);
+    const second = render(<ScreensaverRoute />, { wrapper: wrap });
     await second.findByTestId("screensaver-root");
     fireEvent.press(second.getByTestId("screensaver-root"));
     expect(mockRouterReplace).toHaveBeenCalledWith("/");

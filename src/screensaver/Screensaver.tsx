@@ -3,6 +3,8 @@ import { AppState, Pressable, Text, View } from "react-native";
 import { api } from "../api/client";
 import { TOKENS } from "../theme/tokens";
 import { mixAlpha } from "../ui/SoftButton";
+import { ConditionIcon, MonsterDigit } from "../weather/art";
+import { conditionCode } from "../weather/conditions";
 
 /**
  * The wall's ambient idle board (WS-8) — RN port of Home-ai's
@@ -40,7 +42,7 @@ export interface ScreensaverPayload {
   dinner: { name: string } | null;
   tasks: { done: number; total: number };
   briefing: string[];
-  weather: { tempF: number; hiF: number; loF: number; condition: string } | null;
+  weather: { tempF: number; hiF: number; loF: number; condition: string; weatherCode?: number; isDay?: number } | null;
 }
 
 export const POLL_MS = 60_000;
@@ -64,11 +66,12 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ] as const;
 
-/** Wall-clock "7:05" — built by hand so Hermes Intl quirks can never skew it. */
+/** Wall-clock "7:05 AM" — built by hand so Hermes Intl quirks can never skew it. */
 function clockLine(now: Date): string {
   const h = now.getHours() % 12 || 12;
   const m = String(now.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
+  const ampm = now.getHours() < 12 ? "AM" : "PM";
+  return `${h}:${m} ${ampm}`;
 }
 
 /** "Sunday, October 11" (the reference board's date line). */
@@ -162,17 +165,17 @@ export function Screensaver({ onExit }: ScreensaverProps) {
               </Text>
             </View>
             {data?.weather ? (
-              <View style={{ alignItems: "flex-end" }}>
-                <Text
-                  testID="ss-weather-temp"
-                  style={{ color: INK, fontSize: 84, fontWeight: "700", lineHeight: 88, fontVariant: ["tabular-nums"] }}
-                >
-                  {`${data.weather.tempF}°`}
-                </Text>
+              <View style={{ alignItems: "flex-end", gap: 2 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <ConditionIcon code={conditionCode(data.weather.weatherCode, data.weather.isDay !== 0)} size={56} />
+                  <View style={{ flexDirection: "row", alignItems: "flex-end" }} testID="ss-weather-temp">
+                    {String(data.weather.tempF).split("").map((d, i) => (
+                      <MonsterDigit key={`${d}-${i}`} digit={d} height={64} />
+                    ))}
+                  </View>
+                </View>
                 <Text style={{ color: INK, fontSize: 24, fontWeight: "600" }}>{data.weather.condition}</Text>
-                <Text style={{ color: SUB_INK, fontSize: 18, fontVariant: ["tabular-nums"], marginTop: 2 }}>
-                  {`H ${data.weather.hiF}° · L ${data.weather.loF}°`}
-                </Text>
+                <Text style={{ color: INK, fontSize: 24, fontWeight: "600" }}>{`H ${data.weather.hiF}° · L ${data.weather.loF}°`}</Text>
               </View>
             ) : null}
           </View>
