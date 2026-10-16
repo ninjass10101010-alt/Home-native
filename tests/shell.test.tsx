@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
 import { render } from "@testing-library/react-native";
-import { ThemeProvider } from "../src/theme/ThemeProvider";
-import { phaseForHour, stopsFromToken } from "../src/theme/Atmosphere";
+import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
+import { Atmosphere, phaseForHour, stopsFromToken } from "../src/theme/Atmosphere";
 import { Screen } from "../src/theme/Screen";
 import { TOKENS } from "../src/theme/tokens";
+import { mix } from "../src/theme/mix";
 import { Text } from "react-native";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
@@ -14,6 +15,24 @@ jest.mock("@react-native-async-storage/async-storage", () =>
 const wrap = ({ children }: { children: React.ReactNode }) => (
   <ThemeProvider>{children}</ThemeProvider>
 );
+
+function ForceTheme({ theme, children }: { theme: "light" | "dark"; children: React.ReactNode }) {
+  const { setTheme } = useTheme();
+  React.useEffect(() => {
+    setTheme(theme);
+  }, [theme]);
+  return <>{children}</>;
+}
+
+function wrapTheme(theme: "light" | "dark") {
+  return function Themed({ children }: { children: React.ReactNode }) {
+    return (
+      <ThemeProvider>
+        <ForceTheme theme={theme}>{children}</ForceTheme>
+      </ThemeProvider>
+    );
+  };
+}
 
 describe("atmosphere phase", () => {
   it("maps hours: dawn 5–11, day 11–17, dusk 17–21, night 21–5", () => {
@@ -54,5 +73,18 @@ describe("Screen + Atmosphere", () => {
   it("canvas color comes from tokens, light AND dark", () => {
     expect(TOKENS.light["color-canvas"]).toBe("#f5f6fa");
     expect(TOKENS.dark["color-canvas"]).toBe("#0f1117");
+  });
+
+  it("secondary violet bloom rides the top-right at .warm-glass-canvas stops (14% dark / 10% light)", () => {
+    for (const theme of ["dark", "light"] as const) {
+      const { getByTestId, toJSON } = render(<Atmosphere />, { wrapper: wrapTheme(theme) });
+      expect(getByTestId("atmosphere")).toBeTruthy();
+      const s = JSON.stringify(toJSON());
+      // stops from Home-ai globals.css:736-751 (ellipse 60% 40% at 85% 0%)
+      expect(s).toContain(
+        mix(TOKENS[theme]["color-accent-violet"], "transparent", theme === "dark" ? 14 : 10)
+      );
+      expect(s).toContain('"x":0.85'); // anchored top-right (85% horizontal)
+    }
   });
 });

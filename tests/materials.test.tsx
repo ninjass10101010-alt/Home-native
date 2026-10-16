@@ -2,7 +2,7 @@
 import { render } from "@testing-library/react-native";
 import React from "react";
 import { StyleSheet, Text } from "react-native";
-import { MATERIALS, specularOpacity } from "../src/theme/materials";
+import { MATERIALS, specularOpacity, SPECULAR_AT } from "../src/theme/materials";
 import { Material } from "../src/theme/Material";
 import { perfTier } from "../src/theme/perf";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
@@ -36,6 +36,34 @@ function wrapTheme(theme: "light" | "dark", boost = false) {
       </ThemeProvider>
     );
   };
+}
+
+/** First node in the rendered tree whose flattened style satisfies `pred`. */
+function findNodeByStyle(node: any, pred: (s: Record<string, unknown>) => boolean): any {
+  const stack = [node];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object") continue;
+    const flat = StyleSheet.flatten(cur.props?.style) as Record<string, unknown> | undefined | false;
+    if (flat && typeof flat === "object" && pred(flat)) return cur;
+    const kids = Array.isArray(cur.children) ? cur.children : cur.children ? [cur.children] : [];
+    stack.push(...kids);
+  }
+  return null;
+}
+
+/** Every ExpoLinearGradient host node in the rendered tree. */
+function gradientNodes(node: any): any[] {
+  const out: any[] = [];
+  const stack = [node];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (!cur || typeof cur !== "object") continue;
+    if (cur.type === "ExpoLinearGradient") out.push(cur);
+    const kids = Array.isArray(cur.children) ? cur.children : cur.children ? [cur.children] : [];
+    stack.push(...kids);
+  }
+  return out;
 }
 
 describe("MATERIALS descriptors", () => {
@@ -204,5 +232,112 @@ describe("<Material>", () => {
     expect(flatStyle.height).toBe(96);
     // one View, no shadow shell
     expect(flat.children).toHaveLength(1);
+  });
+});
+
+// ── Task 0.2: tone (.widget-card parity) + caller-tint extraction ────────────
+describe("<Material> tone (.widget-card from Home-ai globals.css)", () => {
+  const toneDark = TOKENS.dark["color-accent-violet"];
+  const toneLight = TOKENS.light["color-accent-violet"];
+
+  it("dark: 160° tone wash 16%→5% + 35% tone border", () => {
+    const { toJSON } = render(
+      <Material tier="thin" tone={toneDark} testID="m">
+        <Text>x</Text>
+      </Material>,
+      { wrapper: wrapTheme("dark") }
+    );
+    const json: any = toJSON();
+    const rootStyle = StyleSheet.flatten(json.props.style) ?? {};
+    expect(rootStyle.borderColor).toBe(mix(toneDark, "transparent", 35));
+    const wash = gradientNodes(json).find(
+      (n) =>
+        n.props.colors[0] === mix(toneDark, "transparent", 16) &&
+        n.props.colors[1] === mix(toneDark, "transparent", 5)
+    );
+    expect(wash).toBeTruthy();
+  });
+
+  it("light: barely-there wash 3%→1% + tone border mixed into color-border (the pastel-mud fix)", () => {
+    const { toJSON } = render(
+      <Material tier="thin" tone={toneLight} testID="m">
+        <Text>x</Text>
+      </Material>,
+      { wrapper: wrapTheme("light") }
+    );
+    const json: any = toJSON();
+    // light thin carries a shadow descriptor → the border rides the INNER
+    // surface (the outer shell stays a non-clipping shadow box)
+    const surface = findNodeByStyle(json, (s) => s.borderWidth === 1);
+    expect(surface).toBeTruthy();
+    expect(StyleSheet.flatten(surface.props.style).borderColor).toBe(
+      mix(toneLight, TOKENS.light["color-border"], 24)
+    );
+    const wash = gradientNodes(json).find(
+      (n) =>
+        n.props.colors[0] === mix(toneLight, "transparent", 3) &&
+        n.props.colors[1] === mix(toneLight, "transparent", 1)
+    );
+    expect(wash).toBeTruthy();
+  });
+
+  it("no tone → tier border unchanged (tone support is opt-in)", () => {
+    const { toJSON } = render(
+      <Material tier="thin" testID="m">
+        <Text>x</Text>
+      </Material>,
+      { wrapper: wrapTheme("dark") }
+    );
+    const rootStyle = StyleSheet.flatten((toJSON() as any).props.style) ?? {};
+    expect(rootStyle.borderColor).toBe(MATERIALS.dark.thin.border);
+  });
+
+  it("top specular rim rides every frosted surface", () => {
+    const { toJSON } = render(
+      <Material tier="thin" testID="m">
+        <Text>x</Text>
+      </Material>,
+      { wrapper: wrapTheme("dark") }
+    );
+    const rim = findNodeByStyle(toJSON(), (s) => s.height === 1 && s.top === 0 && s.position === "absolute");
+    expect(rim).toBeTruthy();
+    expect(rim.props.style.backgroundColor).toBe(SPECULAR_AT(0.08));
+  });
+});
+
+describe("<Material> caller backgroundColor extraction", () => {
+  it("style backgroundColor renders as an absolute layer ABOVE the frost — never the surface's own fill", () => {
+    const bg = mix(TOKENS.dark["color-accent-mint"], "transparent", 88);
+    const { toJSON } = render(
+      <Material tier="thin" style={{ borderRadius: 20, backgroundColor: bg }} testID="m">
+        <Text>x</Text>
+      </Material>,
+      { wrapper: wrapTheme("dark") }
+    );
+    const json: any = toJSON();
+    // the surface box no longer carries the caller's fill (it used to paint
+    // BEHIND the frost's d.background in full mode / OVERWRITE the bake in
+    // reduced mode)…
+    expect(StyleSheet.flatten(json.props.style)?.backgroundColor).toBeUndefined();
+    // …it rides as its own layer inside, above the frost, below tone/specular
+    const layer = findNodeByStyle(
+      json,
+      (s) => s.position === "absolute" && s.backgroundColor === bg
+    );
+    expect(layer).toBeTruthy();
+  });
+
+  it("layout keys still land on the surface (the split only peels off backgroundColor)", () => {
+    const bg = mix(TOKENS.dark["color-accent-amber"], "transparent", 80);
+    const { getByTestId } = render(
+      <Material tier="thin" style={{ flex: 1, padding: 12, backgroundColor: bg }} testID="m">
+        <Text>x</Text>
+      </Material>,
+      { wrapper: wrapTheme("dark") }
+    );
+    const style = StyleSheet.flatten((getByTestId("m") as any).props.style) ?? {};
+    expect(style.flex).toBe(1);
+    expect(style.padding).toBe(12);
+    expect(style.backgroundColor).toBeUndefined();
   });
 });

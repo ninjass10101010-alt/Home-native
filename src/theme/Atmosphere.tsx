@@ -123,6 +123,13 @@ export function Atmosphere() {
         ]
       : [mix(accentColor, "transparent", 12), "transparent"];
 
+  // Secondary violet bloom, top-right — .warm-glass-canvas's second radial
+  // (ellipse 60% 40% at 85% 0%, violet 14% dark / 10% light → transparent 50%).
+  const violetBloomColors: [string, string] = [
+    mix(colors["color-accent-violet"] ?? accentColor, "transparent", theme === "dark" ? 14 : 10),
+    "transparent",
+  ];
+
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill} testID="atmosphere">
       {prevStops ? <GradientLayer stops={prevStops} /> : null}
@@ -133,6 +140,12 @@ export function Atmosphere() {
         colors={bloomColors}
         start={{ x: 0.15, y: 0 }}
         end={{ x: 0.75, y: 0.55 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <LinearGradient
+        colors={violetBloomColors}
+        start={{ x: 0.85, y: 0 }}
+        end={{ x: 0.25, y: 0.5 }}
         style={StyleSheet.absoluteFill}
       />
     </View>

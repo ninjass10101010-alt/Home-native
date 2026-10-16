@@ -5,6 +5,7 @@ import { AccessibilityInfo } from "react-native";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
 import { TOKENS, ACCENTS, ACCENTS_RGB } from "../src/theme/tokens";
 import { contrastRatio } from "../src/lib/contrast";
+import { mix } from "../src/theme/mix";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -59,6 +60,42 @@ describe("ThemeProvider", () => {
     const { result } = renderHook(() => useTheme(), { wrapper: wrap });
     act(() => result.current.setAccent("amber"));
     expect(result.current.colors["color-accent-selected"]).toBe(ACCENTS[result.current.theme].amber);
+  });
+
+  it("every derived accent token re-derives on setAccent (nav fill/button/ink track the live accent)", () => {
+    const { result } = renderHook(() => useTheme(), { wrapper: wrap });
+    for (const theme of ["dark", "light"] as const) {
+      act(() => {
+        result.current.setTheme(theme);
+        result.current.setAccent("amber");
+      });
+      const amber = ACCENTS[theme].amber;
+      const c = result.current.colors;
+      expect(c["color-primary"]).toBe(amber);
+      expect(c["color-ring"]).toBe(amber);
+      expect(c["color-nav-active"]).toBe(amber);
+      expect(c["color-nav-active-border"]).toBe(mix(amber, "transparent", 38));
+      expect(c["color-nav-active-fill"]).toBe(mix(amber, "black", 72));
+      expect(c["color-accent-button"]).toBe(mix(amber, "black", 60));
+      expect(c["color-accent-ink"]).toBe(
+        mix(amber, TOKENS[theme]["color-text-primary"], theme === "light" ? 60 : 55)
+      );
+      // …and they are NOT the static nori table the generator baked
+      expect(c["color-nav-active-fill"]).not.toBe(TOKENS[theme]["color-nav-active-fill"]);
+      expect(c["color-accent-ink"]).not.toBe(TOKENS[theme]["color-accent-ink"]);
+    }
+  });
+
+  it("accent-ink under boost mixes against the BOOST text ladder (the override that wins)", () => {
+    const { result } = renderHook(() => useTheme(), { wrapper: wrap });
+    act(() => {
+      result.current.setTheme("light");
+      result.current.setBoost(true);
+      result.current.setAccent("amber");
+    });
+    expect(result.current.colors["color-accent-ink"]).toBe(
+      mix(ACCENTS.light.amber, TOKENS.boost.light["color-text-primary"], 60)
+    );
   });
 
   it("U1: colors['color-accent-selected-rgb'] mirrors the live accent's channels in every theme × boost", () => {

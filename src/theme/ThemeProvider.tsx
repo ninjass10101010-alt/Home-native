@@ -8,6 +8,7 @@ import React, {
 import { AccessibilityInfo, useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { TOKENS, ACCENTS, ACCENTS_RGB } from "./tokens";
+import { mix } from "./mix";
 
 export type AccentName = string;
 export type ThemeName = "light" | "dark";
@@ -95,28 +96,43 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
 
   const value = useMemo<ThemeValue>(() => {
-    const colors = {
-      ...TOKENS[theme],
-      ...(boost ? TOKENS.boost[theme] : {}),
+    const base = TOKENS[theme];
+    const boostOverrides = boost ? TOKENS.boost[theme] : {};
+    const liveAccent = ACCENTS[theme][accent] ?? ACCENTS[theme].nori;
+    const liveRgb = ACCENTS_RGB[theme][accent] ?? ACCENTS_RGB[theme].nori;
+    const textPrimary = boostOverrides["color-text-primary"] ?? base["color-text-primary"];
+    const colors: Record<string, string> = {
+      ...base,
+      ...boostOverrides,
+      "color-accent-selected": liveAccent,
+      "color-accent-selected-rgb": liveRgb,
+      "color-primary": liveAccent,
+      "color-ring": liveAccent,
+      "color-nav-active": liveAccent,
+      "color-nav-active-border": mix(liveAccent, "transparent", 38),
+      "color-nav-active-sheen": mix(liveAccent, "transparent", 20),
+      "color-nav-active-wash": mix(liveAccent, "transparent", 6),
+      "color-nav-active-glow": mix(liveAccent, "transparent", 35),
+      "color-nav-active-halo": mix(liveAccent, "transparent", 50),
+      "color-nav-active-fill": mix(liveAccent, "black", 72),
+      "color-accent-ink": mix(liveAccent, textPrimary, theme === "light" ? 60 : 55),
+      "color-accent-glow": mix(liveAccent, "transparent", 25),
+      "color-accent-border": mix(liveAccent, "transparent", 35),
+      "color-accent-button": mix(liveAccent, "black", 60),
     };
-    // Keep token-space consumers honest: --color-accent-selected mirrors the
-    // live accent, not the default nori (the web's inline-style hazard, fixed here).
-    colors["color-accent-selected"] = ACCENTS[theme][accent] ?? ACCENTS[theme].nori;
-    // …and its -rgb twin follows too (the generated table is nori-only per
-    // theme; widgets composite with the live accent's channels).
-    colors["color-accent-selected-rgb"] = ACCENTS_RGB[theme][accent] ?? ACCENTS_RGB[theme].nori;
+    const accentColor = liveAccent;
     return {
       theme,
       boost,
       accent,
-      colors,
-      accentColor: ACCENTS[theme][accent] ?? ACCENTS[theme].nori,
       reduceMotion,
+      colors,
+      accentColor,
       setTheme,
       setBoost,
       setAccent,
     };
-  }, [theme, boost, accent, reduceMotion]);
+  }, [theme, boost, accent, reduceMotion, setTheme, setBoost, setAccent]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

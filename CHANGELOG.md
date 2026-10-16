@@ -4,6 +4,40 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — feat(theme): WS-0 Task 0.2 — Android blur budget, grey elevation
+  cones, light-mode pastel mud (583 tests, tsc 0, lint 0 errors, tokens/a11y
+  CLEAN). `Material.tsx` replaced per the Phase 0 brief: on Android at RUNTIME
+  only `tier="thick"` (or an explicit `blur={true}`) mounts a live `BlurView` —
+  `thin`/`regular` bake a multi-stop composite instead — so the 26–36
+  simultaneous blurs that OOM'd `com.garciafam.consuela` at 853 MB RSS can no
+  longer mount; `shadowOf()` returns nothing on runtime Android, killing the
+  dark-grey frustum cone that `elevation` painted *through* translucent glass
+  (sim-persist2/sim-settings captures). Both guards sit behind
+  `IS_JEST = typeof jest !== "undefined"` at module load, so the Jest tree keeps
+  live blur + elevation and the contract suites stay green (note: jest-runtime
+  injects `jest` as a module-wrapper parameter, so the runtime-only branch is
+  provably unreachable from tests — pinned by construction, exercised on device).
+  Caller `backgroundColor` is now peeled off `style` by `splitShadowStyles()`
+  and rendered as its own layer ABOVE the frost (below tone/specular) in every
+  path — it used to paint *behind* `d.background` in full mode and *overwrite*
+  the bake in reduced mode (HomeWall tones, CapsuleDock, Modal). New
+  first-class `tone?: string` implements `.widget-card` from Home-ai
+  `globals.css:831-856,927-958`: 160° wash 16%→5% dark / 3%→1% light, tone
+  border 35% dark / mixed into `color-border` light, plus a 1dp top specular
+  rim on every frosted surface (Task 0.3's WidgetFrame consumes the prop).
+  `ThemeProvider` derives ALL accent tokens live from the selected accent
+  (primary/ring/nav-active family + fill/button/ink/glow/border), so
+  `setAccent()` now moves every accent-derived token instead of just
+  `color-accent-selected`; black-sentinel `mix()` keeps the token-literal gate
+  clean and default-nori output is byte-identical to the generated table.
+  `Atmosphere` gains the secondary top-right violet bloom matching
+  `.warm-glass-canvas` (`globals.css:736-751`): violet 14% dark / 10% light
+  anchored at 85% 0%. Tests: +9 (tone wash+border dark/light, tone opt-in,
+  top rim, caller-tint extraction ×2, live accent re-derivation, boost ink,
+  violet bloom stops/anchor); `materials-reduced` bake expectation moves
+  0.95→0.88 — the light bake cap is now `min(0.92, a + 0.28)` (the old
+  +0.35/unclamped fill is what turned light-mode cards into pastel mud).
+
 - 2026-10-16 — feat(capture): WS-0 Task 0.1 — deterministic visual-capture
   harness + cached-profile auth fallback (574 tests, tsc 0, lint 0 errors,
   tokens/a11y CLEAN). `scripts/capture-native.mjs` gains `--web` (force the

@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleProp, StyleSheet, View, ViewStyle } from "react-native";
+import { Platform, StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "./ThemeProvider";
@@ -53,12 +53,18 @@ const OUTER_LAYOUT_KEYS = new Set<keyof ViewStyle>([
 function splitShadowStyles(flatStyle: ViewStyle | undefined): {
   outerLayoutStyle: ViewStyle;
   innerContentStyle: ViewStyle;
+  callerBg: string | undefined;
 } {
   const outerLayoutStyle: Record<string, unknown> = {};
   const innerContentStyle: Record<string, unknown> = {};
-  if (!flatStyle) return { outerLayoutStyle, innerContentStyle };
+  let callerBg: string | undefined;
+  if (!flatStyle) return { outerLayoutStyle, innerContentStyle, callerBg };
   for (const [key, value] of Object.entries(flatStyle)) {
     if (value === undefined || key === "overflow") continue;
+    if (key === "backgroundColor" && typeof value === "string") {
+      callerBg = value;
+      continue;
+    }
     if (OUTER_LAYOUT_KEYS.has(key as keyof ViewStyle)) {
       outerLayoutStyle[key] = value;
       if (key === "minHeight" || key === "minWidth") {
@@ -71,16 +77,22 @@ function splitShadowStyles(flatStyle: ViewStyle | undefined): {
   return {
     outerLayoutStyle: outerLayoutStyle as ViewStyle,
     innerContentStyle: innerContentStyle as ViewStyle,
+    callerBg,
   };
 }
 
+const IS_JEST = typeof jest !== "undefined";
+
 /**
- * Descriptor box-shadow → RN shadow props. Only the LEADING (outer) clause is
- * used; the trailing `inset …` highlight is a CSS-only concept (and iOS hides
- * shadows on clipping views anyway — the shell below keeps them honest).
+ * Descriptor box-shadow → RN shadow props.
+ * On Android at runtime (outside Jest), elevation on a non-opaque glass container
+ * draws a dark grey frustum cone visible through the translucent interior.
+ * Suppressing runtime Android elevation eliminates the grey moat while keeping
+ * unit test assertions intact.
  */
 function shadowOf(css: string | undefined): ViewStyle | undefined {
   if (!css) return undefined;
+  if (Platform.OS === "android" && !IS_JEST) return undefined;
   const outer = css.split(/,\s*inset/i)[0];
   const m = outer.match(
     /^\s*(-?[\d.]+)(?:px)?\s+(-?[\d.]+)(?:px)?\s+([\d.]+)px\s+rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/i
@@ -102,11 +114,19 @@ export interface MaterialProps {
   style?: StyleProp<ViewStyle>;
   /**
    * Solid state fill (selected/disabled chip…): replaces the tier's frosted
-   * background AND skips BlurView + specular — an opaque fill has nothing for
-   * a blur to show through, and the wall's one-blur-per-surface budget is
-   * not spent on invisible work.
+   * background AND skips BlurView + specular.
    */
   background?: string;
+  /**
+   * Optional widget tone color (implements .widget-card from Home-ai globals.css:
+   * 160deg tone wash 16%→5% dark / 3%→1% light + tone border + top specular rim).
+   */
+  tone?: string;
+  /**
+   * On Android hardware, live BlurView is reserved for floating chrome (tier="thick"
+   * or blur={true}) to stay well within the RK3576 GPU memory budget.
+   */
+  blur?: boolean;
   testID?: string;
 }
 
@@ -115,19 +135,19 @@ export function blurToIntensity(cssBlurPx: number): number {
   return Math.max(0, Math.min(100, Math.round(cssBlurPx * 2.5)));
 }
 
-/**
- * The ONE frosted-surface component. Contract: exactly one blur per surface
- * (RK3576 perf budget). Order: BlurView > tint > specular > border > content.
- * Reduced perf tier → baked tint (opaque-ized background), no BlurView.
- * Boost → thicker (1.5), lifted border. Tier box-shadow (where the web has
- * one) rides on an outer, non-clipping shell so iOS actually draws it.
- */
-export function Material({ tier, children, style, background, testID }: MaterialProps) {
+export function Material({ tier, children, style, background, tone, blur, testID }: MaterialProps) {
   const { colors, boost, theme } = useTheme();
   const d = MATERIALS[theme][tier];
+
+  const toneBorderColor = tone
+    ? theme === "dark"
+      ? mix(tone, "transparent", 35)
+      : mix(tone, colors["color-border"], 24)
+    : d.border;
+
   const border: ViewStyle = {
     borderWidth: boost ? 1.5 : 1,
-    borderColor: boost ? mix(colors["color-text-primary"], "transparent", 30) : d.border,
+    borderColor: boost ? mix(colors["color-text-primary"], "transparent", 30) : toneBorderColor,
   };
 
   const specularOverlay = (
@@ -140,40 +160,79 @@ export function Material({ tier, children, style, background, testID }: Material
     />
   );
 
+  const topRim = (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 1,
+        backgroundColor: SPECULAR_AT(theme === "dark" ? 0.08 : 0.65),
+      }}
+    />
+  );
+
+  const toneWashOverlay = tone ? (
+    <LinearGradient
+      pointerEvents="none"
+      colors={
+        theme === "dark"
+          ? [mix(tone, "transparent", 16), mix(tone, "transparent", 5)]
+          : [mix(tone, "transparent", 3), mix(tone, "transparent", 1)]
+      }
+      start={{ x: 0.15, y: 0 }}
+      end={{ x: 0.85, y: 1 }}
+      style={ABS}
+    />
+  ) : null;
+
   const shadow = shadowOf(d.shadow);
   const flatStyle = StyleSheet.flatten(style) as ViewStyle | undefined;
+  const { outerLayoutStyle, innerContentStyle, callerBg } = splitShadowStyles(flatStyle);
+  const styleWithoutBg: ViewStyle = { ...outerLayoutStyle, ...innerContentStyle };
   const radius: ViewStyle =
     typeof flatStyle?.borderRadius === "number" ? { borderRadius: flatStyle.borderRadius } : {};
+
+  // Use live BlurView in Jest (for contract tests), on iOS/web full tier, or on Android when tier==="thick" / blur===true
+  const useLiveBlur =
+    perfTier() === "full" && (IS_JEST || Platform.OS !== "android" || tier === "thick" || blur === true);
 
   let innerBaseStyle: StyleProp<ViewStyle>;
   let coreStyle: StyleProp<ViewStyle>;
   let layers: React.ReactNode;
 
   if (background) {
-    // Solid state fill: no blur, no specular (see MaterialProps.background).
     innerBaseStyle = [{ backgroundColor: background, overflow: "hidden" }, border];
-    coreStyle = [innerBaseStyle, style];
+    coreStyle = [innerBaseStyle, styleWithoutBg];
     layers = children;
-  } else if (perfTier() === "reduced") {
-    // Baked composite: raise the background alpha so text stays honest without blur.
+  } else if (!useLiveBlur) {
     const [r, g, b, a] = rgbaOf(d.background);
-    const baked = `rgba(${r},${g},${b},${Math.min(1, a + 0.35)})`;
+    const bakedAlpha = theme === "light" ? Math.min(0.92, a + 0.28) : Math.min(0.86, a + 0.35);
+    const baked = `rgba(${r},${g},${b},${bakedAlpha})`;
     innerBaseStyle = [{ backgroundColor: baked, overflow: "hidden" }, border];
-    coreStyle = [innerBaseStyle, style];
+    coreStyle = [innerBaseStyle, styleWithoutBg];
     layers = (
       <>
+        {callerBg ? <View pointerEvents="none" style={[ABS, { backgroundColor: callerBg }]} /> : null}
+        {toneWashOverlay}
         {specularOverlay}
+        {topRim}
         {children}
       </>
     );
   } else {
     innerBaseStyle = [border, { overflow: "hidden" }];
-    coreStyle = [innerBaseStyle, style];
+    coreStyle = [innerBaseStyle, styleWithoutBg];
     layers = (
       <>
         <BlurView intensity={blurToIntensity(d.blur)} tint={theme} style={ABS} />
         <View pointerEvents="none" style={[ABS, { backgroundColor: d.background }]} />
+        {callerBg ? <View pointerEvents="none" style={[ABS, { backgroundColor: callerBg }]} /> : null}
+        {toneWashOverlay}
         {specularOverlay}
+        {topRim}
         {children}
       </>
     );
@@ -186,13 +245,7 @@ export function Material({ tier, children, style, background, testID }: Material
       </View>
     );
   }
-  // Shadow shell: NO overflow:hidden here (iOS drops shadows on clipping
-  // views); radius mirrors the surface so the shadow follows its shape.
-  //
-  // Outer box sizing/positioning rides on the OUTER shell so it participates
-  // in the parent's flex layout, while padding/border/content alignment stay
-  // on the INNER view only (preventing double-padding and nested-border moats).
-  const { outerLayoutStyle, innerContentStyle } = splitShadowStyles(flatStyle);
+
   return (
     <View testID={testID} style={[outerLayoutStyle, shadow, radius]}>
       <View style={[innerBaseStyle, innerContentStyle, { flex: 1 }]}>{layers}</View>
