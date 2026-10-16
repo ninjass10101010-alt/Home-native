@@ -5,7 +5,7 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 ## Long-form entries
 
 - 2026-10-16 — feat(capture): WS-0 Task 0.1 — deterministic visual-capture
-  harness + cached-profile auth fallback (573 tests, tsc 0, lint 0 errors,
+  harness + cached-profile auth fallback (574 tests, tsc 0, lint 0 errors,
   tokens/a11y CLEAN). `scripts/capture-native.mjs` gains `--web` (force the
   1080×1920 Playwright preview even with an emulator attached), `--wait`/`--base`,
   and an adb branch that refuses to screenshot the launcher: `am start -W` now
@@ -21,9 +21,9 @@ Full shipped-change history for Home-native (newest first, long-form entries).
   instead (the Playwright harness seeds it; a cookie-less cold start paints it
   too), and a cache-less dead session still clears the cookie; `tests/auth.test.tsx`
   now isolates the profile/cookie caches per test and pins all three fallback
-  paths (whoami-null, offline, no-cookie). Behavior delta to know: the hydrate
-  effect no longer arms the idle/warn timers on the live-whoami path — expiry
-  starts at the first `poke()` after hydration instead.
+  paths (whoami-null, offline, no-cookie). Behavior note: a cold-start whoami
+  success arms the idle/warn timers (web parity); the cached-profile display
+  fallbacks (whoami-null, offline) never arm them.
 
 - 2026-10-14 — fix(home): WS-3 Adult Home — critic round 3 (all Mediums + the
   Lows that had teeth closed; 541 tests, tsc 0, lint 0 errors, tokens/a11y
