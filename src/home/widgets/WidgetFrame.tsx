@@ -99,13 +99,32 @@ export function WidgetFrame({
         ]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0.35, y: 1 }}
-        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
       />
-      {widgetIconVariantFor(id) ? (
-        <HomeWidgetIcon variant={widgetIconVariantFor(id)!} size={38} title={title} />
-      ) : (
-        <Text style={{ fontSize: 24, lineHeight: 28 }}>{icon}</Text>
-      )}
+      {/* The wash is OPAQUE, and on react-native-web a positioned descendant
+          paints ABOVE in-flow content — so an in-flow <Svg> underneath it
+          vanishes entirely (every wall disc rendered as an empty tinted
+          circle). The artwork rides its own positioned layer at zIndex 1,
+          which is what makes it visible over the wash. */}
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1,
+        }}
+        pointerEvents="none"
+      >
+        {widgetIconVariantFor(id) ? (
+          <HomeWidgetIcon variant={widgetIconVariantFor(id)!} size={38} title={title} />
+        ) : (
+          <Text style={{ fontSize: 24, lineHeight: 28 }}>{icon}</Text>
+        )}
+      </View>
     </View>
   ) : null;
 

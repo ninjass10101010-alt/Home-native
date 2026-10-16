@@ -4,6 +4,30 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — fix(kit): WS-0 harsh-critic round 2b — CRITICAL D-2 + LOW D-13
+  (empty wall discs / react-native-web DOM warning). **D-2** `HomeWidgetIcon`
+  painted its clay body and shine through `<Defs>` + `fill="url(#…)"` gradient
+  refs, which react-native-web never resolves — but the discs were empty for a
+  SECOND, stacked reason the pixels finally isolated: the disc's wash in
+  `WidgetFrame` is an **opaque** `LinearGradient` in an absolutely-positioned
+  layer, and on web a positioned descendant paints ABOVE in-flow content, so the
+  in-flow `<svg>` was covered by the wash (hiding the wash div in the browser
+  revealed a fully painted speech bubble, which is how this was confirmed).
+  Both are fixed: `src/ui/HomeWidgetIcon.tsx` deletes the `<Defs>` /
+  `LinearGradient` / `<Stop>` / `ClipPath` block and every `url(#…)` ref — the
+  body is now the solid `p.mid` and the shine a solid `HOME_WIDGET_ICON_SHINE`,
+  with the existing per-shape `opacity` ladder carrying the volume read (a solid
+  fill cannot fail to resolve) — and `src/home/widgets/WidgetFrame.tsx` seats
+  the artwork in its own positioned `zIndex: 1` layer over the `zIndex: 0`
+  wash. Measured on the product wall (per-channel σ over each disc interior,
+  30×30px box inset 22%): **dark sd 3.2–5.0 → 44.1–78.9, light sd 3.9–4.9 →
+  44.1–78.9; relY span 0.010–0.040 → 0.499–0.896** on all 7 discs, both themes.
+  **D-13** the `Invalid DOM property 'transform-origin'` LogBox warning came
+  from `HomeWidgetIcon`'s leaderboard shine (`<Rect rotation originX originY/>`
+  inside a `clipPath` group) — react-native-svg forwards the rotation origin to
+  the DOM, which React rejects; that shape went with the gradient block, so the
+  wall capture now emits **zero** React warnings. 629 tests, tsc 0, lint 0
+  errors, tokens/a11y CLEAN.
 - 2026-10-16 — fix(kit): WS-0 harsh-critic round 2 — all 12 REJECT findings
   (2 CRITICAL + 4 HIGH + 6 LOW) closed on `/_design` (629 tests, tsc 0, lint 0
   errors, tokens/a11y CLEAN). **CRITICAL 1** `IconButton` hoisted its glyph-ink

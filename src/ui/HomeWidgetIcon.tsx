@@ -1,14 +1,5 @@
-import React, { useId } from "react";
-import Svg, {
-  Circle,
-  ClipPath,
-  Defs,
-  G,
-  LinearGradient as RNSvgLinearGradient,
-  Path,
-  Rect,
-  Stop as RNSvgStop,
-} from "react-native-svg";
+import React from "react";
+import Svg, { Circle, G, Path, Rect } from "react-native-svg";
 import { useTheme } from "../theme/ThemeProvider";
 import {
   HOME_WIDGET_ICON_PALETTES,
@@ -36,9 +27,6 @@ const SIZE_PX: Record<HomeWidgetIconSize, number> = {
   md: 44,
   lg: 56,
 };
-
-const LinearGradient = RNSvgLinearGradient ?? G;
-const Stop = RNSvgStop ?? G;
 
 function accentOpacity(state?: HomeWidgetIconState): number {
   return state && state !== "default" ? 0.95 : 0.6;
@@ -84,23 +72,30 @@ export function widgetIconVariantFor(id: string): HomeWidgetIconVariant | null {
   }
 }
 
+/**
+ * The clay body/shine are painted as SOLID palette steps.
+ *
+ * They were `fill="url(#…)"` gradient refs until WS-0 round 2: on
+ * react-native-web a `<Defs>`-scoped ref never resolves, which dropped the
+ * WHOLE subtree — not just the gradient shapes, but the solid-fill siblings
+ * too — so 9 of 10 wall discs rendered as empty tinted circles. A solid fill
+ * cannot fail to resolve, so the volume read now rides per-shape `opacity`
+ * over a lit-top / mid-body / shaded-base stack instead.
+ */
 function renderArtwork(
   variant: HomeWidgetIconVariant,
   p: HomeWidgetIconPalette,
-  id: string,
   accentFill: string,
   state?: HomeWidgetIconState
 ): React.ReactNode {
-  const body = `url(#${id}-body)`;
-  const shine = `url(#${id}-shine)`;
   const op = accentOpacity(state);
 
   switch (variant) {
     case "briefing":
       return (
         <G>
-          <Circle cx="24" cy="21" r="10" fill={body} />
-          <Circle cx="24" cy="21" r="10" fill={shine} opacity={0.55} />
+          <Circle cx="24" cy="21" r="10" fill={p.mid} />
+          <Circle cx="24" cy="21" r="10" fill={HOME_WIDGET_ICON_SHINE} opacity={0.55} />
           <Path
             d="M24 5v4M24 33v4M8 21h4M36 21h4M12.7 9.7l2.8 2.8M32.5 29.5l2.8 2.8M35.3 9.7l-2.8 2.8M15.5 29.5l-2.8 2.8"
             stroke={p.hi}
@@ -119,11 +114,11 @@ function renderArtwork(
         <G>
           <Path
             d="M11 8h26a6 6 0 0 1 6 6v15a6 6 0 0 1-6 6H24l-9 8v-8a6 6 0 0 1-6-6V14a6 6 0 0 1 6-6Z"
-            fill={body}
+            fill={p.mid}
           />
           <Path
             d="M13 11h20a5 5 0 0 1 5 5v3c-8-3-19-2-25 2-3 2-6 2-8 1v-5a5 5 0 0 1 5-5Z"
-            fill={shine}
+            fill={HOME_WIDGET_ICON_SHINE}
             opacity={0.45}
           />
           <G fill={p.detail}>
@@ -140,7 +135,7 @@ function renderArtwork(
         <G>
           <Path
             d="M20 4c1.6 7.8 4.2 10.4 12 12-7.8 1.6-10.4 4.2-12 12-1.6-7.8-4.2-10.4-12-12 7.8-1.6 10.4-4.2 12-12Z"
-            fill={body}
+            fill={p.mid}
           />
           <Path
             d="M36 24c.9 4.4 2.3 5.8 6.7 6.7-4.4.9-5.8 2.3-6.7 6.7-.9-4.4-2.3-5.8-6.7-6.7 4.4-.9 5.8-2.3 6.7-6.7Z"
@@ -154,7 +149,7 @@ function renderArtwork(
     case "leaderboard":
       return (
         <G>
-          <Path d="M14 7h20v11c0 7-4.5 11-10 11S14 25 14 18V7Z" fill={body} />
+          <Path d="M14 7h20v11c0 7-4.5 11-10 11S14 25 14 18V7Z" fill={p.mid} />
           <Path
             d="M14 11H8v3c0 5 3 8 7 8M34 11h6v3c0 5-3 8-7 8"
             stroke={p.lo}
@@ -163,20 +158,7 @@ function renderArtwork(
             strokeLinecap="round"
           />
           <Path d="M24 29v7M16 42h16l-2-6H18l-2 6Z" fill={p.lo} />
-          <G clipPath={`url(#${id}-clip)`}>
-            <Rect
-              x="4"
-              y="4"
-              width="7"
-              height="26"
-              rx="3"
-              fill={HOME_WIDGET_ICON_SHINE}
-              opacity={0.5}
-              rotation={18}
-              originX={24}
-              originY={18}
-            />
-          </G>
+          <Circle cx="19" cy="13" r="3.2" fill={HOME_WIDGET_ICON_SHINE} opacity={0.34} />
           <Path
             d="m24 11 2 4.2 4.6.7-3.3 3.2.8 4.6L24 21.6l-4.1 2.1.8-4.6-3.3-3.2 4.6-.7L24 11Z"
             fill={p.detail}
@@ -188,7 +170,7 @@ function renderArtwork(
     case "events":
       return (
         <G>
-          <Rect x="6" y="10" width="36" height="32" rx="7" fill={body} />
+          <Rect x="6" y="10" width="36" height="32" rx="7" fill={p.mid} />
           <Path d="M6 17h36v-3a7 7 0 0 0-7-7H13a7 7 0 0 0-7 7v3Z" fill={p.detail} />
           <Path d="M15 5v9M33 5v9" stroke={p.ink} strokeWidth="3.4" strokeLinecap="round" />
           <Rect x="20" y="24" width="11" height="11" rx="3.5" fill={p.hi} />
@@ -205,8 +187,8 @@ function renderArtwork(
     case "schedule":
       return (
         <G>
-          <Circle cx="24" cy="25" r="18" fill={body} />
-          <Circle cx="24" cy="25" r="13" fill={shine} opacity={0.4} />
+          <Circle cx="24" cy="25" r="18" fill={p.mid} />
+          <Circle cx="24" cy="25" r="13" fill={HOME_WIDGET_ICON_SHINE} opacity={0.4} />
           <Path d="M24 10V6M39 25h4M24 40v4M9 25H5" stroke={p.lo} strokeWidth="2.6" strokeLinecap="round" />
           <Path d="M24 25V15" stroke={p.ink} strokeWidth="3" strokeLinecap="round" />
           <Path d="M24 25l8 5" stroke={p.ink} strokeWidth="3" strokeLinecap="round" />
@@ -223,7 +205,7 @@ function renderArtwork(
             <Path d="M24 14c0-4 3-4 3-8" />
             <Path d="M31 15c0-4 3-4 3-8" />
           </G>
-          <Path d="M5 24h38c0 11-8 18-19 18S5 35 5 24Z" fill={body} />
+          <Path d="M5 24h38c0 11-8 18-19 18S5 35 5 24Z" fill={p.mid} />
           <Path d="M5 24h38c0 3-.5 5.4-1.5 7.5H6.5C5.5 29.4 5 27 5 24Z" fill={p.hi} opacity={0.6} />
           <Path
             d="M14 21c2-6 8-8 14-6 4 1.4 7 4 9 6"
@@ -240,7 +222,7 @@ function renderArtwork(
     case "tasks":
       return (
         <G>
-          <Rect x="7" y="6" width="34" height="38" rx="7" fill={body} />
+          <Rect x="7" y="6" width="34" height="38" rx="7" fill={p.mid} />
           <Path d="M17 6V4h14v2" stroke={p.lo} strokeWidth="3" fill="none" strokeLinecap="round" />
           <G stroke={p.hi} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.85}>
             <Path d="m13 18 3 3 6-6" />
@@ -262,7 +244,7 @@ function renderArtwork(
     case "week":
       return (
         <G>
-          <Rect x="5" y="11" width="38" height="28" rx="7" fill={body} />
+          <Rect x="5" y="11" width="38" height="28" rx="7" fill={p.mid} />
           <Path d="M5 18h38v-3a7 7 0 0 0-7-7H12a7 7 0 0 0-7 7v3Z" fill={p.lo} opacity={0.65} />
           <G fill={p.detail}>
             <Rect x="11" y="29" width="5" height="6" rx="2" />
@@ -281,8 +263,8 @@ function renderArtwork(
     case "security":
       return (
         <G>
-          <Path d="M24 3 41 9v13c0 11-7 19-17 23-10-4-17-12-17-23V9L24 3Z" fill={body} />
-          <Path d="M24 6 38 11v9c0 9-5.6 15.6-14 19.4V6Z" fill={shine} opacity={0.28} />
+          <Path d="M24 3 41 9v13c0 11-7 19-17 23-10-4-17-12-17-23V9L24 3Z" fill={p.mid} />
+          <Path d="M24 6 38 11v9c0 9-5.6 15.6-14 19.4V6Z" fill={HOME_WIDGET_ICON_SHINE} opacity={0.28} />
           <Rect x="19" y="20" width="10" height="11" rx="3" fill={p.detail} />
           <Path
             d="M21 20v-3a3 3 0 0 1 6 0v3"
@@ -299,7 +281,7 @@ function renderArtwork(
     case "climate":
       return (
         <G>
-          <Path d="M19 27V10a6 6 0 0 1 12 0v17a9.5 9.5 0 1 1-12 0Z" fill={body} />
+          <Path d="M19 27V10a6 6 0 0 1 12 0v17a9.5 9.5 0 1 1-12 0Z" fill={p.mid} />
           <Path d="M22 26V11a3 3 0 0 1 6 0v15a7 7 0 1 1-6 0Z" fill={p.hi} opacity={0.5} />
           <Path d="M25 34V16" stroke={p.detail} strokeWidth="4.4" strokeLinecap="round" />
           <Circle cx="25" cy="35" r="5" fill={p.detail} />
@@ -313,8 +295,8 @@ function renderArtwork(
     case "lights":
       return (
         <G>
-          <Circle cx="24" cy="20" r="13" fill={body} />
-          <Circle cx="24" cy="20" r="8" fill={shine} opacity={0.5} />
+          <Circle cx="24" cy="20" r="13" fill={p.mid} />
+          <Circle cx="24" cy="20" r="8" fill={HOME_WIDGET_ICON_SHINE} opacity={0.5} />
           <Circle cx="24" cy="20" r="5.5" fill={p.hi} opacity={0.9} />
           <Path d="M20 32h8v4a3 3 0 0 1-3 3h-2a3 3 0 0 1-3-3v-4Z" fill={p.lo} />
           <Path d="M20 35h8M21 39h6" stroke={p.ink} strokeWidth="1.8" strokeLinecap="round" opacity={0.6} />
@@ -331,7 +313,7 @@ function renderArtwork(
     case "ledger":
       return (
         <G>
-          <Path d="M9 6h26a5 5 0 0 1 5 5v31H14a5 5 0 0 1-5-5V6Z" fill={body} />
+          <Path d="M9 6h26a5 5 0 0 1 5 5v31H14a5 5 0 0 1-5-5V6Z" fill={p.mid} />
           <Path d="M9 10h-3v27a5 5 0 0 0 5 5h3v-2H11a5 5 0 0 1-5-5V10h3Z" fill={p.lo} />
           <G stroke={p.hi} strokeWidth="2.6" strokeLinecap="round" opacity={0.8}>
             <Path d="M17 15h16M17 22h16M17 29h10" />
@@ -351,7 +333,6 @@ function renderArtwork(
 
 export function HomeWidgetIcon({ variant, state = "default", size = "md", title }: HomeWidgetIconProps) {
   const { accentColor } = useTheme();
-  const id = `hwi-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const p = HOME_WIDGET_ICON_PALETTES[variant];
   const px = typeof size === "number" ? size : SIZE_PX[size];
   const accentFill = mix(accentColor, p.ink, 72);
@@ -364,22 +345,8 @@ export function HomeWidgetIcon({ variant, state = "default", size = "md", title 
       fill="none"
       accessibilityLabel={title}
     >
-      <Defs>
-        <LinearGradient id={`${id}-body`} x1="0" y1="0" x2="0.35" y2="1">
-          <Stop offset="0%" stopColor={p.hi} />
-          <Stop offset="52%" stopColor={p.mid} />
-          <Stop offset="100%" stopColor={p.lo} />
-        </LinearGradient>
-        <LinearGradient id={`${id}-shine`} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0%" stopColor={HOME_WIDGET_ICON_SHINE} stopOpacity="0.9" />
-          <Stop offset="100%" stopColor={HOME_WIDGET_ICON_SHINE} stopOpacity="0" />
-        </LinearGradient>
-        <ClipPath id={`${id}-clip`}>
-          <Rect x="12" y="5" width="24" height="27" rx="6" />
-        </ClipPath>
-      </Defs>
       <Circle cx="24" cy="24" r="22" fill={p.glow} opacity={0.16} />
-      {renderArtwork(variant, p, id, accentFill, state)}
+      {renderArtwork(variant, p, accentFill, state)}
     </Svg>
   );
 }
