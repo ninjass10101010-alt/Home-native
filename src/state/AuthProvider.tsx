@@ -136,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!alive) return;
         if (who) {
           setMember(who);
+          armTimers(who);
           await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(who));
         } else {
           const cachedRaw = await AsyncStorage.getItem(PROFILE_KEY);
@@ -177,7 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [armTimers]);
 
   // Wall presses ARE session activity: the web's idle clock re-arms on wall
   // interaction, so every touch on the panel re-arms it here too. Reads the

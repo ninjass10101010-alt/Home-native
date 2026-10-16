@@ -122,6 +122,18 @@ describe("AuthProvider", () => {
     expect(result.current.mode).toBe("adult");
   });
 
+  it("hydration arms the idle clock when whoami confirms a live session", async () => {
+    mockSecureStore.getItemAsync.mockResolvedValueOnce("cookie");
+    authApi.whoami.mockResolvedValueOnce(parent);
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await settleFor(result);
+    expect(result.current.hydrated).toBe(true);
+    act(() => jest.advanceTimersByTime(INACTIVITY_TIMEOUT_MS - SESSION_WARN_MS));
+    expect(result.current.sessionWarn).toBe(true);
+    act(() => jest.advanceTimersByTime(SESSION_WARN_MS));
+    expect(result.current.member).toBeNull(); // expired → signed out
+  });
+
   it("dead session (whoami null) → family mode", async () => {
     mockSecureStore.getItemAsync.mockResolvedValueOnce("cookie");
     authApi.whoami.mockResolvedValueOnce(null);
