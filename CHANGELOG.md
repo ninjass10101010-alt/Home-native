@@ -4,6 +4,36 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — fix(theme): WS-0 harsh-critic round 2b — HIGH D-4 + HIGH D-8 +
+  LOW D-9 + LOW D-11 (the Material ladder and the light tone wash). **D-8/D-9**
+  `MATERIALS` transcribed the three web tiers as three ALPHAS of ONE colour
+  (rgb(30 35 48) dark / #ffffff light), which is not a ladder in the render: the
+  composited base already sits at rgb(30 35 48), so no alpha could lift a card
+  more than ~1.5 levels, and the legacy `a + 0.35 / a + 0.28` bake boost
+  compressed what was left. Measured on `/_design`, dark read
+  thin 0.0175 / regular 0.0163 / thick 0.0194 relY — 0.0011 spread and
+  NON-monotonic (regular darker than thin); light read #fefefe / #fefdfd /
+  #fefcfb, all effectively #ffffff, with `thick` byte-identical to
+  `strong glass + glow`. Each tier is now a real SURFACE STEP off the theme's
+  own ramp with the alpha carrying only translucency, and the bake paints the
+  declared alpha. Re-measured: **dark 0.0230 / 0.0281 / 0.0364 — monotonic with
+  0.0051 and 0.0083 gaps, thin landing on the reference's 0.023 card relY;
+  light #fafafd / #f8f9fd / #f5f7fb — three distinct surfaces, none #ffffff.**
+  Borders, blur, saturate and specular are untouched, so the rim/border ladder
+  is unchanged. **D-4** the wall's per-widget `tone` reaches `Material` as a 10%
+  caller `backgroundColor`, and `Material` painted it OVER the tier's white
+  glass — in light theme that stopped being a wash and became the card's
+  colour: ten wall cells composited into a saturated pastel patchwork (chroma
+  14–22/255, 1.95x spread). A faint caller background (alpha < 0.5) now paints
+  UNDER the glass in light theme, attenuated to 38% of its alpha; the tone still
+  speaks through the tone border and the 1dp specular rim. Wall cells re-measured:
+  **chroma 14–22 → 3–10/255, spread 1.06x → 1.01x.** **D-11** dark keeps its
+  wash on top (the wall's most distinctive cue) but it is ceiling-clipped toward
+  `color-surface-6`, which bounds a bright tone's luminance lift — dark wall
+  cells **0.0287–0.0347 relY, spread 1.13x → 1.08x**, low end intact. The dark
+  clip applies to faint washes only, so an opaque caller fill (the dock capsule,
+  a modal pane, an amber banner) still paints verbatim. 629 tests, tsc 0, lint
+  0 errors, tokens/a11y CLEAN.
 - 2026-10-16 — fix(kit): WS-0 harsh-critic round 2b — CRITICAL D-2 + LOW D-13
   (empty wall discs / react-native-web DOM warning). **D-2** `HomeWidgetIcon`
   painted its clay body and shine through `<Defs>` + `fill="url(#…)"` gradient

@@ -26,9 +26,9 @@ describe("<Material> on reduced perf tier", () => {
     const flat = JSON.stringify(toJSON());
     expect(flat).not.toContain("ExpoBlur");
     expect(flat).not.toContain('"intensity"');
-    // jest env defaults to light theme: regular light bg alpha 0.6 → baked
-    // 0.88 (Task 0.2 light bake: min(0.92, a + 0.28) — the old +0.35/1.0 cap
-    // is what turned the light theme's baked cards into pastel mud).
-    expect(flat).toContain("rgba(255,255,255,0.88)");
+    // jest env defaults to light theme. The bake now paints the DECLARED alpha
+    // (WS-0 round 2 D-8): the legacy `a + 0.28 / a + 0.35` boost collapsed all
+    // three light tiers onto #ffffff.
+    expect(flat).toContain("rgba(250,252,255,0.64)");
   });
 });

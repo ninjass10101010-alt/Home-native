@@ -67,20 +67,30 @@ function gradientNodes(node: any): any[] {
 }
 
 describe("MATERIALS descriptors", () => {
-  it("dark tiers match the contract table exactly", () => {
-    expect(MATERIALS.dark.thin.background).toBe("rgba(30, 35, 48, 0.35)");
+  // WS-0 round 2 (D-8/D-9): the fills are re-stepped onto real surface steps.
+  // The transcribed trio was three ALPHAS of ONE color, which rendered as a
+  // 0.0017-relY non-monotonic ladder in dark and three literal #ffffff cards in
+  // light. Blur / border / specular keep the transcribed values.
+  it("dark tiers are a monotonic surface ladder", () => {
+    expect(MATERIALS.dark.thin.background).toBe("rgba(37, 44, 60, 0.42)");
     expect(MATERIALS.dark.thin.blur).toBe(12);
-    expect(MATERIALS.dark.regular.background).toBe("rgba(30, 35, 48, 0.45)");
+    expect(MATERIALS.dark.regular.background).toBe("rgba(45, 53, 72, 0.58)");
     expect(MATERIALS.dark.regular.blur).toBe(20);
-    expect(MATERIALS.dark.thick.background).toBe("rgba(30, 35, 48, 0.55)");
+    expect(MATERIALS.dark.thick.background).toBe("rgba(52, 61, 81, 0.62)");
     expect(MATERIALS.dark.thick.blur).toBe(26);
     expect(MATERIALS.dark.thick.border).toBe("rgba(255, 255, 255, 0.12)");
   });
-  it("light tiers match the contract table exactly", () => {
-    expect(MATERIALS.light.thin.background).toBe("rgba(255, 255, 255, 0.4)");
-    expect(MATERIALS.light.regular.background).toBe("rgba(255, 255, 255, 0.6)");
-    expect(MATERIALS.light.thick.background).toBe("rgba(255, 255, 255, 0.8)");
+  it("light tiers are three DISTINCT surfaces — never three #ffffff cards", () => {
+    expect(MATERIALS.light.thin.background).toBe("rgba(253, 254, 255, 0.58)");
+    expect(MATERIALS.light.regular.background).toBe("rgba(250, 252, 255, 0.64)");
+    expect(MATERIALS.light.thick.background).toBe("rgba(245, 248, 253, 0.72)");
     expect(MATERIALS.light.thin.border).toBe("rgba(0, 0, 0, 0.03)");
+    const fills = new Set([
+      MATERIALS.light.thin.background,
+      MATERIALS.light.regular.background,
+      MATERIALS.light.thick.background,
+    ]);
+    expect(fills.size).toBe(3);
   });
   it("specular alphas per tier", () => {
     expect(specularOpacity("dark", "thin")).toBeCloseTo(0.04);

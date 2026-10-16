@@ -1,9 +1,18 @@
 /**
  * Material descriptors — the Warm Glass frosted-surface tiers, transcribed
  * from ../Home-ai/src/app/globals.css (.material-thin / .material-regular /
- * .material-thick + light overrides; verified 2026-10-09). Values mirror the
- * tokens.generated.ts material-* keys where the generator emitted them; the
- * literal table below is the contract (tests pin it byte-exact).
+ * .material-thick + light overrides; verified 2026-10-09).
+ *
+ * WS-0 round 2 RE-STEPPED the fills (D-8/D-9): the web's three tiers were
+ * transcribed as three ALPHAS of ONE color (rgb(30 35 48) dark /
+ * #ffffff light). Rendered, that is not a ladder at all —
+ *   dark : the composited base already sits at rgb(30 35 48), so no alpha can
+ *          lift a card more than ~1.5 levels; thin→thick measured 0.0017 relY
+ *          and was NON-monotonic (regular darker than thin).
+ *   light: white-on-near-white collapsed all three to literal #ffffff.
+ * Each tier is now a real SURFACE STEP off the theme's own ramp, with the
+ * alpha carrying only the translucency. Borders, blur, saturate and specular
+ * are unchanged — the rim/border ladder stays exactly as transcribed.
  */
 
 export type MaterialTier = "thin" | "regular" | "thick";
@@ -29,21 +38,21 @@ export const MATERIALS: Record<
 > = {
   dark: {
     thin: {
-      background: "rgba(30, 35, 48, 0.35)",
+      background: "rgba(37, 44, 60, 0.42)",
       border: "rgba(255, 255, 255, 0.05)",
       blur: 12,
       saturate: 1.2,
       specular: 0.04,
     },
     regular: {
-      background: "rgba(30, 35, 48, 0.45)",
+      background: "rgba(45, 53, 72, 0.58)",
       border: "rgba(255, 255, 255, 0.08)",
       blur: 20,
       saturate: 1.4,
       specular: 0.02,
     },
     thick: {
-      background: "rgba(30, 35, 48, 0.55)",
+      background: "rgba(52, 61, 81, 0.62)",
       border: "rgba(255, 255, 255, 0.12)",
       blur: 26,
       saturate: 1.6,
@@ -53,7 +62,7 @@ export const MATERIALS: Record<
   },
   light: {
     thin: {
-      background: "rgba(255, 255, 255, 0.4)",
+      background: "rgba(253, 254, 255, 0.58)",
       border: "rgba(0, 0, 0, 0.03)",
       blur: 12,
       saturate: 1.2,
@@ -61,7 +70,7 @@ export const MATERIALS: Record<
       shadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
     },
     regular: {
-      background: "rgba(255, 255, 255, 0.6)",
+      background: "rgba(250, 252, 255, 0.64)",
       border: "rgba(0, 0, 0, 0.06)",
       blur: 20,
       saturate: 1.4,
@@ -69,7 +78,7 @@ export const MATERIALS: Record<
       shadow: "0 4px 16px rgba(0, 0, 0, 0.06)",
     },
     thick: {
-      background: "rgba(255, 255, 255, 0.8)",
+      background: "rgba(245, 248, 253, 0.72)",
       border: "rgba(0, 0, 0, 0.08)",
       blur: 26,
       saturate: 1.6,
