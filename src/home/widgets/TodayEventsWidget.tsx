@@ -178,8 +178,17 @@ export function TodayEventsWidget() {
     // Family events: the db-gateway read is public — it renders LIVE on the
     // signed-out wall (the reference guest capture: "0 events on the family
     // calendar" + rows visible). Its failure is the widget's failure.
-    const db = await api<DbListEnvelope<DbEventRow>>("/api/db/events");
-    const family = familyEventsForDay(Array.isArray(db?.items) ? db.items : [], today);
+    let family: WallEvent[] = [];
+    try {
+      const db = await api<DbListEnvelope<DbEventRow>>("/api/db/events");
+      family = familyEventsForDay(Array.isArray(db?.items) ? db.items : [], today);
+    } catch (e) {
+      if (guest && e instanceof ApiError && e.status === 401) {
+        family = [];
+      } else {
+        throw e;
+      }
+    }
 
     // Google: a failure here degrades to an honest pill, not a widget failure.
     let google: WallEvent[] = [];
@@ -280,6 +289,7 @@ export function TodayEventsWidget() {
                 <ListRow
                   key={event.id}
                   testID={`todayEvents-row-${event.id}`}
+                  style={{ minHeight: 52, paddingVertical: 8 }}
                   leading={<Text style={{ fontSize: 20 }}>{event.icon}</Text>}
                   title={event.title}
                   subtitle={event.time}
@@ -295,8 +305,9 @@ export function TodayEventsWidget() {
                 testID="todayEvents-more-footer"
                 accessibilityRole="link"
                 accessibilityLabel={`${hidden} more events. Open calendar`}
+                hitSlop={16}
                 onPress={() => router.push("/calendar")}
-                style={{ minHeight: 64, justifyContent: "center", marginTop: 2 }}
+                style={{ minHeight: 28, justifyContent: "center", marginTop: 2 }}
               >
                 <Text
                   style={{

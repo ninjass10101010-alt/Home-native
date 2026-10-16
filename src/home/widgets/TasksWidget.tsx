@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
+import { mix } from "../../theme/mix";
 import { EmptyState } from "../../ui/EmptyState";
 import { ListRow } from "../../ui/ListRow";
 import { Chip } from "../../ui/Chip";
@@ -87,7 +88,8 @@ export function TasksWidget() {
   // (src/home/wall-stats.ts) — one snapshot, two surfaces.
   React.useEffect(() => {
     if (hasData) publishWallStats({ openTasks: pending.length });
-  }, [hasData, pending.length]);
+    else if (guest) publishWallStats({ openTasks: 0 });
+  }, [hasData, guest, pending.length]);
 
   return (
     <WidgetFrame
@@ -121,6 +123,7 @@ export function TasksWidget() {
             return (
               <ListRow
                 key={String(task.id)}
+                style={{ minHeight: 52, paddingVertical: 8 }}
                 title={task.title}
                 subtitle={awaiting ? `Waiting for approval${subtitle ? ` · ${subtitle}` : ""}` : subtitle || undefined}
                 leftRailColor={pointsColor}
@@ -128,7 +131,29 @@ export function TasksWidget() {
                   awaiting ? (
                     <Chip as="span" size="sm" tone="warning" label="⏳ approval" />
                   ) : (
-                    <Chip as="span" size="sm" tone="neutral" label={`+${points} pts`} />
+                    <View
+                      style={{
+                        minHeight: 28,
+                        borderRadius: 999,
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        backgroundColor: mix(pointsColor, "transparent", 20),
+                        borderWidth: 1,
+                        borderColor: mix(pointsColor, "transparent", 40),
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors["color-text-primary"],
+                          fontSize: TYPOGRAPHY.label.fontSize,
+                          fontWeight: "700",
+                        }}
+                      >
+                        +{points} pts
+                      </Text>
+                    </View>
                   )
                 }
               />
@@ -142,8 +167,9 @@ export function TasksWidget() {
               testID="tasks-approval-footer"
               accessibilityRole="link"
               accessibilityLabel={`${pendingApprovalCount} need approval. Open tasks`}
+              hitSlop={16}
               onPress={() => router.push("/tasks")}
-              style={{ minHeight: 64, justifyContent: "center", marginTop: 2 }}
+              style={{ minHeight: 28, justifyContent: "center", marginTop: 2 }}
             >
               <Text
                 style={{
@@ -161,8 +187,9 @@ export function TasksWidget() {
               testID="tasks-more-footer"
               accessibilityRole="link"
               accessibilityLabel={`${hidden} more tasks. Open tasks`}
+              hitSlop={16}
               onPress={() => router.push("/tasks")}
-              style={{ minHeight: 64, justifyContent: "center", marginTop: 2 }}
+              style={{ minHeight: 28, justifyContent: "center", marginTop: 2 }}
             >
               <Text
                 style={{

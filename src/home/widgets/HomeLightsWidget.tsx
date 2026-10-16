@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../theme/ThemeProvider";
-import { MIN_TARGET_DP, TYPOGRAPHY } from "../../theme/tokens";
+import { TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
 import { useToast } from "../../ui/Toast";
 import { useAuth } from "../../state/AuthProvider";
@@ -83,7 +83,8 @@ export function HomeLightsWidget() {
                     if (isParent) void toggle(l.entity_id);
                     else router.push("/ha");
                   }}
-                  style={{ minHeight: MIN_TARGET_DP, justifyContent: "center", width: "100%" }}
+                  hitSlop={8}
+                  style={{ minHeight: 36, paddingVertical: 4, justifyContent: "center", width: "100%" }}
                 >
                   <Text
                     style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}

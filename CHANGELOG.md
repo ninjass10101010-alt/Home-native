@@ -4,7 +4,15 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
-- 2026-10-16 — feat(ws2): full-bleed heroes — WeatherPoster side-by-side layout
+- 2026-10-16 — feat(ws3): Home bento data widgets — height budget & visual parity across all 9 widgets.
+  **HomeSecurityWidget.tsx:** fixed critical footer overlap bug by giving content container `flex: 1, minHeight: 0, justifyContent: "space-between"`, reducing sensor gap, setting `minHeight: 36, paddingVertical: 4` on chips, and giving footer `borderTopWidth: 1, borderTopColor: colors["color-border"]` with `hitSlop` on `Pressable`.
+  **QuickAskWidget.tsx:** replaced 3 oversized rectangular boxes with the web's exact layout: centered bold prompt quote `“Add soccer practice for Thursday.” →` + `Open Ask →`, and 3 compact violet glass pill buttons (`minHeight: 36, hitSlop={8}`).
+  **BriefingWidget.tsx:** passed `showDisc` to `WidgetFrame`, moved expand toggle badge to `headerRight`, moved ack button into body as compact `size="sm"` pill, and wrapped expanded rows in `ScrollView` with `nestedScrollEnabled`.
+  **TodayEventsWidget.tsx:** handled guest 401 gracefully on `/api/db/events` by falling back to `family = []` with `GooglePill` + `🌿 Quiet day` (matching reference), passed `minHeight: 52, paddingVertical: 8` to `ListRow`, and set `minHeight: 28` (`hitSlop={16}`) on `todayEvents-more-footer`.
+  **TasksWidget.tsx:** styled `ListRow` with `minHeight: 52`, replaced neutral chip with a compact `28dp` priority-tinted points pill (`rose` >15, `amber` >10, `mint` <=10), set `minHeight: 28` (`hitSlop={16}`) on `tasks-approval-footer` and `tasks-more-footer`, and published `openTasks: 0` for guests to keep KPI strip active.
+  **CurrentMealWidget.tsx:** passed `showDisc` to `WidgetFrame`, styled time badge in translucent mint glass (`mix(mint, "transparent", 16)`), styled inner meal card with `mix(mint, colors["color-surface-0"], 8)`, and handled guest 401 on schedules/meal plan entries.
+  **LeaderboardWidget.tsx:** added avatar photo URI support via `isPhotoUri` rendering `Image` within 40×40 circular container when member emoji is a photo URI.
+  **HomeLightsWidget.tsx:** shrank light toggle rows from `minHeight: 64` to `minHeight: 36, paddingVertical: 4` with `hitSlop={8}` to prevent vertical card overflow.- 2026-10-16 — feat(ws2): full-bleed heroes — WeatherPoster side-by-side layout
   & PhotosWidget gradient scrim / styled pause button.
   **WidgetHero.tsx:** `WeatherPoster` layout completely redesigned for web parity
   with `Home-ai WeatherWidget`. `digitsHeight` shrunk `132→88` (cell) / `260→220`

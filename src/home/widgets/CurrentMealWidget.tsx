@@ -1,7 +1,8 @@
 import React from "react";
 import { Text, View } from "react-native";
-import { api } from "../../api/client";
+import { api, ApiError } from "../../api/client";
 import type { DbListEnvelope } from "../../api/types";
+import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
 import { mix } from "../../theme/mix";
@@ -79,6 +80,8 @@ export interface CurrentMealWidgetProps {
  */
 export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) {
   const { colors, accentColor } = useTheme();
+  const { member, hydrated } = useAuth();
+  const guest = hydrated && !member;
   const [tickNow, setTickNow] = React.useState<Date | null>(null);
 
   // The slot ("it's almost dinner") moves with the wall clock even between
@@ -91,14 +94,21 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
 
   const { status, data, failure, stale, retry } = useWidgetData(
     async () => {
-      const [schedulesRes, mealsRes] = await Promise.all([
-        api<DbListEnvelope<ScheduleRow>>("/api/db/schedules"),
-        api<DbListEnvelope<MealRow>>("/api/db/meal_plan_entries"),
-      ]);
-      return {
-        schedules: Array.isArray(schedulesRes?.items) ? schedulesRes.items : [],
-        meals: Array.isArray(mealsRes?.items) ? mealsRes.items : [],
-      };
+      try {
+        const [schedulesRes, mealsRes] = await Promise.all([
+          api<DbListEnvelope<ScheduleRow>>("/api/db/schedules"),
+          api<DbListEnvelope<MealRow>>("/api/db/meal_plan_entries"),
+        ]);
+        return {
+          schedules: Array.isArray(schedulesRes?.items) ? schedulesRes.items : [],
+          meals: Array.isArray(mealsRes?.items) ? mealsRes.items : [],
+        };
+      } catch (e) {
+        if (guest && e instanceof ApiError && e.status === 401) {
+          return { schedules: [], meals: [] };
+        }
+        throw e;
+      }
     },
     // Reference guest capture: the meal card renders LIVE signed-out (the
     // db-gateway reads are public). Guests see the honest "No meal planned
@@ -150,11 +160,9 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
   // Card tint mirrors the web's proximity glow (static at wall distance): the
   // meal accent mints the card border at 30%, matching `accentColor`+`30` web fill.
   const mint = colors["color-accent-mint"] ?? accentColor;
-  const cardBorder = mix(mint, "transparent", 30);
 
   // Title band (reference): plain "🌙 Dinner Time" title with a COMPACT time
-  // chip beside it — not one opaque mega-pill (the clock glyph is the web's
-  // drop; the capture shows "🌙 Dinner Time   11:49 PM").
+  // chip beside it — styled with mint translucent glass matching web reference.
   const header = (
     <View style={{ alignItems: "center", gap: 6 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10, justifyContent: "center" }}>
@@ -168,13 +176,13 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
           style={{
             borderRadius: 9999,
             borderWidth: 1,
-            borderColor: cardBorder,
-            backgroundColor: colors["color-surface-0"],
+            borderColor: mix(mint, "transparent", 32),
+            backgroundColor: mix(mint, "transparent", 16),
             paddingHorizontal: 12,
             paddingVertical: 4,
           }}
         >
-          <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+          <Text style={{ color: colors["color-accent-ink-mint"] ?? mint, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
             {timeStr}
           </Text>
         </View>
@@ -219,6 +227,7 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
       stale={stale}
       onRetry={retry}
       header={header}
+      showDisc
     >
       <View
         style={{
@@ -227,8 +236,8 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
           gap: 14,
           borderRadius: 20,
           borderWidth: 1,
-          borderColor: cardBorder,
-          backgroundColor: colors["color-surface-0"],
+          borderColor: mix(mint, "transparent", 24),
+          backgroundColor: mix(mint, colors["color-surface-0"] ?? "#0b1020", 8),
           padding: 14,
           flex: 1,
           minHeight: 0,

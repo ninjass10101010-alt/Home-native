@@ -1,10 +1,11 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Image, Text, View } from "react-native";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
 import { useSync, type WeekData } from "../../state/SyncManager";
 import { displayEmoji } from "../../tasks/claim";
+import { isPhotoUri } from "../../ui/MemberRail";
 import { weekStartMondayISO } from "./data";
 import { WidgetFrame } from "./WidgetFrame";
 
@@ -69,12 +70,10 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
   const weekData = snapshot?.weekData as WeekData | undefined;
   const ranked = rankWeek(weekData);
 
-  // Roster emoji by first name (the rail's matching convention); the
-  // displayEmoji guard keeps a photo data URL out of a Text glyph (1 MiB rule).
-  const emojiFor = (fullName: string): string => {
+  // Roster row by first name (the rail's matching convention)
+  const memberFor = (fullName: string): LeaderboardMember | undefined => {
     const first = fullName.split(" ")[0].toLowerCase();
-    const row = members.find((m) => m.name.split(" ")[0].toLowerCase() === first);
-    return displayEmoji(row?.emoji);
+    return members.find((m) => m.name.split(" ")[0].toLowerCase() === first);
   };
 
   // Guest model: /api/tasks/sync requires a live session (server-auth), so a
@@ -122,31 +121,40 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
               </Text>
             </View>
           ) : (
-            ranked.slice(0, VISIBLE_RANKS).map((r) => (
-              <View key={r.name} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: colors["color-surface-2"],
-                  }}
-                >
-                  <Text style={{ fontSize: 20 }}>{emojiFor(r.name)}</Text>
+            ranked.slice(0, VISIBLE_RANKS).map((r) => {
+              const m = memberFor(r.name);
+              const photo = m?.emoji ? isPhotoUri(m.emoji) : false;
+              return (
+                <View key={r.name} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: colors["color-surface-2"],
+                      overflow: "hidden",
+                    }}
+                  >
+                    {photo && m ? (
+                      <Image source={{ uri: m.emoji }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+                    ) : (
+                      <Text style={{ fontSize: 20 }}>{displayEmoji(m?.emoji)}</Text>
+                    )}
+                  </View>
+                  <Text
+                    numberOfLines={1}
+                    style={{ flex: 1, color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}
+                  >
+                    {medal(r.rank)} {r.name.split(" ")[0]}
+                  </Text>
+                  <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                    {r.points} pts
+                  </Text>
                 </View>
-                <Text
-                  numberOfLines={1}
-                  style={{ flex: 1, color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}
-                >
-                  {medal(r.rank)} {r.name.split(" ")[0]}
-                </Text>
-                <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
-                  {r.points} pts
-                </Text>
-              </View>
-            ))
+              );
+            })
           )}
           {ranked.length > 0 ? (
             <Text

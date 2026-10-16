@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
 import { Chip } from "../../ui/Chip";
@@ -63,73 +63,81 @@ export function HomeSecurityWidget({ onOpenHomeControls }: HomeSecurityWidgetPro
       stale={!!error && states.length > 0}
       onRetry={refresh}
     >
-      <View style={{ flex: 1, minHeight: 0 }}>
+      <View style={{ flex: 1, minHeight: 0, justifyContent: "space-between" }}>
         <View>
-          <SectionLabel label="Presence" />
-          {people.length === 0 ? (
-            <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
-              {EMPTY_SECURITY}
-            </Text>
-          ) : (
-            <>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {people.map((person) => (
-                  <Chip
-                    key={person.entity_id}
-                    as="span"
-                    size="sm"
-                    tone="neutral"
-                    label={`👤 ${friendlyName(person).split(" ")[0]} · ${person.state === "home" ? "home" : "away"}`}
-                  />
-                ))}
-              </View>
-              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 6 }}>
-                {home.length} home
+          <View>
+            <SectionLabel label="Presence" />
+            {people.length === 0 ? (
+              <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                {EMPTY_SECURITY}
               </Text>
-            </>
-          )}
-        </View>
-
-        <View style={{ marginTop: 12 }}>
-          <SectionLabel label="Sensors" />
-          {sensors.length === 0 ? (
-            <Chip as="span" size="sm" tone="success" label="Doors & windows closed" />
-          ) : (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-              {sensors.slice(0, 4).map((s) => (
-                <Chip key={s.entity_id} as="span" size="sm" tone="danger" label={friendlyName(s)} />
-              ))}
-              {sensors.length > 4 ? (
-                <Chip as="span" size="sm" tone="danger" label={`+${sensors.length - 4} more`} />
-              ) : null}
-            </View>
-          )}
-        </View>
-
-        {alarm ? (
-          <View style={{ marginTop: 12, flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Chip
-              as="span"
-              size="sm"
-              tone={alarmState === "disarmed" ? "success" : "danger"}
-              label={alarmState}
-            />
+            ) : (
+              <>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                  {people.map((person) => (
+                    <Chip
+                      key={person.entity_id}
+                      as="span"
+                      size="sm"
+                      tone="neutral"
+                      style={{ minHeight: 36, paddingVertical: 4 }}
+                      label={`👤 ${friendlyName(person).split(" ")[0]} · ${person.state === "home" ? "home" : "away"}`}
+                    />
+                  ))}
+                </View>
+                <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 4 }}>
+                  {home.length} home
+                </Text>
+              </>
+            )}
           </View>
-        ) : null}
+
+          <View style={{ marginTop: 8 }}>
+            <SectionLabel label="Sensors" />
+            {sensors.length === 0 ? (
+              <Chip as="span" size="sm" tone="success" style={{ minHeight: 36, paddingVertical: 4 }} label="Doors & windows closed" />
+            ) : (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {sensors.slice(0, 4).map((s) => (
+                  <Chip key={s.entity_id} as="span" size="sm" tone="danger" style={{ minHeight: 36, paddingVertical: 4 }} label={friendlyName(s)} />
+                ))}
+                {sensors.length > 4 ? (
+                  <Chip as="span" size="sm" tone="danger" style={{ minHeight: 36, paddingVertical: 4 }} label={`+${sensors.length - 4} more`} />
+                ) : null}
+              </View>
+            )}
+          </View>
+
+          {alarm ? (
+            <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Chip
+                as="span"
+                size="sm"
+                tone={alarmState === "disarmed" ? "success" : "danger"}
+                style={{ minHeight: 36, paddingVertical: 4 }}
+                label={alarmState}
+              />
+            </View>
+          ) : null}
+        </View>
 
         {/* Web footer (HomeSecurityWidget.tsx:49-52): the route to the full
             controls surface. resolveRoute keeps the manifest's honest
             fallback — /ha lands on /soon with the dock alive rather than on a
             toast, which is the app's own convention for an unshipped cap. */}
-        <View style={{ minHeight: 64, justifyContent: "center", marginTop: 10 }}>
-          <Text
+        <View style={{ paddingTop: 6, borderTopWidth: 1, borderTopColor: colors["color-border"] }}>
+          <Pressable
             testID="open-home-controls"
             accessibilityRole="link"
+            hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }}
             onPress={() => (onOpenHomeControls ? onOpenHomeControls() : router.push(resolveRoute("/ha", "House") as never))}
-            style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}
           >
-            Open Home controls →
-          </Text>
+            <Text
+              style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}
+            >
+              Open Home controls →
+            </Text>
+          </Pressable>
         </View>
       </View>
     </WidgetFrame>

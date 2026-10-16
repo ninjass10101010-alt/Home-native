@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { api } from "../../api/client";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
@@ -125,77 +125,35 @@ export function BriefingWidget() {
     }
   }
 
-  // Title band with the expand toggle (web badge parity). The visible chip is
-  // COMPACT like the reference; its tap floor is carried by the hit region
-  // (chip ≈28dp + 20dp slop each way = 68dp ≥ the 64dp wall floor).
-  const header = (
-    <View style={{ alignItems: "center" }}>
-      {showToggle ? (
-        <Pressable
-          testID="briefing-toggle"
-          accessibilityRole="button"
-          accessibilityLabel={expanded ? "Collapse morning briefing" : "Expand morning briefing"}
-          accessibilityState={{ expanded }}
-          hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
-          onPress={() => setExpanded((v) => !v)}
-          style={{
-            position: "absolute",
-            top: 0,
-            right: 0,
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "row",
-            gap: 6,
-            borderRadius: 9999,
-            borderWidth: 1,
-            borderColor: mixAlpha(accentColor, 0.3),
-            backgroundColor: mixAlpha(accentColor, 0.18),
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            zIndex: 3,
-          }}
-        >
-          <Text style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
-            {total} item{total === 1 ? "" : "s"}
-          </Text>
-          <Text style={{ color: accentColor, fontSize: 14 }}>{expanded ? "▲" : "▼"}</Text>
-        </Pressable>
-      ) : null}
-      {!acknowledged && briefing ? (
-        <Pressable
-          testID="briefing-ack"
-          accessibilityRole="button"
-          accessibilityLabel="Acknowledge briefing"
-          disabled={ackBusy}
-          onPress={() => void handleAck()}
-          style={{
-            marginTop: 8,
-            minHeight: 64,
-            borderRadius: 14,
-            paddingHorizontal: 16,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: accentColor,
-          }}
-        >
-          <Text style={{ color: colors["color-text-on-accent"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
-            ✓ Got it
-          </Text>
-        </Pressable>
-      ) : null}
-      <Text
-        style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}
-        accessibilityRole="header"
-      >
-        Morning Briefing
+  // Right-of-header slot: expand toggle badge (web badge parity)
+  const headerRight = showToggle ? (
+    <Pressable
+      testID="briefing-toggle"
+      accessibilityRole="button"
+      accessibilityLabel={expanded ? "Collapse morning briefing" : "Expand morning briefing"}
+      accessibilityState={{ expanded }}
+      hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+      onPress={() => setExpanded((v) => !v)}
+      style={{
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "row",
+        gap: 6,
+        borderRadius: 9999,
+        borderWidth: 1,
+        borderColor: mixAlpha(accentColor, 0.3),
+        backgroundColor: mixAlpha(accentColor, 0.18),
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        zIndex: 3,
+      }}
+    >
+      <Text style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+        {total} item{total === 1 ? "" : "s"}
       </Text>
-      {description ? (
-        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 2 }}>
-          {description}
-        </Text>
-      ) : null}
-    </View>
-  );
+      <Text style={{ color: accentColor, fontSize: 14 }}>{expanded ? "▲" : "▼"}</Text>
+    </Pressable>
+  ) : null;
 
   return (
     <WidgetFrame
@@ -208,7 +166,8 @@ export function BriefingWidget() {
       hasData={briefing != null}
       stale={stale}
       onRetry={retry}
-      header={header}
+      headerRight={headerRight}
+      showDisc
     >
       {briefing === null ? (
         // A genuinely empty briefing (not a failed read — that renders above).
@@ -258,41 +217,90 @@ export function BriefingWidget() {
           >
             {"Tap the badge above to see today's plan."}
           </Text>
-        </View>
-      ) : (
-        <View style={{ gap: 8 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {note ? (
-              <Text
-                style={{
-                  flex: 1,
-                  color: colors["color-accent-amber"] ?? colors["color-text-secondary"],
-                  fontSize: TYPOGRAPHY.label.fontSize,
-                  fontWeight: "600",
-                }}
-              >
-                {note}
-              </Text>
-            ) : null}
-            <Chip as="span" size="sm" tone="accent" label={`${total} item${total === 1 ? "" : "s"}`} />
-          </View>
-          {visible.map((row) => (
-            <ListRow key={row.key} leading={<Text style={{ fontSize: 20 }}>{row.icon}</Text>} title={row.title} subtitle={row.meta} />
-          ))}
-          {hidden > 0 ? (
-            <Text
+          {!acknowledged && briefing ? (
+            <Pressable
+              testID="briefing-ack"
+              accessibilityRole="button"
+              accessibilityLabel="Acknowledge briefing"
+              disabled={ackBusy}
+              onPress={() => void handleAck()}
               style={{
-                color: colors["color-text-secondary"],
-                fontSize: TYPOGRAPHY.label.fontSize,
-                fontWeight: "600",
-                textAlign: "center",
-                marginTop: 2,
+                marginTop: 6,
+                minHeight: 36,
+                borderRadius: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 6,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: accentColor,
+                alignSelf: "center",
               }}
             >
-              +{hidden} more
-            </Text>
+              <Text style={{ color: colors["color-text-on-accent"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                ✓ Got it
+              </Text>
+            </Pressable>
           ) : null}
         </View>
+      ) : (
+        <ScrollView style={{ flex: 1 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {note ? (
+                <Text
+                  style={{
+                    flex: 1,
+                    color: colors["color-accent-amber"] ?? colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "600",
+                  }}
+                >
+                  {note}
+                </Text>
+              ) : null}
+              <Chip as="span" size="sm" tone="accent" label={`${total} item${total === 1 ? "" : "s"}`} />
+            </View>
+            {!acknowledged && briefing ? (
+              <Pressable
+                testID="briefing-ack"
+                accessibilityRole="button"
+                accessibilityLabel="Acknowledge briefing"
+                disabled={ackBusy}
+                onPress={() => void handleAck()}
+                style={{
+                  minHeight: 36,
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 6,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: accentColor,
+                  alignSelf: "center",
+                }}
+              >
+                <Text style={{ color: colors["color-text-on-accent"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                  ✓ Got it
+                </Text>
+              </Pressable>
+            ) : null}
+            {visible.map((row) => (
+              <ListRow key={row.key} leading={<Text style={{ fontSize: 20 }}>{row.icon}</Text>} title={row.title} subtitle={row.meta} />
+            ))}
+            {hidden > 0 ? (
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  fontWeight: "600",
+                  textAlign: "center",
+                  marginTop: 2,
+                }}
+              >
+                +{hidden} more
+              </Text>
+            ) : null}
+          </View>
+        </ScrollView>
       )}
     </WidgetFrame>
   );
