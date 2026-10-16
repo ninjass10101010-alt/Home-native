@@ -31,7 +31,13 @@ function PokeBoundary({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ Fredoka: require("../assets/fonts/Fredoka.ttf") });
+  const [fontsLoaded] = useFonts({
+    Fredoka: require("../assets/fonts/Fredoka.ttf"),
+    // The web's --font-display (Home-ai layout.tsx:28-33, weight 400). Bundled
+    // rather than falling back to the generic "serif": the review set is set in
+    // Instrument, and the greeting / display mastheads depend on its shapes.
+    "Instrument Serif": require("../assets/fonts/InstrumentSerif-Regular.ttf"),
+  });
   useEffect(() => {
     hydrateBaseUrl().catch(() => {});
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});

@@ -46,10 +46,7 @@ export function TextField({
           style={{
             marginBottom: 8,
             color: colors["color-text-secondary"],
-            fontSize: TYPOGRAPHY.label.fontSize,
-            fontWeight: "700",
-            letterSpacing: 1.2,
-            textTransform: "uppercase",
+            ...TYPOGRAPHY.fieldLabel,
           }}
         >
           {label}

@@ -46,11 +46,56 @@ export const ACCENTS_RGB = GENERATED.accentsRgb as {
 export const RADII = { sm: 10, md: 16, lg: 20, xl: 28, xxl: 36, full: 9999 } as const;
 export const MOTION = { fast: 150, base: 240, slow: 400, glide: 600 } as const;
 
-/** Wall-scale type ramp (14sp floor — single-device contract, spec decision 7). */
+/**
+ * Bundled faces (assets/fonts/, loaded in app/_layout.tsx). `display` is the
+ * web's `--font-display`: Instrument Serif 400 (Home-ai layout.tsx:28-33), the
+ * editorial serif behind `.text-display` / the home greeting. `rounded` is the
+ * weather label register. Never fall back to the generic "serif": on the wall
+ * that is Noto Serif, and the reference set is set in Instrument.
+ */
+export const FONTS = { display: "Instrument Serif", rounded: "Fredoka" } as const;
+
+/**
+ * Wall-scale type ramp (14sp floor — single-device contract, spec decision 7).
+ * Levels, strongest → weakest: `display` (serif masthead) → `sectionTitle`
+ * (showcase section headers) → `title` (in-card headings) → `stat`/`body` →
+ * `label` (14sp floor) → `eyebrow`/`fieldLabel` (tracked uppercase kickers).
+ * `hero` stays as the raw 72sp display size for the wall greeting, which pairs
+ * it with the same serif face (see FONTS.display).
+ */
 export const TYPOGRAPHY = {
   label: { fontSize: 14, lineHeight: 20 },
   body: { fontSize: 16, lineHeight: 24 },
+  /** In-card heading level (component titles, dialog titles). */
   title: { fontSize: 20, lineHeight: 28 },
+  /** Page/section masthead — web `.text-display` (serif, 400, -3% tracking)
+   *  wall-scaled ~2.3× from the web's 2rem. */
+  display: {
+    fontSize: 72,
+    lineHeight: 76,
+    fontFamily: FONTS.display,
+    fontWeight: "400",
+    letterSpacing: -2.2,
+  },
+  /** Tracked uppercase kicker ABOVE a masthead — web `.text-eyebrow`
+   *  (12px/600/.14em) wall-scaled to 24sp. */
+  eyebrow: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "600",
+    letterSpacing: 3.4,
+    textTransform: "uppercase",
+  },
+  /** THE one field/control label system: TextField, Stepper, any form label. */
+  fieldLabel: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  /** Showcase/panel section headers — a level above in-card `title`. */
+  sectionTitle: { fontSize: 28, lineHeight: 36, fontWeight: "700", letterSpacing: -0.2 },
   stat: { fontSize: 32, lineHeight: 40 },
   hero: { fontSize: 72, lineHeight: 80 },
 } as const;

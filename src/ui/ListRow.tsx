@@ -18,6 +18,10 @@ export interface ListRowProps {
   accessibilityLabel?: string;
 }
 
+/** Icon-badge well (reference ui/ListRow.tsx: 44px at web scale — the wall
+ *  keeps it at 44dp inside a ≥64dp row). */
+const LEADING_BADGE_DP = 44;
+
 /**
  * RN port of ui/ListRow.tsx at wall scale: row ≥64dp, title 16sp semibold,
  * subtitle at the 14sp floor. Pressable rows use a subtle tap response instead
@@ -35,7 +39,7 @@ export function ListRow({
   testID,
   accessibilityLabel,
 }: ListRowProps) {
-  const { colors } = useTheme();
+  const { colors, accentColor } = useTheme();
 
   const inner = (
     <>
@@ -54,7 +58,26 @@ export function ListRow({
           }}
         />
       ) : null}
-      {leading ? <View>{leading}</View> : null}
+      {leading ? (
+        /* The reference seats `leading` in a 44dp tinted circle (badge fill +
+           ring), not bare. A bare emoji glyph reads as text, not as an icon
+           well — and a 28sp glyph with no plate crowds the row's rhythm. */
+        <View
+          style={{
+            width: LEADING_BADGE_DP,
+            height: LEADING_BADGE_DP,
+            borderRadius: LEADING_BADGE_DP / 2,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: mixAlpha(leftRailColor ?? accentColor, 0.16),
+            borderWidth: 1,
+            borderColor: mixAlpha(leftRailColor ?? accentColor, 0.28),
+          }}
+          testID="listrow-leading-badge"
+        >
+          {leading}
+        </View>
+      ) : null}
       <View style={{ flex: 1, minWidth: 0 }}>
         {typeof title === "string" ? (
           <Text

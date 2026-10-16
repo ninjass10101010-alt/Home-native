@@ -1,7 +1,7 @@
 import React from "react";
 import { Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
-import { ACCENTS, TYPOGRAPHY } from "../theme/tokens";
+import { ACCENTS, FONTS, TYPOGRAPHY } from "../theme/tokens";
 import { mixAlpha } from "../ui/SoftButton";
 import { Material } from "../theme/Material";
 import { MoreButton } from "../nav/CapsuleDock";
@@ -117,7 +117,7 @@ export function HomeWall({ members, onSelectMember, onSignOut, widgets = {}, gre
         <MemberRail members={members} currentName={member?.name ?? null} onSelect={onSelectMember} onSignOut={onSignOut} />
       </View>
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
-        <Text style={{ color: colors["color-text-primary"], fontSize: 54, fontWeight: "700", lineHeight: 58, fontFamily: "serif" }}>
+        <Text style={{ color: colors["color-text-primary"], fontSize: 54, fontWeight: "700", lineHeight: 58, fontFamily: FONTS.display }}>
           {greeting},{"\n"}
           {/* lineHeight is explicit on the nested span too: the outer
               lineHeight caps inherited children at the platform default

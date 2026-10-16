@@ -54,7 +54,7 @@ export function Stepper({ value, onChange, min = 0, max = 99, step = 1, label, s
   return (
     <View testID={testID} style={[{ flexDirection: "row", alignItems: "center", gap: 12 }, style]}>
       {label ? (
-        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+        <Text style={{ color: colors["color-text-secondary"], ...TYPOGRAPHY.fieldLabel }}>
           {label}
         </Text>
       ) : null}
