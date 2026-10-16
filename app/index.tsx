@@ -8,6 +8,7 @@ import { CapsuleDock } from "../src/nav/CapsuleDock";
 import { resolveRoute } from "../src/nav/nav-items";
 import { MoreSheet } from "../src/nav/MoreSheet";
 import { useTheme } from "../src/theme/ThemeProvider";
+import { mix } from "../src/theme/mix";
 import { TYPOGRAPHY } from "../src/theme/tokens";
 import { type RailMember } from "../src/ui/MemberRail";
 import { PinPad } from "../src/ui/PinPad";
@@ -214,7 +215,22 @@ export default function HomePlaceholder() {
           calling that "offline" asserts a network fault that does not exist.
           A genuinely unreachable NAS is the only offline claim the wall makes. */}
       {rosterLoading ? null : roster.source !== "live" || railError ? (
-        <View style={{ position: "absolute", top: 12, left: 24, right: 24, alignItems: "center" }}>
+        <View
+          style={{
+            position: "absolute",
+            top: 4,
+            left: 24,
+            right: 100,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: mix(colors["color-accent-amber"], "transparent", 40),
+            backgroundColor: mix(colors["color-accent-amber"], "transparent", 15),
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           {railError ? (
             <Text
               accessibilityLiveRegion="polite"

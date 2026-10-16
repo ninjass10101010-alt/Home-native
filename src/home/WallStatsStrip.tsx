@@ -1,9 +1,11 @@
 import React from "react";
+import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { Pressable, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../theme/tokens";
-import { accentInk, mix } from "../theme/mix";
+import { accentDeepened, accentInk, mix } from "../theme/mix";
 import { Material } from "../theme/Material";
+import { MoreButton } from "../nav/CapsuleDock";
 import { HomeWidgetIcon, widgetIconVariantFor } from "../ui/HomeWidgetIcon";
 import { useWallStats, weekSkeletonFor, type WallDayCell } from "./wall-stats";
 
@@ -64,58 +66,88 @@ interface TileProps {
 }
 
 function StatTile({ label, detail, value, pending, icon, widgetId, tone, testID }: TileProps) {
-  const { colors, accentColor } = useTheme();
+  const { colors, accentColor, reduceMotion } = useTheme();
   const toneColor = colors[toneToken(tone)] ?? accentColor;
   const ink = colors[toneInkToken(tone)] ?? mix(toneColor, colors["color-text-primary"], 45);
 
+  const pulse = useSharedValue(reduceMotion ? 1 : 0.55);
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  React.useEffect(() => {
+    if (reduceMotion) {
+      pulse.value = 1; // eslint-disable-line react-hooks/immutability
+      return;
+    }
+    pulse.value = withRepeat(withSequence(withTiming(1, { duration: 900 }), withTiming(0.55, { duration: 900 })), -1, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- shared value write is idiom
+  }, [reduceMotion]);
+
   return (
-    // Definite height: Material's inner core carries `flex: 1`, which resolves
-    // to 0 against an auto-height outer — the surface collapses to its first
-    // child. The wall's cards avoid this by wrapping each Material in a View
-    // with an explicit height; a self-sizing band needs its own.
     <Material
       tier="regular"
-      style={{ flex: 1, height: KPI_TILE_H, borderRadius: 20, padding: 10 }}
+      tone={toneColor}
+      style={{
+        flex: 1,
+        height: KPI_TILE_H,
+        borderRadius: 22,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        justifyContent: "center",
+      }}
       testID={testID}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        {/* icon disc (web StatTile: 28dp tinted square, tone-tinted) */}
-        <View
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 10,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: mix(toneColor, "transparent", 20),
-          }}
-        >
-          {widgetIconVariantFor(widgetId) ? (
-            <HomeWidgetIcon variant={widgetIconVariantFor(widgetId)!} size={20} title={label} />
-          ) : (
-            <Text style={{ fontSize: 14 }}>{icon}</Text>
-          )}
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 11,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: mix(toneColor, "transparent", 20),
+            }}
+          >
+            {widgetIconVariantFor(widgetId) ? (
+              <HomeWidgetIcon variant={widgetIconVariantFor(widgetId)!} size={22} title={label} />
+            ) : (
+              <Text style={{ fontSize: 16 }}>{icon}</Text>
+            )}
+          </View>
           {pending ? (
-            <View style={{ width: 34, height: 28, borderRadius: 8, backgroundColor: colors["color-surface-2"] }} />
+            <Material
+              tier="thin"
+              testID={`${testID}-pending`}
+              style={{ width: 34, height: 28, borderRadius: 8, overflow: "hidden" }}
+            >
+              <Animated.View
+                style={[animatedStyle, { flex: 1, backgroundColor: mix(colors["color-surface-3"], colors["color-surface-4"], 50) }]}
+              />
+            </Material>
           ) : (
             <Text
               style={{
                 color: colors["color-text-primary"],
-                fontSize: 26,
-                lineHeight: 30,
-                fontWeight: "700",
-                fontFamily: "serif",
+                fontSize: 32,
+                lineHeight: 36,
+                fontWeight: "800",
+                fontVariant: ["tabular-nums"],
               }}
             >
               {value}
             </Text>
           )}
-          <Text style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }} numberOfLines={1}>
+        </View>
+        <View style={{ alignItems: "flex-end", justifyContent: "center", flexShrink: 1 }}>
+          <Text
+            style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: 18, fontWeight: "700" }}
+            numberOfLines={1}
+          >
             {label}
           </Text>
-          <Text style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize }} numberOfLines={1}>
+          <Text
+            style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: 18 }}
+            numberOfLines={1}
+          >
             {detail}
           </Text>
         </View>
@@ -123,6 +155,7 @@ function StatTile({ label, detail, value, pending, icon, widgetId, tone, testID 
     </Material>
   );
 }
+
 
 export function WallStatStrip() {
   const { eventsToday, openTasks, plannedDays } = useWallStats();
@@ -191,13 +224,15 @@ function useWeekFraction(): number {
 
 interface ThisWeekCardProps {
   onSelectDay?: (dayId: string) => void;
+  onOpenMore?: () => void;
 }
 
-export function ThisWeekCard({ onSelectDay }: ThisWeekCardProps) {
+export function ThisWeekCard({ onSelectDay, onOpenMore }: ThisWeekCardProps) {
   const { colors, accentColor } = useTheme();
   const { weekCells } = useWallStats();
   const fraction = useWeekFraction();
   const tone = colors["color-accent-mint"] ?? accentColor;
+  const isTodayFill = accentDeepened(accentColor, 40);
   // The web declares --color-accent-sage for a planned day (page.tsx:571).
   // Raw sage measures 2.61:1 on the card's light wash — under the 3:1
   // non-text floor — so the dot wears the kit's accentInk recipe (accent 55%
@@ -205,8 +240,8 @@ export function ThisWeekCard({ onSelectDay }: ThisWeekCardProps) {
   const sage = accentInk(colors["color-accent-sage"] ?? tone, colors["color-text-primary"]);
 
   return (
-    <Material tier="regular" style={{ borderRadius: 20, padding: 12, gap: 10, height: THIS_WEEK_H }} testID="wall-this-week">
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+    <Material tier="regular" tone={tone} style={{ borderRadius: 20, padding: 12, gap: 10, height: THIS_WEEK_H }} testID="wall-this-week">
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors["color-border"], paddingBottom: 8 }}>
         <View
           style={{
             width: 34,
@@ -234,6 +269,7 @@ export function ThisWeekCard({ onSelectDay }: ThisWeekCardProps) {
             Meal and family rhythm at a glance
           </Text>
         </View>
+        {onOpenMore ? <MoreButton onPress={onOpenMore} /> : null}
       </View>
 
       {/* Day strip: a week-at-a-glance row; a planned day carries the sage dot. */}
@@ -253,13 +289,13 @@ export function ThisWeekCard({ onSelectDay }: ThisWeekCardProps) {
               paddingVertical: 7,
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: cell.isToday ? tone : mix(tone, "transparent", 78),
-              backgroundColor: cell.isToday ? mix(tone, "transparent", 78) : "transparent",
+              borderColor: cell.isToday ? isTodayFill : colors["color-border"],
+              backgroundColor: cell.isToday ? isTodayFill : "transparent",
             }}
           >
             <Text
               style={{
-                color: cell.isToday ? colors["color-text-primary"] : colors["color-text-secondary"],
+                color: cell.isToday ? colors["color-primary-foreground"] : colors["color-text-secondary"],
                 fontSize: TYPOGRAPHY.label.fontSize,
                 fontWeight: "600",
                 letterSpacing: 0,
@@ -269,9 +305,10 @@ export function ThisWeekCard({ onSelectDay }: ThisWeekCardProps) {
             </Text>
             <Text
               style={{
-                color: colors["color-text-primary"],
+                color: cell.isToday ? colors["color-primary-foreground"] : colors["color-text-primary"],
                 fontSize: TYPOGRAPHY.body.fontSize,
                 fontWeight: "700",
+                fontVariant: ["tabular-nums"],
               }}
             >
               {String(cell.date)}

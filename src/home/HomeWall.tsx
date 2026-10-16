@@ -103,18 +103,21 @@ export function HomeWall({ members, onSelectMember, onSignOut, widgets = {}, gre
   return (
     <View style={{ flex: 1, paddingHorizontal: GRID_H_PAD, paddingTop: 24 }}>
       {/* Emergency shield: 64dp, top-right of the header area, never over the rail */}
-      <EmergencyShield />
+      <EmergencyShield style={{ zIndex: 0 }} />
       {/* Wall header (web page.tsx:615-632 parity): ROW 1 = date kicker + the
           identity rail sharing the band; ROW 2 = greeting with the clock
           inline beside the name (the web explicitly deleted the stranded
           far-right clock) — clearing the floating shield's column. */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingRight: 88, gap: 16 }}>
         <Text
-          style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", letterSpacing: 2 }}
+          numberOfLines={1}
+          style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", letterSpacing: 2, flexShrink: 0 }}
         >
           {day} · {date}
         </Text>
-        <MemberRail members={members} currentName={member?.name ?? null} onSelect={onSelectMember} onSignOut={onSignOut} />
+        <View style={{ flex: 1, minWidth: 0, flexDirection: "row", justifyContent: "flex-end" }}>
+          <MemberRail members={members} currentName={member?.name ?? null} onSelect={onSelectMember} onSignOut={onSignOut} />
+        </View>
       </View>
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
         <Text style={{ color: colors["color-text-primary"], fontSize: 54, fontWeight: "700", lineHeight: 58, fontFamily: FONTS.display }}>
@@ -143,6 +146,7 @@ export function HomeWall({ members, onSelectMember, onSignOut, widgets = {}, gre
             {col.map((def) => {
               const span = WALL_SPANS[def.id] ?? 1;
               const Cell = widgets[def.id];
+              const isFullBleed = def.id === "photos" || def.id === "weather";
               // Per-widget tone (web WidgetCard parity): a tone wash + tone
               // hairline on every card — the wall's most distinctive cue.
               const tone = (ACCENTS as { dark: Record<string, string>; light: Record<string, string> })[theme]?.[WIDGET_TONES[def.id]] ?? accentColor;
@@ -154,13 +158,11 @@ export function HomeWall({ members, onSelectMember, onSignOut, widgets = {}, gre
                 >
                   <Material
                     tier="regular"
+                    tone={isFullBleed ? undefined : tone}
                     style={{
                       flex: 1,
                       borderRadius: 28,
-                      padding: 18,
-                      borderWidth: 1,
-                      borderColor: mixAlpha(tone, 0.32),
-                      backgroundColor: mixAlpha(tone, 0.10),
+                      padding: isFullBleed ? 0 : 14,
                     }}
                   >
                     {Cell ? <Cell /> : <WidgetPlaceholder def={def} />}
@@ -176,14 +178,8 @@ export function HomeWall({ members, onSelectMember, onSignOut, widgets = {}, gre
           week-mode DayLine, in a sibling below the bento — one tap from Home,
           /meals?day= is the same contract the web relies on. */}
       <View style={{ marginTop: TAIL_GAP, paddingBottom: DOCK_CLEAR }}>
-        <ThisWeekCard onSelectDay={onSelectDay} />
+        <ThisWeekCard onSelectDay={onSelectDay} onOpenMore={onOpenMore} />
       </View>
-
-      {onOpenMore ? (
-        <View style={{ position: "absolute", right: 24, bottom: 96 }} pointerEvents="box-none">
-          <MoreButton onPress={onOpenMore} />
-        </View>
-      ) : null}
     </View>
   );
 }

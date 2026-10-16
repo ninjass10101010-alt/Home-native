@@ -4,6 +4,21 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — feat(ws1): home wall shell / signed-out banner / KPI strip & ThisWeekCard.
+  Signed-out roster badge is now an amber-tinted pill bar (borderRadius 14,
+  top 4, left 24, right 100); date kicker pinned to one line (numberOfLines 1,
+  flexShrink 0) with the MemberRail wrapped (flex 1, minWidth 0); EmergencyShield
+  dropped below the rail stack (zIndex 0). KPI tiles converted to horizontal
+  layout (34dp tone icon well, 32sp tabular numeral, right-aligned label/detail)
+  through Material tier regular with tone wash; pending numeral is a 34x28 (1.21
+  aspect) rounded skeleton through Material tier thin, surface-3/4 mix, with a
+  reduceMotion-aware opacity pulse. ThisWeekCard now takes tone mint, 1dp bottom
+  rule under the header, integrates MoreButton on the header right (removing
+  the absolute bottom:96 collision), styles today pills with an accentDeepened (mint) fill + primary-foreground ink; inactive
+  pills use color-border; week strip and KPI numerals use tabular-nums. Bento
+  cells pass per-widget tone; full-bleed photos/weather cells use padding 0 with
+  no tone wash, standard cells padding 14. Tests/tsc/lint/tokens clean.
+
 - 2026-10-16 — fix(kit): WS-0 harsh-critic round 3 (kit-side findings 1–10).
   Section cards gain a two-part shape (thin body + thick header band, /, hairline
   rule; header/body relY ratio 1.59x under dark). Weekday strip is nowrap with
