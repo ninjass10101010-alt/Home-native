@@ -64,17 +64,24 @@ BEFORE handoff.
 - Reference captures: `npm run reference:capture` (needs the Home-ai dev server:
   `cd ../Home-ai && PORT=3100 npm run dev`; matrix = 84 PNGs).
 - Device captures: `scripts/screenshot.sh` requires adb + the tablet (or an
-  emulator). If no hardware is attached, capture the dev preview of `/_design`
-  with Playwright instead (documented when it's wired).
+  emulator) and verifies the app owns the foreground window first — it errors
+  out instead of shooting the Android home screen. If no hardware is attached,
+  use `npm run native:capture -- --web` (below).
 
 ## Native capture
 
 `npm run native:capture` runs `scripts/capture-native.mjs`. It accepts
 `--ws <name>`, `--route <path>`, `--auth guest|child|parent`,
-`--theme light|dark|dark-boost`.
+`--theme light|dark|dark-boost`, plus `--web` (force the browser preview even
+with a device attached), `--wait <ms>`, and `--base <url>` (default
+`http://localhost:3200`).
 
-- With an adb device online: deep-links `consuela://<route>?ws=<ws>` and runs
-  `adb exec-out screencap -p > screenshots/<ws>/<name>.png`.
-- Otherwise: Playwright Chromium at 1080×1920 against Expo web on
-  `http://localhost:3200`, seeding AsyncStorage theme/boost/session state, 900ms
-  settle, PNG at `screenshots/<ws>/<route>-<auth>-<theme>.png`.
+- With an adb device online (and no `--web`): deep-links
+  `consuela:///<route>?ws=<ws>` with `am start -W` on  `com.garciafam.consuela`,
+  polls `dumpsys window displays` until the app owns the foreground window
+  (refuses to screenshot the launcher), settles 2200ms warm / 4500ms cold (or
+  `--wait`), then captures via `adb exec-out screencap -p`.
+- Otherwise: Playwright Chromium at 1080×1920 against Expo web, seeding
+  theme/boost/accent plus the `consuela-auth-user`/`consuela_session` session
+  state, `--wait` or 1600ms settle.
+- Both paths write `screenshots/<ws>/<route>-<auth>-<theme>.png`.
