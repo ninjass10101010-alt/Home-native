@@ -7,7 +7,7 @@ import { TOKENS, ACCENTS, TYPE_FLOOR_SP, TYPOGRAPHY } from "../src/theme/tokens"
 import { MATERIALS } from "../src/theme/materials";
 import { contrastRatio } from "../src/lib/contrast";
 import { accentDeepened, accentInk, mix } from "../src/theme/mix";
-import { SoftButton } from "../src/ui/SoftButton";
+import { SoftButton, mixAlpha } from "../src/ui/SoftButton";
 import { IconButton } from "../src/ui/IconButton";
 import { Chip, ChipTone } from "../src/ui/Chip";
 import { Toggle } from "../src/ui/Toggle";
@@ -56,6 +56,12 @@ describe("mix math (web token formulas)", () => {
     expect(accentDeepened("#3b82f6", 40)).toBe("#234e94"); // the measured-AA primary fill, pixel-identical to web
     expect(accentDeepened("#3b82f6", 0)).toBe("#3b82f6");
     expect(accentDeepened("#3b82f6", 100)).toBe("#000000");
+  });
+  it("mixAlpha delegates to mix — 3-digit hex, rgba() and sentinels all resolve", () => {
+    expect(mixAlpha("#abc", 0.25)).toBe(mix("#abc", "transparent", 25));
+    // the old regex returned full-opacity color for rgba() input (silent alpha loss)
+    expect(mixAlpha("rgba(1, 2, 3, 0.5)", 0.5)).toBe(mix("rgba(1, 2, 3, 0.5)", "transparent", 50));
+    expect(mixAlpha(TOKENS.light["color-surface-0"], 0.3)).toBe(mix(TOKENS.light["color-surface-0"], "transparent", 30));
   });
 });
 
@@ -141,6 +147,18 @@ describe("Chip", () => {
     const { toJSON } = render(<Chip label="Me" selected />, { wrapper: wrap });
     const s = flat(toJSON());
     expect(s).toContain(accentDeepened(ACCENTS.light.nori, 40));
+  });
+  it("task 0.3: borders ride the chip's OWN tone at 0.25 alpha (no hardcoded accent ring)", () => {
+    const borderOf = (tone: ChipTone) =>
+      flat(render(<Chip tone={tone} label={`chip-${tone}`} />, { wrapper: wrap }).toJSON());
+    expect(borderOf("success")).toContain(mix(ACCENTS.light.mint, "transparent", 25));
+    expect(borderOf("danger")).toContain(mix(ACCENTS.light.rose, "transparent", 25));
+    expect(borderOf("warning")).toContain(mix(ACCENTS.light.amber, "transparent", 25));
+    expect(borderOf("violet")).toContain(mix(ACCENTS.light.violet, "transparent", 25));
+    expect(borderOf("cyan")).toContain(mix(ACCENTS.light.cyan, "transparent", 25));
+    expect(borderOf("accent")).toContain(mix(ACCENTS.light.nori, "transparent", 25));
+    // neutral keeps the token border (a tone ring on a neutral chip is wrong)
+    expect(borderOf("neutral")).not.toContain(mix(ACCENTS.light.nori, "transparent", 25));
   });
   it("U2.5: chrome routes through Material — resting frosts, solid states (selected/disabled) skip blur", () => {
     const resting = flat(render(<Chip label="Go" />, { wrapper: wrap }).toJSON());
@@ -235,6 +253,12 @@ describe("Toggle", () => {
     const { getByRole } = render(<Toggle value={false} onChange={onChange} label="Wall" />, { wrapper: wrap });
     fireEvent.press(getByRole("switch"));
     expect(onChange).toHaveBeenCalledWith(true);
+  });
+  it("task 0.3: knob travel is 26 (symmetric 4dp margins inside the 64dp track)", () => {
+    const { toJSON } = render(<Toggle value onChange={() => {}} />, { wrapper: wrap });
+    const s = flat(toJSON());
+    expect(s).toContain('"translateX":26');
+    expect(s).not.toContain('"translateX":28');
   });
 });
 

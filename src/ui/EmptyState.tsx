@@ -26,16 +26,18 @@ export interface EmptyStateProps {
  */
 export function EmptyState({ icon = "✨", title, body, actionLabel, onAction, flat = false, style, testID }: EmptyStateProps) {
   const { colors } = useTheme();
+  // `flat` = inside a bento cell (279dp) — compact rhythm so the empty state
+  // fits the 185dp body; the standalone chrome keeps the roomier scale.
   const content = (
     <>
-      <Text style={{ fontSize: 30, lineHeight: 36, marginBottom: 16 }}>{icon}</Text>
+      <Text style={{ fontSize: 30, lineHeight: 36, marginBottom: flat ? 6 : 16 }}>{icon}</Text>
       <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>
         {title}
       </Text>
       {body ? (
         <Text
           style={{
-            marginTop: 8,
+            marginTop: flat ? 4 : 8,
             maxWidth: 320,
             textAlign: "center",
             color: colors["color-text-secondary"],
@@ -47,7 +49,7 @@ export function EmptyState({ icon = "✨", title, body, actionLabel, onAction, f
         </Text>
       ) : null}
       {actionLabel && onAction ? (
-        <SoftButton onPress={onAction} size="md" style={{ marginTop: 20 }}>
+        <SoftButton onPress={onAction} size={flat ? "sm" : "md"} style={{ marginTop: flat ? 10 : 20 }}>
           {actionLabel}
         </SoftButton>
       ) : null}

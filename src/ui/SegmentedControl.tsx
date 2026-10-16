@@ -47,7 +47,8 @@ export function SegmentedControl({
   const activeIndex = Math.max(options.findIndex((o) => o.id === value), 0);
 
   const [boxes, setBoxes] = React.useState<{ x: number; w: number }[]>([]);
-  const pillX = useSharedValue(4);
+  // pill origin sits at the container's 6dp padding until measurement lands
+  const pillX = useSharedValue(6);
   const pillW = useSharedValue(0);
 
   React.useEffect(() => {
@@ -77,7 +78,9 @@ export function SegmentedControl({
         {
           flexDirection: "row",
           flexWrap: "wrap",
-          borderRadius: 20,
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: colors["color-border"],
           backgroundColor: colors["color-surface-2"],
           padding: 6,
           maxWidth: 640,
@@ -93,14 +96,15 @@ export function SegmentedControl({
             top: 6,
             bottom: 6,
             left: 0,
-            borderRadius: 16,
+            borderRadius: 999,
             overflow: "hidden",
             // Web EMPHASIZE_PILL: glow 0 6px 18px accent/35% + inset highlight.
+            // (shadow only — Android elevation double-draws the pill under the
+            // segments and reads as a grey slab.)
             shadowColor: accentColor,
             shadowOpacity: emphasize ? 0.35 : 0,
             shadowRadius: 18,
             shadowOffset: { width: 0, height: 6 },
-            elevation: emphasize ? 6 : 0,
           },
           pillStyle,
         ]}
@@ -151,7 +155,9 @@ export function SegmentedControl({
               const { x, width } = e.nativeEvent.layout;
               setBoxes((prev) => {
                 const next = [...prev];
-                next[index] = { x: x - 6, w: width };
+                // Raw x (padding included) — the absolutely positioned pill
+                // measures from the same border-box origin, no -6 correction.
+                next[index] = { x, w: width };
                 return next;
               });
             }}

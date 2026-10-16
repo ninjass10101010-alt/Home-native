@@ -7,6 +7,8 @@ import { Modal } from "../src/ui/Modal";
 import { ToastProvider, useToast } from "../src/ui/Toast";
 import { PinPad } from "../src/ui/PinPad";
 import { MemberRail } from "../src/ui/MemberRail";
+import { TOKENS, TYPOGRAPHY } from "../src/theme/tokens";
+import { mix } from "../src/theme/mix";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -59,11 +61,17 @@ describe("Modal", () => {
   });
 });
 
-function ToastHarness() {
+function ToastHarness({
+  intent = "success",
+  message = "Saved!",
+}: {
+  intent?: "info" | "success" | "error";
+  message?: string;
+}) {
   const t = useToast();
   return (
     <>
-      <Text testID="fire" onPress={() => t.show("Saved!", { intent: "success" })}>
+      <Text testID="fire" onPress={() => t.show(message, { intent })}>
         fire
       </Text>
     </>
@@ -92,6 +100,28 @@ describe("Toast", () => {
     };
     const { getByText } = render(<Bad />);
     expect(getByText(/useToast must be used within ToastProvider/)).toBeTruthy();
+  });
+  it("task 0.3: tone backgrounds are opaque-backed surface-1 mixes (readable over headers)", () => {
+    jest.useFakeTimers();
+    const bgOf = (intent: "info" | "success" | "error") => {
+      const { getByTestId, UNSAFE_root, unmount } = render(<ToastHarness intent={intent} />, { wrapper: wrap });
+      fireEvent.press(getByTestId("fire"));
+      // the live-region host (getByRole skips it while the mock's enter
+      // animation still reads opacity 0)
+      const alert = UNSAFE_root.findAll((n) => n.props.accessibilityRole === "alert")[0];
+      expect(alert).toBeTruthy();
+      const bg = alert.props.style.backgroundColor;
+      unmount();
+      return bg;
+    };
+    expect(bgOf("success")).toBe(
+      mix(TOKENS.light["color-accent-mint"], TOKENS.light["color-surface-1"], 18)
+    );
+    expect(bgOf("error")).toBe(
+      mix(TOKENS.light["color-accent-rose"], TOKENS.light["color-surface-1"], 18)
+    );
+    expect(bgOf("info")).toBe(mix(TOKENS.light["color-surface-1"], "transparent", 96));
+    jest.useRealTimers();
   });
 });
 
@@ -162,6 +192,32 @@ describe("PinPad", () => {
     });
     jest.restoreAllMocks();
   });
+  it("task 0.3: photo-URI members render an Image (never a raw data: string in Text)", () => {
+    const photoMember = { name: "Aurora", emoji: "data:image/png;base64,AAAA" };
+    const { UNSAFE_root, queryByText } = render(
+      <PinPad member={photoMember} onVerified={() => {}} onCancel={() => {}} />,
+      { wrapper: wrap }
+    );
+    const images = UNSAFE_root.findAll((n: any) => n.type === "Image");
+    expect(images).toHaveLength(1);
+    expect(images[0].props.source).toEqual({ uri: photoMember.emoji });
+    expect(queryByText(photoMember.emoji)).toBeNull();
+  });
+  it("task 0.3: emoji members keep the 56sp Text glyph (no Image)", () => {
+    const { UNSAFE_root } = render(
+      <PinPad member={member} onVerified={() => {}} onCancel={() => {}} />,
+      { wrapper: wrap }
+    );
+    expect(UNSAFE_root.findAll((n: any) => n.type === "Image")).toHaveLength(0);
+  });
+  it("task 0.3: Clear key uses the title scale while digits keep the stat scale", () => {
+    const { getByText } = render(
+      <PinPad member={member} onVerified={() => {}} onCancel={() => {}} />,
+      { wrapper: wrap }
+    );
+    expect(getByText("Clear").props.style).toMatchObject({ fontSize: TYPOGRAPHY.title.fontSize });
+    expect(getByText("1").props.style).toMatchObject({ fontSize: TYPOGRAPHY.stat.fontSize });
+  });
 });
 
 describe("MemberRail", () => {
@@ -179,14 +235,42 @@ describe("MemberRail", () => {
     expect(onSelect).toHaveBeenCalledWith(members[0]);
     expect(getByLabelText("Signed in as Emily")).toBeTruthy();
   });
-  it("Sign out control is optional", () => {
+  it("Sign out is a 2-tap confirm (web WallMemberRail parity); second tap fires", () => {
     const onSignOut = jest.fn();
-    const { getByLabelText } = render(
+    const { getByLabelText, queryByLabelText } = render(
       <MemberRail members={members} currentName={null} onSelect={() => {}} onSignOut={onSignOut} />,
       { wrapper: wrap }
     );
+    fireEvent.press(getByLabelText("Sign out")); // arm
+    expect(onSignOut).not.toHaveBeenCalled();
+    expect(queryByLabelText("Sign out")).toBeNull(); // swapped for the armed state
+    expect(getByLabelText("Confirm sign out")).toBeTruthy();
+    fireEvent.press(getByLabelText("Confirm sign out")); // confirm
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("the armed 'Sign out?' state auto-resets after 3s", () => {
+    jest.useFakeTimers();
+    const { getByLabelText, queryByLabelText } = render(
+      <MemberRail members={members} currentName={null} onSelect={() => {}} onSignOut={() => {}} />,
+      { wrapper: wrap }
+    );
     fireEvent.press(getByLabelText("Sign out"));
-    expect(onSignOut).toHaveBeenCalled();
+    expect(queryByLabelText("Confirm sign out")).toBeTruthy();
+    act(() => {
+      jest.advanceTimersByTime(3000);
+    });
+    expect(queryByLabelText("Confirm sign out")).toBeNull();
+    expect(getByLabelText("Sign out")).toBeTruthy();
+    jest.useRealTimers();
+  });
+
+  it("no onSignOut prop → no sign-out control at all", () => {
+    const { queryByLabelText } = render(
+      <MemberRail members={members} currentName={null} onSelect={() => {}} />,
+      { wrapper: wrap }
+    );
+    expect(queryByLabelText("Sign out")).toBeNull();
   });
 
   it("regression: current member with a NAMED color (green) renders without crashing", () => {

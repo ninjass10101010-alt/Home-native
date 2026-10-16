@@ -2,9 +2,8 @@ import React from "react";
 import { Pressable, Text, View, ViewStyle } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { MIN_TARGET_DP } from "../theme/tokens";
-import { accentDeepened, accentInk } from "../theme/mix";
+import { accentDeepened, accentInk, mix } from "../theme/mix";
 import { Material } from "../theme/Material";
-import { mixAlpha } from "./SoftButton";
 
 export type ChipTone = "neutral" | "accent" | "success" | "danger" | "warning" | "violet" | "cyan";
 export type ChipSize = "sm" | "md" | "lg";
@@ -102,13 +101,33 @@ export function Chip({
     : selected
       ? ON_ACCENT
       : toneInk(tone);
+  // Border rides the chip's OWN tone (mint/rose/amber/violet/cyan/accent) at
+  // 0.25 alpha — hardcoding the accent made a danger chip wear the brand ring.
+  const toneColor = (t: ChipTone): string => {
+    switch (t) {
+      case "success":
+        return mint;
+      case "danger":
+        return rose;
+      case "warning":
+        return amber;
+      case "violet":
+        return colors["color-accent-violet"] ?? accentColor;
+      case "cyan":
+        return colors["color-accent-cyan"] ?? accentColor;
+      case "accent":
+      case "neutral":
+        return accentColor;
+    }
+  };
+
   const resolvedBorder = disabled
     ? colors["color-border"] ?? "transparent"
     : selected
       ? "transparent"
       : tone === "neutral"
         ? colors["color-border"] ?? "transparent"
-        : mixAlpha(accentColor, 0.25);
+        : mix(toneColor(tone), "transparent", 25);
 
   const content = (
     <>

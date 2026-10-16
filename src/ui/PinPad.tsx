@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Pressable, Text, View, ViewStyle } from "react-native";
+import { Image, Pressable, Text, View, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { MOTION, MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { Material } from "../theme/Material";
 import { SoftButton } from "./SoftButton";
+import { isPhotoUri } from "./MemberRail";
 
 export interface PinPadProps {
   /** Display name + emoji of the member signing in. */
@@ -63,7 +64,15 @@ export function PinPad({ member, onVerified, onCancel, busy = false, error = nul
   return (
     <View testID={testID} style={style}>
       <View style={{ alignItems: "center", marginBottom: 24 }}>
-        <Text style={{ fontSize: 56 }}>{member.emoji}</Text>
+        {isPhotoUri(member.emoji) ? (
+          <Image
+            source={{ uri: member.emoji }}
+            style={{ width: 64, height: 64, borderRadius: 32 }}
+            accessibilityLabel={`${member.name} photo`}
+          />
+        ) : (
+          <Text style={{ fontSize: 56 }}>{member.emoji}</Text>
+        )}
         <Text
           style={{
             color: colors["color-text-primary"],
@@ -146,7 +155,9 @@ export function PinPad({ member, onVerified, onCancel, busy = false, error = nul
               <Text
                 style={{
                   color: colors["color-text-primary"],
-                  fontSize: TYPOGRAPHY.stat.fontSize,
+                  // "Clear" is a word key — title scale keeps it inside the 96dp
+                  // disc while digits stay at the stat scale.
+                  fontSize: k === "Clear" ? TYPOGRAPHY.title.fontSize : TYPOGRAPHY.stat.fontSize,
                   fontWeight: "600",
                 }}
               >

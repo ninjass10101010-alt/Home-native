@@ -4,7 +4,7 @@ import { Modal } from "../ui/Modal";
 import { ListRow } from "../ui/ListRow";
 import { NavIcon } from "../ui/NavIcon";
 import { useTheme } from "../theme/ThemeProvider";
-import { mixAlpha } from "../ui/SoftButton";
+import { mix } from "../theme/mix";
 import { NAV_ICONS } from "./CapsuleDock";
 import { NavRole, moreNavItemsForRole, resolveRoute } from "./nav-items";
 
@@ -19,10 +19,16 @@ export interface MoreSheetProps {
 /** The Home "More…" sheet: the manifest's secondary items for the role,
  *  as ListRows with their one-line blurbs. Counts per role: 7/6/4. */
 export function MoreSheet({ visible, onClose, role, onNavigate, testID }: MoreSheetProps) {
-  const { colors } = useTheme();
+  const { colors, accentColor } = useTheme();
   const items = moreNavItemsForRole(role);
   return (
-    <Modal visible={visible} onClose={onClose} title="More…" testID={testID}>
+    <Modal
+      visible={visible}
+      onClose={onClose}
+      title="More…"
+      description="Everything else around the house"
+      testID={testID}
+    >
       <View style={{ gap: 10 }}>
         {items.map((item) => (
           <ListRow
@@ -31,16 +37,18 @@ export function MoreSheet({ visible, onClose, role, onNavigate, testID }: MoreSh
             leading={
               <View
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
+                  width: 48,
+                  height: 48,
+                  borderRadius: 16,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: mixAlpha(colors["color-surface-2"], 0.6),
+                  backgroundColor: mix(accentColor, "transparent", 15),
                 }}
               >
                 <NavIcon iconKey={item.iconKey} size={22} color={colors["color-text-primary"]} />
-                <Text style={{ width: 0, height: 0, opacity: 0 }}>{NAV_ICONS[item.iconKey]}</Text>
+                <Text style={{ position: "absolute", width: 0, height: 0, opacity: 0 }}>
+                  {NAV_ICONS[item.iconKey]}
+                </Text>
               </View>
             }
             title={item.label}

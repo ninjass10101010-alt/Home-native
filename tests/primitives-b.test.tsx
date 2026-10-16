@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 import { Text } from "react-native";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { SegmentedControl } from "../src/ui/SegmentedControl";
@@ -15,6 +15,22 @@ import { mixAlpha } from "../src/ui/SoftButton";
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
+// The stock reanimated mock rebuilds useSharedValue PER RENDER (no ref), so
+// effect-written values are unobservable. This file re-mocks it with a
+// persistent (useRef-backed) shared value — matching the real runtime — for
+// the SegmentedControl measurement contract.
+jest.mock("react-native-reanimated", () => {
+  const React = require("react");
+  const mock = require("react-native-reanimated/mock");
+  return {
+    ...mock,
+    useSharedValue: (init: unknown) => {
+      const ref = React.useRef(null);
+      if (ref.current === null) ref.current = { value: init };
+      return ref.current;
+    },
+  };
+});
 
 const wrap = ({ children }: { children: React.ReactNode }) => (
   <ThemeProvider>{children}</ThemeProvider>
@@ -60,6 +76,47 @@ describe("SegmentedControl", () => {
     expect(at(true)).toContain('"scale":0.96');
     expect(at(false)).not.toContain('"scale":0.96');
   });
+  it("task 0.3: measurement stores raw x (no -6 correction); pill tracks it; no Android elevation", () => {
+    // The reanimated mock only recomputes useAnimatedStyle on re-render, so a
+    // pass-through rerender stands in for the native shared-value update.
+    const Seg = () => <SegmentedControl options={options} value="b" onChange={() => {}} />;
+    const { UNSAFE_root, rerender } = render(<Seg />, { wrapper: wrap });
+    // layout each segment at the container's 6dp padding origin
+    // (host nodes only — composite Pressables carry the same props)
+    const segments = UNSAFE_root.findAll(
+      (n) => typeof n.type === "string" && n.props.accessibilityRole === "radio"
+    );
+    expect(segments).toHaveLength(3);
+    const widths = [100, 100, 100];
+    let x = 6;
+    act(() => {
+      for (const [i, w] of widths.entries()) {
+        fireEvent(segments[i], "layout", {
+          nativeEvent: { layout: { x, width: w, y: 0, height: 64 } },
+        });
+        x += w;
+      }
+    });
+    rerender(<Seg />);
+    // the sliding pill: the only pointerEvents="none" host node in the tree
+    const pill = UNSAFE_root.findAll(
+      (n) => typeof n.type === "string" && n.props.pointerEvents === "none"
+    )[0];
+    expect(pill).toBeTruthy();
+    const style = JSON.stringify(pill.props.style);
+    // active = "b" → raw x = 106 (padding 6 + 100). The old contract stored
+    // x-6 and parked the pill 6dp left of its segment.
+    expect(style).toContain('"translateX":106');
+    expect(style).not.toContain("elevation");
+    // container is a bordered capsule
+    const container = JSON.stringify(
+      UNSAFE_root.findAll(
+        (n) => typeof n.type === "string" && n.props.accessibilityRole === "radiogroup"
+      )[0]?.props.style ?? []
+    );
+    expect(container).toContain('"borderRadius":999');
+    expect(container).toContain('"borderWidth":1');
+  });
 });
 
 describe("ListRow", () => {
@@ -80,6 +137,15 @@ describe("ListRow", () => {
   it("U2.4: row fill = the web's surface-0/30 wash (web-parity, not a solid card)", () => {
     const { toJSON } = render(<ListRow title="Milk" />, { wrapper: wrap });
     expect(flat(toJSON())).toContain(mixAlpha(TOKENS.light["color-surface-0"], 0.3));
+  });
+  it("task 0.3: left rail is inset 6/14 so borderRadius 20 never slices it at an angle", () => {
+    const railColor = TOKENS.light["color-accent-mint"];
+    const { UNSAFE_root } = render(<ListRow title="Milk" leftRailColor={railColor} />, { wrapper: wrap });
+    const rail = UNSAFE_root.findAll(
+      (n: any) => n.props.style?.position === "absolute" && n.props.style?.width === 4
+    )[0];
+    expect(rail).toBeTruthy();
+    expect(rail.props.style).toMatchObject({ left: 6, top: 14, bottom: 14 });
   });
 });
 
@@ -145,6 +211,27 @@ describe("EmptyState", () => {
     const nested = flat(render(<EmptyState title="Empty" flat />, { wrapper: wrap }).toJSON());
     expect(nested).not.toContain("ExpoBlur");
   });
+  it("task 0.3: flat spacing is compact (6/4/10 + sm button) so it fits a 185dp bento body", () => {
+    const { getByText, toJSON } = render(
+      <EmptyState flat icon="🍽️" title="Nothing" body="Plan meals" actionLabel="Plan" onAction={() => {}} />,
+      { wrapper: wrap }
+    );
+    expect(getByText("🍽️").props.style).toMatchObject({ marginBottom: 6 });
+    expect(getByText("Plan meals").props.style).toMatchObject({ marginTop: 4 });
+    // SoftButton mt 10 (the flat rhythm) + the sm size map (64dp — the wall floor)
+    const s = flat(toJSON());
+    expect(s).toContain('"marginTop":10');
+    expect(s).toContain(`"minHeight":${MIN_TARGET_DP}`);
+    expect(s).not.toContain('"marginTop":20'); // the roomy standalone rhythm
+  });
+  it("task 0.3: non-flat keeps the roomier rhythm", () => {
+    const { getByText } = render(
+      <EmptyState icon="🍽️" title="Nothing" body="Plan meals" actionLabel="Plan" onAction={() => {}} />,
+      { wrapper: wrap }
+    );
+    expect(getByText("🍽️").props.style).toMatchObject({ marginBottom: 16 });
+    expect(getByText("Plan meals").props.style).toMatchObject({ marginTop: 8 });
+  });
 });
 
 describe("SwipeableRow", () => {
@@ -162,5 +249,19 @@ describe("SwipeableRow", () => {
     const action = getByLabelText("Delete");
     fireEvent.press(action); // action is directly pressable in the rail
     expect(onAction).toHaveBeenCalled();
+  });
+  it("task 0.3: rail opacity ramps with the swipe — 0 (hidden) at rest", () => {
+    const { getByTestId } = render(
+      <SwipeableRow
+        testID="sw"
+        actions={[{ key: "del", label: "Delete", intent: "destructive", onAction: () => {} }]}
+      >
+        <Text>row body</Text>
+      </SwipeableRow>,
+      { wrapper: wrap }
+    );
+    const rail = getByTestId("sw-rail");
+    // offset 0 at rest → opacity 0: the rose rail never bleeds through
+    expect(JSON.stringify(rail.props.style)).toContain('"opacity":0');
   });
 });

@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from "react
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { MOTION, MIN_TARGET_DP } from "../theme/tokens";
-import { accentDeepened, accentInk } from "../theme/mix";
+import { accentDeepened, accentInk, mix } from "../theme/mix";
 
 export type SoftButtonVariant = "primary" | "secondary" | "ghost" | "destructive" | "danger" | "success";
 export type SoftButtonSize = "sm" | "md" | "lg" | "icon";
@@ -118,14 +118,14 @@ export function SoftButton({
   );
 }
 
-/** "#rrggbb"/"rgba(...)" → same color at alpha a (for borders). */
+/**
+ * "#rrggbb"/"rgba(...)" → same color at alpha a (for borders). Delegates to
+ * mix()'s CSS-Color-5 parser so 3-digit hex, rgb()/rgba() and the
+ * transparent/black/white sentinels all resolve (the old regex silently
+ * returned full-opacity color for any input it couldn't match).
+ */
 export function mixAlpha(color: string, a: number): string {
-  const m = color.trim().match(/^#([0-9a-f]{6})$/i);
-  if (m) {
-    const h = m[1];
-    return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
-  }
-  return color;
+  return mix(color, "transparent", Math.round(a * 100));
 }
 
 const styles = StyleSheet.create({

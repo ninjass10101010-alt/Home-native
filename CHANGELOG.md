@@ -4,6 +4,39 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — feat(kit): WS-0 Task 0.3 — warm-glass `WidgetFrame`, dock/sheet
+  + 10 core primitives (606 tests, tsc 0, lint 0 errors, tokens/a11y CLEAN).
+  `WidgetFrame` gains `headerRight?`/`showDisc?`; the identity disc is now a
+  52/26/−6 3-stop `LinearGradient` badge (tone↔surface-1 34/20/30, 42%
+  transparent ring) carrying `<HomeWidgetIcon size={38}/>` (24sp emoji fallback
+  for ids with no variant), rendered only when `!header || showDisc` so the
+  `tests/widget-frame.test.tsx:75` null-pin stays green; the default header
+  gets 48dp padding + a bottom hairline divider and hosts the absolute
+  `headerRight` slot (z4), and the failure pill splits tone — rose
+  (`inkRose`) for `error`, amber for `unauthorised`/`offline`/`not_connected`
+  (web ReadStatePill parity). `CapsuleDock` drops the bruised active-disc ring
+  (`activeDiscBorder: "transparent"`) and absolutely positions the MoreButton
+  hidden glyph (Yoga phantom 10dp gap); `MoreSheet` passes
+  `description="Everything else around the house"` and paints 48×48 r16
+  accent tiles at `mix(accent, transparent, 15)`. Primitives: `mixAlpha`
+  delegates to `mix()` (3-digit hex/rgba no longer silently lose alpha);
+  Chip borders ride their OWN tone at 25% (neutral keeps the token border);
+  Toggle knob travel 28→26 (symmetric 4dp margins); SegmentedControl pill
+  origin 4→6, 999-radius container with 1dp border + 999 pill, Android
+  `elevation` removed (double-drawn grey slab), raw layout `x` (no −6
+  correction); ListRow rail insets 6/14/14 (no diagonal slice through r20);
+  SwipeableRow `Gesture.Pan().runOnJS(true)` + rail opacity ramp
+  `min(1, |offset|/24)` (rose never bleeds at rest); EmptyState flat spacing
+  compacted for 279dp bento cells; Toast success/error mix 18% into
+  surface-1, info surface-1@96% (opaque over headers); PinPad renders photo
+  members via `isPhotoUri` → 64dp round `<Image/>` (exported from
+  MemberRail) and drops the Clear key to 20sp while digits stay 32sp;
+  MemberRail sign-out is now a 2-tap arm ("Sign out?" rose border/ink) with
+  3s auto-reset (WallMemberRail parity). Tests: +23 pins across
+  widget-frame / capsule-dock / primitives-a·b·c (incl. a local
+  useRef-persistent `useSharedValue` re-mock in primitives-b to pin the
+  SegmentedControl measurement contract under the jest reanimated mock).
+
 - 2026-10-16 — feat(theme): WS-0 Task 0.2 — Android blur budget, grey elevation
   cones, light-mode pastel mud (583 tests, tsc 0, lint 0 errors, tokens/a11y
   CLEAN). `Material.tsx` replaced per the Phase 0 brief: on Android at RUNTIME

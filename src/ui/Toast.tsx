@@ -101,12 +101,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const tone = toast?.intent ?? "info";
   const mint = colors["color-accent-mint"] ?? accentColor;
   const rose = colors["color-accent-rose"] ?? accentColor;
+  // Opaque-backed mixes: a floating toast sits over page headers, so an
+  // 80%-transparent wash made the copy unreadable (web parity: surface-tinted).
   const bg =
     tone === "success"
-      ? mix(mint, "transparent", 15)
+      ? mix(mint, colors["color-surface-1"], 18)
       : tone === "error"
-        ? mix(rose, "transparent", 15)
-        : mix(colors["color-surface-0"], "transparent", 80);
+        ? mix(rose, colors["color-surface-1"], 18)
+        : mix(colors["color-surface-1"], "transparent", 96);
   const fg =
     tone === "success"
       ? accentInk(mint, colors["color-text-primary"])

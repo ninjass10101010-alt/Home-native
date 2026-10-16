@@ -6,6 +6,7 @@ import { render } from "@testing-library/react-native";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { WidgetFrame } from "../src/home/widgets/WidgetFrame";
 import { READ_COPY, READ_COPY_STALE } from "../src/home/widgets/data";
+import { TOKENS } from "../src/theme/tokens";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -47,20 +48,32 @@ describe("WidgetFrame default header (U13.7) — left-aligned band + protruding 
     // The disc is decorative (aria-hidden on web): the title carries identity,
     // so the glyph is excluded from the a11y tree — query with hidden elements.
     const disc = getByTestId("wf-icon-disc", { includeHiddenElements: true });
-    // ~56dp disc seated in the Material's 18dp padding: negative offsets pull it
-    // toward the card corner while staying inside the clipped Material bounds.
+    // 52dp seated badge with the 3-stop tone wash (task 0.3 geometry).
     expect(disc.props.style).toMatchObject({
       position: "absolute",
-      top: -8,
+      top: -6,
       left: -6,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
+      width: 52,
+      height: 52,
+      borderRadius: 26,
     });
+    // 3-stop LinearGradient wash inside the disc (tone-on-surface stops).
+    const gradient = disc.findAll((n: any) => n.type === "ExpoLinearGradient")[0];
+    expect(gradient).toBeTruthy();
+    expect(gradient.props.colors).toHaveLength(3);
     expect(getByText("✅", { includeHiddenElements: true })).toBeTruthy(); // the glyph lives on the disc…
     const title = getByRole("header");
     expect(title.props.children).toBe("Tasks"); // …and the title is LEFT of it
     expect(getByText("2 pending for the family")).toBeTruthy();
+  });
+
+  it("variant widgets render HomeWidgetIcon at 38dp on the disc", () => {
+    const { getByTestId } = render(<Frame id="briefing" icon="🌅" title="Briefing" />, { wrapper: wrap });
+    const disc = getByTestId("briefing-icon-disc", { includeHiddenElements: true });
+    const svg = disc.findAll((n: any) => n.type === "Svg")[0];
+    expect(svg).toBeTruthy();
+    expect(svg.props.width).toBe(38);
+    expect(svg.props.height).toBe(38);
   });
 
   it("honors the type floors: title 20sp bold, description 14sp", () => {
@@ -69,10 +82,40 @@ describe("WidgetFrame default header (U13.7) — left-aligned band + protruding 
     expect(getByText(base.description).props.style).toMatchObject({ fontSize: 14 });
   });
 
+  it("the default band carries the bottom divider hairline", () => {
+    const { getByTestId } = render(<Frame />, { wrapper: wrap });
+    expect(getByTestId("wf-header").props.style).toMatchObject({
+      borderBottomWidth: 1,
+      paddingBottom: 8,
+      paddingLeft: 48,
+      paddingRight: 48,
+    });
+  });
+
+  it("headerRight renders in the band's absolute right slot", () => {
+    const { getByText, UNSAFE_root } = render(<Frame headerRight={<Text>20 items ▼</Text>} />, { wrapper: wrap });
+    expect(getByText("20 items ▼")).toBeTruthy();
+    // the slot wrapper is absolutely positioned at the band's top-right
+    const slot = UNSAFE_root.findAll(
+      (n: any) => n.props.style?.position === "absolute" && n.props.style?.zIndex === 4
+    )[0];
+    expect(slot).toBeTruthy();
+    expect(slot.props.style).toMatchObject({ top: 0, right: 0 });
+  });
+
   it("the header override prop still wins over the default band", () => {
     const { getByText, queryByTestId } = render(<Frame header={<Text>Custom band</Text>} />, { wrapper: wrap });
     expect(getByText("Custom band")).toBeTruthy();
     expect(queryByTestId("wf-icon-disc")).toBeNull(); // the override owns identity
+  });
+
+  it("showDisc forces the disc even under a header override", () => {
+    const { getByText, getByTestId } = render(
+      <Frame header={<Text>Custom band</Text>} showDisc />,
+      { wrapper: wrap }
+    );
+    expect(getByText("Custom band")).toBeTruthy();
+    expect(getByTestId("wf-icon-disc", { includeHiddenElements: true })).toBeTruthy();
   });
 });
 
@@ -117,5 +160,22 @@ describe("WidgetFrame state machine (U13.8/U13.10) — never a blank cell, never
     expect(getByTestId("wf-body")).toBeTruthy(); // last-good content kept
     expect(getByTestId("wf-stale")).toBeTruthy(); // …badged — the frame is airtight
     expect(getByTestId("wf-stale").props.children).toBe(READ_COPY_STALE);
+  });
+});
+
+describe("WidgetFrame semantic failure tones (task 0.3) — rose for errors, amber for gate/offline", () => {
+  const pillInk = (failure: "error" | "offline" | "unauthorised") => {
+    const { getByText } = render(<Frame status="error" failure={failure} hasData={false} />, { wrapper: wrap });
+    const copy = getByText(new RegExp(READ_COPY[failure].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    return copy.props.style.color;
+  };
+
+  it("status/error failures use the rose ink token", () => {
+    expect(pillInk("error")).toBe(TOKENS.light["color-accent-ink-rose"]);
+  });
+
+  it("offline + unauthorised keep the amber ink token", () => {
+    expect(pillInk("offline")).toBe(TOKENS.light["color-accent-ink-amber"]);
+    expect(pillInk("unauthorised")).toBe(TOKENS.light["color-accent-ink-amber"]);
   });
 });

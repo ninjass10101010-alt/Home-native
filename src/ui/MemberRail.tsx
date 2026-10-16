@@ -21,12 +21,16 @@ export interface MemberRailProps {
   testID?: string;
 }
 
-function isPhotoUri(emoji: string): boolean {
+/** True when the member's "emoji" slot carries a photo (data-URI or URL). */
+export function isPhotoUri(emoji: string): boolean {
   return (
     typeof emoji === "string" &&
     (emoji.startsWith("data:image/") || emoji.startsWith("http") || emoji.startsWith("/"))
   );
 }
+
+/** Auto-reset window for the armed "Sign out?" state (web WallMemberRail parity). */
+const SIGN_OUT_ARM_MS = 3000;
 
 /**
  * Wall member rail (the wall-mode header rail from the 2026-09-09 wall spec §5):
@@ -35,6 +39,19 @@ function isPhotoUri(emoji: string): boolean {
  */
 export function MemberRail({ members, currentName = null, onSelect, onSignOut, style, testID }: MemberRailProps) {
   const { colors, theme, accentColor } = useTheme();
+  // Web WallMemberRail parity: sign-out is a 2-tap confirm — the first tap
+  // arms ("Sign out?"), the second fires; the armed state auto-resets.
+  const [arming, setArming] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!arming) return;
+    const t = setTimeout(() => setArming(false), SIGN_OUT_ARM_MS);
+    return () => clearTimeout(t);
+  }, [arming]);
+
+  const rose = colors["color-accent-rose"] ?? accentColor;
+  const inkRose = colors["color-accent-ink-rose"] ?? rose;
+
   return (
     <View testID={testID} style={style} accessibilityLabel="Family members">
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, alignItems: "center" }}>
@@ -127,16 +144,41 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
           );
         })}
         {onSignOut ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Sign out"
-            onPress={onSignOut}
-            style={{ alignItems: "center", justifyContent: "center", minHeight: MIN_TARGET_DP, paddingHorizontal: 16 }}
-          >
-            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
-              Sign out
-            </Text>
-          </Pressable>
+          arming ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Confirm sign out"
+              onPress={() => {
+                setArming(false);
+                onSignOut();
+              }}
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: MIN_TARGET_DP,
+                paddingHorizontal: 16,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: mix(rose, "transparent", 40),
+                backgroundColor: mix(rose, "transparent", 15),
+              }}
+            >
+              <Text style={{ color: inkRose, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                Sign out?
+              </Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sign out"
+              onPress={() => setArming(true)}
+              style={{ alignItems: "center", justifyContent: "center", minHeight: MIN_TARGET_DP, paddingHorizontal: 16 }}
+            >
+              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
+                Sign out
+              </Text>
+            </Pressable>
+          )
         ) : null}
       </ScrollView>
     </View>

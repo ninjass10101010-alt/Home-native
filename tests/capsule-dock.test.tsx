@@ -3,6 +3,9 @@ import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { CapsuleDock, MoreButton } from "../src/nav/CapsuleDock";
+import { MoreSheet } from "../src/nav/MoreSheet";
+import { mix } from "../src/theme/mix";
+import { ACCENTS } from "../src/theme/tokens";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -73,6 +76,32 @@ describe("CapsuleDock", () => {
     const selected = getAllByRole("button").filter((b: any) => b.props.accessibilityState?.selected);
     expect(selected).toHaveLength(0);
   });
+
+  it("task 0.3: the ACTIVE cap's disc has a transparent ring (web CapsuleNav parity)", () => {
+    const { getByTestId } = render(
+      <CapsuleDock role="parent" hydrated pathname="/" onNavigate={() => {}} />,
+      { wrapper: wrap }
+    );
+    // dock-home is the active cap; its child disc is the 48dp circle
+    const disc = getByTestId("dock-home").findAll((n: any) => n.props.style?.width === 48)[0];
+    expect(disc).toBeTruthy();
+    expect(disc.props.style.borderColor).toBe("transparent");
+  });
+});
+
+describe("MoreSheet", () => {
+  it("task 0.3: modal carries the house description + accent icon tiles", () => {
+    const { getByText, UNSAFE_root } = render(
+      <MoreSheet visible onClose={() => {}} role="parent" onNavigate={() => {}} />,
+      { wrapper: wrap }
+    );
+    expect(getByText("Everything else around the house")).toBeTruthy();
+    const tile = UNSAFE_root.findAll(
+      (n: any) => n.props.style?.width === 48 && n.props.style?.height === 48 && n.props.style?.borderRadius === 16
+    )[0];
+    expect(tile).toBeTruthy();
+    expect(tile.props.style.backgroundColor).toBe(mix(ACCENTS.light.nori, "transparent", 15));
+  });
 });
 
 describe("MoreButton (web page.tsx MoreButton parity)", () => {
@@ -95,5 +124,14 @@ describe("MoreButton (web page.tsx MoreButton parity)", () => {
     const m = flat.match(/"minHeight":(\d+)/);
     expect(m).toBeTruthy();
     expect(Number(m![1])).toBeGreaterThanOrEqual(64);
+  });
+
+  it("task 0.3: the hidden emoji glyph is absolute (no phantom Yoga flex gap)", () => {
+    const { UNSAFE_root } = render(<MoreButton onPress={() => {}} />, { wrapper: wrap });
+    const hidden = UNSAFE_root.findAll(
+      (n: any) => n.type === "Text" && n.props.style?.opacity === 0 && n.props.style?.width === 0
+    )[0];
+    expect(hidden).toBeTruthy();
+    expect(hidden.props.style.position).toBe("absolute");
   });
 });

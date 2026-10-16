@@ -65,7 +65,9 @@ export function CapsuleDock({ role, hydrated, pathname, onNavigate, style, testI
   const activeBg = mix(accentColor, "transparent", 20);
   const activeBorder = mix(accentColor, "transparent", 38);
   const activeDiscBg = colors["color-nav-active-fill"] ?? accentDeepened(accentColor, 28);
-  const activeDiscBorder = mix(accentColor, "transparent", 55);
+  // transparent ring (web CapsuleNav parity): the old 55%-accent ring read as
+  // a bruised halo around the active disc in light mode.
+  const activeDiscBorder = "transparent";
   const idleDiscBg = mix(colors["color-surface-2"], "transparent", 58);
   const idleDiscBorder = mix(colors["color-text-primary"], "transparent", 12);
 
@@ -258,7 +260,9 @@ export function MoreButton({ onPress, style }: { onPress: () => void; style?: Vi
       }}
     >
       <NavIcon iconKey="more" size={20} color={colors["color-text-primary"]} />
-      <Text style={{ fontSize: 14, width: 0, height: 0, opacity: 0 }}>{NAV_ICONS.more}</Text>
+      {/* hidden emoji a11y fallback — absolute so Yoga does not insert a
+          phantom flex gap next to the (zero-size) glyph */}
+      <Text style={{ position: "absolute", fontSize: 14, width: 0, height: 0, opacity: 0 }}>{NAV_ICONS.more}</Text>
       <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
         More…
       </Text>

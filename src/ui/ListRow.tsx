@@ -43,9 +43,11 @@ export function ListRow({
         <View
           style={{
             position: "absolute",
-            left: 0,
-            top: 12,
-            bottom: 12,
+            // inset 6/14 so the row's borderRadius 20 never slices the rail
+            // at an angle
+            left: 6,
+            top: 14,
+            bottom: 14,
             width: 4,
             borderRadius: 2,
             backgroundColor: leftRailColor,

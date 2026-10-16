@@ -39,6 +39,8 @@ export function SwipeableRow({ children, actions = [], style, testID }: Swipeabl
 
   const pan = Gesture.Pan()
     .activeOffsetX([-10, 10])
+    // React state (setOpen) is JS-thread only — run the callbacks there.
+    .runOnJS(true)
     .onUpdate((e) => {
       offset.value = Math.max(-maxOffset, Math.min(0, e.translationX + (open ? -maxOffset : 0)));
     })
@@ -51,16 +53,23 @@ export function SwipeableRow({ children, actions = [], style, testID }: Swipeabl
     });
 
   const rowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }));
+  // Rail opacity ramps with the swipe so the destructive rose never bleeds
+  // through a translucent row at rest (opacity 0 until 24dp of travel).
+  const railStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.abs(offset.value) / 24) }));
 
   const rail = (
-    <View
-      style={{
-        position: "absolute",
-        top: 0,
-        bottom: 0,
-        right: 0,
-        flexDirection: "row",
-      }}
+    <Animated.View
+      testID={testID ? `${testID}-rail` : undefined}
+      style={[
+        {
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          right: 0,
+          flexDirection: "row",
+        },
+        railStyle,
+      ]}
     >
       {actions.map((a) => {
         const destructive = a.intent === "destructive";
@@ -93,7 +102,7 @@ export function SwipeableRow({ children, actions = [], style, testID }: Swipeabl
           </Animated.View>
         );
       })}
-    </View>
+    </Animated.View>
   );
 
   return (

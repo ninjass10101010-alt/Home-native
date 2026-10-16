@@ -40,7 +40,9 @@ export function Toggle({
   }, [value, reduceMotion, progress]);
 
   const knobStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: progress.value * 28 }],
+    // track 64 − knob 28 − 2×4dp insets = 28dp of travel… but the 1dp track
+    // border eats 2dp, so 26 keeps symmetric 4dp knob margins at both ends.
+    transform: [{ translateX: progress.value * 26 }],
   }));
 
   const track = (
