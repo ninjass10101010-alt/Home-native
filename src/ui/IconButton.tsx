@@ -59,6 +59,32 @@ export function IconButton({
   const scale = useSharedValue(1);
   const aStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
+  // ONE ink resolution for every branch. Consumers pass a glyph WITHOUT a
+  // colour far more often than not, and an unstyled <Text> resolves to RN
+  // Web's #000000 — pure black on dark glass (1.47:1, WCAG 1.4.11 fail). The
+  // accent/danger/ghost inks stay exactly as they were; glass/surface gain the
+  // body-ink default the web gets from its `text-text-primary` class.
+  const inkFor = (v: IconButtonVariant): string => {
+    switch (v) {
+      case "accent":
+        return accentInk(accentColor, colors["color-text-primary"]);
+      case "danger":
+        return ON_ACCENT;
+      case "ghost":
+        return colors["color-text-secondary"];
+      default:
+        return colors["color-text-primary"];
+    }
+  };
+
+  /** Tint the glyph unless the caller already named an ink (its style wins). */
+  const withInk = (fg: string) =>
+    React.isValidElement(icon)
+      ? React.cloneElement(icon as React.ReactElement<any>, {
+          style: [{ color: fg }, (icon.props as any).style],
+        })
+      : icon;
+
   if (variant === "glass" || variant === "surface") {
     return (
       <Animated.View style={aStyle}>
@@ -87,7 +113,7 @@ export function IconButton({
               opacity: disabled ? 0.5 : 1,
             }}
           >
-            {icon}
+            {withInk(inkFor(variant))}
           </Pressable>
         </Material>
       </Animated.View>
@@ -97,19 +123,19 @@ export function IconButton({
   const resolved: Record<Exclude<IconButtonVariant, "glass" | "surface">, { bg: string; fg: string; border: string }> = {
     accent: {
       bg: mixAlpha(accentColor, 0.15),
-      fg: accentInk(accentColor, colors["color-text-primary"]),
+      fg: inkFor("accent"),
       border: mixAlpha(accentColor, 0.25),
     },
     danger: {
       // Web parity: bg color-mix(rose, #000 25%) — 25% TOWARD black (naming the
       // web recipe so the value is never re-derived by memory).
       bg: accentDeepened(rose, 25),
-      fg: ON_ACCENT,
+      fg: inkFor("danger"),
       border: mixAlpha(rose, 0.2),
     },
     ghost: {
       bg: "transparent",
-      fg: colors["color-text-secondary"],
+      fg: inkFor("ghost"),
       border: "transparent",
     },
   };
@@ -133,12 +159,8 @@ export function IconButton({
         }}
         style={[circle, { backgroundColor: v.bg, borderColor: v.border, opacity: disabled ? 0.5 : 1 }]}
       >
-        {/* tint glyph text color via context-less wrapper: consumers pass Text with their own color; accent ink applies when they don't */}
-        {React.isValidElement(icon)
-          ? React.cloneElement(icon as React.ReactElement<any>, {
-              style: [{ color: v.fg }, (icon.props as any).style],
-            })
-          : icon}
+        {/* glyph ink rides the SAME resolver as glass/surface (see withInk) */}
+        {withInk(v.fg)}
       </Pressable>
     </Animated.View>
   );

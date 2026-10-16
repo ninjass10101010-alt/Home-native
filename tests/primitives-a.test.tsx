@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
-import { AccessibilityInfo, Text } from "react-native";
+import { AccessibilityInfo, StyleSheet, Text } from "react-native";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
 import { TOKENS, ACCENTS, TYPE_FLOOR_SP, TYPOGRAPHY } from "../src/theme/tokens";
 import { MATERIALS } from "../src/theme/materials";
@@ -120,6 +120,40 @@ describe("IconButton", () => {
       { wrapper: wrap }
     );
     expect(getByLabelText("Open settings")).toBeTruthy();
+  });
+  it("glass/surface ink: a colour-less glyph never resolves to RN Web's #000000", () => {
+    // WS-0 critic CRITICAL 1: the cloneElement ink injection used to run only
+    // on the accent/danger/ghost branch, so `<Text style={{fontSize:22}}>＋</Text>`
+    // inside a glass IconButton painted pure black on dark glass (1.47:1).
+    for (const variant of ["glass", "surface"] as const) {
+      for (const theme of ["dark", "light"] as const) {
+        const { getByText } = render(
+          <ThemeProvider>
+            <SetTheme theme={theme}>
+              <IconButton
+                icon={<Text style={{ fontSize: 22 }}>＋</Text>}
+                label="Add"
+                variant={variant}
+              />
+            </SetTheme>
+          </ThemeProvider>
+        );
+        const ink = StyleSheet.flatten(getByText("＋").props.style).color;
+        expect(ink).toBeDefined();
+        expect(String(ink).toLowerCase()).not.toBe("#000000");
+        expect(String(ink).toLowerCase()).not.toBe("black");
+        expect(contrastRatio(ink as string, TOKENS[theme]["color-text-primary"])).toBeCloseTo(1, 5);
+      }
+    }
+  });
+  it("accent/danger/ghost inks are unchanged by the hoist", () => {
+    const { getByText } = render(
+      <IconButton icon={<Text>⚙️</Text>} label="Settings" variant="accent" />,
+      { wrapper: wrap }
+    );
+    expect(StyleSheet.flatten(getByText("⚙️").props.style).color).toBe(
+      accentInk(ACCENTS.light.nori, TOKENS.light["color-text-primary"])
+    );
   });
   it("AA: accent ink on its wash ≥4.5 across accents/themes", () => {
     for (const theme of ["dark", "light"] as const) {
