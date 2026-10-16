@@ -4,6 +4,16 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — feat(ws4): Tasks & Leaderboard page — triple-A visual & behavioral parity.
+  **claim.ts:** extended `ClaimAction` with `"crew-join" | "crew-checkin" | "crew-remove" | "crew-close"` and preserved `awardedPoints` + `completedAt` in `normalizeSnapshotTasks`.
+  **TasksPage.tsx (Header & Banner):** rendered `0 PENDING` eyebrow with 2px letterSpacing, nested `✅ Tasks` to separate 28sp checkmark glyph from 44sp title, moved `+ Add Chore` and `± Bonus/Penalty` into the header right row, and appended underlined `Sign in with your PIN →` action link to `SignedOutBanner`.
+  **TasksPage.tsx (StatTiles):** made `StatTile` theme-aware (`washHi = 16/3`, `washLo = 5/1`, `borderMix = 35/14`) for crisp light-mode glass; computed all-time points when complete to show `{pts} pts all-time` on Earned tile.
+  **TasksPage.tsx (MemberFilterRail):** redesigned `MemberFilterTile` with labels inside the tile, circular 40×40 avatar ring, and photo URI support via `isPhotoUri`; filtered pet members out from device cache roster.
+  **TasksPage.tsx (SectionCard):** moved 56×56 badge disc to outer card container (`top: 12, left: 16`) with theme-aware wash and `paddingLeft: 68` on header row to eliminate badge/divider line collision.
+  **TasksPage.tsx (Needs approval & Completed):** rendered payout-first amber ink (`+{award}pts for {kid}`) with inline `Approve ✓` and `Send back` pills and `✓ Approve all ({N})`; wrapped each completed week group in a `.tasks-week-group` plate with space-between header (`{label}` left, `{count} chores` right) and inline `↩` undo button.
+  **TasksPage.tsx (Leaderboard Tab):** added Champion Hero card (`👑 The crown is up for grabs` on 0 pts vs champion stats when leading), Weekly Prizes card (`fetchDbCollection("weekly_prizes")`), and 3-step podium row with rank medal helper preventing false gold/silver/bronze awards on 0-pt rows.
+  **TasksPage.tsx (Modals):** added horizontal selectable member chips from `cachedRoster` in `add-chore-modal` and `bonus-modal` for one-tap assignee selection.
+
 - 2026-10-16 — feat(ws3): Home bento data widgets — height budget & visual parity across all 9 widgets.
   **HomeSecurityWidget.tsx:** fixed critical footer overlap bug by giving content container `flex: 1, minHeight: 0, justifyContent: "space-between"`, reducing sensor gap, setting `minHeight: 36, paddingVertical: 4` on chips, and giving footer `borderTopWidth: 1, borderTopColor: colors["color-border"]` with `hitSlop` on `Pressable`.
   **QuickAskWidget.tsx:** replaced 3 oversized rectangular boxes with the web's exact layout: centered bold prompt quote `“Add soccer practice for Thursday.” →` + `Open Ask →`, and 3 compact violet glass pill buttons (`minHeight: 36, hitSlop={8}`).

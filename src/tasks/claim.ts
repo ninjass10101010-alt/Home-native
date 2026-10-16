@@ -10,7 +10,14 @@ import { api, ApiError } from "../api/client";
  */
 
 /** Kid lane actions (claim route: "claim" needs a PIN; complete/undo ride a session). */
-export type ClaimAction = "claim" | "complete" | "undo";
+export type ClaimAction =
+  | "claim"
+  | "complete"
+  | "undo"
+  | "crew-join"
+  | "crew-checkin"
+  | "crew-remove"
+  | "crew-close";
 /** Parent lane actions (approve route — always the parent's memberName + pin). */
 export type ApproveAction = "approve" | "approve-all" | "send-back";
 
@@ -52,6 +59,8 @@ export interface WallTask {
   /** The server's own week key for the completion (never client-computed). */
   completedInWeek: string;
   completedBy: string;
+  awardedPoints?: number;
+  completedAt?: string;
 }
 
 /** Photo data-URLs never belong in a Text glyph (web safeDisplayEmoji parity, the 1 MiB
@@ -118,6 +127,8 @@ export function normalizeSnapshotTasks(raw: unknown): WallTask[] {
       speedBonus: Number(t.speedBonus) || 0,
       completedInWeek: typeof t.completedInWeek === "string" ? t.completedInWeek : "",
       completedBy: typeof t.completedBy === "string" ? t.completedBy : "",
+      awardedPoints: typeof t.awardedPoints === "number" ? t.awardedPoints : undefined,
+      completedAt: typeof t.completedAt === "string" ? t.completedAt : undefined,
     });
   }
   return out;

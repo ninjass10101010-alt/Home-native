@@ -237,7 +237,7 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
           borderRadius: 20,
           borderWidth: 1,
           borderColor: mix(mint, "transparent", 24),
-          backgroundColor: mix(mint, colors["color-surface-0"] ?? "#0b1020", 8),
+          backgroundColor: mix(mint, "transparent", 8),
           padding: 14,
           flex: 1,
           minHeight: 0,

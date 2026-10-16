@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
 import { LinearGradient } from "expo-linear-gradient";
@@ -11,6 +11,8 @@ import { memberAccentHex } from "../theme/memberColor";
 import { useAuth } from "../state/AuthProvider";
 import { useSync, type WeekData } from "../state/SyncManager";
 import { readCachedMembers } from "../api/members";
+import { fetchAllTimeTotals, fetchDbCollection } from "../rewards/api";
+import { isPhotoUri } from "../ui/MemberRail";
 import { api } from "../api/client";
 import { Modal } from "../ui/Modal";
 import { PinPad } from "../ui/PinPad";
@@ -132,7 +134,7 @@ function rankWeek(weekData: WeekData | undefined): { name: string; points: numbe
 /** The rank glyph: ranks 1,2,3 are medals and every other rank prints its
  *  number. A tie means two rows SHARE a rank, so both tied rows wear that
  *  rank's glyph (40/25/25 → 🥇,🥈,🥈) exactly as the web ranks. */
-const medal = (rank: number) => (rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `${rank}.`);
+const medal = (rank: number, pts: number) => pts === 0 ? `${rank}.` : rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `${rank}.`;
 
 /** One stat tile — the web StatTile's compact formula: a tone GRADIENT wash
  *  (16%→5%) under the material tier, a tone border and the tone's AA ink on
@@ -154,11 +156,14 @@ function StatTile({
   tone: "warning" | "success" | "accent";
   testID: string;
 }) {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const toneKey =
     tone === "warning" ? "color-accent-amber" : tone === "success" ? "color-accent-mint" : "color-accent-selected";
   const toneColor = colors[toneKey] ?? colors["color-accent-selected"] ?? colors["color-accent"];
   const ink = accentInk(toneColor, colors["color-text-primary"]);
+  const washHi = theme === "dark" ? 16 : 3;
+  const washLo = theme === "dark" ? 5 : 1;
+  const borderMix = theme === "dark" ? 35 : 14;
   return (
     <Material
       tier="thin"
@@ -166,12 +171,12 @@ function StatTile({
       style={{
         flex: 1,
         borderRadius: 24,
-        borderColor: mix(toneColor, "transparent", 35),
+        borderColor: mix(toneColor, "transparent", borderMix),
         overflow: "hidden",
       }}
     >
       <LinearGradient
-        colors={[mix(toneColor, "transparent", 16), mix(toneColor, "transparent", 5)]}
+        colors={[mix(toneColor, "transparent", washHi), mix(toneColor, "transparent", washLo)]}
         start={{ x: 0.15, y: 0 }}
         end={{ x: 0.85, y: 1 }}
         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
@@ -243,36 +248,50 @@ function MemberFilterTile({
       }}
       style={{ alignItems: "center", minWidth: 76, minHeight: MIN_TARGET_DP }}
     >
-      <Animated.View style={[{ alignItems: "center", minWidth: 76 }, animStyle]}>
-        {/* web .member-tile: a rounded RECT (radius-lg) with a 1px hairline at
-            rest; the active tile swaps to a 22% tone wash + 38% tone border.
-            Not a full-strength ring. */}
+      <Animated.View style={[{ alignItems: "center", minWidth: 72 }, animStyle]}>
         <View
           style={{
-            width: 76,
-            height: 76,
             borderRadius: 20,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            gap: 6,
             alignItems: "center",
-            justifyContent: "center",
             borderWidth: 1,
             borderColor: active ? mix(tileColor, "transparent", 38) : mix(colors["color-text-primary"] ?? accentColor, "transparent", 8),
             backgroundColor: active ? mix(tileColor, "transparent", 22) : mix(colors["color-text-primary"] ?? accentColor, "transparent", 5),
           }}
         >
-          <Text style={{ fontSize: 30 }}>{emoji}</Text>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              borderWidth: 2,
+              borderColor: mix(tileColor, "transparent", 40),
+              backgroundColor: mix(tileColor, "transparent", 20),
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+            }}
+          >
+            {isPhotoUri(emoji) ? (
+              <Image source={{ uri: emoji }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+            ) : (
+              <Text style={{ fontSize: 20 }}>{emoji}</Text>
+            )}
+          </View>
+          <Text
+            numberOfLines={1}
+            style={{
+              maxWidth: 72,
+              color: active ? colors["color-text-primary"] : colors["color-text-secondary"],
+              fontSize: TYPOGRAPHY.label.fontSize,
+              fontWeight: active ? "700" : "500",
+            }}
+          >
+            {label}
+          </Text>
         </View>
-        <Text
-          numberOfLines={1}
-          style={{
-            marginTop: 4,
-            maxWidth: 96,
-            color: active ? colors["color-text-primary"] : colors["color-text-secondary"],
-            fontSize: TYPOGRAPHY.label.fontSize,
-            fontWeight: active ? "700" : "500",
-          }}
-        >
-          {label}
-        </Text>
       </Animated.View>
     </Pressable>
   );
@@ -466,64 +485,66 @@ function SectionCard({
   children: React.ReactNode;
   testID: string;
 }) {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   // ONE card family, ONE tone: the web's WidgetCard defaults
   // --widget-tone to --color-accent-selected and no /tasks SectionCard
   // passes a tone (page.tsx:2924, 2995, 3168, 3327, 3568, 3691); the
   // reference confirms it — identical blue border on every card.
   const tone = colors["color-accent-selected"] ?? colors["color-accent"];
+  const sWashHi = theme === "dark" ? 16 : 3;
+  const sWashLo = theme === "dark" ? 5 : 1;
+  const sBorderMix = theme === "dark" ? 35 : 14;
   return (
     <Material
       tier="regular"
       testID={testID}
       style={{
         borderRadius: 24,
-        borderColor: mix(tone, "transparent", 35),
+        borderColor: mix(tone, "transparent", sBorderMix),
         overflow: "hidden",
       }}
     >
       <LinearGradient
-        colors={[mix(tone, "transparent", 16), mix(tone, "transparent", 5)]}
+        colors={[mix(tone, "transparent", sWashHi), mix(tone, "transparent", sWashLo)]}
         start={{ x: 0.15, y: 0 }}
         end={{ x: 0.85, y: 1 }}
         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
       />
+      {/* Corner-straddling badge on outer container */}
+      <View
+        style={{
+          position: "absolute",
+          top: 12,
+          left: 16,
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: mix(tone, "transparent", 22),
+          borderWidth: 1,
+          borderColor: mix(tone, "transparent", 42),
+          shadowColor: tone,
+          shadowOpacity: 0.35,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 0 },
+          elevation: 6,
+          zIndex: 3,
+        }}
+      >
+        <Text style={{ fontSize: 30 }}>{icon}</Text>
+      </View>
       <View style={{ paddingHorizontal: 20, paddingVertical: 20, gap: 16 }}>
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
             paddingBottom: 14,
-            paddingLeft: 72,
+            paddingLeft: 68,
             borderBottomWidth: 1,
-            borderBottomColor: mix(tone, "transparent", 20),
+            borderBottomColor: colors["color-border"] ?? mix(tone, "transparent", 20),
           }}
         >
-          {/* corner-straddling badge (web WidgetCard: absolute -top-1 -left-1,
-              h-14 w-14, 30px glyph, SectionCard reserves pl-[72px]) */}
-          <View
-            style={{
-              position: "absolute",
-              top: -4,
-              left: -4,
-              width: 56,
-              height: 56,
-              borderRadius: 28,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: mix(tone, "transparent", 22),
-              borderWidth: 1,
-              borderColor: mix(tone, "transparent", 42),
-              shadowColor: tone,
-              shadowOpacity: 0.35,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 0 },
-              elevation: 6,
-              zIndex: 3,
-            }}
-          >
-            <Text style={{ fontSize: 30 }}>{icon}</Text>
-          </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>
               {title}
@@ -586,6 +607,28 @@ export function TasksPage() {
   // read would only 401, and the snapshot poll already owns the signed-in
   // read path). Assignees in the snapshot fill any gap — a chip is only ever
   // offered for a name the board can actually show.
+  const [allTimeData, setAllTimeData] = useState<{
+    historyComplete?: boolean;
+    points?: Record<string, number> | null;
+    totals?: Record<string, { points?: number | null } | number>;
+  } | null>(null);
+
+  const [prizes, setPrizes] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    if (activeTab !== "leaderboard") return;
+    let alive = true;
+    void fetchAllTimeTotals().then((res) => {
+      if (alive) setAllTimeData(res);
+    });
+    void fetchDbCollection("weekly_prizes").then((res) => {
+      if (alive && Array.isArray(res)) setPrizes(res);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [activeTab]);
+
   const [cachedRoster, setCachedRoster] = useState<{ name: string; emoji: string; color?: string }[]>([]);
   React.useEffect(() => {
     let alive = true;
@@ -593,8 +636,12 @@ export function TasksPage() {
       if (!alive) return;
       setCachedRoster(
         rows
-          .filter((r) => (r.name || "").trim())
-          .map((r) => ({ name: r.name, emoji: (r as { emoji?: string }).emoji || "👤", color: (r as { color?: string }).color }))
+          .filter((r) => (r.name || "").trim() && String(r.role ?? "").toLowerCase() !== "pet")
+          .map((r) => ({
+            name: r.name,
+            emoji: (r as { emoji?: string }).emoji || "👤",
+            color: (r as { color?: string }).color,
+          }))
       );
     });
     return () => {
@@ -625,6 +672,32 @@ export function TasksPage() {
   // contains no completed rows at all (web reads getThisWeeksCompletedTasks off
   // the unfiltered rows — a scoped length there is a structural zero).
   const stats = taskStats(scoped, weekData?.points, weekData?.weekStart, activeFilter, me, tasks);
+  let allTimePts: number | null = null;
+  if (allTimeData?.historyComplete) {
+    if (activeFilter === "All" || activeFilter === "Open") {
+      if (allTimeData.totals) {
+        let sum = 0;
+        for (const v of Object.values(allTimeData.totals)) {
+          if (typeof v === "number") sum += v;
+          else if (v && typeof v.points === "number") sum += v.points;
+        }
+        allTimePts = sum;
+      }
+    } else {
+      const targetName = activeFilter === "My Tasks" ? me : activeFilter;
+      if (targetName) {
+        const v = allTimeData.totals?.[targetName];
+        if (typeof v === "number") allTimePts = v;
+        else if (v && typeof v.points === "number") allTimePts = v.points;
+        else if (allTimeData.points && typeof allTimeData.points[targetName] === "number") {
+          allTimePts = allTimeData.points[targetName];
+        } else {
+          allTimePts = 0;
+        }
+      }
+    }
+  }
+  const earnedDetail = allTimePts !== null ? `${allTimePts} pts all-time` : "All-time unavailable";
   const scopedCompleted = scoped.filter((t) => t.completed).length;
   // The approval queue is FAMILY-WIDE (web `pendingApprovals` — never member
   // scoped): a parent approves whatever tap landed, whoever tapped it.
@@ -970,36 +1043,116 @@ export function TasksPage() {
     }
 
      if (activeTab === "leaderboard") {
+       const topScorer = ranked[0];
+       const isFreshWeek = !topScorer || topScorer.points === 0;
+
        return (
-         <SectionCard icon="🏆" title={RACE_TITLE} description="This week's race — resets Monday" testID="tasks-leaderboard">
-           <Material tier="thin" style={{ borderRadius: 20, paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
-             {ranked.length === 0 ? (
-               <Text
-                 style={{
-                   color: colors["color-text-secondary"],
-                   fontSize: TYPOGRAPHY.body.fontSize,
-                   textAlign: "center",
-                 }}
-               >
-                 {RACE_EMPTY}
+         <View style={{ gap: 20 }}>
+           {/* Champion Hero Card */}
+           {isFreshWeek ? (
+             <Material tier="thin" style={{ borderRadius: 24, padding: 24, alignItems: "center", gap: 8 }}>
+               <Text style={{ fontSize: 36 }}>👑</Text>
+               <Text style={{ color: colors["color-text-primary"], fontSize: 22, fontWeight: "700" }}>
+                 The crown is up for grabs
                </Text>
-             ) : (
-               ranked.map((r) => (
-                 <View
-                   key={r.name}
-                   style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 48 }}
-                 >
-                   <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, flex: 1 }}>
-                     {medal(r.rank)} {r.name}
+               <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, textAlign: "center" }}>
+                 Everyone starts at zero — the first completed task takes the crown.
+               </Text>
+             </Material>
+           ) : (
+             <Material tier="thin" style={{ borderRadius: 24, padding: 20, gap: 14 }}>
+               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                 <View style={{ gap: 4 }}>
+                   <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                     {"This week's champion"}
                    </Text>
-                   <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
-                     {r.points}pts
+                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                     <Text style={{ fontSize: 28 }}>👑</Text>
+                     <Text style={{ color: colors["color-text-primary"], fontSize: 24, fontWeight: "700" }}>
+                       {topScorer.name.split(" ")[0]}
+                     </Text>
+                   </View>
+                   <Text style={{ color: colors["color-accent-mint"] ?? colors["color-accent"], fontSize: 18, fontWeight: "700" }}>
+                     {topScorer.points} pts
                    </Text>
                  </View>
-               ))
-             )}
-           </Material>
-         </SectionCard>
+                 <RowAvatar
+                   emoji={cachedRoster.find((m) => m.name === topScorer.name)?.emoji || "👤"}
+                   memberColor={memberColorOf(topScorer.name)}
+                   fallbackRail={colors["color-accent-amber"]}
+                 />
+               </View>
+             </Material>
+           )}
+
+           {/* Weekly Prizes Card */}
+           {prizes.length > 0 ? (
+             <SectionCard icon="🎁" title="Weekly Prizes" description="Race ends Monday" testID="tasks-weekly-prizes">
+               <Material tier="thin" style={{ borderRadius: 20, padding: 16, gap: 10 }}>
+                 {prizes.map((p, idx) => (
+                   <View key={String(p.id ?? idx)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                     <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
+                       #{p.rank ?? idx + 1} {p.title || p.prize || p.name}
+                     </Text>
+                     <Text style={{ color: colors["color-accent-amber"] ?? colors["color-accent"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                       {p.points ? `${p.points}pts` : "Top prize"}
+                     </Text>
+                   </View>
+                 ))}
+               </Material>
+             </SectionCard>
+           ) : null}
+
+           {/* Race Standings */}
+           <SectionCard icon="🏆" title={RACE_TITLE} description="This week's race — resets Monday" testID="tasks-leaderboard">
+             <Material tier="thin" style={{ borderRadius: 20, paddingHorizontal: 20, paddingVertical: 12, gap: 4 }}>
+               {ranked.length === 0 ? (
+                 <Text
+                   style={{
+                     color: colors["color-text-secondary"],
+                     fontSize: TYPOGRAPHY.body.fontSize,
+                     textAlign: "center",
+                     paddingVertical: 12,
+                   }}
+                 >
+                   {RACE_EMPTY}
+                 </Text>
+               ) : (
+                 ranked.map((r) => {
+                   const memberRow = cachedRoster.find((m) => m.name === r.name);
+                   return (
+                     <View
+                       key={r.name}
+                       style={{
+                         flexDirection: "row",
+                         alignItems: "center",
+                         justifyContent: "space-between",
+                         minHeight: 52,
+                         paddingVertical: 6,
+                         borderBottomWidth: 1,
+                         borderBottomColor: mix(colors["color-text-primary"], "transparent", 6),
+                       }}
+                     >
+                       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                         <RowAvatar
+                           emoji={memberRow?.emoji || "👤"}
+                           memberColor={memberColorOf(r.name)}
+                           fallbackRail={colors["color-accent-selected"]}
+                         />
+                         <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600", flex: 1 }}>
+                           {medal(r.rank, r.points)} {r.name}
+                         </Text>
+                       </View>
+                       <Text style={{ color: colors["color-accent-mint"] ?? colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                         {r.points}pts
+                       </Text>
+                     </View>
+                   );
+                 })
+               )}
+             </Material>
+           </SectionCard>
+         </View>
        );
      }
 
@@ -1139,28 +1292,51 @@ export function TasksPage() {
                     disabled={busy}
                     onPress={() => openIntent({ kind: "approve-all", taskIds: approvalQueue.map((t) => t.id) })}
                   >
-                    {`Approve all (${approvalQueue.length})`}
+                    {`✓ Approve all (${approvalQueue.length})`}
                   </SoftButton>
                 ) : null}
               </View>
               {approvalQueue.map((t) => {
                 const byName = t.pendingApproval?.byName ? t.pendingApproval.byName.split(" ")[0] : "";
                 const award = t.pendingApproval?.points ?? t.points;
+                const kid = byName || t.assignee.split(" ")[0];
                 return (
-                  <View key={t.id} style={{ gap: 10 }}>
-                    <SchedRow
-                      testID={`queue-row-${t.id}`}
-                      toneKey="color-accent-amber"
-                      leading={<RowAvatar emoji={t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={colors["color-accent-amber"]} />}
-                      title={t.title}
-                      subtitle={[byName, tappedLabel(t), WAITING_COPY].filter(Boolean).join(" · ")}
-                      trailing={<ToneChip label={`+${award}pts`} toneKey="color-accent-amber" />}
-                    />
-                    <View style={{ flexDirection: "row", gap: 12 }}>
+                  <View
+                    key={t.id}
+                    testID={`queue-row-${t.id}`}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      paddingVertical: 10,
+                      borderBottomWidth: 1,
+                      borderBottomColor: mix(colors["color-accent-amber"] ?? colors["color-accent"], "transparent", 15),
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                      <RowAvatar emoji={t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={colors["color-accent-amber"]} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          <Text style={{ color: colors["color-accent-amber"] ?? colors["color-accent"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                            {`+${award}pts`}
+                          </Text>
+                          <Text style={{ color: colors["color-accent-amber"] ?? colors["color-accent"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "500" }}>
+                            {`for ${kid}`}
+                          </Text>
+                        </View>
+                        <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }} numberOfLines={1}>
+                          {t.title}
+                        </Text>
+                        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                          {[tappedLabel(t), WAITING_COPY].filter(Boolean).join(" · ")}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
                       <SoftButton
                         variant="success"
                         size="sm"
-                        style={{ flex: 1 }}
                         testID={`task-approve-${t.id}`}
                         disabled={busy}
                         onPress={() => openIntent({ kind: "approve", taskId: t.id })}
@@ -1170,7 +1346,6 @@ export function TasksPage() {
                       <SoftButton
                         variant="ghost"
                         size="sm"
-                        style={{ flex: 1 }}
                         testID={`task-sendback-${t.id}`}
                         disabled={busy}
                         onPress={() => openIntent({ kind: "send-back", taskId: t.id })}
@@ -1235,56 +1410,71 @@ export function TasksPage() {
                   ))}
                 </View>
               ) : null}
-              {/* One header per week (web groupCompletedTasksByWeek): the
-                  label comes from the row's OWN server week key, so an older
-                  week is never labelled "This week". */}
-              {weekGroups.map((group) => (
-                <View key={group.weekKey || "unattributed"} style={{ gap: 8 }}>
-                  {group.weekKey ? (
-                    <Text
-                      style={{
-                        color: colors["color-text-primary"],
-                        fontSize: TYPOGRAPHY.label.fontSize,
-                        fontWeight: "700",
-                      }}
-                    >
-                      {`${weekGroupLabel(group.weekKey, weekData?.weekStart)} · ${group.rows.length} chore${group.rows.length === 1 ? "" : "s"}`}
-                    </Text>
-                  ) : (
-                    <Text
-                      style={{
-                        color: colors["color-text-secondary"],
-                        fontSize: TYPOGRAPHY.label.fontSize,
-                      }}
-                    >
-                      Earlier — the family server never recorded a day for these.
-                    </Text>
-                  )}
-                  {group.rows.map((t) => (
-                    <View key={t.id} style={{ gap: 8 }}>
-                      <SchedRow
-                        testID={`completed-row-${t.id}`}
-                        toneKey="color-accent-mint"
-                        leading={<RowAvatar emoji={t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={colors["color-accent-mint"]} />}
-                        title={t.title}
-                        subtitle={completerMeta(t)}
-                        trailing={<ToneChip label="Done" toneKey="color-accent-mint" />}
-                      />
-                      {canUndo(t) ? (
-                        <SoftButton
-                          variant="ghost"
-                          size="sm"
-                          testID={`task-undo-${t.id}`}
-                          disabled={busy}
-                          onPress={() => openIntent({ kind: "undo", taskId: t.id })}
-                        >
-                          ↩ Take it back
-                        </SoftButton>
-                      ) : null}
+              {/* One header per week (.tasks-week-group) */}
+              {weekGroups.map((group) => {
+                const label = group.weekKey ? weekGroupLabel(group.weekKey, weekData?.weekStart) : "Earlier";
+                return (
+                  <View
+                    key={group.weekKey || "unattributed"}
+                    testID="tasks-week-group"
+                    style={{
+                      borderRadius: 20,
+                      backgroundColor: mix(colors["color-text-primary"], "transparent", 3),
+                      padding: 12,
+                      gap: 8,
+                      borderWidth: 1,
+                      borderColor: mix(colors["color-text-primary"], "transparent", 6),
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text
+                        style={{
+                          color: colors["color-text-primary"],
+                          fontSize: TYPOGRAPHY.label.fontSize,
+                          fontWeight: "700",
+                        }}
+                      >
+                        {label}
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors["color-text-secondary"],
+                          fontSize: TYPOGRAPHY.label.fontSize,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {`${group.rows.length} chore${group.rows.length === 1 ? "" : "s"}`}
+                      </Text>
                     </View>
-                  ))}
-                </View>
-              ))}
+                    {group.rows.map((t) => (
+                      <View key={t.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <View style={{ flex: 1 }}>
+                          <SchedRow
+                            testID={`completed-row-${t.id}`}
+                            toneKey="color-accent-mint"
+                            leading={<RowAvatar emoji={t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={colors["color-accent-mint"]} />}
+                            title={t.title}
+                            subtitle={completerMeta(t)}
+                            trailing={<ToneChip label="Done" toneKey="color-accent-mint" />}
+                          />
+                        </View>
+                        {canUndo(t) ? (
+                          <SoftButton
+                            variant="ghost"
+                            size="sm"
+                            testID={`task-undo-${t.id}`}
+                            disabled={busy}
+                            onPress={() => openIntent({ kind: "undo", taskId: t.id })}
+                            style={{ minHeight: 36, paddingHorizontal: 10 }}
+                          >
+                            ↩
+                          </SoftButton>
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
+                );
+              })}
               {waitingRows.length === 0 && historyRows.length === 0 ? (
                 <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>
                   Nothing completed yet this week.
@@ -1334,10 +1524,7 @@ export function TasksPage() {
   return (
     <View testID="tasks-page" style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 180, gap: 20 }} showsVerticalScrollIndicator={false}>
-      {/* Signed-out banner (web SyncStatusBanner parity): the reference banner
-          is a plain surface-0 pill with a tone border and NO wash — Material
-          paints its own layers above any backgroundColor we pass, so the
-          honest port carries the border alone. */}
+      {/* Signed-out banner (web SyncStatusBanner parity) */}
       {!member ? (
         <SignedOutBanner
           testID="tasks-guest-banner"
@@ -1345,15 +1532,37 @@ export function TasksPage() {
           onPress={() => router.push("/")}
           style={{ paddingHorizontal: 20, paddingVertical: 14, minHeight: MIN_TARGET_DP, justifyContent: "center" }}
           title={SIGNED_OUT_BANNER}
+          action={
+            <Text style={{ color: colors["color-accent-ink-amber"] ?? colors["color-accent-amber"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", textDecorationLine: "underline" }}>
+              Sign in with your PIN →
+            </Text>
+          }
         />
       ) : null}
 
         {/* Header (web hero parity) */}
         <View>
-          <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", letterSpacing: 2 }}>
+          <Text style={{ color: colors["color-text-muted"] ?? colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", letterSpacing: 2 }}>
             {`${stats.pending} PENDING`}
           </Text>
-          <Text style={{ color: colors["color-text-primary"], fontSize: 54, fontWeight: "700", marginTop: 4 }}>✅ Tasks</Text>
+          <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginTop: 4 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Text style={{ color: colors["color-text-primary"], fontSize: 44, fontWeight: "400" }}>
+                <Text style={{ fontSize: 28 }}>✅ </Text>
+                Tasks
+              </Text>
+            </View>
+            {isParent ? (
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <SoftButton variant="secondary" size="sm" testID="tasks-add-chore" onPress={() => setAddChoreOpen(true)} style={{ minHeight: 38 }}>
+                  + Add Chore
+                </SoftButton>
+                <SoftButton variant="secondary" size="sm" testID="tasks-bonus-penalty" onPress={() => setBonusOpen(true)} style={{ minHeight: 38 }}>
+                  ± Bonus/Penalty
+                </SoftButton>
+              </View>
+            ) : null}
+          </View>
           {stale && member ? (
             <Text
               testID="tasks-stale"
@@ -1404,37 +1613,25 @@ export function TasksPage() {
         <View style={{ flexDirection: "row", gap: 12 }}>
           <StatTile testID="tasks-stat-pending" icon="📋" value={stats.pending} label="Pending" detail="Open tasks" tone="warning" />
           <StatTile testID="tasks-stat-completed" icon="🎉" value={stats.completedThisWeek} label="Completed" detail="This week" tone="success" />
-          <StatTile testID="tasks-stat-earned" icon="🏆" value={stats.earnedThisWeek} label="Earned this week" detail="All-time unavailable" tone="accent" />
+          <StatTile testID="tasks-stat-earned" icon="🏆" value={stats.earnedThisWeek} label="Earned this week" detail={earnedDetail} tone="accent" />
         </View>
 
-        {isParent ? (
-          <View style={{ gap: 10 }}>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <SoftButton variant="secondary" testID="tasks-add-chore" onPress={() => setAddChoreOpen(true)} style={{ flex: 1, minHeight: MIN_TARGET_DP }}>
-                + Add Chore
-              </SoftButton>
-              <SoftButton variant="secondary" testID="tasks-bonus-penalty" onPress={() => setBonusOpen(true)} style={{ flex: 1, minHeight: MIN_TARGET_DP }}>
-                ± Bonus/Penalty
-              </SoftButton>
-            </View>
-            {queueRows.length > 0 ? (
-              <Material tier="thin" testID="tasks-queued-commands-banner" style={{ borderRadius: 16, padding: 12, gap: 8, borderWidth: 1, borderColor: mix(colors["color-accent-amber"], "transparent", 40) }}>
-                <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
-                  Queued commands
+        {isParent && queueRows.length > 0 ? (
+          <Material tier="thin" testID="tasks-queued-commands-banner" style={{ borderRadius: 16, padding: 12, gap: 8, borderWidth: 1, borderColor: mix(colors["color-accent-amber"], "transparent", 40) }}>
+            <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+              Queued commands
+            </Text>
+            {queueRows.map((q: any, i: number) => (
+              <View key={String(q?.operationId ?? i)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, flex: 1 }} numberOfLines={1}>
+                  {q?.action ?? "command"} · {q?.displayTarget?.title ?? q?.operationId ?? ""}
                 </Text>
-                {queueRows.map((q: any, i: number) => (
-                  <View key={String(q?.operationId ?? i)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                    <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, flex: 1 }} numberOfLines={1}>
-                      {q?.action ?? "command"} · {q?.displayTarget?.title ?? q?.operationId ?? ""}
-                    </Text>
-                    <SoftButton variant="ghost" size="sm" testID={`tasks-queue-cancel-${q?.operationId ?? i}`} onPress={() => void cancelQueueRow(String(q?.operationId ?? ""))}>
-                      Cancel
-                    </SoftButton>
-                  </View>
-                ))}
-              </Material>
-            ) : null}
-          </View>
+                <SoftButton variant="ghost" size="sm" testID={`tasks-queue-cancel-${q?.operationId ?? i}`} onPress={() => void cancelQueueRow(String(q?.operationId ?? ""))}>
+                  Cancel
+                </SoftButton>
+              </View>
+            ))}
+          </Material>
         ) : null}
 
         {/* View switch (web SegmentedControl) */}
@@ -1495,6 +1692,36 @@ export function TasksPage() {
             keyboardType="numeric"
             style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, padding: 12, borderRadius: 12, backgroundColor: colors["color-surface-2"] }}
           />
+          {cachedRoster.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+              {cachedRoster.map((m) => {
+                const selected = newChoreAssignee === m.name;
+                return (
+                  <Pressable
+                    key={m.name}
+                    testID={`add-chore-chip-${m.name}`}
+                    onPress={() => setNewChoreAssignee(m.name)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 16,
+                      backgroundColor: selected ? mix(colors["color-accent-selected"] ?? colors["color-accent"], "transparent", 25) : colors["color-surface-2"],
+                      borderWidth: 1,
+                      borderColor: selected ? (colors["color-accent-selected"] ?? colors["color-accent"]) : "transparent",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Text style={{ fontSize: 16 }}>{m.emoji}</Text>
+                    <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: selected ? "700" : "500" }}>
+                      {m.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
           <TextInput
             testID="add-chore-assignee"
             placeholder="Assignee"
@@ -1510,6 +1737,36 @@ export function TasksPage() {
 
       <Modal visible={bonusOpen} onClose={() => setBonusOpen(false)} title="Bonus / penalty" testID="bonus-modal" dismissable={!busy}>
         <View style={{ gap: 12 }}>
+          {cachedRoster.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+              {cachedRoster.map((m) => {
+                const selected = bonusTarget === m.name;
+                return (
+                  <Pressable
+                    key={m.name}
+                    testID={`bonus-chip-${m.name}`}
+                    onPress={() => setBonusTarget(m.name)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 16,
+                      backgroundColor: selected ? mix(colors["color-accent-selected"] ?? colors["color-accent"], "transparent", 25) : colors["color-surface-2"],
+                      borderWidth: 1,
+                      borderColor: selected ? (colors["color-accent-selected"] ?? colors["color-accent"]) : "transparent",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Text style={{ fontSize: 16 }}>{m.emoji}</Text>
+                    <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: selected ? "700" : "500" }}>
+                      {m.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
           <TextInput
             testID="bonus-target"
             placeholder="Target member"
