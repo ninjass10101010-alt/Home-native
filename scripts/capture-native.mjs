@@ -2,13 +2,21 @@
 /**
  * capture-native.mjs — deterministic 1080×1920 capture harness for the RN app.
  *
- * - If an adb target is online: deep-link consuela://<route>?ws=<ws> on device and
- *   grab a PNG via adb screencap.
- * - Otherwise: launch Playwright Chromium at the wall viewport against the Expo
- *   web preview (http://localhost:3200), seed theme/boost/session state, wait 900ms,
- *   screenshot into screenshots/<ws>/<route>-<auth>-<theme>.png.
+ * - If an adb target is online (and --web is absent): deep-link
+ *   consuela://<route>?ws=<ws> with the app package + `am start -W`, poll
+ *   `dumpsys window displays` until com.garciafam.consuela owns the foreground
+ *   window (otherwise it refuses to screenshot the launcher), settle
+ *   (--wait, else 4500ms cold / 2200ms warm), then grab a PNG via adb screencap.
+ * - Otherwise (or forced with --web): launch Playwright Chromium at the wall
+ *   viewport against the Expo web preview (--base, default
+ *   http://localhost:3200), seed theme/boost/accent + the
+ *   consuela-auth-user/consuela_session session state, wait (--wait, else
+ *   1600ms), screenshot into
+ *   screenshots/<ws>/<route>-<auth>-<theme>.png (both paths share the name).
  *
- * Usage: node scripts/capture-native.mjs [--ws <name>] [--route <path>] [--auth guest|child|parent] [--theme light|dark|dark-boost]
+ * Usage: node scripts/capture-native.mjs [--ws <name>] [--route <path>]
+ *   [--auth guest|child|parent] [--theme light|dark|dark-boost]
+ *   [--web] [--wait <ms>] [--base <url>]
  */
 import { execSync, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
@@ -27,6 +35,10 @@ const WS = flag("ws", "native");
 const ROUTE = flag("route", "/");
 const AUTH = flag("auth", "guest");
 const THEME = flag("theme", "dark");
+const BASE = flag("base", "http://localhost:3200");
+const FORCE_WEB = args.includes("--web");
+const WAIT_MS = Number(flag("wait", "0")) || 0;
+const PKG = "com.garciafam.consuela";
 
 function hasOnlineDevice() {
   try {
@@ -60,33 +72,55 @@ function mintSession(secret, { memberId, name, role }) {
 }
 
 function safeRoute(route) {
-  const slug = String(route || "/").replace(/^\/+|\/+$/g, "").replace(/\//g, "-");
+  const slug = String(route || "/").replace(/^\/+|\/+$/g, "").replace(/[/?&=]+/g, "-");
   return slug || "index";
 }
 
 async function main() {
   const dir = join(ROOT, "screenshots", WS);
   mkdirSync(dir, { recursive: true });
+  const outFile = join(dir, `${safeRoute(ROUTE)}-${AUTH}-${THEME}.png`);
 
-  if (hasOnlineDevice()) {
+  if (!FORCE_WEB && hasOnlineDevice()) {
     const routePart = String(ROUTE).replace(/^\/+/, "");
-    const deeplink = `consuela://${routePart}?ws=${encodeURIComponent(WS)}`;
-    spawnSync("adb", ["shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", deeplink], {
-      stdio: "ignore",
-    });
-    await new Promise((r) => setTimeout(r, 1200));
-    const outPath = join(dir, `${WS}.png`);
-    const fd = openSync(outPath, "w");
+    const deeplink = `consuela:///${routePart}${routePart.includes("?") ? "&" : "?"}ws=${encodeURIComponent(WS)}`;
+    const wasRunning =
+      spawnSync("adb", ["shell", "pidof", PKG], { encoding: "utf8" }).stdout.trim().length > 0;
+    const startRes = spawnSync(
+      "adb",
+      ["shell", "am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", deeplink, PKG],
+      { encoding: "utf8" }
+    );
+    if (startRes.status !== 0 || /Error:/i.test(String(startRes.stdout) + String(startRes.stderr))) {
+      console.error(`capture-native: am start failed for ${PKG}`);
+      process.exit(1);
+    }
+    const deadline = Date.now() + 10_000;
+    let focused = false;
+    while (Date.now() < deadline) {
+      const win = spawnSync("adb", ["shell", "dumpsys", "window", "displays"], { encoding: "utf8" }).stdout;
+      if (win && win.includes(`${PKG}/`)) {
+        focused = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    if (!focused) {
+      console.error(`capture-native: ${PKG} did not reach foreground focus; refusing to screenshot launcher`);
+      process.exit(1);
+    }
+    const settleMs = WAIT_MS || (wasRunning ? 2200 : 4500);
+    await new Promise((r) => setTimeout(r, settleMs));
+    const fd = openSync(outFile, "w");
     spawnSync("adb", ["exec-out", "screencap", "-p"], { stdio: ["ignore", fd, "ignore"] });
     closeSync(fd);
-    console.log(`capture-native: ${outPath}`);
+    console.log(`capture-native: ${outFile}`);
     return;
   }
 
-  const BASE = "http://localhost:3200";
   const probe = await fetch(BASE).catch(() => null);
   if (!probe) {
-    console.error(`capture-native: ${BASE} unreachable — start Expo web first (npm run web)`);
+    console.error(`capture-native: ${BASE} unreachable — start Expo web first (npx expo start --web --port 3200)`);
     process.exit(1);
   }
 
@@ -94,11 +128,11 @@ async function main() {
   let token = null;
   let profile = null;
   if (AUTH === "child") {
-    profile = { id: "aurora", pbId: "aurora", name: "Aurora", role: "child", emoji: "👧", color: "#4F8EDB", age: 8 };
-    if (secret) token = mintSession(secret, { memberId: "aurora", name: "Aurora", role: "child" });
+    profile = { id: "child-1", pbId: "child-1", name: "Child 1", role: "child", emoji: "👧", color: "sky", age: 8 };
+    if (secret) token = mintSession(secret, { memberId: "child-1", name: "Child 1", role: "child" });
   } else if (AUTH === "parent") {
-    profile = { id: "rebecca", pbId: "rebecca", name: "Rebecca (Mom)", role: "parent", emoji: "👩", color: "#B26A3D" };
-    if (secret) token = mintSession(secret, { memberId: "rebecca", name: "Rebecca (Mom)", role: "parent" });
+    profile = { id: "mom", pbId: "mom", name: "Mom", role: "parent", emoji: "🐱", color: "gold", age: 38 };
+    if (secret) token = mintSession(secret, { memberId: "mom", name: "Mom", role: "parent" });
   }
 
   const browser = await chromium.launch();
@@ -128,11 +162,10 @@ async function main() {
   const page = await ctx.newPage();
   const urlPath = ROUTE.startsWith("/") ? ROUTE : `/${ROUTE}`;
   await page.goto(`${BASE}${urlPath}`, { waitUntil: "networkidle", timeout: 30_000 }).catch(() => {});
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(WAIT_MS || 1600);
 
-  const file = join(dir, `${safeRoute(ROUTE)}-${AUTH}-${THEME}.png`);
-  await page.screenshot({ path: file, fullPage: false });
-  console.log(`capture-native: ${file}`);
+  await page.screenshot({ path: outFile, fullPage: false });
+  console.log(`capture-native: ${outFile}`);
 
   await ctx.close();
   await browser.close();

@@ -13,6 +13,7 @@ import {
   KID_SESSION_WARN_MS,
 } from "../src/state/AuthProvider";
 import type { ServerMember } from "../src/api/types";
+import { _resetSessionCookieCache } from "../src/api/session";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -94,9 +95,13 @@ describe("mode derivation + PIN rules (web parity)", () => {
 });
 
 describe("AuthProvider", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    // Hydration reads the profile cache + session cookie — isolate both, or
+    // one test's persisted profile leaks into the next test's cold start.
+    await AsyncStorage.clear();
+    _resetSessionCookieCache();
   });
   afterEach(() => jest.useRealTimers());
 
@@ -123,6 +128,37 @@ describe("AuthProvider", () => {
     const { result } = renderHook(() => useAuth(), { wrapper: wrap });
     await settleFor(result);
     expect(result.current.member).toBeNull();
+  });
+
+  it("whoami null + cached profile → cached display profile paints (capture fallback)", async () => {
+    mockSecureStore.getItemAsync.mockResolvedValueOnce("cookie");
+    authApi.whoami.mockResolvedValueOnce(null);
+    await AsyncStorage.setItem("consuela-auth-user", JSON.stringify(parent));
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await settleFor(result);
+    expect(result.current.hydrated).toBe(true);
+    expect(result.current.member?.name).toBe("Rebecca (Mom)");
+    expect(result.current.mode).toBe("adult");
+  });
+
+  it("offline cold start (whoami rejects) + cached profile → cached profile paints", async () => {
+    mockSecureStore.getItemAsync.mockResolvedValueOnce("cookie");
+    authApi.whoami.mockRejectedValueOnce(new Error("network down"));
+    await AsyncStorage.setItem("consuela-auth-user", JSON.stringify(kid));
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await settleFor(result);
+    expect(result.current.hydrated).toBe(true);
+    expect(result.current.member?.name).toBe("Aurora");
+    expect(result.current.mode).toBe("kid");
+  });
+
+  it("no session cookie + cached profile → cached profile paints", async () => {
+    await AsyncStorage.setItem("consuela-auth-user", JSON.stringify(parent));
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await settleFor(result);
+    expect(result.current.hydrated).toBe(true);
+    expect(result.current.member?.name).toBe("Rebecca (Mom)");
+    expect(result.current.mode).toBe("adult");
   });
 
   it("signIn with PIN → member + adult mode + profile persisted", async () => {

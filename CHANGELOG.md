@@ -4,6 +4,27 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — feat(capture): WS-0 Task 0.1 — deterministic visual-capture
+  harness + cached-profile auth fallback (573 tests, tsc 0, lint 0 errors,
+  tokens/a11y CLEAN). `scripts/capture-native.mjs` gains `--web` (force the
+  1080×1920 Playwright preview even with an emulator attached), `--wait`/`--base`,
+  and an adb branch that refuses to screenshot the launcher: `am start -W` now
+  names the `com.garciafam.consuela` package, the script polls
+  `dumpsys window displays` for the app's foreground window (10s deadline)
+  before screencapping, settles 2200ms warm / 4500ms cold (was a flat 1200ms
+  that caught Hermes mid-mount), and both paths name the file
+  `<route>-<auth>-<theme>.png` (the adb branch used to dump `<ws>.png`).
+  `scripts/screenshot.sh` does the same focus check and errors out instead of
+  capturing the Android home screen (the `ws1-ui-polish/home-wall.png` bug).
+  `AuthProvider` hydration no longer wipes the session when `whoami()` answers
+  null or throws offline — the cached `consuela-auth-user` paints the rail
+  instead (the Playwright harness seeds it; a cookie-less cold start paints it
+  too), and a cache-less dead session still clears the cookie; `tests/auth.test.tsx`
+  now isolates the profile/cookie caches per test and pins all three fallback
+  paths (whoami-null, offline, no-cookie). Behavior delta to know: the hydrate
+  effect no longer arms the idle/warn timers on the live-whoami path — expiry
+  starts at the first `poke()` after hydration instead.
+
 - 2026-10-14 — fix(home): WS-3 Adult Home — critic round 3 (all Mediums + the
   Lows that had teeth closed; 541 tests, tsc 0, lint 0 errors, tokens/a11y
   CLEAN). `?day=` focus proof tightened: the test now asserts the focused

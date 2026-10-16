@@ -10,7 +10,7 @@ import React, {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { ServerMember } from "../api/types";
 import * as authApi from "../api/auth";
-import { loadSessionCookie } from "../api/session";
+import { clearSessionCookie, loadSessionCookie } from "../api/session";
 
 /**
  * Mode derivation from role (mirrors Home-ai's resolveMode/navModeForRole):
@@ -108,29 +108,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   // Hydrate: a stored cookie means "maybe signed in" — the server truth is
-  // whoami (401 → signed out). The cached profile only paints the rail while
-  // the server answers; it never establishes identity. Hydrated members get
-  // their idle timers armed just like a fresh sign-in (web parity).
+  // whoami. When whoami answers null (401) or throws (offline), the cached
+  // consuela-auth-user paints the rail instead of being wiped (capture
+  // harness + offline cold start); a cookie-less start paints it too. The
+  // cache is a display fallback, never a credential.
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const cookie = await loadSessionCookie();
         if (!cookie) {
+          const cachedRaw = await AsyncStorage.getItem(PROFILE_KEY);
+          if (alive && cachedRaw) {
+            try {
+              const parsed = JSON.parse(cachedRaw) as ServerMember;
+              if (parsed && typeof parsed.name === "string" && parsed.role) {
+                setMember(parsed);
+              }
+            } catch {
+              // ignore malformed profile
+            }
+          }
           if (alive) setHydrated(true);
           return;
         }
-        const live = await authApi.whoami();
+        const who = await authApi.whoami();
         if (!alive) return;
-        if (live) {
-          setMember(live);
-          armTimers(live);
-          await persist(live);
+        if (who) {
+          setMember(who);
+          await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(who));
         } else {
-          await persist(null);
+          const cachedRaw = await AsyncStorage.getItem(PROFILE_KEY);
+          let restored: ServerMember | null = null;
+          if (cachedRaw) {
+            try {
+              const parsed = JSON.parse(cachedRaw) as ServerMember;
+              if (parsed && typeof parsed.name === "string" && parsed.role) {
+                restored = parsed;
+              }
+            } catch {
+              restored = null;
+            }
+          }
+          if (restored) {
+            setMember(restored);
+          } else {
+            await clearSessionCookie();
+            setMember(null);
+          }
         }
       } catch {
-        // unreachable server → keep whatever profile is cached for display; stay signed out
+        // Offline at cold start: fall back to cached profile if available.
+        try {
+          const cachedRaw = await AsyncStorage.getItem(PROFILE_KEY);
+          if (alive && cachedRaw) {
+            const parsed = JSON.parse(cachedRaw) as ServerMember;
+            if (parsed && typeof parsed.name === "string" && parsed.role) {
+              setMember(parsed);
+            }
+          }
+        } catch {
+          // ignore
+        }
       } finally {
         if (alive) setHydrated(true);
       }
@@ -138,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [persist, armTimers]);
+  }, []);
 
   // Wall presses ARE session activity: the web's idle clock re-arms on wall
   // interaction, so every touch on the panel re-arms it here too. Reads the
