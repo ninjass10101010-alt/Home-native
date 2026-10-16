@@ -1,9 +1,12 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { ACCENTS, TYPOGRAPHY } from "../../theme/tokens";
 import { useTheme } from "../../theme/ThemeProvider";
+import { useAuth } from "../../state/AuthProvider";
 import { mix } from "../../theme/mix";
+import { Material } from "../../theme/Material";
 import { mixAlpha } from "../../ui/SoftButton";
 import { READ_COPY, READ_COPY_STALE, READ_RETRY_LABEL, type ReadFailure } from "./data";
 import { WIDGET_TONES } from "../widgets";
@@ -32,8 +35,8 @@ export function pendingSurface(
   theme: "dark" | "light"
 ): string {
   return theme === "dark"
-    ? mix(colors["color-surface-7"] ?? "", colors["color-text-primary"] ?? "", 78)
-    : mix(colors["color-surface-2"] ?? "", colors["color-text-primary"] ?? "", 55);
+    ? mix(colors["color-surface-5"] ?? "", colors["color-surface-7"] ?? "", 50)
+    : mix(colors["color-surface-2"] ?? "", colors["color-surface-3"] ?? "", 50);
 }
 
 export interface WidgetFrameProps {
@@ -88,7 +91,9 @@ export function WidgetFrame({
   showDisc = false,
   children,
 }: WidgetFrameProps) {
-  const { colors, theme, accentColor } = useTheme();
+  const { colors, theme, accentColor, reduceMotion } = useTheme();
+  const { member, hydrated } = useAuth();
+  const signedOut = hydrated && !member;
 
   const tone = ACCENTS[theme]?.[WIDGET_TONES[id as keyof typeof WIDGET_TONES] ?? "nori"] ?? accentColor;
   const amber = colors["color-accent-amber"] ?? accentColor;
@@ -218,7 +223,9 @@ export function WidgetFrame({
   //    status "ready" and render their own honest empty state as children.
   const failed = !hasData && (failure !== null || status === "error");
   if (failed) {
-    const shown: ReadFailure = failure ?? "error";
+    // A signed-out session must never claim a network fault / couldn't-load
+    // error. Gate on signed-out FIRST, ahead of READ_COPY[shown].
+    const shown: ReadFailure = signedOut ? "unauthorised" : (failure ?? "error");
     const lock = shown === "unauthorised";
     // Semantic pill tone: hard errors read rose; the guest PIN gate and
     // connectivity failures read amber (web ReadStatePill parity).
@@ -280,11 +287,7 @@ export function WidgetFrame({
       <View testID={`${id}-loading`} accessibilityLabel={`Loading ${title}`} style={{ flex: 1, gap: 12 }}>
         {headerBlock}
         {[0, 1].map((i) => (
-          <View
-            key={i}
-            testID={`${id}-skeleton-row-${i}`}
-            style={{ height: 64, borderRadius: 20, backgroundColor: pendingSurface(colors, theme) }}
-          />
+          <SkeletonRow key={i} id={id} i={i} colors={colors} theme={theme} reduceMotion={reduceMotion} />
         ))}
       </View>
     );
@@ -315,5 +318,31 @@ export function WidgetFrame({
     </View>
   );
 }
+
+
+
+function SkeletonRow({ id, i, colors, theme, reduceMotion }: {
+  id: string; i: number; colors: Record<string,string|undefined>; theme: "dark"|"light"; reduceMotion: boolean;
+}) {
+  const pulse = useSharedValue(reduceMotion ? 1 : 0.55);
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  React.useEffect(() => {
+    if (reduceMotion) {
+      pulse.value = 1; // eslint-disable-line react-hooks/immutability
+      return;
+    }
+    pulse.value = withRepeat(withSequence(withTiming(1, { duration: 900 }), withTiming(0.55, { duration: 900 })), -1, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- shared value write is idiom
+  }, [reduceMotion]);
+  return (
+    <Material tier="thin" style={{ height: 64, borderRadius: 20, overflow: "hidden" }}>
+      <Animated.View
+        testID={`${id}-skeleton-row-${i}`}
+        style={[animatedStyle, { flex: 1, backgroundColor: pendingSurface(colors, theme) }]}
+      />
+    </Material>
+  );
+}
+
 
 export default WidgetFrame;

@@ -3,6 +3,7 @@ import { Image, Pressable, ScrollView, Text, View, ViewStyle } from "react-nativ
 import { useTheme } from "../theme/ThemeProvider";
 import { MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { Material } from "../theme/Material";
+import { IconButton } from "./IconButton";
 import { mix } from "../theme/mix";
 import { memberAccentHex } from "../theme/memberColor";
 
@@ -168,16 +169,13 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
               </Text>
             </Pressable>
           ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Sign out"
+            <IconButton
+              icon={<Text>⏻</Text>}
+              label="Sign out"
+              variant="danger"
+              size="sm"
               onPress={() => setArming(true)}
-              style={{ alignItems: "center", justifyContent: "center", minHeight: MIN_TARGET_DP, paddingHorizontal: 16 }}
-            >
-              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
-                Sign out
-              </Text>
-            </Pressable>
+            />
           )
         ) : null}
       </ScrollView>

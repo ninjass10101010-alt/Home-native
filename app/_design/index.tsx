@@ -1,10 +1,12 @@
 import React from "react";
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../src/theme/ThemeProvider";
 import { ACCENTS, TYPOGRAPHY, MOTION } from "../../src/theme/tokens";
 import { Screen } from "../../src/theme/Screen";
 import { Material } from "../../src/theme/Material";
+import { mix, accentDeepened } from "../../src/theme/mix";
 import { useSync } from "../../src/state/SyncManager";
 import { useAuth } from "../../src/state/AuthProvider";
 import { Surface } from "../../src/ui/Surface";
@@ -50,7 +52,23 @@ function DeleteGlyph({ color, size = 22 }: { color: string; size?: number }) {
   );
 }
 
-/** Reference-shaped section card: sectionTitle header + subtitle in a material. */
+/**
+ * Reference-shaped section card: a LIGHTER header band (sectionTitle + subtitle)
+ * over the body, divided by a 1px hairline — the two-part shape every section
+ * card in `reference/design-system/parent-dark.png` has.
+ *
+ * WS-0 round 3, finding 1. Measured off the reference at the card's left
+ * padding gutter: header band relY 0.0348 mean / 0.0379 peak, body 0.0257,
+ * with a 1px rule at rgb(64,75,95). The native Section had been ONE flat
+ * `regular` surface with no rule, so its header was 3% DARKER than its body and
+ * nothing divided the two — a section card read as a rounded slab.
+ *
+ * Tier choice: the body is the ladder's `thin` tier (0.0242 composited, the
+ * reference's own 0.0257) and the header band is `thick` (0.0386) — a 1.59x
+ * internal step. The ladder's own single-step ratios (regular/thin 1.21x,
+ * thick/regular 1.32x) cannot reach the 1.4x the composition pin demands, so
+ * the band deliberately spans thin->thick rather than sitting one rung up.
+ */
 function Section({
   title,
   subtitle,
@@ -62,8 +80,24 @@ function Section({
 }) {
   const { colors } = useTheme();
   return (
-    <Material tier="regular" style={{ borderRadius: 28, padding: 20, marginBottom: 20, gap: 14 }}>
-      <View>
+    <Material
+      tier="thin"
+      testID="showcase-section-body"
+      style={{ borderRadius: 28, marginBottom: 20, paddingTop: 0, paddingHorizontal: 0, paddingBottom: 0 }}
+    >
+      <Material
+        tier="thick"
+        testID="showcase-section-header"
+        style={{
+          borderTopLeftRadius: 28,
+          borderTopRightRadius: 28,
+          paddingHorizontal: 20,
+          paddingTop: 16,
+          paddingBottom: 14,
+          borderBottomWidth: 1,
+          borderBottomColor: colors["color-border"],
+        }}
+      >
         <Text
           style={{
             color: colors["color-text-primary"],
@@ -88,8 +122,8 @@ function Section({
             {subtitle}
           </Text>
         ) : null}
-      </View>
-      {children}
+      </Material>
+      <View style={{ padding: 20, gap: 14 }}>{children}</View>
     </Material>
   );
 }
@@ -113,6 +147,7 @@ export default function DesignKitShowcase() {
   const { member } = useAuth();
   const { width } = useWindowDimensions();
   const twoColumn = width >= TWO_COL_MIN_WIDTH;
+  const mint = colors["color-accent-mint"] ?? accentColor;
   const [seg, setSeg] = React.useState("home");
   const [toggled, setToggled] = React.useState(true);
   const [text, setText] = React.useState("Pack lunch");
@@ -299,18 +334,34 @@ export default function DesignKitShowcase() {
     <Section title="Patterns" subtitle="Stat tile, day strip, navigation rows">
       <Surface variant="glass-strong" style={{ borderRadius: 20, padding: 20 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <Text
-            testID="specimen-stat"
-            style={{
-              color: colors["color-text-primary"],
-              fontSize: TYPOGRAPHY.stat.fontSize,
-              fontWeight: "700",
-              // figures that tick must not reflow their own column
-              fontVariant: ["tabular-nums"],
-            }}
+          {/* Reference patterns card: the hero figure is a GREEN GRADIENT tile
+              with a soft green glow bleeding past its edges (measured
+              reference tile relY 0.053–0.096, chroma 25–33, white ink at
+              7.2–10.2:1) — not a flat ink on flat glass. The stops use the
+              same accent-deepened recipe as SoftButton's success variant, so
+              the white ink keeps 5.7:1 dark / 9.8:1 light at its darkest stop
+              and 4.1:1 / 7.5:1 at its lightest. */}
+          <View testID="specimen-stat-glow" style={{ position: "absolute", left: -18, top: -10, width: 150, height: 64, borderRadius: 32, backgroundColor: mixAlpha(colors["color-accent-mint"], 0.18) }} pointerEvents="none" />
+          <LinearGradient
+            testID="specimen-stat-fill"
+            colors={[accentDeepened(mint, 48), accentDeepened(mint, 36)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ borderRadius: 12 }}
           >
-            240
-          </Text>
+            <Text
+              testID="specimen-stat"
+              style={{
+                color: colors["color-primary-foreground"],
+                fontSize: TYPOGRAPHY.stat.fontSize,
+                fontWeight: "700",
+                // figures that tick must not reflow their own column
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              240
+            </Text>
+          </LinearGradient>
           <Text style={{ fontSize: 24 }}>⭐</Text>
         </View>
         <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, textAlign: "right" }}>
@@ -320,9 +371,29 @@ export default function DesignKitShowcase() {
           +35 this week
         </Text>
       </Surface>
-      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+      {/* WS-0 round 3, finding 2: seven chips used to wrap to MON TUE WED THU FRI
+          / SAT SUN — two ragged rows. A wrapped chip strip is not a baseline, so
+          the row is nowrap and each chip takes an equal, shrinkable share with
+          a single-line label. */}
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "nowrap" }} testID="specimen-week-strip">
         {["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((d, i) => (
-          <Chip key={d} label={d} tone={i === 0 ? "accent" : "neutral"} selected={i === 0} as="span" size="sm" />
+          // the ROW owns the distribution (each cell flex:1 / minWidth:0) and the
+          // chip fills its share, so seven labels can only ever land on ONE
+          // baseline — a wrapping strip was two ragged rows.
+          <View key={d} testID="specimen-week-chip" style={{ flex: 1, minWidth: 0 }}>
+            <Chip
+              label={
+                <Text numberOfLines={1} style={{ textAlign: "center" }}>
+                  {d}
+                </Text>
+              }
+              tone={i === 0 ? "accent" : "neutral"}
+              selected={i === 0}
+              as="span"
+              size="sm"
+              style={{ flex: 1, paddingHorizontal: 4 }}
+            />
+          </View>
         ))}
       </View>
       <ListRow title="Grocery" subtitle="Shopping list" leading={<Text style={{ fontSize: 22 }}>🛒</Text>} showDisclosure onPress={() => toast.show("Grocery")} />
@@ -347,15 +418,18 @@ export default function DesignKitShowcase() {
             onPress={() => setAccent(a)}
             style={{ width: "47%", minHeight: 64, gap: 8 }}
           >
-            <View
-              style={{
-                height: 56,
-                borderRadius: 16,
-                backgroundColor: ACCENTS[theme][a],
-                borderWidth: accent === a ? 3 : 0,
-                borderColor: colors["color-text-primary"],
-              }}
-            />
+            {/* WS-0 round 3, finding 10: the reference swatch is
+                linear-gradient(135deg, accent.hex, accent.glow) — a flat fill
+                reads as a colour chip, not as lit glass. */}
+            <View style={{ height: 56, borderRadius: 16, overflow: "hidden", borderWidth: accent === a ? 3 : 0, borderColor: colors["color-text-primary"] }}>
+              <LinearGradient
+                testID="specimen-swatch-fill"
+                colors={[ACCENTS[theme][a], mix(ACCENTS[theme][a], colors["color-primary-foreground"], 28)]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ flex: 1 }}
+              />
+            </View>
             <Text
               style={{
                 color: colors["color-text-primary"],

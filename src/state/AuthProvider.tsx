@@ -232,6 +232,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth(): AuthValue {
   const v = useContext(Ctx);
-  if (!v) throw new Error("useAuth must be used within AuthProvider");
-  return v;
+  if (v) return v;
+  // Fallback for kit surfaces (e.g. WidgetFrame) rendered outside an
+  // AuthProvider — keeps them guest-neutral without a thrown hook and lets
+  // callers gate on hydrated/!member without crashing in unit tests.
+  return {
+    member: null,
+    mode: "family",
+    hydrated: false,
+    sessionWarn: false,
+    pinRequiredFor,
+    signIn: async () => { throw new Error("useAuth: no provider"); },
+    signOut: async () => {},
+    refreshIdentity: async () => {},
+    poke: () => {},
+  };
 }

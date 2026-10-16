@@ -44,7 +44,7 @@ const AUTH = flag("auth", "guest");
 const THEME = flag("theme", "dark");
 const BASE = flag("base", "http://localhost:3200");
 const FORCE_WEB = args.includes("--web");
-const WAIT_MS = Number(flag("wait", "0")) || 0;
+const WAIT_MS = Number(flag("wait", "9000")) || 0;
 const ALLOW_CONSOLE_ERRORS = args.includes("--allow-console-errors");
 const PKG = "com.garciafam.consuela";
 
@@ -197,7 +197,7 @@ async function main() {
 
   const urlPath = ROUTE.startsWith("/") ? ROUTE : `/${ROUTE}`;
   await page.goto(`${BASE}${urlPath}`, { waitUntil: "networkidle", timeout: 30_000 }).catch(() => {});
-  await page.waitForTimeout(WAIT_MS || 1600);
+  await page.waitForTimeout(WAIT_MS || 9000);
 
   await page.screenshot({ path: outFile, fullPage: false });
   console.log(`capture-native: ${outFile}`);

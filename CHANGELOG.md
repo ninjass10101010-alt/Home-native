@@ -4,6 +4,21 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — fix(kit): WS-0 harsh-critic round 3 (kit-side findings 1–10).
+  Section cards gain a two-part shape (thin body + thick header band, /, hairline
+  rule; header/body relY ratio 1.59x under dark). Weekday strip is nowrap with
+  seven flex:1 chips on one baseline. Material ladder replaced literal-string
+  assertions with composited relative-luminance property tests; dark glass re-cut
+  near-neutral (chroma <=12) and tone ceiling lowered to 15%; dark wall cell
+  chroma spread measured 39.9/255 with glass chroma <=12. Pending skeleton is now
+  a low-contrast mix (1.37:1) rendered through Material tier thin with an
+  opacity pulse, and signed-out sessions can never produce offline/couldn't-load
+  copy. MemberRail sign-out is an icon-only danger IconButton. Capture harness
+  defaults to 9000ms; paint audit fails in CI when skipped; paint audit extended
+  to sample every dark wall cell chroma. Showcase swatches/stat gain gradients. 9
+  git commits aggregated.
+
+
 - 2026-10-16 — fix(kit): WS-0 harsh-critic round 2b — HIGH D-6 + LOW D-1 / D-12 /
   D-13 / D-14 (amber banner, destructive glyph, header rules, gate hardening).
   **D-6** the signed-out affordance keyed its rim off `accentColor`, so the

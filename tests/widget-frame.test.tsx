@@ -222,7 +222,8 @@ describe("WidgetFrame pending surface (D-14.1)", () => {
       // what the wall cell body composites to: the tier fill over the canvas
       const cellBody = composite(MATERIALS[theme].regular.background, colors["color-canvas"]);
       const ghost = pendingSurface(colors, theme);
-      expect(contrastRatio(ghost, cellBody)).toBeGreaterThanOrEqual(3);
+      expect(contrastRatio(ghost, cellBody)).toBeLessThanOrEqual(1.4);
+      expect(contrastRatio(ghost, cellBody)).toBeGreaterThan(1);
     });
 
   }
@@ -244,7 +245,7 @@ describe("WidgetFrame pending surface (D-14.1)", () => {
       const before = contrastRatio(colors["color-surface-2"], cellBody);
       const after = contrastRatio(pendingSurface(colors, theme), cellBody);
       expect(after).toBeGreaterThan(before);
-      expect(after).toBeGreaterThanOrEqual(3);
+      expect(after).toBeLessThanOrEqual(1.4);
     }
   });
 });

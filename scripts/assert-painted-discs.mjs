@@ -70,7 +70,10 @@ const SAMPLER = `(regions) => new Promise(async (resolve) => {
     const sd = (a) => { const m = a.reduce((x,y)=>x+y,0)/a.length; return Math.sqrt(a.reduce((x,y)=>x+(y-m)*(y-m),0)/a.length); };
     const hi = Math.max(Math.max(...R), Math.max(...G), Math.max(...B));
     const lo = Math.min(Math.min(...R), Math.min(...G), Math.min(...B));
-    return { sdMax: Math.max(sd(R), sd(G), sd(B)), relYSpan: Math.max(...Y) - Math.min(...Y), range: hi - lo };
+    const mR = R.reduce((x,y)=>x+y,0)/R.length;
+    const mG = G.reduce((x,y)=>x+y,0)/G.length;
+    const mB = B.reduce((x,y)=>x+y,0)/B.length;
+    return { sdMax: Math.max(sd(R), sd(G), sd(B)), relYSpan: Math.max(...Y) - Math.min(...Y), range: hi - lo, meanR: mR, meanG: mG, meanB: mB, chromaMean: Math.max(mR,mG,mB) - Math.min(mR,mG,mB) };
   }));
 })`;
 
@@ -130,6 +133,62 @@ async function audit(browser) {
       }
     });
 
+    // WS-0 round 3, finding 4: the dark wall's per-widget chroma vocabulary
+    // must span >= 25/255. Sample every wall widget cell interior (dark only,
+    // that is where the reference's 0->52/255 spread lives) and fail when the
+    // max-min chroma across cells drops below the floor.
+    if (theme === "dark") {
+      const cellRegions = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('[data-testid^="widget-"]')).map((el) => {
+          const b = el.getBoundingClientRect();
+          const inset = Math.round(Math.min(b.width, b.height) * 0.12);
+          return {
+            id: el.getAttribute("data-testid"),
+            x: Math.round(b.x) + inset,
+            y: Math.round(b.y) + inset,
+            w: Math.max(4, Math.round(b.width) - inset * 2),
+            h: Math.max(4, Math.round(b.height) - inset * 2),
+          };
+        })
+      );
+      if (!cellRegions.length) {
+        failures.push(`${theme}: no [data-testid^="widget-"] found on ${ROUTE} — cell chroma gate cannot run`);
+      } else {
+        const cellStats = await page.evaluate((regions) => {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.src = "data:image/png;base64," + window.__shotB64;
+            img.onload = () => {
+              const cv = document.createElement("canvas");
+              cv.width = img.width; cv.height = img.height;
+              const g = cv.getContext("2d", { willReadFrequently: true });
+              g.drawImage(img, 0, 0);
+              resolve(regions.map((reg) => {
+                const d = g.getImageData(reg.x, reg.y, reg.w, reg.h).data;
+                let r = 0, gg = 0, b = 0, n = 0;
+                for (let i = 0; i < d.length; i += 4) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; n++; }
+                const mR = r / n, mG = gg / n, mB = b / n;
+                return { chromaMean: Math.max(mR, mG, mB) - Math.min(mR, mG, mB) };
+              }));
+            };
+          });
+        }, cellRegions);
+        const rows = cellRegions.map((reg, i) => ({
+          id: reg.id,
+          chroma: (cellStats[i] && typeof cellStats[i].chromaMean === "number") ? cellStats[i].chromaMean : 0,
+        }));
+        const vals = rows.map((r) => r.chroma);
+        const spread = Math.max(...vals) - Math.min(...vals);
+        console.log(`  dark wall cell chroma: ${rows.map((r) => `${r.id.replace("widget-", "")}=${r.chroma.toFixed(1)}`).join("  ")}`);
+        console.log(`  dark wall cell chroma spread ${spread.toFixed(1)} (min ${Math.min(...vals).toFixed(1)}, max ${Math.max(...vals).toFixed(1)})`);
+        if (spread < 25) {
+          failures.push(
+            `dark: wall cell chroma spread ${spread.toFixed(1)} < 25 (min ${Math.min(...vals).toFixed(1)}, max ${Math.max(...vals).toFixed(1)})`
+          );
+        }
+      }
+    }
+
     await ctx.close();
   }
   return { checked, failures };
@@ -153,6 +212,9 @@ async function main() {
     console.log("╚══════════════════════════════════════════════════════════════════╝");
     console.log("");
     await browser.close();
+    // Under CI a skipped audit is a real failure — otherwise a regressed disc
+    // (or a missing dev server) never surfaces in `npm test`.
+    if (process.env.CI === "1") return 1;
     return 0;
   }
 

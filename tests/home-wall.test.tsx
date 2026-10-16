@@ -282,4 +282,17 @@ describe("widget registry", () => {
       "homeSecurity", "homeClimate", "homeLights",
     ]);
   });
+
+  it("guest wall cells never claim an offline/couldn't-load fault", () => {
+    const view = render(
+      <HomeWall members={members} onSelectMember={() => {}} />,
+      { wrapper: wrap }
+    );
+    const widgetIds = WALL_DEFAULT_WIDGETS.filter((id) => !WALL_HIDDEN_WIDGETS.includes(id));
+    for (const id of widgetIds) {
+      const text = subtreeText(view, `widget-${id}`);
+      expect(text).not.toMatch(/offline|can't be reached|Couldn't load/i);
+    }
+  });
+
 });
