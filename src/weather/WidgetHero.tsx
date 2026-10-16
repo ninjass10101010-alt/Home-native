@@ -31,9 +31,20 @@ export interface WeatherPosterProps {
 }
 
 /**
- * The Monster hero poster — full-bleed wash, condition icon (ambient bob),
- * segmented MonsterDigit temperature, condition/H:L/outlook stack. Pure: the
+ * The Monster hero poster — full-bleed wash, side-by-side temperature digits
+ * and condition icon (ambient bob), and a 3-line summary stack. Pure: the
  * fetching cell (WeatherHeroCell) and the gallery route both render it.
+ *
+ * Layout (web parity with Home-ai WeatherWidget):
+ *   Row 1: [📍 place glass pill]   [Details › glass pill]
+ *   Row 2: [Monster digits]         [AmbientBob ConditionIcon]  ← side-by-side
+ *   Row 3: condition / H:L · feels  (centered)
+ *   Row 4: outlook                  (centered)
+ *   Row 5: Updated …               (right-aligned footer)
+ *
+ * Digit heights: cell=88dp, full=220dp.
+ * Icon sizes:    cell=84dp, full=180dp.
+ * This keeps total content inside the 279dp cell height (cell mode).
  */
 export function WeatherPoster({ size, data }: WeatherPosterProps) {
   const { colors } = useTheme();
@@ -42,8 +53,14 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
   const [washTop, washBottom] = WASH_TOKENS[washPair(code)];
   const washInk = colors[washInkToken(code)] ?? colors["color-text-primary"];
   const soft = mix(washInk, "transparent", 64); // AA-safe secondary on the wash
-  const digitsHeight = size === "full" ? 260 : 132;
-  const iconSize = size === "full" ? 200 : 96;
+  const digitsHeight = size === "full" ? 220 : 88;
+  const iconSize = size === "full" ? 180 : 84;
+  const pad = size === "full" ? 28 : 14;
+  const gap = size === "full" ? 12 : 6;
+
+  // Translucent glass pill background for the place / details affordances
+  const pillBg = mix(washInk, "transparent", 82);
+  const pillBorder = mix(washInk, "transparent", 72);
 
   const temperature =
     data.tempF == null ? (
@@ -74,36 +91,73 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
       colors={[colors[washTop] ?? colors["color-surface-1"], colors[washBottom] ?? colors["color-surface-2"]]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0.65, y: 1 }}
-      style={{ flex: 1, borderRadius: RADII.xl, padding: size === "full" ? 28 : 14, gap: size === "full" ? 16 : 8, overflow: "hidden" }}
+      style={{ flex: 1, borderRadius: RADII.xl, padding: pad, gap, overflow: "hidden" }}
     >
-      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
-        <View style={{ flex: 1, alignItems: "flex-start" }}>
+      {/* Row 1 — place pill (left) + details pill (right) */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 999,
+            backgroundColor: pillBg,
+            borderWidth: 1,
+            borderColor: pillBorder,
+          }}
+        >
           <Text numberOfLines={1} style={[WX_LABEL, { color: washInk, fontSize: TYPOGRAPHY.label.fontSize }]}>
-            {data.place}
+            {"📍 "}{data.place}
           </Text>
+        </View>
+        {size === "cell" ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 999,
+              backgroundColor: pillBg,
+              borderWidth: 1,
+              borderColor: pillBorder,
+            }}
+          >
+            <Text style={[WX_LABEL, { color: washInk, fontSize: TYPOGRAPHY.label.fontSize }]}>
+              Details ›
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Row 2 — side-by-side: Monster digits (left) + AmbientBob icon (right) */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flex: 1 }}>
+        <View style={{ flex: 1 }}>
+          {temperature}
         </View>
         <AmbientBob>
           <ConditionIcon code={code} size={iconSize} />
         </AmbientBob>
       </View>
 
-      <View style={{ alignItems: "center" }}>
-        {temperature}
-        <Text style={[WX_LABEL, { color: washInk, fontSize: TYPOGRAPHY.title.fontSize }]}>{data.condition}</Text>
+      {/* Row 3 — condition + H/L + feels + outlook (centered) */}
+      <View style={{ alignItems: "center", gap: 2 }}>
+        <Text style={[WX_LABEL, { color: washInk, fontSize: 16, fontWeight: "700" }]}>{data.condition}</Text>
         {hlLine ? (
           <Text style={{ color: soft, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
-            {hlLine}
-            {feels}
+            {hlLine}{feels}
           </Text>
         ) : null}
-      </View>
-
-      <View style={{ alignItems: "center" }}>
         {data.outlook ? (
           <Text testID="wx-outlook" style={{ color: soft, fontSize: TYPOGRAPHY.body.fontSize, textAlign: "center" }}>
             {data.outlook}
           </Text>
         ) : null}
+      </View>
+
+      {/* Row 4 — Updated footer (right-aligned) */}
+      <View style={{ alignItems: "flex-end" }}>
         <Text style={{ color: soft, fontSize: TYPOGRAPHY.label.fontSize }}>Updated {relativeUpdated(data.updatedAt)}</Text>
       </View>
     </LinearGradient>
@@ -130,12 +184,32 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
   );
 }
 
-/** Wall cell — one fetch on mount + sync pulses, guest-visible, honest states. */
+/**
+ * Wall cell — one fetch on mount + sync pulses, guest-visible, honest states.
+ * When data is available, renders WeatherPoster directly (full-bleed, no
+ * WidgetFrame header disc or marginTop gap). WidgetFrame is kept only for
+ * loading/error states when data === null.
+ */
 export function WeatherHeroCell() {
   const { colors } = useTheme();
   const { status, data, failure, stale, retry } = useWidgetData<WeatherSnapshot>(fetchWeather, {
     guestVisible: true, // Open-Meteo is public; the guest wall sees weather (reference parity)
   });
+
+  // Direct render when data is available — full-bleed, no header disc gap
+  if (data) {
+    return (
+      <View style={{ flex: 1 }}>
+        <WeatherPoster size="cell" data={data} />
+        {stale ? (
+          <Text testID="wx-stale" style={{ color: colors["color-accent-ink-amber"] ?? colors["color-accent-amber"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+            {READ_COPY_STALE}
+          </Text>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <WidgetFrame
       id="weather"
@@ -145,21 +219,12 @@ export function WeatherHeroCell() {
       // the poster's place line). The frame keeps an accessible header label.
       header={<View testID="weather-header" accessibilityRole="header" accessibilityLabel="Weather" style={{ height: 0, overflow: "hidden" }} />}
       status={status}
-      failure={data !== null ? null : failure}
-      hasData={data !== null}
-      stale={false} /* the poster paints its own honest badge below */
+      failure={failure}
+      hasData={false}
+      stale={false}
       onRetry={retry}
     >
-      {data ? (
-        <>
-          <WeatherPoster size="cell" data={data} />
-          {stale ? (
-            <Text testID="wx-stale" style={{ color: colors["color-accent-ink-amber"] ?? colors["color-accent-amber"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
-              {READ_COPY_STALE}
-            </Text>
-          ) : null}
-        </>
-      ) : null}
+      {null}
     </WidgetFrame>
   );
 }

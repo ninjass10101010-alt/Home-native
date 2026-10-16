@@ -2,12 +2,14 @@ import React from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 import { api, ApiError } from "../../api/client";
 import { photoSource, type WallPhoto } from "../../photos/library";
+import { mix } from "../../theme/mix";
 import { useTheme } from "../../theme/ThemeProvider";
 import { MOTION, TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
-import { mixAlpha } from "../../ui/SoftButton";
+import { SoftButton } from "../../ui/SoftButton";
 import { READ_COPY_STALE, READ_RETRY_LABEL, useWidgetData } from "./data";
 import { WidgetFrame } from "./WidgetFrame";
 
@@ -81,7 +83,7 @@ function fallbackCaption(takenAt?: string): string | null {
  * image bytes via source.headers (RN fresco).
  */
 export function PhotosWidget() {
-  const { colors, accentColor, reduceMotion } = useTheme();
+  const { colors, reduceMotion } = useTheme();
   const router = useRouter();
   const { status, data: batch, failure, stale, retry } = useWidgetData<PhotosState>(() => loadPhotos());
 
@@ -156,7 +158,7 @@ export function PhotosWidget() {
   // never a generic PIN line on a title-bearing card.
   if (failure === "unauthorised") {
     return (
-      <View testID="photos-unavailable" style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 10 }}>
+      <View testID="photos-unavailable" style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }}>
         <Text style={{ fontSize: 32 }}>📡</Text>
         <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>
           Photos unavailable
@@ -166,23 +168,9 @@ export function PhotosWidget() {
               lives in an expression (eslint's no-unescaped-entities parity). */}
           {"The family photo library can't be reached right now."}
         </Text>
-        <Pressable
-          onPress={retry}
-          accessibilityRole="button"
-          accessibilityLabel="Photos unavailable. Try again"
-          style={{ minHeight: 64, justifyContent: "center", paddingHorizontal: 16 }}
-        >
-          <Text
-            style={{
-              color: colors["color-accent-selected"] ?? accentColor,
-              fontSize: TYPOGRAPHY.label.fontSize,
-              fontWeight: "700",
-              textDecorationLine: "underline",
-            }}
-          >
-            {READ_RETRY_LABEL}
-          </Text>
-        </Pressable>
+        <SoftButton variant="primary" size="sm" onPress={retry} testID="photos-unavailable-retry" accessibilityLabel="Photos unavailable. Try again">
+          {READ_RETRY_LABEL}
+        </SoftButton>
       </View>
     );
   }
@@ -235,31 +223,35 @@ export function PhotosWidget() {
             accessibilityLabel="Pause photo rotation"
             accessibilityState={{ checked: paused }}
             onPress={() => setPausedByChoice((was) => !(was ?? reduceMotion))}
-            hitSlop={8}
+            hitSlop={12}
             style={{
               position: "absolute",
               top: 12,
               right: 12,
-              width: 64,
-              height: 64,
-              borderRadius: 32,
+              width: 44,
+              height: 44,
+              borderRadius: 22,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: mixAlpha(colors["color-canvas"], 0.45),
+              backgroundColor: mix(colors["color-monster-ink-blue"], "transparent", 55),
             }}
           >
-            <Text style={{ fontSize: 24, color: colors["color-primary-foreground"] }} accessibilityElementsHidden>
-              {paused ? "▶️" : "⏸️"}
+            <Text style={{ fontSize: 18, color: colors["color-primary-foreground"] }} accessibilityElementsHidden>
+              {paused ? "▶" : "⏸"}
             </Text>
           </Pressable>
         ) : null}
         {data.settings.showCaption && caption ? (
           <>
-            {/* The scrim is what keeps the caption legible against a snow
-                scene (web globals): a flat translucent band + white ink. */}
-            <View
+            {/* Dark gradient scrim keeps white caption text legible in both
+                light and dark themes — a flat canvas-alpha band washes out
+                on light mode (the web fix: color-monster-ink-blue gradient). */}
+            <LinearGradient
               pointerEvents="none"
-              style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 72, backgroundColor: mixAlpha(colors["color-canvas"], 0.38) }}
+              colors={["transparent", mix(colors["color-monster-ink-blue"], "transparent", 75)]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 96 }}
             />
             <Text
               numberOfLines={2}

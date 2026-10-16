@@ -4,6 +4,36 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — feat(ws2): full-bleed heroes — WeatherPoster side-by-side layout
+  & PhotosWidget gradient scrim / styled pause button.
+  **WidgetHero.tsx:** `WeatherPoster` layout completely redesigned for web parity
+  with `Home-ai WeatherWidget`. `digitsHeight` shrunk `132→88` (cell) / `260→220`
+  (full); `iconSize` `96→84` (cell) / `200→180` (full). Layout is now four rows:
+  (1) translucent glass pills — `📍 place` left + `Details ›` right — with
+  `mix(washInk, "transparent", 82/72)` fill/border; (2) **side-by-side** Monster
+  digits (left, `flex:1`) + `AmbientBob ConditionIcon` (right) — eliminating the
+  vertical overflow that sliced the `132dp` Monster numerals in half inside the
+  `279dp` cell; (3) centered condition / H:L·feels-like / outlook stack; (4)
+  right-aligned `Updated …` footer. `WeatherHeroCell` now returns
+  `<WeatherPoster size="cell" data={data} />` **directly** when `data !== null`
+  (no `WidgetFrame` wrapper that added a `marginTop: 10` header gap and an inner
+  content slot creating a double-border moat); `WidgetFrame` is kept only for
+  loading/error states. `GalleryHero` full-size poster unchanged functionally.
+  **PhotosWidget.tsx:** Caption scrim replaced flat
+  `mixAlpha(colors["color-canvas"], 0.38)` band (`height: 72`) with a
+  `LinearGradient` (`["transparent", mix(colors["color-monster-ink-blue"],
+  "transparent", 75)]`, `height: 96`) so the `#fff` caption text reads in both
+  dark and light themes (the light-mode canvas alpha produced a white-on-white
+  wash). Pause/play button resized `64→44dp` (radius `32→22`), `hitSlop` `8→12`,
+  background changed from `mixAlpha(canvas, 0.45)` to
+  `mix(color-monster-ink-blue, transparent, 55)` (theme-invariant dark ink), glyphs
+  changed from emoji `▶️⏸️` to plain text `▶⏸` (emoji ignore `color` — the old
+  buttons were invisible in light mode). Unauthorised / guest state gains
+  `padding: 24` and replaces the raw `Pressable` underline link with a
+  `<SoftButton variant="primary" size="sm">` pill matching
+  `reference/home/guest-dark.png`. tsc 0 errors, lint 0 errors (27 warnings
+  unchanged), `photos-widget.test.tsx` + `weather/hero.test.tsx` all PASS.
+
 - 2026-10-16 — feat(ws1): home wall shell / signed-out banner / KPI strip & ThisWeekCard.
   Signed-out roster badge is now an amber-tinted pill bar (borderRadius 14,
   top 4, left 24, right 100); date kicker pinned to one line (numberOfLines 1,
