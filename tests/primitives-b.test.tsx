@@ -98,24 +98,42 @@ describe("SegmentedControl", () => {
       }
     });
     rerender(<Seg />);
-    // the sliding pill: the only pointerEvents="none" host node in the tree
-    const pill = UNSAFE_root.findAll(
+    // pointerEvents="none" host nodes: the ring overlay (first child) + the pill.
+    // The pill is the one carrying the animated translateX.
+    const overlays = UNSAFE_root.findAll(
       (n) => typeof n.type === "string" && n.props.pointerEvents === "none"
-    )[0];
+    );
+    const pill = overlays.find((n) => JSON.stringify(n.props.style).includes("translateX")) as any;
     expect(pill).toBeTruthy();
     const style = JSON.stringify(pill.props.style);
     // active = "b" → raw x = 106 (padding 6 + 100). The old contract stored
     // x-6 and parked the pill 6dp left of its segment.
     expect(style).toContain('"translateX":106');
     expect(style).not.toContain("elevation");
-    // container is a bordered capsule
-    const container = JSON.stringify(
-      UNSAFE_root.findAll(
-        (n) => typeof n.type === "string" && n.props.accessibilityRole === "radiogroup"
-      )[0]?.props.style ?? []
-    );
+    // container is a border-free capsule: the 1dp ring is an absolute overlay,
+    // so segment coordinates (and the pill's translateX) are never border-shifted
+    const containerNode = UNSAFE_root.findAll(
+      (n) => typeof n.type === "string" && n.props.accessibilityRole === "radiogroup"
+    )[0];
+    const container = JSON.stringify(containerNode?.props.style ?? []);
     expect(container).toContain('"borderRadius":999');
-    expect(container).toContain('"borderWidth":1');
+    expect(container).not.toContain('"borderWidth"');
+    // the ring exists as an absolutely-positioned full-inset child (first child,
+    // so the later sibling pill paints above it). `children` yields the composite
+    // wrappers, so match on props rather than a host type string.
+    const ring = containerNode.children?.find(
+      (c: any) => c.props?.style?.position === "absolute" && c.props?.style?.borderWidth === 1
+    ) as any;
+    expect(ring).toBeTruthy();
+    expect(ring.props.style).toMatchObject({
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderRadius: 999,
+    });
+    expect(containerNode.children[0]).toBe(ring);
   });
 });
 

@@ -79,8 +79,6 @@ export function SegmentedControl({
           flexDirection: "row",
           flexWrap: "wrap",
           borderRadius: 999,
-          borderWidth: 1,
-          borderColor: colors["color-border"],
           backgroundColor: colors["color-surface-2"],
           padding: 6,
           maxWidth: 640,
@@ -88,6 +86,22 @@ export function SegmentedControl({
         style,
       ]}
     >
+      {/* Non-layout ring: same 1dp capsule edge, but never shifts the child
+          coordinates the sliding pill aligns to (border on the container
+          made the pill land 1dp right of its segment). */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: colors["color-border"],
+        }}
+      />
       <Animated.View
         pointerEvents="none"
         style={[
@@ -155,8 +169,9 @@ export function SegmentedControl({
               const { x, width } = e.nativeEvent.layout;
               setBoxes((prev) => {
                 const next = [...prev];
-                // Raw x (padding included) — the absolutely positioned pill
-                // measures from the same border-box origin, no -6 correction.
+                // Raw x (padding included) — the container carries no layout
+                // border (the ring is an overlay), so the absolutely positioned
+                // pill measures from the same origin, no -6 correction.
                 next[index] = { x, w: width };
                 return next;
               });
