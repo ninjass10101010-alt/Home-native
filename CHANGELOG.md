@@ -4,6 +4,61 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — fix(kit): WS-0 harsh-critic round 2 — all 12 REJECT findings
+  (2 CRITICAL + 4 HIGH + 6 LOW) closed on `/_design` (629 tests, tsc 0, lint 0
+  errors, tokens/a11y CLEAN). **CRITICAL 1** `IconButton` hoisted its glyph-ink
+  `cloneElement` into one `inkFor(variant)` resolver used by BOTH branches — the
+  glass/surface branch used to render `{icon}` verbatim, so
+  `<Text style={{fontSize:22}}>＋</Text>` painted RN Web's default black on dark
+  glass (1.47:1, WCAG 1.4.11 fail); glass/surface now default to
+  `color-text-primary`, accent/danger/ghost inks unchanged, and the showcase's
+  three specimen glyphs carry an explicit ink. The gate capture now holds
+  **0 pure-#000000 pixels** (was 25). **CRITICAL 2** `Screen` gained
+  `atmosphere?: boolean` (default true) and `/_design` passes
+  `atmosphere={false}`, so the calibration surface renders the bare
+  `--color-canvas` token exactly like the web's design-system page — the capture
+  now measures canvas `#0f1117` L\* 5.1 vs the reference's 5.0 — and the
+  PRODUCT atmosphere was re-budgeted: `ATMOSPHERE_BUDGET` scales the token
+  alphas (hue + stop intent untouched) to `dark {gradient 0.30, accent 3%,
+  violet 2%}` / `light {gradient 0.45, no blooms}`, because the web paints its
+  radials with `background-blend-mode: screen` (which LIGHTENS) while RN
+  alpha-composites them (which veils). Measured on the product wall: canvas
+  L\* 6.2–7.6 (was 18.6, brighter than its own cards), glass 3.3× the canvas
+  luminance, card L\* 18.6–19.2 vs the reference's 19–21. **HIGH 1** light
+  resolves `gradient-canvas-day` at every phase (the dawn/dusk phase switch was
+  native-only drift — the 08:42 capture was a pink/peach `#d7c0eb` block); light
+  canvas now `#eef3fb`–`#f6f7fa`, Lab chroma 1.6–4.4, byte-identical at any
+  capture hour. **HIGH 2** the light/dark text ladders clear 4.5:1 on the
+  COMPOSITED canvas (the old `#5a5a5a` on `#dcc5e4` measured 4.31:1), pinned in
+  `tests/atmosphere.test.tsx` against `canvasComposite()`. **HIGH 3** light
+  mounts no bloom layers at all. **HIGH 4** new `src/ui/PageHeader.tsx`
+  (RN port of the web's eyebrow + serif display architecture) on `/_design`,
+  fed by two new ramp tokens — `TYPOGRAPHY.display` (72sp, `Instrument Serif`,
+  weight 400, −2.2 tracking) and `TYPOGRAPHY.eyebrow` (24sp/600/.14em
+  uppercase) — and **Instrument Serif 400 is now bundled**
+  (`assets/fonts/InstrumentSerif-Regular.ttf`, the web's `--font-display`,
+  Home-ai layout.tsx:28-33), so `FONTS.display` is a real face instead of the
+  generic `"serif"` fallback that `HomeWall`'s greeting was still using; the
+  debug caption moved to a muted lede under the title. **HIGH 5** the showcase
+  is a 58/42 two-column board at ≥840dp (`useWindowDimensions`, 24dp gutter,
+  1120dp composed max-width) instead of one 992px phone column at 1080dp.
+  **LOW** (L1) one `TYPOGRAPHY.fieldLabel` token (14/700/1.2/UPPERCASE) now
+  feeds `TextField` AND `Stepper`; (L2) showcase section headers moved to their
+  own `TYPOGRAPHY.sectionTitle` (28sp) so cards, in-card headings and data read
+  as distinct levels; (L3) the headline "240" stat is `tabular-nums`; (L4)
+  `ListRow` seats `leading` in a 44dp accent-tinted badge well with a ring (the
+  reference's icon disc) instead of rendering it bare; (L5) the seven dead
+  Lists-row chips are inert `as="span"` specimens, not buttons with no
+  `onPress`; (L6) the showcase renders a visible "Signed out — read-only
+  preview" affordance when `useAuth().member` is null, so the guest capture has
+  guest-specific evidence instead of a differing sync caption. New tests:
+  `tests/atmosphere.test.tsx` (13 pixel-math + behaviour pins),
+  `tests/type-ramp.test.tsx`, +6 showcase pins, +2 `primitives-a` ink pins; the
+  stale "violet bloom 14%/10%" pin in `tests/shell.test.tsx` was rewritten
+  against the budget. Captures: `screenshots/ws0/_design-{parent-dark,
+  parent-light, parent-dark-boost, guest-dark, guest-light}.png` + the product
+  wall `index-parent-{dark,light}.png`.
+
 - 2026-10-16 — feat(kit): WS-0 Task 0.3 — warm-glass `WidgetFrame`, dock/sheet
   + 10 core primitives (606 tests, tsc 0, lint 0 errors, tokens/a11y CLEAN).
   `WidgetFrame` gains `headerRight?`/`showDisc?`; the identity disc is now a
