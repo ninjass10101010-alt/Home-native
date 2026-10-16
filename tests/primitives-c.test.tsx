@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { act, fireEvent, render } from "@testing-library/react-native";
-import { Text } from "react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { AccessibilityInfo, Text } from "react-native";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { Modal } from "../src/ui/Modal";
 import { ToastProvider, useToast } from "../src/ui/Toast";
@@ -96,7 +96,7 @@ describe("Toast", () => {
 });
 
 describe("PinPad", () => {
-  const member = { name: "Aurora Garcia", emoji: "👧" };
+  const member = { name: "Aurora", emoji: "👧" };
   it("emits exactly once, on the 4th digit", () => {
     const onVerified = jest.fn();
     const { getByLabelText } = render(
@@ -137,6 +137,30 @@ describe("PinPad", () => {
     );
     const s = JSON.stringify(toJSON());
     expect(s).toContain('"width":96');
+  });
+  it("U2.6: keys scale 0.96 on press; reduceMotion renders without it", async () => {
+    const { UNSAFE_root } = render(
+      <PinPad member={member} onVerified={() => {}} onCancel={() => {}} />,
+      { wrapper: wrap }
+    );
+    // Pressable's style is a function on the composite instance (RNTL can't
+    // drive the internal pressed state) — assert the function's contract.
+    const pressable = UNSAFE_root.findAll((n) => typeof n.props.style === "function" && n.props.onPress)[0];
+    expect(pressable).toBeTruthy();
+    const at = (pressed: boolean) => JSON.stringify(pressable.props.style({ pressed }));
+    expect(at(true)).toContain('"scale":0.96');
+    expect(at(false)).not.toContain('"scale":0.96');
+
+    jest.spyOn(AccessibilityInfo, "isReduceMotionEnabled").mockResolvedValue(true);
+    const { UNSAFE_root: rmRoot } = render(
+      <PinPad member={member} onVerified={() => {}} onCancel={() => {}} />,
+      { wrapper: wrap }
+    );
+    await waitFor(() => {
+      const rmKey = rmRoot.findAll((n) => typeof n.props.style === "function" && n.props.onPress)[0];
+      expect(JSON.stringify(rmKey.props.style({ pressed: true }))).not.toContain('"scale"');
+    });
+    jest.restoreAllMocks();
   });
 });
 

@@ -67,9 +67,23 @@ export interface MembersResult {
   members: ServerMember[];
   /** "live" | "cache" | "fallback" — the rail badges anything that isn't live. */
   source: "live" | "cache" | "fallback";
+  /**
+   * Why the live read failed, when it did. This is the ONE honest split the
+   * rail needs: "signed-out" (the device is fine, the roster is the cache —
+   * the family wall's normal state) must never be reported as "unreachable".
+   * Undefined on the live path.
+   */
+  reason?: "signed-out" | "unreachable";
 }
 
-/** The roster for the rail: live → cache → stand-in fallbacks (never throws). */
+/** The roster for the rail: live → cache → stand-in fallbacks (never throws).
+ *
+ *  `reason` is what the catch branch actually saw — it is the ONLY place the
+ *  app can tell a signed-out session (an EXPECTED 401 on this device) from an
+ *  unreachable NAS. The signed-out wall must never claim to be offline: the
+ *  rail reads its cache on purpose, and saying "offline" there asserts a
+ *  network fault that does not exist (web parity: SyncStatusBanner shows the
+ *  amber "Signed out" state and never an offline state for a 401). */
 export async function listMembersSmart(): Promise<MembersResult> {
   try {
     const live = await listMembersLive();
@@ -81,11 +95,10 @@ export async function listMembersSmart(): Promise<MembersResult> {
     // be appended beside the real roster (their names can't match it).
     return { members: cleaned, source: "live" };
   } catch (e: any) {
-    if (e instanceof ApiError && e.status === 401) {
-      // signed out — cache/fallback is the EXPECTED path, not an error
-    } // unreachable also lands here; the badge covers both honestly
+    const reason: "signed-out" | "unreachable" =
+      e instanceof ApiError && e.status === 401 ? "signed-out" : "unreachable";
     const cached = await readCachedMembers();
-    if (cached.length) return { members: cached, source: "cache" };
-    return { members: FALLBACK_MEMBERS.map((m) => ({ ...m })), source: "fallback" };
+    if (cached.length) return { members: cached, source: "cache", reason };
+    return { members: FALLBACK_MEMBERS.map((m) => ({ ...m })), source: "fallback", reason };
   }
 }

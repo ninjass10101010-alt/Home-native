@@ -190,6 +190,23 @@ describe("AuthProvider", () => {
     expect(result.current.member).not.toBeNull(); // still signed in
   });
 
+  it("refreshIdentity re-arms the idle clock (a live identity read IS activity)", async () => {
+    authApi.login.mockResolvedValueOnce(parent);
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await settleFor(result);
+    await act(async () => {
+      await result.current.signIn("Rebecca (Mom)", "1234");
+    });
+    act(() => jest.advanceTimersByTime(INACTIVITY_TIMEOUT_MS - 10_000));
+    authApi.whoami.mockResolvedValueOnce(parent);
+    await act(async () => {
+      await result.current.refreshIdentity();
+    });
+    act(() => jest.advanceTimersByTime(20_000)); // past the OLD deadline
+    expect(result.current.member).not.toBeNull(); // re-armed, still signed in
+    expect(result.current.sessionWarn).toBe(false);
+  });
+
   it("PINs NEVER touch a store (memory-only contract)", async () => {
     authApi.login.mockResolvedValueOnce(parent);
     const { result } = renderHook(() => useAuth(), { wrapper: wrap });

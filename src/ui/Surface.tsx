@@ -35,8 +35,10 @@ export interface SurfaceProps {
 /**
  * RN port of ui/Surface.tsx. The web's variant map (glass* kept as aliases of
  * material-* tiers, byte-identical render) is preserved; "warm" maps to the
- * regular tier (warm-glass-card's material), "flat" to the neutral raised
- * surface (token surface-2 + border) — same semantics as the web contract.
+ * THICK tier — warm-glass-card's blur 24 ≈ 26, border-frost-2 ≈ thick border,
+ * strong-stop 0.78 ≈ thick's 0.8 tint, and its inset highlight rides thick's
+ * shadow clause; "flat" to the neutral raised surface (token surface-2 +
+ * border) — same semantics as the web contract.
  */
 const variantTier: Record<SurfaceVariant, MaterialTier | null> = {
   thin: "thin",
@@ -48,7 +50,7 @@ const variantTier: Record<SurfaceVariant, MaterialTier | null> = {
   "material-regular": "regular",
   "material-thick": "thick",
   "material-thin": "thin",
-  warm: "regular",
+  warm: "thick",
   flat: null,
 };
 

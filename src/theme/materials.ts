@@ -89,3 +89,54 @@ export function specularOpacity(
 /** Specular overlay stop colors (white at tier alpha → clear). Token-owned. */
 export const SPECULAR_AT = (a: number) => `rgba(255,255,255,${a})`;
 export const SPECULAR_CLEAR = "rgba(255,255,255,0)";
+
+export const HOME_WIDGET_ICON_VARIANTS = [
+  "briefing",
+  "ask",
+  "suggestions",
+  "leaderboard",
+  "events",
+  "schedule",
+  "meal",
+  "tasks",
+  "week",
+  "security",
+  "climate",
+  "lights",
+  "ledger",
+] as const;
+
+export type HomeWidgetIconVariant = (typeof HOME_WIDGET_ICON_VARIANTS)[number];
+
+export interface HomeWidgetIconPalette {
+  hi: string;
+  mid: string;
+  lo: string;
+  detail: string;
+  ink: string;
+  glow: string;
+}
+
+/**
+ * Clay icon palettes transcribed from Home-ai/src/components/ui/HomeWidgetIcon.tsx.
+ * Each widget owns an opaque, saturated family (hi = lit top, mid = body,
+ * lo = shaded base, detail = tone accent, ink = line work, glow = halo).
+ */
+export const HOME_WIDGET_ICON_PALETTES: Record<HomeWidgetIconVariant, HomeWidgetIconPalette> = {
+  briefing:    { hi: "#FFE9A8", mid: "#FB923C", lo: "#DB5A1E", detail: "#34D399", ink: "#5B2A0F", glow: "#FDBA74" },
+  ask:         { hi: "#D9CCFF", mid: "#8B5CF6", lo: "#5B21B6", detail: "#FDE68A", ink: "#2E1065", glow: "#C4B5FD" },
+  suggestions: { hi: "#FFF3B0", mid: "#FBBF24", lo: "#B45309", detail: "#F472B6", ink: "#5F3A06", glow: "#FDE68A" },
+  leaderboard: { hi: "#FFE49A", mid: "#F59E0B", lo: "#B45309", detail: "#FFF7ED", ink: "#5F3A06", glow: "#FCD34D" },
+  events:      { hi: "#BFE0FF", mid: "#3B82F6", lo: "#1D4ED8", detail: "#FB7185", ink: "#0B2A66", glow: "#93C5FD" },
+  schedule:    { hi: "#B8F5EA", mid: "#14B8A6", lo: "#0F766E", detail: "#FDE68A", ink: "#0A3A36", glow: "#5EEAD4" },
+  meal:        { hi: "#FFD5CB", mid: "#F1654D", lo: "#B3261E", detail: "#FDE68A", ink: "#5A150F", glow: "#FCA5A5" },
+  tasks:       { hi: "#BFF3DC", mid: "#10B981", lo: "#047857", detail: "#FDE68A", ink: "#064E3B", glow: "#6EE7B7" },
+  week:        { hi: "#CDD8FF", mid: "#6366F1", lo: "#3730A3", detail: "#F59E0B", ink: "#1E1B4B", glow: "#A5B4FC" },
+  security:    { hi: "#C9E6FF", mid: "#2C7BE5", lo: "#123E8B", detail: "#FBBF24", ink: "#0A2A5E", glow: "#93C5FD" },
+  climate:     { hi: "#DFF3FF", mid: "#60A5FA", lo: "#1E40AF", detail: "#F87171", ink: "#0C2A52", glow: "#BFDBFE" },
+  lights:      { hi: "#FFF6CC", mid: "#FBBF24", lo: "#B45309", detail: "#FDE68A", ink: "#5F3A06", glow: "#FDE68A" },
+  ledger:      { hi: "#C6F3D6", mid: "#22A55E", lo: "#14663A", detail: "#FBBF24", ink: "#0B3D22", glow: "#86EFAC" },
+};
+
+export const HOME_WIDGET_ICON_SHINE = "#FFFFFF";
+export const HOME_WIDGET_ICON_SHADOW = "#0B1020";

@@ -4,7 +4,8 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { MOTION, MIN_TARGET_DP } from "../theme/tokens";
-import { accentDeepened, mix } from "../theme/mix";
+import { mix } from "../theme/mix";
+import { mixAlpha } from "./SoftButton";
 
 export interface SwipeAction {
   key: string;
@@ -78,8 +79,9 @@ export function SwipeableRow({ children, actions = [], style, testID }: Swipeabl
                 flex: 1,
                 textAlign: "center",
                 textAlignVertical: "center",
-                backgroundColor: destructive ? accentDeepened(rose, 75) : mix(accentColor, colors["color-surface-1"], 20),
-                color: destructive ? colors["color-primary-foreground"] : colors["color-text-primary"],
+                // Web parity: bg-[rose]/20 tint + rose ink (NOT a deep black fill)
+                backgroundColor: destructive ? mixAlpha(rose, 0.2) : mix(accentColor, colors["color-surface-1"], 20),
+                color: destructive ? rose : colors["color-text-primary"],
                 fontSize: 15,
                 fontWeight: "700",
                 minHeight: MIN_TARGET_DP,

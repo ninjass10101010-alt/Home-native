@@ -2,10 +2,9 @@ import React from "react";
 import { Text, View } from "react-native";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
+import { EmptyState } from "../../ui/EmptyState";
 import { useHAState, entitiesByDomain } from "./ha-state";
 import { WidgetFrame } from "./WidgetFrame";
-
-const EMPTY_CLIMATE = "No climate data yet.";
 
 /** Wall climate tile (web HomeClimateWidget.tsx parity, read-only Wave 1). */
 export function HomeClimateWidget() {
@@ -22,35 +21,49 @@ export function HomeClimateWidget() {
       status={loaded ? (error && states.length === 0 ? "error" : "ready") : "loading"}
       failure={error && states.length === 0 ? "error" : null}
       hasData={states.length > 0}
-      stale={false}
+      stale={!!error && states.length > 0}
       onRetry={refresh}
     >
       {states.length === 0 && loaded ? (
-        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, textAlign: "center" }}>
-          {EMPTY_CLIMATE}
-        </Text>
+        <EmptyState
+          flat
+          icon="🌡️"
+          title="No climate data"
+          body="Connect a thermostat to Home Assistant to see indoor conditions here."
+          style={{ flex: 1 }}
+        />
       ) : (
-        <View style={{ gap: 6, alignItems: "flex-start" }}>
+        <View style={{ gap: 8, alignItems: "flex-start" }}>
           {climates.length === 0 ? (
-            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
-              {EMPTY_CLIMATE}
-            </Text>
+            <EmptyState
+              flat
+              icon="🌡️"
+              title="No climate data"
+              body="Connect a thermostat to Home Assistant to see indoor conditions here."
+              style={{ flex: 1 }}
+            />
           ) : (
             climates.map((c) => {
-              const current = c.attributes?.current_temperature;
-              const target = c.attributes?.temperature;
-              const mode = typeof c.attributes?.hvac_mode === "string" ? c.attributes.hvac_mode : c.state;
+              const attrs = c.attributes ?? {};
+              const current = attrs.current_temperature;
+              const target = attrs.temperature;
+              const humidity = attrs.current_humidity;
+              const mode = typeof attrs.hvac_mode === "string" ? attrs.hvac_mode : c.state;
               return (
-                <Text
-                  key={c.entity_id}
-                  style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize }}
-                >
-                  🌡️ {typeof current === "number" ? `${Math.round(current)}°` : "—"} →{" "}
-                  {typeof target === "number" ? `${Math.round(target)}°` : "—"}{" "}
-                  <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
-                    {String(mode)}
+                <View key={c.entity_id} style={{ gap: 2 }}>
+                  <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize }}>
+                    🌡️ {typeof current === "number" ? `${Math.round(current)}°` : "—"} →{" "}
+                    {typeof target === "number" ? `${Math.round(target)}°` : "—"}{" "}
+                    <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                      {String(mode)}
+                    </Text>
                   </Text>
-                </Text>
+                  {typeof humidity === "number" ? (
+                    <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                      Humidity {Math.round(humidity)}%
+                    </Text>
+                  ) : null}
+                </View>
               );
             })
           )}
@@ -59,3 +72,5 @@ export function HomeClimateWidget() {
     </WidgetFrame>
   );
 }
+
+export default HomeClimateWidget;

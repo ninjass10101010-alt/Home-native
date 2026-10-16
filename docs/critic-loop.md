@@ -66,3 +66,15 @@ BEFORE handoff.
 - Device captures: `scripts/screenshot.sh` requires adb + the tablet (or an
   emulator). If no hardware is attached, capture the dev preview of `/_design`
   with Playwright instead (documented when it's wired).
+
+## Native capture
+
+`npm run native:capture` runs `scripts/capture-native.mjs`. It accepts
+`--ws <name>`, `--route <path>`, `--auth guest|child|parent`,
+`--theme light|dark|dark-boost`.
+
+- With an adb device online: deep-links `consuela://<route>?ws=<ws>` and runs
+  `adb exec-out screencap -p > screenshots/<ws>/<name>.png`.
+- Otherwise: Playwright Chromium at 1080×1920 against Expo web on
+  `http://localhost:3200`, seeding AsyncStorage theme/boost/session state, 900ms
+  settle, PNG at `screenshots/<ws>/<route>-<auth>-<theme>.png`.

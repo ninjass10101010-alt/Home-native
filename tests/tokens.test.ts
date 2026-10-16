@@ -1,4 +1,4 @@
-import { TOKENS, ACCENTS, TYPOGRAPHY, RADII, MOTION } from "../src/theme/tokens";
+import { TOKENS, ACCENTS, ACCENTS_RGB, TYPOGRAPHY, RADII, MOTION } from "../src/theme/tokens";
 import snap from "../src/theme/tokens.snapshot.json";
 
 describe("tokens", () => {
@@ -27,5 +27,22 @@ describe("tokens", () => {
   it("pins motion + radii", () => {
     expect(MOTION).toMatchObject({ fast: 150, base: 240, slow: 400, glide: 600 });
     expect(RADII).toMatchObject({ sm: 10, md: 16, lg: 20, xl: 28, xxl: 36, full: 9999 });
+  });
+  it("U1: color-accent-selected-rgb mirrors the theme's nori channels (light was leaking dark)", () => {
+    expect(TOKENS.light["color-accent-selected-rgb"]).toBe("37, 99, 235"); // #2563eb
+    expect(TOKENS.dark["color-accent-selected-rgb"]).toBe("59, 130, 246"); // #3b82f6
+    expect(TOKENS.light["color-accent-selected-rgb"]).toBe(ACCENTS_RGB.light.nori);
+    expect(TOKENS.dark["color-accent-selected-rgb"]).toBe(ACCENTS_RGB.dark.nori);
+  });
+  it("U1: every accentsRgb triple equals the hex accent's channels, both themes", () => {
+    for (const theme of ["dark", "light"] as const) {
+      for (const name of Object.keys(ACCENTS[theme])) {
+        const hex = ACCENTS[theme][name];
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        expect(ACCENTS_RGB[theme][name]).toBe(`${r}, ${g}, ${b}`);
+      }
+    }
   });
 });

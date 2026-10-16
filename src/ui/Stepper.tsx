@@ -1,8 +1,7 @@
 import React from "react";
-import { Text, View, ViewStyle } from "react-native";
+import { Pressable, Text, View, ViewStyle } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
-import { TYPOGRAPHY } from "../theme/tokens";
-import { IconButton } from "./IconButton";
+import { MIN_TARGET_DP, RADII, TYPOGRAPHY } from "../theme/tokens";
 
 export interface StepperProps {
   value: number;
@@ -16,15 +15,42 @@ export interface StepperProps {
 }
 
 /**
- * RN port of ui/Stepper.tsx at wall scale: the −/+ controls are 64×64
- * IconButton "surface" circles (the web's 44px hit-44 is the 64dp wall floor),
- * value text at body size, disabled at the rails with the surface treatment.
+ * RN port of ui/Stepper.tsx at wall scale: the −/+ controls are 64dp FLAT
+ * squares (web: rounded-2xl bg-surface-2 — deliberately not a glass circle;
+ * a stepper rail is a dense utility, not a frosted surface), value text at
+ * body size, disabled rail dimmed to opacity 0.4 (web disabled:opacity-40),
+ * press scale 0.96 skipped under reduceMotion.
  */
 export function Stepper({ value, onChange, min = 0, max = 99, step = 1, label, style, testID }: StepperProps) {
-  const { colors } = useTheme();
+  const { colors, reduceMotion } = useTheme();
   const what = label || "value";
   const decDisabled = value <= min;
   const incDisabled = value >= max;
+
+  const railButton = (sign: "−" | "+", disabled: boolean, a11y: string, onPress: () => void) => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          width: MIN_TARGET_DP,
+          height: MIN_TARGET_DP,
+          borderRadius: RADII.md,
+          backgroundColor: colors["color-surface-2"],
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: disabled ? 0.4 : 1,
+        },
+        pressed && !reduceMotion ? { transform: [{ scale: 0.96 }] } : null,
+      ]}
+    >
+      <Text style={{ fontSize: 26, fontWeight: "600", color: colors["color-text-primary"] }}>{sign}</Text>
+    </Pressable>
+  );
+
   return (
     <View testID={testID} style={[{ flexDirection: "row", alignItems: "center", gap: 12 }, style]}>
       {label ? (
@@ -32,14 +58,7 @@ export function Stepper({ value, onChange, min = 0, max = 99, step = 1, label, s
           {label}
         </Text>
       ) : null}
-      <IconButton
-        variant="surface"
-        size="sm"
-        icon={<Text style={{ fontSize: 26, fontWeight: "600" }}>−</Text>}
-        label={`Decrease ${what}`}
-        disabled={decDisabled}
-        onPress={() => onChange(Math.max(min, value - step))}
-      />
+      {railButton("−", decDisabled, `Decrease ${what}`, () => onChange(Math.max(min, value - step)))}
       <Text
         style={{
           minWidth: 48,
@@ -52,14 +71,7 @@ export function Stepper({ value, onChange, min = 0, max = 99, step = 1, label, s
       >
         {value}
       </Text>
-      <IconButton
-        variant="surface"
-        size="sm"
-        icon={<Text style={{ fontSize: 26, fontWeight: "600" }}>+</Text>}
-        label={`Increase ${what}`}
-        disabled={incDisabled}
-        onPress={() => onChange(Math.min(max, value + step))}
-      />
+      {railButton("+", incDisabled, `Increase ${what}`, () => onChange(Math.min(max, value + step)))}
     </View>
   );
 }

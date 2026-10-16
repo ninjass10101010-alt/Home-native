@@ -13,18 +13,47 @@ import type { MealSlotId } from "./plan-grid";
  */
 export interface SlotScheduleRow {
   mealType?: string;
+  /** Schedule title — the keyword fallback lane (web parity). */
+  title?: string;
   time?: string; // "HH:MM"
 }
 
 const SLOTS: MealSlotId[] = ["breakfast", "lunch", "snack", "dinner"];
 
+/** Web parity (CurrentMealWidget.tsx:100-109): a row with no mealType but a
+ *  meal keyword in its TITLE still marks a slot ("Dinner" → dinner). */
+function mealTypeFromTitle(title?: string): MealSlotId | null {
+  const t = (title ?? "").toLowerCase();
+  if (t.includes("breakfast")) return "breakfast";
+  if (t.includes("lunch")) return "lunch";
+  if (t.includes("dinner")) return "dinner";
+  if (t.includes("snack")) return "snack";
+  return null;
+}
+
 export function currentSlotFor(schedules: SlotScheduleRow[] | null | undefined, now: Date): MealSlotId {
-  const rows = (schedules ?? [])
+  const typed = (schedules ?? [])
     .filter((s) => !!s.mealType && s.mealType !== "none" && SLOTS.includes(s.mealType as MealSlotId))
     .map((s) => ({ ...s, minutes: parseMinutes(s.time) }))
     .filter((s): s is SlotScheduleRow & { minutes: number } => s.minutes !== null)
     .sort((a, b) => a.minutes - b.minutes);
 
+  // Title-keyword fallback: the family "Dinner" schedule with an empty
+  // mealType field still drives the slot (the web never skipped it).
+  const titled = typed.length === 0
+    ? (schedules ?? [])
+        .map((s) => {
+          const mealType = mealTypeFromTitle(s.title);
+          if (!mealType) return null;
+          const minutes = parseMinutes(s.time);
+          if (minutes === null) return null;
+          return { ...s, mealType, minutes };
+        })
+        .filter((s): s is { mealType: MealSlotId; minutes: number; title?: string; time?: string } => s !== null)
+        .sort((a, b) => a.minutes - b.minutes)
+    : [];
+
+  const rows = typed.length > 0 ? typed : titled;
   if (rows.length === 0) return "dinner";
 
   const nowMinutes = now.getHours() * 60 + now.getMinutes();

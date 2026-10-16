@@ -3,10 +3,11 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { api } from "../api/client";
 import type { DbListEnvelope } from "../api/types";
 import { useTheme } from "../theme/ThemeProvider";
-import { accentInk } from "../theme/mix";
+import { accentInk, mix } from "../theme/mix";
 import { TYPOGRAPHY } from "../theme/tokens";
 import { useAuth } from "../state/AuthProvider";
 import { useSync } from "../state/SyncManager";
+import { useLocalSearchParams } from "expo-router";
 import { Chip } from "../ui/Chip";
 import { EmptyState } from "../ui/EmptyState";
 import { Modal } from "../ui/Modal";
@@ -58,6 +59,16 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
   const { colors, accentColor } = useTheme();
   const { member } = useAuth();
   const { stale: syncStale } = useSync();
+  // Home's "This Week" strip links /meals?day=<Sat>. Honouring it is what
+  // makes that strip a navigation and not a decoration (web page.tsx:170-206).
+  // The wall shows the whole week at a glance, so the named day is FOCUSED —
+  // its column header wears the accent wash — rather than being isolated.
+  const params = useLocalSearchParams<{ day?: string }>();
+  const focusDay = useMemo(() => {
+    const raw = Array.isArray(params.day) ? params.day[0] : params.day;
+    const match = WEEK_DAYS_SHORT.find((d) => d.toLowerCase() === String(raw ?? "").trim().toLowerCase());
+    return match ?? null;
+  }, [params.day]);
 
   const [tab, setTab] = useState<KitchenTab>("plan");
   const [detail, setDetail] = useState<{ meal: ParsedMeal; slot: MealSlotId } | null>(null);
@@ -88,6 +99,11 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
   // The "Now" chip follows the household's meal schedule (schedules table),
   // exactly matching the wall cell — one rule, one source (src/meals/slot.ts).
   const currentSlot = schedules.length === 0 ? null : currentSlotFor(schedules, now);
+  const todaysMeals = meals.filter((m) => m.time === todayShort && (m.weekOf ?? weekMonday) === weekMonday);
+  const todayKcal = todaysMeals.reduce((a, m) => a + (m.calories || 0), 0);
+  const todayProtein = todaysMeals.reduce((a, m) => a + (m.protein || 0), 0);
+  const todayCarbs = todaysMeals.reduce((a, m) => a + (m.carbs || 0), 0);
+  const todayFat = todaysMeals.reduce((a, m) => a + (m.fat || 0), 0);
 
   const renderCell = (day: (typeof days)[number], slot: MealSlotId) => {
     const meal = mealForCell(meals, day.short, slot, weekMonday);
@@ -153,9 +169,11 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
     <View testID="meals-page" style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
       {/* Page header */}
       <View style={{ marginBottom: 20 }}>
-        <Text style={{ color: colors["color-text-primary"], fontSize: 54, fontWeight: "700" }}>Kitchen</Text>
+        <Text style={{ color: colors["color-text-primary"], fontSize: 54, fontWeight: "700" }}>
+          {tab === "plan" && !weekHasMeals(meals, weekMonday) ? "Meals" : "Kitchen"}
+        </Text>
         <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, marginTop: 4 }}>
-          This week
+          {tab === "plan" && !weekHasMeals(meals, weekMonday) ? "Family meal planning" : tab === "plan" ? "This week" : tab === "shop" ? "Grocery list" : "Pantry"}
         </Text>
         {stale && member ? (
           <Text
@@ -212,20 +230,35 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                     <View style={{ flexDirection: "row", gap: 6 }}>
                       {days.map((day) => {
                         const isToday = day.short === todayShort;
+                        const isFocus = day.short === focusDay;
                         return (
                           <View
                             key={day.short}
                             testID={`meals-day-${day.short}`}
-                            accessibilityLabel={isToday ? "Today" : day.short}
-                            style={{ flex: 1, alignItems: "center", paddingVertical: 6 }}
+                            accessibilityLabel={
+                              isToday && isFocus
+                                ? "Today, selected from the wall"
+                                : isToday
+                                  ? "Today"
+                                  : isFocus
+                                    ? `${day.short}, selected from the wall`
+                                    : day.short
+                            }
+                            style={{
+                              flex: 1,
+                              alignItems: "center",
+                              paddingVertical: 6,
+                              borderRadius: 12,
+                              backgroundColor: isFocus ? mix(accentColor, "transparent", 12) : "transparent",
+                            }}
                           >
                             <Text
                               style={{
-                                color: isToday
+                                color: isToday || isFocus
                                   ? accentInk(accentColor, colors["color-text-primary"])
                                   : colors["color-text-secondary"],
                                 fontSize: TYPOGRAPHY.body.fontSize,
-                                fontWeight: isToday ? "800" : "700",
+                                fontWeight: isToday || isFocus ? "800" : "700",
                               }}
                             >
                               {day.short}
@@ -271,6 +304,15 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                 ) : (
                   <EmptyState flat icon="🍽️" title="Meals" body={EMPTY_WEEK_COPY} />
                 )}
+
+                {todaysMeals.length > 0 ? (
+                  <Text
+                    testID="meals-fuel-today"
+                    style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, textAlign: "center" }}
+                  >
+                    {`Family fuel today: ${todayKcal} kcal · ${todayProtein}g protein · ${todayCarbs}g carbs · ${todayFat}g fat`}
+                  </Text>
+                ) : null}
 
                 <Text
                   testID="meals-readonly-note"

@@ -16,6 +16,8 @@ export interface DbEventRow {
   time?: string; // "HH:MM"
   member?: string;
   icon?: string;
+  /** Member/routine color name (db-gateway row) — the web's member color. */
+  color?: string;
 }
 
 /** Google row per docs/wave1-endpoints.md + lib/calendar/google-mapping.ts. */
@@ -47,7 +49,9 @@ export interface WallEvent {
   sortMinutes: number;
   icon: string;
   member?: string;
-  /** Theme token key for the row's left rail (routines carry a color). */
+  /** Theme token key for the row's left rail + member-chip tint. Family rows
+   *  default to nori, Google rows to cyan (web eventLineColor); a routine's
+   *  own colour (when set) wins. */
   railToken?: string;
   /** "s_"-prefixed ids are routines (schedules) — counts must not call them events. */
   isRoutine?: boolean;
@@ -56,6 +60,11 @@ export interface WallEvent {
 export const ALL_DAY_TIME = "All day";
 export const ALL_DAY_SORT_MINUTES = -1;
 export const UNKNOWN_SORT_MINUTES = 24 * 60; // unparseable sorts last, never midnight
+
+/** Web eventLineColor parity (Home-ai page.tsx:549): a family event with no
+ *  explicit colour paints the house nori rail; every Google row paints cyan. */
+export const FAMILY_RAIL_TOKEN = "color-accent-nori";
+export const GOOGLE_RAIL_TOKEN = "color-accent-cyan";
 
 function isDateOnly(iso: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(iso);
@@ -140,6 +149,10 @@ export function familyEventsForDay(rows: DbEventRow[], dayISO: string): WallEven
       sortMinutes: hhmmToMinutes(e.time),
       icon: e.icon || "📅",
       member: e.member || undefined,
+      // Web parity (db/index.ts:122): the row's own member color paints the
+      // rail (green→mint, amber→amber…); amber is the web's no-color fallback
+      // — never a blanket blue.
+      railToken: (e.color && SCHEDULE_RAIL_TOKENS[e.color.toLowerCase()]) || "color-accent-amber",
     }));
 }
 
@@ -156,6 +169,7 @@ export function googleEventsForDay(rows: GoogleEventRow[], dayISO: string): Wall
         sortMinutes: clock.sortMinutes,
         icon: "📅",
         member: "Google",
+        railToken: GOOGLE_RAIL_TOKEN,
       };
     });
 }

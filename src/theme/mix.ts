@@ -49,7 +49,12 @@ export function accentInk(accent: string, textPrimary: string): string {
   return mix(accent, textPrimary, 55);
 }
 
-/** Selected/primary fill convention: accent deepened toward black. */
+/**
+ * Selected/primary fill convention: accent deepened toward black. `pct` is
+ * the percent TOWARD BLACK — the web's `color-mix(in srgb, accent X%, black)`
+ * equals pct = 100 − X (e.g. SoftButton primary: web X=60 ⇒ pct=40, the
+ * measured-AA fill 4.60–8.33:1 dark / 7.12–12.52:1 light).
+ */
 export function accentDeepened(accent: string, pct: number): string {
-  return mix(accent, "black", pct);
+  return mix(accent, "black", 100 - pct);
 }

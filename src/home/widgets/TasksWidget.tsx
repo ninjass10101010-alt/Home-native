@@ -1,5 +1,6 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
@@ -8,6 +9,8 @@ import { ListRow } from "../../ui/ListRow";
 import { Chip } from "../../ui/Chip";
 import { useSync } from "../../state/SyncManager";
 import { WidgetFrame } from "./WidgetFrame";
+import { publishWallStats } from "../wall-stats";
+import { DayLine } from "./DayLine";
 
 /** Snapshot task row per Home-ai src/types/tasks.ts (subset read by the wall). */
 interface WallTask {
@@ -33,6 +36,7 @@ const WALL_ROW_BUDGET = 2;
  */
 export function TasksWidget() {
   const { colors, accentColor } = useTheme();
+  const router = useRouter();
   const { member, hydrated } = useAuth();
   const isParent = member?.role === "parent";
   const { snapshot, stale: syncStale, syncError, refreshNow } = useSync();
@@ -41,33 +45,49 @@ export function TasksWidget() {
     () => ((snapshot?.tasks as WallTask[] | undefined) ?? []),
     [snapshot]
   );
-  // Pending rows: uncompleted + a kid's LANDED tap (server shape:
-  // completed:true+pendingApproval — task-utils.ts:60) still counts as
-  // "waiting", not done; parents approve it on the Tasks page.
-  const pending = React.useMemo(
-    () => tasks.filter((t) => !t.completed || !!t.pendingApproval),
-    [tasks]
-  );
+  // Web parity (page.tsx:451-457): the PENDING list is OPEN rows only — a
+  // completed row awaiting approval moves to the approvals queue, never the
+  // pending count (kid taps surface honestly via the parent footer instead).
+  const pending = React.useMemo(() => tasks.filter((t) => !t.completed), [tasks]);
+  // The authoritative predicate, ported from Home-ai/src/lib/task-utils.ts
+  // (isPendingApproval): a row awaits approval only when it is completed AND
+  // carries the marker. Dropping the `completed` half would count a row the
+  // parent finds nothing to approve — the marker's `completed` half is the
+  // guard the web wrote deliberately against cross-device snapshot merges.
   const pendingApprovalCount = React.useMemo(
-    () => tasks.filter((t) => !!t.pendingApproval).length,
+    () => tasks.filter((t) => !!t.completed && !!t.pendingApproval).length,
     [tasks]
   );
 
   const visible = pending.slice(0, WALL_ROW_BUDGET);
   const hidden = pending.length - visible.length;
 
+  // Guest model: /api/tasks/sync requires a live session (server-auth), so a
+  // signed-out fetch can only 401 — guests get the PIN gate WITHOUT a doomed
+  // poll (the web keeps the same rule: no signed-out gateway polling).
   const guest = hydrated && !member;
   const hasData = !guest && snapshot !== null;
+  // U5.1 taxonomy: transport down is OFFLINE ("unreachable"); a NAS that
+  // answered and failed ("server") is an ERROR — never blame the family's
+  // internet for a 502.
   const failure = guest
     ? "unauthorised"
     : syncError === "unreachable"
       ? "offline"
-      : syncError
-        ? "error"
-        : null;
+      : syncError === "unauthorized"
+        ? "unauthorised"
+        : syncError === "server"
+          ? "error"
+          : null;
   const status = guest || (syncError !== null && !hasData) ? "error" : hasData ? "ready" : "loading";
 
   const description = hasData ? `${pending.length} pending for the family` : undefined;
+
+  // The KPI band's "Tasks · Pending" tile reads the same list this card reads
+  // (src/home/wall-stats.ts) — one snapshot, two surfaces.
+  React.useEffect(() => {
+    if (hasData) publishWallStats({ openTasks: pending.length });
+  }, [hasData, pending.length]);
 
   return (
     <WidgetFrame
@@ -85,6 +105,9 @@ export function TasksWidget() {
         <EmptyState flat icon="🎉" title="All caught up" body="No pending tasks right now." style={{ flex: 1 }} />
       ) : (
         <View style={{ gap: 8 }}>
+          {/* Web page.tsx:942: the bare rose clock band above the rows — the
+              same rhythm Today's Events paints with its event markers. */}
+          <DayLine testID="tasks-dayline" tone={colors["color-accent-rose"] ?? accentColor} marginBottom={0} />
           {visible.map((task) => {
             const points = typeof task.points === "number" ? task.points : 0;
             const pointsColor =
@@ -93,7 +116,7 @@ export function TasksWidget() {
                 : points > 10
                   ? colors["color-accent-amber"] ?? accentColor
                   : colors["color-accent-mint"] ?? accentColor;
-            const awaiting = !!task.pendingApproval;
+            const awaiting = !!task.completed && !!task.pendingApproval;
             const subtitle = [task.assignee, task.due].filter(Boolean).join(" · ");
             return (
               <ListRow
@@ -111,30 +134,47 @@ export function TasksWidget() {
               />
             );
           })}
+          {/* Web footer parity: a LINK to /tasks, not dead text — the parent's
+              approval count and the "+N more" row both open the page that
+              resolves them (page.tsx:933-935). */}
           {isParent && pendingApprovalCount > 0 ? (
-            <Text
-              style={{
-                color: colors["color-text-secondary"],
-                fontSize: TYPOGRAPHY.label.fontSize,
-                fontWeight: "600",
-                textAlign: "center",
-                marginTop: 2,
-              }}
+            <Pressable
+              testID="tasks-approval-footer"
+              accessibilityRole="link"
+              accessibilityLabel={`${pendingApprovalCount} need approval. Open tasks`}
+              onPress={() => router.push("/tasks")}
+              style={{ minHeight: 64, justifyContent: "center", marginTop: 2 }}
             >
-              {pendingApprovalCount} {pendingApprovalCount === 1 ? "needs" : "need"} approval
-            </Text>
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  fontWeight: "600",
+                  textAlign: "center",
+                }}
+              >
+                {`${pendingApprovalCount} ${pendingApprovalCount === 1 ? "needs" : "need"} approval →`}
+              </Text>
+            </Pressable>
           ) : hidden > 0 ? (
-            <Text
-              style={{
-                color: colors["color-text-secondary"],
-                fontSize: TYPOGRAPHY.label.fontSize,
-                fontWeight: "600",
-                textAlign: "center",
-                marginTop: 2,
-              }}
+            <Pressable
+              testID="tasks-more-footer"
+              accessibilityRole="link"
+              accessibilityLabel={`${hidden} more tasks. Open tasks`}
+              onPress={() => router.push("/tasks")}
+              style={{ minHeight: 64, justifyContent: "center", marginTop: 2 }}
             >
-              +{hidden} more
-            </Text>
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  fontWeight: "600",
+                  textAlign: "center",
+                }}
+              >
+                {`+${hidden} more · See all →`}
+              </Text>
+            </Pressable>
           ) : null}
         </View>
       )}

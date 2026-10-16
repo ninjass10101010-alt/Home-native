@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 const KEY = "consuela_session"; // cookie NAME — value is an opaque server token
@@ -22,12 +23,22 @@ export async function loadSessionCookie(): Promise<string | null> {
   } catch {
     inMemory = null;
   }
+  if (!inMemory && typeof __DEV__ !== "undefined" && __DEV__ && typeof jest === "undefined") {
+    try {
+      inMemory = await AsyncStorage.getItem(KEY);
+    } catch {
+      inMemory = null;
+    }
+  }
   return inMemory;
 }
 
 export async function clearSessionCookie(): Promise<void> {
   inMemory = null;
   await SecureStore.deleteItemAsync(KEY).catch(() => {});
+  if (typeof __DEV__ !== "undefined" && __DEV__ && typeof jest === "undefined") {
+    await AsyncStorage.removeItem(KEY).catch(() => {});
+  }
 }
 
 /** Parse the consuela_session value out of a response's Set-Cookie header(s).

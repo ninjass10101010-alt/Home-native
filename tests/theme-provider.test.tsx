@@ -3,7 +3,7 @@ import React from "react";
 import { renderHook, act, waitFor } from "@testing-library/react-native";
 import { AccessibilityInfo } from "react-native";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
-import { TOKENS, ACCENTS } from "../src/theme/tokens";
+import { TOKENS, ACCENTS, ACCENTS_RGB } from "../src/theme/tokens";
 import { contrastRatio } from "../src/lib/contrast";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
@@ -59,6 +59,25 @@ describe("ThemeProvider", () => {
     const { result } = renderHook(() => useTheme(), { wrapper: wrap });
     act(() => result.current.setAccent("amber"));
     expect(result.current.colors["color-accent-selected"]).toBe(ACCENTS[result.current.theme].amber);
+  });
+
+  it("U1: colors['color-accent-selected-rgb'] mirrors the live accent's channels in every theme × boost", () => {
+    const { result } = renderHook(() => useTheme(), { wrapper: wrap });
+    for (const theme of ["light", "dark"] as const) {
+      for (const accent of ["nori", "amber", "mint"] as const) {
+        for (const boost of [false, true]) {
+          act(() => {
+            result.current.setTheme(theme);
+            result.current.setAccent(accent);
+            result.current.setBoost(boost);
+          });
+          const hex = result.current.accentColor;
+          const channels = `${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)}`;
+          expect(result.current.colors["color-accent-selected-rgb"]).toBe(channels);
+          expect(result.current.colors["color-accent-selected-rgb"]).toBe(ACCENTS_RGB[theme][accent]);
+        }
+      }
+    }
   });
 
   it("boost overlays only the boost keys (canvas unchanged)", () => {

@@ -8,6 +8,7 @@ import { Modal } from "../ui/Modal";
 import { PinPad } from "../ui/PinPad";
 import { SoftButton } from "../ui/SoftButton";
 import { Chip } from "../ui/Chip";
+import { MoreButton } from "../nav/CapsuleDock";
 import { EmptyState } from "../ui/EmptyState";
 import { ListRow } from "../ui/ListRow";
 import { useToast } from "../ui/Toast";
@@ -68,7 +69,8 @@ function pointsTone(points: number): "success" | "warning" | "danger" {
   return "success";
 }
 
-export function KidHome() {
+export interface KidHomeProps { onOpenMore?: () => void; }
+export function KidHome({ onOpenMore }: KidHomeProps = {}) {
   const { colors, accentColor } = useTheme();
   const toast = useToast();
   const { member, signOut, pinRequiredFor } = useAuth();
@@ -189,7 +191,7 @@ export function KidHome() {
           <Text
             style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.stat.fontSize, fontWeight: "700", marginTop: 4 }}
           >
-            Hi {first} 👋
+            Hey {first}! 👋
           </Text>
           <View style={{ flexDirection: "row", alignItems: "baseline", marginTop: 4, gap: 8 }}>
             <Text
@@ -346,6 +348,11 @@ export function KidHome() {
           />
         ) : null}
       </Modal>
+    {onOpenMore ? (
+      <View style={{ position: "absolute", left: 0, right: 0, bottom: 116, alignItems: "center" }} pointerEvents="box-none">
+        <MoreButton onPress={onOpenMore} />
+      </View>
+    ) : null}
     </View>
   );
 }

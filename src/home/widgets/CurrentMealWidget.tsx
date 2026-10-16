@@ -9,6 +9,7 @@ import { Chip } from "../../ui/Chip";
 import { WidgetFrame } from "./WidgetFrame";
 import { useWidgetData, weekStartMondayISO } from "./data";
 import { currentSlotFor } from "../../meals/slot";
+import { publishWallStats, weekCellsFor } from "../wall-stats";
 
 /** meal_plan_entries row (subset) — see Home-ai src/lib/pb-seed.ts schema. */
 interface MealRow {
@@ -88,16 +89,22 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
     return () => clearInterval(t);
   }, [injectedNow]);
 
-  const { status, data, failure, stale, retry } = useWidgetData(async () => {
-    const [schedulesRes, mealsRes] = await Promise.all([
-      api<DbListEnvelope<ScheduleRow>>("/api/db/schedules"),
-      api<DbListEnvelope<MealRow>>("/api/db/meal_plan_entries"),
-    ]);
-    return {
-      schedules: Array.isArray(schedulesRes?.items) ? schedulesRes.items : [],
-      meals: Array.isArray(mealsRes?.items) ? mealsRes.items : [],
-    };
-  });
+  const { status, data, failure, stale, retry } = useWidgetData(
+    async () => {
+      const [schedulesRes, mealsRes] = await Promise.all([
+        api<DbListEnvelope<ScheduleRow>>("/api/db/schedules"),
+        api<DbListEnvelope<MealRow>>("/api/db/meal_plan_entries"),
+      ]);
+      return {
+        schedules: Array.isArray(schedulesRes?.items) ? schedulesRes.items : [],
+        meals: Array.isArray(mealsRes?.items) ? mealsRes.items : [],
+      };
+    },
+    // Reference guest capture: the meal card renders LIVE signed-out (the
+    // db-gateway reads are public). Guests see the honest "No meal planned
+    // yet" — never a PIN gate.
+    { guestVisible: true }
+  );
 
   const now = injectedNow ?? tickNow ?? new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -107,7 +114,14 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
   // agree because there is ONE implementation (the critic's fork-ban).
   const current: { mealType: string; time?: string; minutes: number | null } = (() => {
     const slot = currentSlotFor(data?.schedules ?? [], now);
-    const row = (data?.schedules ?? []).find((s) => s.mealType === slot) ?? null;
+    // The row can carry the slot either explicitly (mealType) or via the
+    // title keyword — match both so a title-only "Dinner" schedule keeps its
+    // time on the card (the web reads the same schedule object).
+    const rows = data?.schedules ?? [];
+    const row =
+      rows.find((s) => s.mealType === slot) ??
+      rows.find((s) => (s.title ?? "").toLowerCase().includes(slot) && parseTimeToMinutes(s.time) !== null) ??
+      null;
     return { mealType: slot, time: row?.time, minutes: row ? parseTimeToMinutes(row.time) : null };
   })();
 
@@ -133,25 +147,66 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
           : `In ${formatDuration(minutesUntil)} · at ${scheduledTime}`
         : `Started at ${scheduledTime}`;
 
+  // Card tint mirrors the web's proximity glow (static at wall distance): the
+  // meal accent mints the card border at 30%, matching `accentColor`+`30` web fill.
+  const mint = colors["color-accent-mint"] ?? accentColor;
+  const cardBorder = mix(mint, "transparent", 30);
+
+  // Title band (reference): plain "🌙 Dinner Time" title with a COMPACT time
+  // chip beside it — not one opaque mega-pill (the clock glyph is the web's
+  // drop; the capture shows "🌙 Dinner Time   11:49 PM").
   const header = (
-    <View style={{ alignItems: "center" }}>
-      <Text
-        style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}
-        accessibilityRole="header"
-      >
-        {`${theme.icon} ${theme.label} Time`}
-      </Text>
-      <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 2 }}>
-        {timeStr} · {subtitle}
+    <View style={{ alignItems: "center", gap: 6 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, justifyContent: "center" }}>
+        <Text
+          style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}
+          accessibilityRole="header"
+        >
+          {`${theme.icon} ${theme.label} Time`}
+        </Text>
+        <View
+          style={{
+            borderRadius: 9999,
+            borderWidth: 1,
+            borderColor: cardBorder,
+            backgroundColor: colors["color-surface-0"],
+            paddingHorizontal: 12,
+            paddingVertical: 4,
+          }}
+        >
+          <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+            {timeStr}
+          </Text>
+        </View>
+      </View>
+      <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+        {subtitle}
       </Text>
     </View>
   );
 
   const tags = meal ? tagsOf(meal) : [];
-  // Card tint mirrors the web's proximity glow (static at wall distance): the
-  // meal accent mints the card border at 30%, matching `accentColor`+`30` web fill.
-  const mint = colors["color-accent-mint"] ?? accentColor;
-  const cardBorder = mix(mint, "transparent", 30);
+
+  // The KPI band + "This Week" strip read THIS widget's meal rows — the wall
+  // header's "Days planned" tile and the week strip must agree with the card
+  // that owns the read (src/home/wall-stats.ts). Week-matched rows only:
+  // a meal without weekOf predates the week-scoped planner and belongs to the
+  // current week (the web's plannedDaysThisWeek rule, verbatim).
+  React.useEffect(() => {
+    if (!data) return;
+    const weekMonday = weekStartMondayISO(now);
+    const plannedLabels = new Set<string>();
+    for (const m of data.meals) {
+      if ((m.weekOf || weekMonday) === weekMonday && typeof m.time === "string" && m.time) {
+        plannedLabels.add(m.time);
+      }
+    }
+    const cells = weekCellsFor(now, plannedLabels);
+    publishWallStats({
+      plannedDays: cells.filter((c) => c.planned).length,
+      weekCells: cells,
+    });
+  }, [data, now.getDate()]); // eslint-disable-line react-hooks/exhaustive-deps -- re-derive on a date change, not every tick
 
   return (
     <WidgetFrame

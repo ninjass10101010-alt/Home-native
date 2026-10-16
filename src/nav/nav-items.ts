@@ -203,7 +203,43 @@ export function navItemForPath(pathname: string): NavItemDefinition | undefined 
 }
 
 /**
- * Routes that deliberately have no manifest entry, each with its reason.
+ * Routes that actually exist under app/ today (Wave 1 surfaces).
+ *
+ * CONTRACT: every entry here MUST have a matching route file (app/index.tsx
+ * for "/"), or resolveRoute will strand the wall on expo-router's Unmatched
+ * view — the very failure it exists to prevent. tests/nav-items.test.ts
+ * walks the real app/ tree and fails on any entry without a file.
+ */
+const LIVE_ROUTES: ReadonlySet<string> = new Set([
+  "/",
+  "/tasks",
+  "/meals",
+  "/calendar",
+  "/photos",
+  "/settings",
+  "/emergency",
+  "/weather",
+  "/ha",
+  "/chat",
+  "/rewards",
+]);
+
+/**
+ * U3 navigation guard: a manifest path that has no route yet (Ask/House/
+ * Rewards + the More… sheet's secondary destinations — Wave 2) must NEVER
+ * strand the family on expo-router's Unmatched view (dock unmounted, wall
+ * dead). Unknown paths land on /soon with an honest "arrives in the next
+ * wave" surface that keeps the dock alive.
+ */
+export function resolveRoute(path: string, label?: string): string {
+  if (LIVE_ROUTES.has(path)) return path;
+  const name = label ?? path;
+  return `/soon?label=${encodeURIComponent(name)}`;
+}
+
+/**
+ * Routes that deliberately have no manifest entry, each with the reason it
+ * is allowed to stay orphans.
  */
 export const EXEMPT_ROUTES: Readonly<Record<string, string>> = {
   "/design-system": "Dev-only design-system preview (production-gated).",
@@ -214,4 +250,6 @@ export const EXEMPT_ROUTES: Readonly<Record<string, string>> = {
   "/player": "Reached from Home's Music widget; a drill-down, not a cap.",
   "/screensaver": "Idle wall board — reached by inactivity, not nav.",
   "/suggestions": "Reached from Home's Suggestions widget ('See all').",
+  "/weather": "Reached from Home's weather cell poster — a drill-down, not a cap.",
+  "/soon": "Honest fallback for destinations that have not shipped (dock stays alive).",
 };

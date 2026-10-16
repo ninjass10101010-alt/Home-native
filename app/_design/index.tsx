@@ -1,5 +1,5 @@
 import React from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useTheme } from "../../src/theme/ThemeProvider";
 import { ACCENTS, TYPOGRAPHY, MOTION } from "../../src/theme/tokens";
 import { Screen } from "../../src/theme/Screen";
@@ -246,16 +246,38 @@ export default function DesignKitShowcase() {
         <Section title="Accents" subtitle="Warm Glass v2 accent palette — tap to apply">
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
             {Object.keys(ACCENTS.dark).map((a) => (
-              <View key={a} style={{ width: "47%", gap: 6 }}>
-                <Chip
-                  testID={`accent-chip-${a}`}
-                  label={a}
-                  tone="accent"
-                  selected={accent === a}
-                  onPress={() => setAccent(a)}
-                  style={{ backgroundColor: ACCENTS[theme][a] }}
+              // Reference structure (design-system capture): the accent NAME
+              // sits OUTSIDE the swatch in primary ink on the card — the
+              // swatch itself is pure accent color. (An in-pill label over a
+              // raw accent fill failed AA: 1.6–3.4:1.)
+              <Pressable
+                key={a}
+                testID={`accent-chip-${a}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Accent ${a}`}
+                accessibilityState={{ selected: accent === a }}
+                onPress={() => setAccent(a)}
+                style={{ width: "47%", minHeight: 64, gap: 8 }}
+              >
+                <View
+                  style={{
+                    height: 56,
+                    borderRadius: 16,
+                    backgroundColor: ACCENTS[theme][a],
+                    borderWidth: accent === a ? 3 : 0,
+                    borderColor: colors["color-text-primary"],
+                  }}
                 />
-              </View>
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "600",
+                  }}
+                >
+                  {a}
+                </Text>
+              </Pressable>
             ))}
           </View>
         </Section>

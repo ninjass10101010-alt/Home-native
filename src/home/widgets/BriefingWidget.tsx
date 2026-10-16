@@ -1,11 +1,12 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { api } from "../../api/client";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
 import { ListRow } from "../../ui/ListRow";
 import { Chip } from "../../ui/Chip";
+import { mixAlpha } from "../../ui/SoftButton";
 import { WidgetFrame } from "./WidgetFrame";
 import { localTodayISO, useWidgetData } from "./data";
 
@@ -46,7 +47,14 @@ function taskSourceNote(briefing: Briefing): string | null {
 const WALL_ROW_BUDGET = 3;
 
 export function BriefingWidget() {
-  const { colors } = useTheme();
+  const { colors, accentColor } = useTheme();
+
+  // Web model (MorningBriefingWidget.tsx:73,136-149): the wall card is
+  // COLLAPSED by default — a compact teaser + an expand toggle. The family
+  // reads the day at a glance; the badge opens the detail.
+  const [expanded, setExpanded] = React.useState(false);
+  const [acked, setAcked] = React.useState(false);
+  const [ackBusy, setAckBusy] = React.useState(false);
 
   const { status, data, failure, stale, retry } = useWidgetData(async () => {
     // Body-over-status: ok:false means the read is not truth even on a 200.
@@ -98,7 +106,96 @@ export function BriefingWidget() {
   const visible = rows.slice(0, WALL_ROW_BUDGET);
   const hidden = rows.length - visible.length;
 
-  const description = briefing && !briefing.acknowledged ? "What Consuela lined up for today" : undefined;
+  const acknowledged = !!briefing?.acknowledged || acked;
+
+  const description = briefing && !acknowledged ? "What Consuela lined up for today" : undefined;
+
+  const showToggle = !!briefing && !acknowledged && (total > 0 || !!note);
+
+  async function handleAck() {
+    if (!briefing || ackBusy) return;
+    setAckBusy(true);
+    try {
+      await api("/api/consuela/briefing", { method: "PATCH", body: { id: briefing.id } });
+      setAcked(true);
+    } catch {
+      setAcked(false);
+    } finally {
+      setAckBusy(false);
+    }
+  }
+
+  // Title band with the expand toggle (web badge parity). The visible chip is
+  // COMPACT like the reference; its tap floor is carried by the hit region
+  // (chip ≈28dp + 20dp slop each way = 68dp ≥ the 64dp wall floor).
+  const header = (
+    <View style={{ alignItems: "center" }}>
+      {showToggle ? (
+        <Pressable
+          testID="briefing-toggle"
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? "Collapse morning briefing" : "Expand morning briefing"}
+          accessibilityState={{ expanded }}
+          hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+          onPress={() => setExpanded((v) => !v)}
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "row",
+            gap: 6,
+            borderRadius: 9999,
+            borderWidth: 1,
+            borderColor: mixAlpha(accentColor, 0.3),
+            backgroundColor: mixAlpha(accentColor, 0.18),
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            zIndex: 3,
+          }}
+        >
+          <Text style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+            {total} item{total === 1 ? "" : "s"}
+          </Text>
+          <Text style={{ color: accentColor, fontSize: 14 }}>{expanded ? "▲" : "▼"}</Text>
+        </Pressable>
+      ) : null}
+      {!acknowledged && briefing ? (
+        <Pressable
+          testID="briefing-ack"
+          accessibilityRole="button"
+          accessibilityLabel="Acknowledge briefing"
+          disabled={ackBusy}
+          onPress={() => void handleAck()}
+          style={{
+            marginTop: 8,
+            minHeight: 64,
+            borderRadius: 14,
+            paddingHorizontal: 16,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: accentColor,
+          }}
+        >
+          <Text style={{ color: colors["color-text-on-accent"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+            ✓ Got it
+          </Text>
+        </Pressable>
+      ) : null}
+      <Text
+        style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}
+        accessibilityRole="header"
+      >
+        Morning Briefing
+      </Text>
+      {description ? (
+        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 2 }}>
+          {description}
+        </Text>
+      ) : null}
+    </View>
+  );
 
   return (
     <WidgetFrame
@@ -111,6 +208,7 @@ export function BriefingWidget() {
       hasData={briefing != null}
       stale={stale}
       onRetry={retry}
+      header={header}
     >
       {briefing === null ? (
         // A genuinely empty briefing (not a failed read — that renders above).
@@ -121,7 +219,7 @@ export function BriefingWidget() {
           body="Consuela will post the morning briefing here."
           style={{ flex: 1 }}
         />
-      ) : briefing.acknowledged ? (
+      ) : acknowledged ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 6 }}>
           <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, textAlign: "center" }}>
             Seen for today — Consuela will refresh it tomorrow
@@ -136,6 +234,31 @@ export function BriefingWidget() {
           body="Consuela will post the morning briefing here."
           style={{ flex: 1 }}
         />
+      ) : !expanded ? (
+        // Collapsed teaser (web parity) — the badge above opens the plan.
+        <View style={{ flex: 1, justifyContent: "center", gap: 6, paddingHorizontal: 4 }}>
+          {note ? (
+            <Text
+              style={{
+                color: colors["color-accent-amber"] ?? colors["color-text-secondary"],
+                fontSize: TYPOGRAPHY.label.fontSize,
+                fontWeight: "600",
+                textAlign: "center",
+              }}
+            >
+              {note}
+            </Text>
+          ) : null}
+          <Text
+            style={{
+              color: colors["color-text-muted"],
+              fontSize: TYPOGRAPHY.label.fontSize,
+              textAlign: "center",
+            }}
+          >
+            {"Tap the badge above to see today's plan."}
+          </Text>
+        </View>
       ) : (
         <View style={{ gap: 8 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>

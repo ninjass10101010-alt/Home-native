@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
+import { AppState } from "react-native";
 import { act, renderHook } from "@testing-library/react-native";
-import { SyncManager, useSync } from "../src/state/SyncManager";
+import { SyncManager, useSync, classifySyncError } from "../src/state/SyncManager";
 import { ApiError } from "../src/api/client";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
@@ -58,7 +59,7 @@ describe("SyncManager", () => {
     expect(api.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("no polling when signed out", async () => {
+  it("no polling when signed out (server requires a session — a guest poll could only 401)", async () => {
     mockMember = null;
     renderHook(() => useSync(), { wrapper: wrap });
     await act(async () => {
@@ -150,5 +151,110 @@ describe("SyncManager", () => {
     expect(api).toHaveBeenCalledTimes(3); // nothing at 5s
     await act(async () => { jest.advanceTimersByTime(55_000); await Promise.resolve(); });
     expect(api).toHaveBeenCalledTimes(4); // the 60s poll fired
+  });
+});
+
+describe("SyncError taxonomy (U5.1) — a 502 is not offline", () => {
+  it("classifySyncError: transport stays unreachable, HTTP errors are server, 401 is session", () => {
+    expect(classifySyncError(new ApiError({ message: "x", status: 0, code: "unreachable", retryable: true }))).toBe("unreachable");
+    expect(classifySyncError(new ApiError({ message: "bad gateway", status: 502, code: "http_502", retryable: true }))).toBe("server");
+    expect(classifySyncError(new ApiError({ message: "not found", status: 404, code: "http_404" }))).toBe("server");
+    expect(classifySyncError(new ApiError({ message: "unauthorized", status: 401, code: "unauthorized" }))).toBe("unauthorized");
+    expect(classifySyncError(new Error("boom"))).toBe("unreachable"); // non-ApiError transport
+  });
+
+  it("a reachable server that fails (502) → syncError 'server', surfaces never read it as offline", async () => {
+    api.mockRejectedValueOnce(new ApiError({ message: "bad gateway", status: 502, code: "http_502", retryable: true }));
+    const { result } = renderHook(() => useSync(), { wrapper: wrap });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.syncError).toBe("server");
+    expect(result.current.stale).toBe(true); // still honest: the data may not be family truth
+  });
+
+  it("status 0 transport failure keeps 'unreachable'", async () => {
+    api.mockRejectedValueOnce(new ApiError({ message: "x", status: 0, code: "unreachable", retryable: true }));
+    const { result } = renderHook(() => useSync(), { wrapper: wrap });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.syncError).toBe("unreachable");
+  });
+});
+
+describe("initial stale honesty (U5.2) — never fresh-when-unknown", () => {
+  it("signed in, no successful sync yet → stale is TRUE while the first poll is in flight", async () => {
+    api.mockImplementation(() => new Promise(() => {})); // never settles
+    const { result } = renderHook(() => useSync(), { wrapper: wrap });
+    expect(result.current.lastSyncAt).toBeNull();
+    expect(result.current.stale).toBe(true); // a never-synced wall must not claim freshness
+  });
+
+  it("signed OUT wall → not badged (guests never sync; their wall is the saved-copy rail + gates)", async () => {
+    mockMember = null;
+    api.mockImplementation(() => new Promise(() => {}));
+    const { result } = renderHook(() => useSync(), { wrapper: wrap });
+    expect(result.current.lastSyncAt).toBeNull();
+    expect(result.current.stale).toBe(false);
+  });
+
+  it("the first successful sync clears the honest initial stale", async () => {
+    api.mockResolvedValueOnce({ snapshot: { tasks: [] }, reconciled: true });
+    const { result } = renderHook(() => useSync(), { wrapper: wrap });
+    expect(result.current.stale).toBe(true); // before the poll settles
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.lastSyncAt).not.toBeNull();
+    expect(result.current.stale).toBe(false);
+  });
+});
+
+describe("reconciled:false honesty (U5.3) — Home-ai ARCHITECTURE §5.6", () => {
+  it("keeps the last-good snapshot but leaves stale truthy until the server reconciles", async () => {
+    api.mockResolvedValueOnce({ snapshot: { tasks: [1] }, reconciled: false });
+    const { result } = renderHook(() => useSync(), { wrapper: wrap });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // the snapshot is kept (correct — the server is catching up, not empty)…
+    expect(result.current.snapshot).toEqual({ tasks: [1] });
+    expect(result.current.lastSyncAt).not.toBeNull();
+    expect(result.current.syncError).toBeNull();
+    // …but surfaces must be badged: the data on screen may still lag the family truth.
+    expect(result.current.stale).toBe(true);
+
+    // A later reconciled response clears the badge.
+    api.mockResolvedValueOnce({ snapshot: { tasks: [2] }, reconciled: true });
+    await act(async () => {
+      await result.current.refreshNow();
+    });
+    expect(result.current.snapshot).toEqual({ tasks: [2] });
+    expect(result.current.stale).toBe(false);
+  });
+});
+
+describe("poll loop cleanup (U5.6)", () => {
+  it("unmount clears the 60s timer and detaches the AppState listener", async () => {
+    api.mockResolvedValue({ snapshot: {} });
+    const remove = jest.fn();
+    const addSpy = jest.spyOn(AppState, "addEventListener").mockReturnValue({ remove } as any);
+    const { unmount } = renderHook(() => useSync(), { wrapper: wrap });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(api).toHaveBeenCalledTimes(1); // the mount poll fired
+    expect(addSpy).toHaveBeenCalled();
+    api.mockClear();
+
+    unmount();
+    await act(async () => {
+      jest.advanceTimersByTime(60_000); // the leaked timer would poll here
+      await Promise.resolve();
+    });
+    expect(api).not.toHaveBeenCalled(); // timer cleared on cleanup
+    expect(remove).toHaveBeenCalled(); // AppState listener detached
+    addSpy.mockRestore();
   });
 });

@@ -3,6 +3,7 @@ import { Pressable, Text, View, ViewStyle } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { MIN_TARGET_DP } from "../theme/tokens";
 import { accentDeepened, accentInk } from "../theme/mix";
+import { Material } from "../theme/Material";
 import { mixAlpha } from "./SoftButton";
 
 export type ChipTone = "neutral" | "accent" | "success" | "danger" | "warning" | "violet" | "cyan";
@@ -24,11 +25,19 @@ export interface ChipProps {
 }
 
 /**
- * RN port of ui/Chip.tsx with the wall contract. Tone inks: accent/violet/cyan
- * use the 55% accent→body-ink mix (the measured AA convention). Selected =
- * accent deepened 60% toward black with white ink — and the tone ink is
- * OMITTED (not overridden), mirroring the web fix. Disabled = neutral surface
- * + secondary ink (never an opacity fade).
+ * RN port of ui/Chip.tsx with the wall contract. Chrome routes through
+ * Material (thin): resting = the tier's frosted surface, selected/disabled =
+ * solid state fills (background prop — blur skipped under an opaque fill).
+ * Tone inks: accent/violet/cyan use the 55% accent→body-ink mix (the measured
+ * AA convention). success/warning/danger follow the web's per-tone guards
+ * (globals.css chip-tone): LIGHT = accent at 72% (28% toward black — the
+ * measured light fix, worst case 5.00:1 on surface-2); DARK keeps the vivid
+ * raw accent where AA holds (mint/amber ≥7.3:1 on every chip surface) and
+ * lifts danger via accentInk (raw rose lands 4.27–4.28:1 on Material-
+ * composited chip surfaces; accentInk clears 6.96:1). Selected = accent
+ * deepened 40% toward black (web color-mix(accent 60%, black)) with white ink
+ * — and the tone ink is OMITTED (not overridden), mirroring the web fix.
+ * Disabled = neutral surface + secondary ink (never an opacity fade).
  */
 const sizeMap: Record<ChipSize, { height: number; px: number; font: number }> = {
   sm: { height: 48, px: 16, font: 14 },   // span-only (see runtime guard)
@@ -49,7 +58,7 @@ export function Chip({
   testID,
   accessibilityLabel,
 }: ChipProps) {
-  const { colors, accentColor } = useTheme();
+  const { colors, accentColor, reduceMotion, theme } = useTheme();
   const ON_ACCENT = colors["color-primary-foreground"];
   const s = sizeMap[size];
 
@@ -59,6 +68,10 @@ export function Chip({
     as = "span";
   }
 
+  const mint = colors["color-accent-mint"] ?? accentColor;
+  const rose = colors["color-accent-rose"] ?? accentColor;
+  const amber = colors["color-accent-amber"] ?? accentColor;
+
   const toneInk = (t: ChipTone): string => {
     switch (t) {
       case "neutral":
@@ -66,11 +79,11 @@ export function Chip({
       case "accent":
         return accentInk(accentColor, colors["color-text-primary"]);
       case "success":
-        return colors["color-accent-mint"] ?? accentColor;
+        return theme === "light" ? accentDeepened(mint, 28) : mint;
       case "danger":
-        return colors["color-accent-rose"] ?? accentColor;
+        return theme === "light" ? accentDeepened(rose, 28) : accentInk(rose, colors["color-text-primary"]);
       case "warning":
-        return colors["color-accent-amber"] ?? accentColor;
+        return theme === "light" ? accentDeepened(amber, 28) : amber;
       case "violet":
         return accentInk(colors["color-accent-violet"] ?? accentColor, colors["color-text-primary"]);
       case "cyan":
@@ -78,11 +91,12 @@ export function Chip({
     }
   };
 
-  const resolvedBg = disabled
+  // Solid state fill for Material (undefined = keep the frosted tier surface).
+  const solidFill = disabled
     ? colors["color-surface-2"]
     : selected
-      ? accentDeepened(accentColor, 60)
-      : mixAlpha(colors["color-surface-0"] ?? accentColor, 0.2);
+      ? accentDeepened(accentColor, 40)
+      : undefined;
   const resolvedInk = disabled
     ? colors["color-text-secondary"]
     : selected
@@ -92,7 +106,9 @@ export function Chip({
     ? colors["color-border"] ?? "transparent"
     : selected
       ? "transparent"
-      : mixAlpha(accentColor, tone === "neutral" ? 0.0 : 0.25);
+      : tone === "neutral"
+        ? colors["color-border"] ?? "transparent"
+        : mixAlpha(accentColor, 0.25);
 
   const content = (
     <>
@@ -105,7 +121,7 @@ export function Chip({
     </>
   );
 
-  const base: ViewStyle = {
+  const chrome: ViewStyle = {
     height: s.height,
     minHeight: as === "button" ? MIN_TARGET_DP : s.height,
     paddingHorizontal: s.px,
@@ -115,14 +131,15 @@ export function Chip({
     flexDirection: "row",
     gap: 8,
     borderWidth: 1,
-    backgroundColor: resolvedBg,
     borderColor: resolvedBorder,
   };
 
   if (as === "span") {
     return (
-      <View testID={testID} style={[base, style]} accessibilityLabel={accessibilityLabel}>
-        {content}
+      <View testID={testID} accessibilityLabel={accessibilityLabel}>
+        <Material tier="thin" background={solidFill} style={[chrome, style]}>
+          {content}
+        </Material>
       </View>
     );
   }
@@ -134,9 +151,14 @@ export function Chip({
       accessibilityState={{ disabled, selected }}
       disabled={disabled}
       onPress={onPress}
-      style={[base, style]}
+      style={
+        ({ pressed }) =>
+          pressed && !reduceMotion ? { transform: [{ scale: 0.96 }] } : null
+      }
     >
-      {content}
+      <Material tier="thin" background={solidFill} style={[chrome, style]}>
+        {content}
+      </Material>
     </Pressable>
   );
 }

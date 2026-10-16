@@ -22,6 +22,24 @@ let fetchInFlight = false;
 
 const subscribers = new Set<() => void>();
 const MIN_REFETCH_GAP_MS = 5_000;
+/** Web useHAState.ts:12 — the store polls on this cadence. */
+const POLL_INTERVAL_MS = 60_000;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+function ensureStoreLoop(): void {
+  if (pollTimer) return;
+  pollTimer = setInterval(() => {
+    void fetchStates();
+  }, POLL_INTERVAL_MS);
+}
+
+function teardownStoreLoopIfIdle(): void {
+  if (subscribers.size > 0) return;
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
 
 function notifySubscribers(): void {
   for (const fn of Array.from(subscribers)) {
@@ -48,7 +66,16 @@ async function fetchStates(force = false): Promise<void> {
       sharedError = null;
     }
   } catch (e) {
-    sharedError = e instanceof ApiError ? e.message : String(e);
+    if (e instanceof ApiError && e.status === 401) {
+      // Signed-out wall: /api/ha/* is session-gated. The VERIFIED reference
+      // contract (docs/wave1-endpoints.md): a guest gets the honest EMPTY
+      // states ("No presence data yet" / "No climate data" / "No lights
+      // found"), never an error card that re-401s forever.
+      sharedStates = [];
+      sharedError = null;
+    } else {
+      sharedError = e instanceof ApiError ? e.message : String(e);
+    }
   } finally {
     fetchInFlight = false;
     lastFetchAt = Date.now();
@@ -74,10 +101,12 @@ export function useHAState(): UseHAState {
   useEffect(() => {
     mounted.current = true;
     subscribers.add(onChange);
+    ensureStoreLoop(); // web store-loop parity: poll while anyone watches
     void fetchStates(); // mount: fetch if stale (gap guard applies)
     return () => {
       mounted.current = false;
       subscribers.delete(onChange);
+      teardownStoreLoopIfIdle(); // the wall sleeps when no widget watches
     };
   }, [onChange]);
 
@@ -111,6 +140,24 @@ export function alarmPanel(states: HAState[]): HAState | undefined {
   return states.find((s) => s.entity_id.startsWith("alarm_control_panel."));
 }
 
+/** Immutably apply an optimistic patch to one entity's state. Notifies subscribers. */
+export function applyOptimisticHA(entityId: string, patch: Partial<HAState>): void {
+  sharedStates = sharedStates.map((s) => {
+    if (s.entity_id !== entityId) return s;
+    const mergedAttrs =
+      patch && patch.attributes && typeof patch.attributes === "object" && !Array.isArray(patch.attributes)
+        ? { ...s.attributes, ...(patch.attributes as Record<string, unknown>) }
+        : s.attributes;
+    return { ...s, ...patch, attributes: mergedAttrs };
+  });
+  notifySubscribers();
+}
+
+/** Re-fetch the HA states (force) and emit the result to subscribers. */
+export async function refreshHAState(): Promise<void> {
+  await fetchStates(true);
+}
+
 /** Test hook: reset the module store. */
 export function _resetHAStore() {
   sharedStates = [];
@@ -119,4 +166,8 @@ export function _resetHAStore() {
   lastFetchAt = 0;
   fetchInFlight = false;
   subscribers.clear();
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
 }

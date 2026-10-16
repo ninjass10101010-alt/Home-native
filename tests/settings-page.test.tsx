@@ -392,7 +392,7 @@ describe("Settings route", () => {
     await findByTestId("settings-section-me");
     expect(getByTestId("dock-settings")).toBeTruthy();
     expect(getByTestId("dock-settings").props.accessibilityState?.selected).toBe(true);
-    fireEvent.press(getByTestId("dock-more"));
+    fireEvent.press(getByTestId("home-more"));
     expect(await findByTestId("more-grocery")).toBeTruthy();
   });
 });

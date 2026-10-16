@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, ScrollView, Text, View, ViewStyle } from "react-native";
+import { Image, Pressable, ScrollView, Text, View, ViewStyle } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { Material } from "../theme/Material";
@@ -21,6 +21,13 @@ export interface MemberRailProps {
   testID?: string;
 }
 
+function isPhotoUri(emoji: string): boolean {
+  return (
+    typeof emoji === "string" &&
+    (emoji.startsWith("data:image/") || emoji.startsWith("http") || emoji.startsWith("/"))
+  );
+}
+
 /**
  * Wall member rail (the wall-mode header rail from the 2026-09-09 wall spec §5):
  * one avatar tile per member, current member glows in their accent with a ✓,
@@ -35,6 +42,7 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
           const current = m.name === currentName;
           // color arrives as a NAME from the roster — resolve to a token first
           const memberHex = memberAccentHex(m.color, theme, accentColor);
+          const photo = isPhotoUri(m.emoji);
           return (
             <Pressable
               key={m.name}
@@ -55,8 +63,31 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
                   backgroundColor: current ? mix(memberHex, "transparent", 20) : "transparent",
                 }}
               >
-                <Material tier="regular" style={{ width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ fontSize: 34 }}>{m.emoji}</Text>
+                <Material
+                  tier="regular"
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 36,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: mix(memberHex, "transparent", 18),
+                    borderWidth: 1.5,
+                    borderColor: mix(memberHex, "transparent", 45),
+                  }}
+                >
+                  {photo ? (
+                    <>
+                      <Image
+                        source={{ uri: m.emoji }}
+                        style={{ width: 68, height: 68, borderRadius: 34 }}
+                        resizeMode="cover"
+                      />
+                      <Text style={{ position: "absolute", opacity: 0, fontSize: 14 }}>{m.emoji}</Text>
+                    </>
+                  ) : (
+                    <Text style={{ fontSize: 34 }}>{m.emoji}</Text>
+                  )}
                 </Material>
                 {current ? (
                   <View
@@ -86,8 +117,12 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
                   maxWidth: 96,
                 }}
               >
-                {m.name}
-              </Text>
+                  {/* web WallMemberRail parity: FIRST name only, with the
+                      "✓ " prefix marking the session's own tile (a suffixed
+                      name truncated the rail instead of fitting it). */}
+                  {current ? "✓ " : ""}
+                  {m.name.split(" ")[0]}
+                </Text>
             </Pressable>
           );
         })}

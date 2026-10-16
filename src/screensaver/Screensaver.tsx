@@ -66,11 +66,16 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ] as const;
 
-/** Wall-clock "7:05" — built by hand so Hermes Intl quirks can never skew it. */
+/** Wall-clock "7:05 AM" — built by hand so Hermes Intl quirks can never skew it.
+ *  The meridiem is not decoration: the authoritative board formats the clock
+ *  with `toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})`
+ *  (Home-ai ScreensaverBoard.tsx:54), which renders the AM/PM suffix, and a
+ *  128px numeral without it is ambiguous at wall distance. */
 function clockLine(now: Date): string {
   const h = now.getHours() % 12 || 12;
   const m = String(now.getMinutes()).padStart(2, "0");
-  return `${h}:${m}`;
+  const ampm = now.getHours() < 12 ? "AM" : "PM";
+  return `${h}:${m} ${ampm}`;
 }
 
 /** "Sunday, October 11" (the reference board's date line). */
@@ -159,7 +164,7 @@ export function Screensaver({ onExit }: ScreensaverProps) {
               >
                 {clockLine(now)}
               </Text>
-              <Text testID="ss-date" style={{ color: SUB_INK, fontSize: 26, fontWeight: "500", marginTop: 4 }}>
+              <Text testID="ss-date" style={{ color: SUB_INK, fontSize: 40, lineHeight: 52, fontWeight: "500", marginTop: 4 }}>
                 {dateLine(now)}
               </Text>
             </View>
@@ -173,8 +178,8 @@ export function Screensaver({ onExit }: ScreensaverProps) {
                     ))}
                   </View>
                 </View>
-                <Text style={{ color: INK, fontSize: 24, fontWeight: "600" }}>{data.weather.condition}</Text>
-                <Text style={{ color: INK, fontSize: 24, fontWeight: "600" }}>{`H ${data.weather.hiF}° · L ${data.weather.loF}°`}</Text>
+                <Text style={{ color: INK, fontSize: 32, fontWeight: "600" }}>{data.weather.condition}</Text>
+                <Text style={{ color: INK, fontSize: 32, fontWeight: "600" }}>{`H ${data.weather.hiF}° · L ${data.weather.loF}°`}</Text>
               </View>
             ) : null}
           </View>
@@ -208,12 +213,12 @@ export function Screensaver({ onExit }: ScreensaverProps) {
                 overflow: "hidden",
               }}
             >
-              <Text style={{ color: FAINT_INK, fontSize: 14, fontWeight: "700", letterSpacing: 3, marginBottom: 18 }}>
+              <Text style={{ color: FAINT_INK, fontSize: 22, fontWeight: "700", letterSpacing: 2.2, marginBottom: 18 }}>
                 TODAY
               </Text>
               <View style={{ gap: 16 }}>
                 {(data?.events ?? []).length === 0 ? (
-                  <Text style={{ color: FAINT_INK, fontSize: 22 }}>
+                      <Text style={{ color: FAINT_INK, fontSize: 32 }}>
                     {data ? "Quiet day" : "Waiting for the family server…"}
                   </Text>
                 ) : null}
@@ -227,10 +232,10 @@ export function Screensaver({ onExit }: ScreensaverProps) {
                         backgroundColor: e.color ?? mixAlpha(INK, 0.4),
                       }}
                     />
-                    <Text style={{ width: 96, color: SUB_INK, fontSize: 18, fontVariant: ["tabular-nums"] }} numberOfLines={1}>
+                    <Text style={{ width: 144, color: SUB_INK, fontSize: 28, fontVariant: ["tabular-nums"] }} numberOfLines={1}>
                       {e.time}
                     </Text>
-                    <Text style={{ flex: 1, color: INK, fontSize: 22, fontWeight: "500" }} numberOfLines={1}>
+                    <Text style={{ flex: 1, color: INK, fontSize: 32, lineHeight: 44, fontWeight: "500" }} numberOfLines={1}>
                       {e.title}
                     </Text>
                   </View>
@@ -248,16 +253,16 @@ export function Screensaver({ onExit }: ScreensaverProps) {
                 padding: 24,
               }}
             >
-              <Text style={{ color: FAINT_INK, fontSize: 14, fontWeight: "700", letterSpacing: 3, marginBottom: 12 }}>
+              <Text style={{ color: FAINT_INK, fontSize: 22, fontWeight: "700", letterSpacing: 2.2, marginBottom: 12 }}>
                 TONIGHT
               </Text>
-              <Text testID="ss-dinner" style={{ color: INK, fontSize: 28, fontWeight: "700" }} numberOfLines={2}>
+              <Text testID="ss-dinner" style={{ color: INK, fontSize: 44, lineHeight: 54, fontWeight: "700" }} numberOfLines={2}>
                 {data ? (data.dinner ? data.dinner.name : "Nothing planned yet") : "…"}
               </Text>
-              <Text style={{ color: FAINT_INK, fontSize: 14, fontWeight: "700", letterSpacing: 3, marginTop: 32, marginBottom: 12 }}>
+              <Text style={{ color: FAINT_INK, fontSize: 22, fontWeight: "700", letterSpacing: 2.2, marginTop: 32, marginBottom: 12 }}>
                 CHORES
               </Text>
-              <Text testID="ss-chores" style={{ color: INK, fontSize: 28, fontWeight: "700", fontVariant: ["tabular-nums"] }}>
+              <Text testID="ss-chores" style={{ color: INK, fontSize: 40, lineHeight: 50, fontWeight: "700", fontVariant: ["tabular-nums"] }}>
                 {data ? `${data.tasks.done} of ${data.tasks.total} done` : "…"}
               </Text>
               <View
@@ -284,12 +289,12 @@ export function Screensaver({ onExit }: ScreensaverProps) {
                 overflow: "hidden",
               }}
             >
-              <Text style={{ color: FAINT_INK, fontSize: 14, fontWeight: "700", letterSpacing: 3, marginBottom: 18 }}>
+              <Text style={{ color: FAINT_INK, fontSize: 22, fontWeight: "700", letterSpacing: 2.2, marginBottom: 18 }}>
                 CONSUELA
               </Text>
               <View style={{ gap: 14 }}>
                 {(data?.briefing ?? []).map((line, i) => (
-                  <Text key={i} style={{ color: INK, fontSize: 20, fontWeight: "500" }} numberOfLines={2}>
+                  <Text key={i} style={{ color: INK, fontSize: 32, lineHeight: 44, fontWeight: "500" }} numberOfLines={2}>
                     {line}
                   </Text>
                 ))}

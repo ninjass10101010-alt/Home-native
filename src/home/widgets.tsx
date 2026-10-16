@@ -58,6 +58,29 @@ export const WALL_HIDDEN_WIDGETS: WidgetId[] = ["schedule", "consuelaSuggestions
 /** Only photos earns 2 cells on the wall board (the portrait hero). */
 export const WALL_SPANS: Partial<Record<WidgetId, number>> = { photos: 2 };
 
+/**
+ * The web's per-widget tone map (WidgetCard `--widget-tone`, globals.css:
+ * 765-791). Every wall card wears its tone (wash + border + disc); photos
+ * keeps a sage-neutral frame around its full-bleed hero.
+ */
+export const WIDGET_TONES: Record<WidgetId, string> = {
+  morningBriefing: "apricot",
+  weather: "nori",
+  aiQuickAsk: "violet",
+  consuelaSuggestions: "violet",
+  leaderboard: "amber",
+  todayEvents: "nori",
+  schedule: "cyan",
+  currentMeal: "mint",
+  tasks: "rose",
+  homeSecurity: "rose",
+  homeClimate: "cyan",
+  homeLights: "amber",
+  financeLedger: "sage",
+  music: "violet",
+  photos: "sage",
+};
+
 export const WALL_COLS = 3;
 export const WALL_ROWS = 4;
 

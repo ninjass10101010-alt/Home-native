@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
+import { Text } from "react-native";
 import { act, fireEvent, render } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
@@ -7,7 +8,8 @@ import { TasksWidget } from "../src/home/widgets/TasksWidget";
 import { TodayEventsWidget } from "../src/home/widgets/TodayEventsWidget";
 import { CurrentMealWidget } from "../src/home/widgets/CurrentMealWidget";
 import { BriefingWidget } from "../src/home/widgets/BriefingWidget";
-import { localTodayISO } from "../src/home/widgets/data";
+import { localTodayISO, useWidgetData } from "../src/home/widgets/data";
+import { WidgetFrame } from "../src/home/widgets/WidgetFrame";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -25,7 +27,7 @@ jest.mock("../src/state/AuthProvider", () => ({
 
 let mockStale = false;
 let mockSnapshot: any = null;
-let mockSyncError: "unreachable" | "unauthorized" | null = null;
+let mockSyncError: "unreachable" | "unauthorized" | "server" | null = null;
 const mockRefreshNow = jest.fn(async () => {});
 const mockPulseListeners = new Set<() => void>();
 // Stable value object — mirrors SyncManager's useMemo so effect deps settle.
@@ -100,10 +102,11 @@ describe("TasksWidget (shared snapshot — no widget fetch)", () => {
       { id: 3, title: "Old done task", assignee: "", due: "", points: 5, completed: true, assigneeEmoji: "👤" },
     ]);
     const { findByText, getByText, queryByText } = render(<TasksWidget />, { wrapper: wrap });
-    await findByText("2 pending for the family");
-    expect(getByText(/Waiting for approval/)).toBeTruthy(); // kid row is honest
-    expect(queryByText(/\+10 pts/)).toBeNull(); // points NOT promised for a pending tap
-    expect(getByText("1 needs approval")).toBeTruthy(); // parent footer
+    // Web parity: pending = OPEN rows only; a landed kid tap moves to the
+    // approvals queue (footer count), never the pending total or the list.
+    await findByText("1 pending for the family");
+    expect(queryByText("Waiting for approval")).toBeNull();
+    expect(getByText("1 needs approval →")).toBeTruthy(); // parent footer — now a link
     expect(queryByText("Old done task")).toBeNull();
     expect(api).not.toHaveBeenCalled(); // reads the SHARED snapshot, no fetch
   });
@@ -119,7 +122,7 @@ describe("TasksWidget (shared snapshot — no widget fetch)", () => {
   it("sync down, no snapshot → honest offline copy; retry re-pulls via refreshNow", async () => {
     mockSyncError = "unreachable";
     const { findByText, getByText } = render(<TasksWidget />, { wrapper: wrap });
-    await findByText("Offline — no saved copy on this device.");
+    await findByText(/Offline — no saved copy on this device/);
     await act(async () => {
       fireEvent.press(getByText("Try again"));
       await Promise.resolve();
@@ -127,11 +130,18 @@ describe("TasksWidget (shared snapshot — no widget fetch)", () => {
     expect(mockRefreshNow).toHaveBeenCalled();
   });
 
-  it("guest gate: PIN copy, no doomed fetch", async () => {
+  it("syncError 'server' (the NAS answered and failed) reads as an error, never offline", async () => {
+    mockSyncError = "server"; // U5.1: a 502 is not the family's internet
+    const { findByText, queryByText } = render(<TasksWidget />, { wrapper: wrap });
+    expect(await findByText(/Couldn't load this right now/)).toBeTruthy();
+    expect(queryByText(/Offline/)).toBeNull();
+  });
+
+  it("guest gate: PIN copy, zero doomed fetches (the server requires a session)", async () => {
     mockMember = null;
     const { findByText } = render(<TasksWidget />, { wrapper: wrap });
-    await findByText("Sign in with your PIN to see the family's data.");
-    expect(api).not.toHaveBeenCalled();
+    await findByText(/Sign in with your PIN to see the family's data/);
+    expect(api).not.toHaveBeenCalled(); // reads the shared snapshot — never its own fetch
   });
 
   it("badges staleness when the sync layer reports a failed refresh", async () => {
@@ -252,7 +262,7 @@ describe("BriefingWidget", () => {
     briefing: { id: "b1", scopeDate: localTodayISO(), acknowledged, summary },
   });
 
-  it("renders briefing sections from the verified shape", async () => {
+  it("collapsed by default (web model): teaser + item count, rows behind the badge", async () => {
     route({
       "/api/consuela/briefing": briefingBody({
         events: [{ icon: "📅", title: "Piano", time: "5:30 PM" }],
@@ -261,12 +271,19 @@ describe("BriefingWidget", () => {
         suggestions: [],
       }),
     });
-    const { findByText } = render(<BriefingWidget />, { wrapper: wrap });
+    const { findByText, getByTestId, queryByText } = render(<BriefingWidget />, { wrapper: wrap });
     await findByText("Morning Briefing");
     expect(await findByText("2 items")).toBeTruthy();
+    expect(queryByText("Piano")).toBeNull(); // collapsed — no rows yet
+    expect(await findByText("Tap the badge above to see today's plan.")).toBeTruthy();
+    expect(api).toHaveBeenCalledWith(expect.stringContaining("/api/consuela/briefing?scopeDate="));
+    // the badge opens the plan (web expand parity)
+    fireEvent.press(getByTestId("briefing-toggle"));
     expect(await findByText("Piano")).toBeTruthy();
     expect(await findByText("Dishes")).toBeTruthy();
-    expect(api).toHaveBeenCalledWith(expect.stringContaining("/api/consuela/briefing?scopeDate="));
+    // …and collapses again
+    fireEvent.press(getByTestId("briefing-toggle"));
+    expect(queryByText("Piano")).toBeNull();
   });
 
   it("acknowledged briefing → seen-today card", async () => {
@@ -289,7 +306,7 @@ describe("BriefingWidget", () => {
   it("guest gate: no fetch, PIN copy", async () => {
     mockMember = null;
     const { findByText } = render(<BriefingWidget />, { wrapper: wrap });
-    await findByText("Sign in with your PIN to see the family's data.");
+    await findByText(/Sign in with your PIN to see the family's data/);
     expect(api).not.toHaveBeenCalled();
   });
 });
@@ -304,5 +321,144 @@ describe("TodayEventsWidget — Google not-connected honesty (Wave-2 critic fix)
     const { findByText } = render(<TodayEventsWidget />, { wrapper: wrap });
     expect(await findByText("Google Calendar isn't connected.")).toBeTruthy();
     expect(await findByText("0 events on the family calendar")).toBeTruthy();
+  });
+});
+
+/** Minimal WidgetFrame + useWidgetData consumer — the read contract probe (U5.4/5/9). */
+function Probe({ load }: { load: () => Promise<unknown> }) {
+  const { status, data, failure, stale, retry } = useWidgetData<unknown>(load);
+  return (
+    <WidgetFrame
+      id="probe"
+      icon="🧪"
+      title="Probe"
+      description="Read contract probe"
+      status={status}
+      failure={failure}
+      hasData={data !== null}
+      stale={stale}
+      onRetry={retry}
+    >
+      <Text testID="probe-body">body</Text>
+    </WidgetFrame>
+  );
+}
+
+describe("useWidgetData read contract (U5.4/U5.5/U5.9)", () => {
+  it("exactly ONE fetch on mount — the initial sync pulse racing the first read does not double-fetch", async () => {
+    let settle: (v: unknown) => void = () => {};
+    api.mockImplementation(() => new Promise((r) => { settle = r; }));
+    const { findByText, getByTestId } = render(<Probe load={() => api("/api/probe")} />, { wrapper: wrap });
+    expect(api).toHaveBeenCalledTimes(1); // the mount fetch
+    expect(getByTestId("probe-loading")).toBeTruthy();
+
+    // The initial SyncManager pulse lands while the mount read is in flight:
+    // it must NOT fire a second (racing) fetch — pulses only trigger SUBSEQUENT runs.
+    await act(async () => {
+      mockPulseListeners.forEach((l) => l());
+      await Promise.resolve();
+    });
+    expect(api).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      settle({ ok: true });
+      await Promise.resolve();
+    });
+    expect(await findByText("body")).toBeTruthy();
+
+    // …and a later pulse does trigger a subsequent run.
+    await act(async () => {
+      mockPulseListeners.forEach((l) => l());
+      await Promise.resolve();
+    });
+    expect(api).toHaveBeenCalledTimes(2);
+  });
+
+  it("an unmounted read never setStates — the awaited continuation is cancelled", async () => {
+    let resolveLoad: (v: unknown) => void = () => {};
+    const load = () => new Promise((r) => { resolveLoad = r; });
+
+    // Observer: wrap every useState setter and count calls after `flagged`
+    // flips — React 19 swallows post-unmount setState silently, so the guard
+    // is only provable with an instrumented setter.
+    let flagged = false;
+    let postUnmountSetState = 0;
+    const orig = React.useState;
+    const spy = jest.spyOn(React, "useState").mockImplementation((init?: unknown) => {
+      const [s, set] = (orig as any)(init);
+      const wrapped = (...args: unknown[]) => {
+        if (flagged) postUnmountSetState++;
+        return (set as any)(...args);
+      };
+      return [s, wrapped] as any;
+    });
+
+    let capturedForce: React.Dispatch<React.SetStateAction<number>> | null = null;
+    function SetterProbe() {
+      const [, force] = React.useState(0);
+      React.useEffect(() => {
+        capturedForce = force;
+      }, [force]);
+      return null;
+    }
+
+    try {
+      const { unmount } = render(
+        <>
+          <SetterProbe />
+          <Probe load={load} />
+        </>,
+        { wrapper: wrap }
+      );
+      expect(api).not.toHaveBeenCalled(); // probe uses its own load
+
+      // Control: prove the observer catches a setState while flagged — the
+      // test can never pass vacuously if the spy stops intercepting.
+      flagged = true;
+      await act(async () => {
+        capturedForce?.(1);
+        await Promise.resolve();
+      });
+      expect(postUnmountSetState).toBe(1);
+      postUnmountSetState = 0;
+
+      unmount();
+      await act(async () => {
+        resolveLoad({ ok: true });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(postUnmountSetState).toBe(0); // no setData/setStatus/setFailure after unmount
+      flagged = false;
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("sync-layer stale does not leak into a widget's own-fresh read (scoped staleness)", async () => {
+    route({ "/api/probe": { ok: true } });
+    mockStale = true; // the tasks sync layer is down…
+    const { findByTestId, queryByTestId } = render(<Probe load={() => api("/api/probe")} />, { wrapper: wrap });
+    expect(await findByTestId("probe-body")).toBeTruthy();
+    // …but THIS widget's own read path succeeded: its data is fresh, so it must
+    // not wear the global "saved copy" badge (public widgets ride own-fetch truth).
+    expect(queryByTestId("probe-stale")).toBeNull();
+  });
+
+  it("a failed refresh that kept last-good data DOES badge (widget-local staleness)", async () => {
+    route({ "/api/probe": { ok: true } });
+    const { findByTestId, getByTestId } = render(<Probe load={() => api("/api/probe")} />, { wrapper: wrap });
+    expect(await findByTestId("probe-body")).toBeTruthy();
+
+    route({
+      "/api/probe": new ApiError({ message: "upstream 502", status: 502, code: "http_502", retryable: true }),
+    });
+    await act(async () => {
+      mockPulseListeners.forEach((l) => l());
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(getByTestId("probe-body")).toBeTruthy(); // last-good stays on screen…
+    expect(getByTestId("probe-stale")).toBeTruthy(); // …badged, never silently faked
   });
 });

@@ -3,6 +3,7 @@ import { View, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTheme } from "./ThemeProvider";
+import { mix } from "./mix";
 import { MOTION } from "./tokens";
 
 export type AtmospherePhase = "dawn" | "day" | "dusk" | "night";
@@ -68,8 +69,22 @@ function GradientLayer({ stops }: { stops: [string, string, string] | null }) {
  * crossfades over 600ms (instant under reduced motion). One gradient layer per
  * phase — the perf budget spends blur on surfaces, not backdrops.
  */
+function resolveCanvasToken(
+  theme: "light" | "dark",
+  phase: AtmospherePhase,
+  colors: Record<string, string>
+): string | undefined {
+  if (theme === "dark") {
+    return colors["gradient-canvas-night"] ?? colors["gradient-canvas-day"];
+  }
+  if (phase === "night") {
+    return colors["gradient-canvas-day"];
+  }
+  return colors[`gradient-canvas-${phase}`] ?? colors["gradient-canvas-day"];
+}
+
 export function Atmosphere() {
-  const { colors, reduceMotion } = useTheme();
+  const { theme, colors, accentColor, reduceMotion } = useTheme();
   const phase = useAtmospherePhase();
   const lastPhase = React.useRef<AtmospherePhase>(phase);
   const [prevPhase, setPrevPhase] = React.useState<AtmospherePhase | null>(null);
@@ -92,9 +107,21 @@ export function Atmosphere() {
   }, [phase, reduceMotion, fade]);
 
   const currentStops =
-    stopsFromToken(colors[`gradient-canvas-${phase}`]) ?? stopsFromToken(colors["gradient-canvas-day"]);
-  const prevStops = prevPhase ? stopsFromToken(colors[`gradient-canvas-${prevPhase}`]) : null;
+    stopsFromToken(resolveCanvasToken(theme, phase, colors)) ??
+    stopsFromToken(colors["gradient-canvas-day"]);
+  const prevStops = prevPhase
+    ? stopsFromToken(resolveCanvasToken(theme, prevPhase, colors))
+    : null;
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+
+  const bloomColors: [string, string, ...string[]] =
+    theme === "dark"
+      ? [
+          mix(accentColor, "transparent", 18),
+          mix(colors["color-accent-violet"] ?? accentColor, "transparent", 8),
+          "transparent",
+        ]
+      : [mix(accentColor, "transparent", 12), "transparent"];
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill} testID="atmosphere">
@@ -102,6 +129,12 @@ export function Atmosphere() {
       <Animated.View style={[StyleSheet.absoluteFill, fadeStyle]}>
         <GradientLayer stops={currentStops} />
       </Animated.View>
+      <LinearGradient
+        colors={bloomColors}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 0.75, y: 0.55 }}
+        style={StyleSheet.absoluteFill}
+      />
     </View>
   );
 }

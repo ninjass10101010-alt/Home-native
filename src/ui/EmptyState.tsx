@@ -2,6 +2,7 @@ import React from "react";
 import { Text, View, ViewStyle } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../theme/tokens";
+import { Material } from "../theme/Material";
 import { SoftButton } from "./SoftButton";
 
 export interface EmptyStateProps {
@@ -19,29 +20,14 @@ export interface EmptyStateProps {
 /**
  * RN port of ui/EmptyState.tsx. 30px-scale emoji glyph above the title; the
  * caption sits at the 14sp floor in secondary ink; the action (if any) is a
- * SoftButton. `flat` drops the bordered glass chrome for the nested case.
+ * SoftButton. `flat` drops the bordered glass chrome for the nested case;
+ * the chrome itself routes through Material (thin) — one frosted surface,
+ * the same tier as the web's backdrop-blur-xl box.
  */
 export function EmptyState({ icon = "✨", title, body, actionLabel, onAction, flat = false, style, testID }: EmptyStateProps) {
   const { colors } = useTheme();
-  return (
-    <View
-      testID={testID}
-      style={[
-        {
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: flat ? 0 : 224,
-          padding: flat ? 8 : 32,
-          borderRadius: 20,
-        },
-        !flat && {
-          borderWidth: 1,
-          borderColor: colors["color-border"] ?? "transparent",
-          backgroundColor: colors["color-surface-0"],
-        },
-        style,
-      ]}
-    >
+  const content = (
+    <>
       <Text style={{ fontSize: 30, lineHeight: 36, marginBottom: 16 }}>{icon}</Text>
       <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>
         {title}
@@ -65,7 +51,45 @@ export function EmptyState({ icon = "✨", title, body, actionLabel, onAction, f
           {actionLabel}
         </SoftButton>
       ) : null}
-    </View>
+    </>
+  );
+
+  if (flat) {
+    return (
+      <View
+        testID={testID}
+        style={[
+          {
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 0,
+            padding: 8,
+            borderRadius: 20,
+          },
+          style,
+        ]}
+      >
+        {content}
+      </View>
+    );
+  }
+  return (
+    <Material
+      tier="thin"
+      testID={testID}
+      style={[
+        {
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 224,
+          padding: 32,
+          borderRadius: 20,
+        },
+        style,
+      ]}
+    >
+      {content}
+    </Material>
   );
 }
 

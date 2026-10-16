@@ -211,6 +211,31 @@ describe("members roster", () => {
     expect(r.members.length).toBe(9);
   });
 
+  // The wall's honesty contract: a signed-out session and an unreachable NAS
+  // are DIFFERENT causes and must never collapse into one badge. The rail
+  // reads its cache on purpose when signed out, so "offline" there asserts a
+  // network fault that does not exist (web parity: SyncStatusBanner).
+  it("401 signed-out → reason 'signed-out' (never 'unreachable')", async () => {
+    await require("@react-native-async-storage/async-storage").clear();
+    installFetch(() => mockRes(401, { error: "unauthorized" }));
+    const r = await listMembersSmart();
+    expect(r.reason).toBe("signed-out");
+  });
+
+  it("unreachable/500 → reason 'unreachable' (the only offline claim)", async () => {
+    await require("@react-native-async-storage/async-storage").clear();
+    installFetch(() => { throw new (require("../src/api/client").ApiError)({ message: "boom", status: 500 }); });
+    const r = await listMembersSmart();
+    expect(r.reason).toBe("unreachable");
+  });
+
+  it("a live read carries NO reason (there is nothing to diagnose)", async () => {
+    await require("@react-native-async-storage/async-storage").clear();
+    installFetch(() => mockRes(200, { members: [member] }));
+    const r = await listMembersSmart();
+    expect(r.reason).toBeUndefined();
+  });
+
   it("mergeMemberFallbacks: live wins by first name, blanks dropped, string id gains pbId", () => {
     const merged = mergeMemberFallbacks([
       { id: "pb1", name: "Aurora", role: "child", emoji: "X" } as any,

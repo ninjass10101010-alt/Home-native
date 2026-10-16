@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, Text, View, ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { mixAlpha } from "./SoftButton";
 import { useTheme } from "../theme/ThemeProvider";
 import { MOTION, TYPOGRAPHY } from "../theme/tokens";
 import { accentDeepened } from "../theme/mix";
@@ -28,8 +29,9 @@ export interface SegmentedControlProps {
  * RN port of ui/SegmentedControl.tsx. The sliding pill is measured per-option
  * (onLayout, like the web's getBoundingClientRect path) and animated with
  * withTiming(MOTION.base); reduced-motion zeroes the animation. Emphasize uses
- * the accent deepened 60%/46% toward black (the measured AA pill); inactive
- * labels read text-secondary (the 6.16:1 light fix).
+ * the accent at 40%/54% toward black (web color-mix 60%/46% — the measured AA
+ * pill); inactive labels read text-secondary (the 6.16:1 light fix); segments
+ * scale 0.96 on press (tap-sm parity, skipped under reduceMotion).
  */
 export function SegmentedControl({
   options,
@@ -63,7 +65,7 @@ export function SegmentedControl({
   }));
 
   const pillBg = emphasize
-    ? ([accentDeepened(accentColor, 60), accentDeepened(accentColor, 46)] as const)
+    ? ([accentDeepened(accentColor, 40), accentDeepened(accentColor, 54)] as const)
     : null;
 
   return (
@@ -93,17 +95,37 @@ export function SegmentedControl({
             left: 0,
             borderRadius: 16,
             overflow: "hidden",
+            // Web EMPHASIZE_PILL: glow 0 6px 18px accent/35% + inset highlight.
+            shadowColor: accentColor,
+            shadowOpacity: emphasize ? 0.35 : 0,
+            shadowRadius: 18,
+            shadowOffset: { width: 0, height: 6 },
+            elevation: emphasize ? 6 : 0,
           },
           pillStyle,
         ]}
       >
         {pillBg ? (
-          <LinearGradient
-            colors={pillBg as unknown as [string, string]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-          />
+          <>
+            <LinearGradient
+              colors={pillBg as unknown as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+            />
+            {/* inset top highlight (web inset 0 1px 0 white 22%) */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 1,
+                backgroundColor: mixAlpha(colors["color-primary-foreground"], 0.22),
+              }}
+            />
+          </>
         ) : (
           <View
             style={{
@@ -133,19 +155,22 @@ export function SegmentedControl({
                 return next;
               });
             }}
-            style={{
-              flex: 1,
-              minWidth: compact ? 0 : 96,
-              minHeight: 64,
-              alignItems: "center",
-              justifyContent: "center",
-              flexDirection: "row",
-              gap: 6,
-              paddingHorizontal: compact ? 8 : 16,
-              paddingVertical: 12,
-              borderRadius: 16,
-              zIndex: 1,
-            }}
+            style={({ pressed }) => [
+              {
+                flex: 1,
+                minWidth: compact ? 0 : 96,
+                minHeight: 64,
+                alignItems: "center",
+                justifyContent: "center",
+                flexDirection: "row",
+                gap: 6,
+                paddingHorizontal: compact ? 8 : 16,
+                paddingVertical: 12,
+                borderRadius: 16,
+                zIndex: 1,
+              },
+              pressed && !reduceMotion ? { transform: [{ scale: 0.96 }] } : null,
+            ]}
           >
             {option.icon}
             {typeof option.label === "string" ? (

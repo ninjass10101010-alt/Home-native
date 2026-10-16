@@ -3,17 +3,19 @@ import { Pressable, Text, View, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
-import { mix } from "../theme/mix";
+import { accentDeepened, mix } from "../theme/mix";
 import { MIN_TARGET_DP, MOTION, TYPOGRAPHY } from "../theme/tokens";
+import { NavIcon } from "../ui/NavIcon";
+import { SoftButton } from "../ui/SoftButton";
 import {
   NavIconKey,
-  NavItemDefinition,
   NavRole,
   navItemsForRole,
   isNavItemActive,
+  resolveRoute,
 } from "./nav-items";
 
-/** Emoji placeholder glyphs until Wave 2 ports the web's NavIcon SVG paths. */
+/** Legacy emoji table retained for backward compatibility. */
 export const NAV_ICONS: Record<NavIconKey | "more", string> = {
   home: "🏠",
   ask: "💬",
@@ -40,36 +42,38 @@ export interface CapsuleDockProps {
   /** Current path (the root layout supplies it from expo-router). */
   pathname: string;
   onNavigate: (path: string) => void;
-  onOpenMore: () => void;
   style?: ViewStyle;
   testID?: string;
 }
 
 /**
  * The ONE navigation surface: a bottom-center material-thick capsule with the
- * 7 manifest caps (+ a More cap). Active cap = accent ink + halo per the
- * web's --color-nav-active* chain, resolved per theme+accent via mix().
- * Label renders on the ACTIVE cap only (web contract).
+ * role's primary manifest caps (7 — Home/Ask/Meals/Tasks/Calendar + the
+ * role's House↔Rewards pair + Settings; web CapsuleNav parity). The More…
+ * sheet has NO dock cap — on the web the MoreButton lives on Home itself, so
+ * the wall keeps exactly seven targets at thumb distance.
+ * Active cap = accent disc + pill sheen per the web's --color-nav-active* chain,
+ * resolved per theme+accent via mix(). Labels are always visible (this app
+ * IS the wall).
  */
-export function CapsuleDock({ role, hydrated, pathname, onNavigate, onOpenMore, style, testID }: CapsuleDockProps) {
+export function CapsuleDock({ role, hydrated, pathname, onNavigate, style, testID }: CapsuleDockProps) {
   const { colors, accentColor, reduceMotion } = useTheme();
   if (!hydrated) return null;
 
   const caps = navItemsForRole(role);
-  const items: (NavItemDefinition | { path: "__more__"; label: string; iconKey: NavIconKey })[] = [
-    ...caps,
-    { path: "__more__", label: "More", iconKey: "more" as NavIconKey },
-  ];
 
-  const activeBg = mix(accentColor, "transparent", 8);      // wash ≈ 6–8%
-  const activeBorder = mix(accentColor, "transparent", 38); // border ≈ 38%
-  const activeLabelInk = accentInkSafe(accentColor, colors["color-text-primary"]);
+  const activeBg = mix(accentColor, "transparent", 20);
+  const activeBorder = mix(accentColor, "transparent", 38);
+  const activeDiscBg = colors["color-nav-active-fill"] ?? accentDeepened(accentColor, 28);
+  const activeDiscBorder = mix(accentColor, "transparent", 55);
+  const idleDiscBg = mix(colors["color-surface-2"], "transparent", 58);
+  const idleDiscBorder = mix(colors["color-text-primary"], "transparent", 12);
 
   return (
     <View
       testID={testID}
       style={[
-        { position: "absolute", left: 0, right: 0, bottom: 24, alignItems: "center" },
+        { position: "absolute", left: 0, right: 0, bottom: 18, alignItems: "center" },
         style,
       ]}
     >
@@ -77,27 +81,36 @@ export function CapsuleDock({ role, hydrated, pathname, onNavigate, onOpenMore, 
         tier="thick"
         style={{
           flexDirection: "row",
+          alignItems: "center",
           borderRadius: 9999,
-          padding: 8,
-          gap: 4,
+          paddingHorizontal: 10,
+          paddingVertical: 8,
+          gap: 6,
+          backgroundColor: mix(colors["color-surface-0"], "transparent", 82),
+          borderColor: mix(colors["color-text-primary"], "transparent", 14),
         }}
       >
-        {items.map((item) => {
-          const isMore = item.path === "__more__";
-          const active = !isMore && isNavItemActive(pathname, item as NavItemDefinition);
+        {caps.map((item) => {
+          const active = isNavItemActive(pathname, item);
           return (
             <DockCap
               key={item.path}
-              icon={<Text style={{ fontSize: 26 }}>{NAV_ICONS[item.iconKey as NavIconKey]}</Text>}
+              iconKey={item.iconKey as NavIconKey}
               label={item.label}
               active={active}
               activeBg={activeBg}
               activeBorder={activeBorder}
-              activeLabelInk={activeLabelInk}
+              activeDiscBg={activeDiscBg}
+              activeDiscBorder={activeDiscBorder}
+              idleDiscBg={idleDiscBg}
+              idleDiscBorder={idleDiscBorder}
+              activeGlyphColor={colors["color-primary-foreground"]}
+              idleGlyphColor={colors["color-text-secondary"]}
+              activeLabelInk={colors["color-text-primary"]}
               inactiveInk={colors["color-text-secondary"]}
-              onPress={() => (isMore ? onOpenMore() : onNavigate(item.path))}
+              onPress={() => onNavigate(resolveRoute(item.path, item.label))}
               reduceMotion={reduceMotion}
-              testID={isMore ? "dock-more" : `dock-${(item as NavItemDefinition).label.toLowerCase()}`}
+              testID={`dock-${item.label.toLowerCase()}`}
             />
           );
         })}
@@ -107,11 +120,17 @@ export function CapsuleDock({ role, hydrated, pathname, onNavigate, onOpenMore, 
 }
 
 interface DockCapProps {
-  icon: React.ReactNode;
+  iconKey: NavIconKey;
   label: string;
   active: boolean;
   activeBg: string;
   activeBorder: string;
+  activeDiscBg: string;
+  activeDiscBorder: string;
+  idleDiscBg: string;
+  idleDiscBorder: string;
+  activeGlyphColor: string;
+  idleGlyphColor: string;
   activeLabelInk: string;
   inactiveInk: string;
   onPress: () => void;
@@ -119,12 +138,24 @@ interface DockCapProps {
   testID?: string;
 }
 
-/** Label ink on the active cap: the 55% accent→body ink convention. */
-function accentInkSafe(accent: string, textPrimary: string): string {
-  return mix(accent, textPrimary, 55);
-}
-
-function DockCap({ icon, label, active, activeBg, activeBorder, activeLabelInk, inactiveInk, onPress, reduceMotion, testID }: DockCapProps) {
+function DockCap({
+  iconKey,
+  label,
+  active,
+  activeBg,
+  activeBorder,
+  activeDiscBg,
+  activeDiscBorder,
+  idleDiscBg,
+  idleDiscBorder,
+  activeGlyphColor,
+  idleGlyphColor,
+  activeLabelInk,
+  inactiveInk,
+  onPress,
+  reduceMotion,
+  testID,
+}: DockCapProps) {
   const scale = useSharedValue(1);
   const aStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
@@ -132,7 +163,7 @@ function DockCap({ icon, label, active, activeBg, activeBorder, activeLabelInk, 
       style={[
         aStyle,
         {
-          borderRadius: 22,
+          borderRadius: 9999,
           borderWidth: 1,
           borderColor: active ? activeBorder : "transparent",
           backgroundColor: active ? activeBg : "transparent",
@@ -158,23 +189,41 @@ function DockCap({ icon, label, active, activeBg, activeBorder, activeLabelInk, 
         style={{
           minWidth: MIN_TARGET_DP,
           minHeight: MIN_TARGET_DP,
-          paddingHorizontal: 16,
-          paddingVertical: 10,
+          height: 64,
+          paddingLeft: 6,
+          paddingRight: 12,
+          flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
-          gap: 2,
+          gap: 8,
+          borderRadius: 9999,
         }}
       >
-        {icon}
-        {/* Wall profile contract: labels are ALWAYS visible (this app IS the
-            wall). Active label reads the accent-ink mix; inactive read the
-            secondary ink. */}
+        <View
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: active ? activeDiscBg : idleDiscBg,
+            borderWidth: 1,
+            borderColor: active ? activeDiscBorder : idleDiscBorder,
+          }}
+        >
+          <NavIcon
+            iconKey={iconKey}
+            active={active}
+            size={active ? 24 : 22}
+            color={active ? activeGlyphColor : idleGlyphColor}
+          />
+        </View>
         <Text
+          numberOfLines={1}
           style={{
             color: active ? activeLabelInk : inactiveInk,
             fontSize: TYPOGRAPHY.label.fontSize,
-            fontWeight: active ? "700" : "500",
-            marginTop: 2,
+            fontWeight: active ? "700" : "600",
           }}
         >
           {label}
@@ -185,3 +234,34 @@ function DockCap({ icon, label, active, activeBg, activeBorder, activeLabelInk, 
 }
 
 export default CapsuleDock;
+
+/**
+ * The Home "More…" trigger (web page.tsx MoreButton parity): the secondary
+ * destinations live in the More — sheet, and the web opens it from Home's
+ * own action row, NOT the dock (the dock is the 7 primary caps only).
+ */
+export function MoreButton({ onPress, style }: { onPress: () => void; style?: ViewStyle }) {
+  const { colors } = useTheme();
+  return (
+    <SoftButton
+      variant="secondary"
+      onPress={onPress}
+      accessibilityLabel="More"
+      testID="home-more"
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 10,
+        paddingHorizontal: 22,
+        ...(style ?? {}),
+      }}
+    >
+      <NavIcon iconKey="more" size={20} color={colors["color-text-primary"]} />
+      <Text style={{ fontSize: 14, width: 0, height: 0, opacity: 0 }}>{NAV_ICONS.more}</Text>
+      <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
+        More…
+      </Text>
+    </SoftButton>
+  );
+}

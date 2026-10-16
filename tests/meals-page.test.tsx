@@ -16,9 +16,13 @@ jest.mock("expo-secure-store", () => ({
 }));
 
 const mockRouterPush = jest.fn();
+// `?day=` deep link from Home's "This Week" strip. Each test sets the day it
+// wants (null = the wall's plain Meals press) via the mutable holder below.
+const mockDayParam: { day: string | null } = { day: null };
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockRouterPush, canGoBack: () => false }),
   usePathname: () => "/meals",
+  useLocalSearchParams: () => (mockDayParam.day ? { day: mockDayParam.day } : {}),
 }));
 
 const parent = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" };
@@ -171,6 +175,40 @@ describe("MealsPage — week grid", () => {
     await findByText("Taco Night");
     expect(getByTestId("meals-day-Sat").props.accessibilityLabel).toBe("Today");
     expect(getByTestId("meals-day-Mon").props.accessibilityLabel).toBe("Mon");
+  });
+
+  // Home's "This Week" strip links /meals?day=<Mon>. Honouring it is what
+  // makes that strip a navigation rather than a decoration (web page.tsx:170-206).
+  it("?day= focuses that day's column (the wall shows the whole week at a glance)", async () => {
+    fullRoute();
+    mockDayParam.day = "Mon";
+    try {
+      const { getByTestId, findByText } = render(<MealsPage now={NOW} />, { wrapper: wrap });
+      await findByText("Taco Night");
+      expect(getByTestId("meals-day-Mon").props.accessibilityLabel).toBe("Mon, selected from the wall");
+      // The focused column is VISUALLY distinct: its header wears an accent
+      // wash (a plain header is untinted, today gets weight but no wash).
+      const flat = (t: any) => Object.assign({}, ...[].concat(t.props.style ?? []).filter(Boolean));
+      expect(flat(getByTestId("meals-day-Mon")).backgroundColor).toBeTruthy();
+      expect(flat(getByTestId("meals-day-Tue")).backgroundColor).toBe("transparent");
+      // today keeps its own treatment (weight + ink) even when another day is focused
+      expect(getByTestId("meals-day-Sat").props.accessibilityLabel).toBe("Today");
+    } finally {
+      mockDayParam.day = null;
+    }
+  });
+
+  it("an unknown ?day= is ignored honestly (no crash, no fake focus)", async () => {
+    fullRoute();
+    mockDayParam.day = "Caturday";
+    try {
+      const { getByTestId, findByText } = render(<MealsPage now={NOW} />, { wrapper: wrap });
+      await findByText("Taco Night");
+      expect(getByTestId("meals-day-Sat").props.accessibilityLabel).toBe("Today");
+      expect(getByTestId("meals-day-Mon").props.accessibilityLabel).toBe("Mon");
+    } finally {
+      mockDayParam.day = null;
+    }
   });
 
   it("the current slot row carries the Now chip (schedule rule: 9am → lunch after the 07:30 breakfast rolls forward, 6pm → dinner)", async () => {

@@ -116,7 +116,7 @@ export function PhotosPage() {
       </>
     );
     const cellStyle = {
-      width: "48%" as const,
+      width: "31%" as const,
       aspectRatio: 1,
       borderRadius: 20,
       overflow: "hidden" as const,
@@ -178,7 +178,7 @@ export function PhotosPage() {
           {[0, 1, 2, 3].map((i) => (
             <View
               key={i}
-              style={{ width: "48%", aspectRatio: 1, borderRadius: 20, backgroundColor: colors["color-surface-2"] }}
+              style={{ width: "31%", aspectRatio: 1, borderRadius: 20, backgroundColor: colors["color-surface-2"] }}
             />
           ))}
         </View>
@@ -211,8 +211,13 @@ export function PhotosPage() {
                 <EmptyState flat icon="📸" title="Photos" body={EMPTY_COPY} />
               </View>
             ) : (
-              <View testID="photos-grid" style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-                {photos.map(renderCell)}
+              <View style={{ gap: 12 }}>
+                <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize + 2, fontWeight: "700" }}>
+                  On the wall
+                </Text>
+                <View testID="photos-grid" style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+                  {photos.map(renderCell)}
+                </View>
               </View>
             )}
             {!isParent && photos.length > 0 ? (

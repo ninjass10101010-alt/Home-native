@@ -140,12 +140,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [persist, armTimers]);
 
+  // Wall presses ARE session activity: the web's idle clock re-arms on wall
+  // interaction, so every touch on the panel re-arms it here too. Reads the
+  // member from the closure — NO side effects inside a state updater (a
+  // double-invoked updater would double-arm the timers).
   const poke = useCallback(() => {
-    setMember((m) => {
-      if (m) armTimers(m);
-      return m;
-    });
-  }, [armTimers]);
+    if (member) armTimers(member);
+  }, [armTimers, member]);
 
   const signIn = useCallback(
     async (name: string, pin?: string) => {
@@ -166,7 +167,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setMember(m);
     await persist(m);
-  }, [persist, signOut]);
+    // A fresh identity read is itself activity (hydration parity) — re-arm
+    // the idle clock so an actively-used panel never times out mid-session.
+    armTimers(m);
+  }, [armTimers, persist, signOut]);
 
   const value = useMemo<AuthValue>(
     () => ({

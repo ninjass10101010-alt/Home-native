@@ -23,9 +23,10 @@ export interface SoftButtonProps {
 /**
  * RN port of ui/SoftButton.tsx with the wall-scale contract (≥64dp, ≥14sp;
  * plan Task 6). Variant semantics ported verbatim, with the token formulas
- * computed at runtime per theme+accent (src/theme/mix.ts):
- *   primary   = accent deepened 60% toward black + white label (was the
- *               measured AA fix: 4.60–8.33:1 dark / 7.12–12.52:1 light)
+ * computed at runtime per theme+accent (src/theme/mix.ts — pct is the percent
+ * TOWARD BLACK, so web color-mix(accent X%, black) ⇒ pct = 100 − X):
+ *   primary   = accent 40% toward black + white label (was the measured AA
+ *               fix: 4.60–8.33:1 dark / 7.12–12.52:1 light)
  *   secondary = surface-2 fill + 55%-accent ink (6.96–10.85:1 / 6.03–10.23:1)
  *   danger    = rose deepened 25% toward black + white (alias "destructive")
  *   success   = mint deepened 45% toward black + white
@@ -64,14 +65,14 @@ export function SoftButton({
     }
     switch (variant) {
       case "primary":
-        return { bg: accentDeepened(accentColor, 60), fg: ON_ACCENT, border: mixAlpha(accentColor, 0.2), shadow: true };
+        return { bg: accentDeepened(accentColor, 40), fg: ON_ACCENT, border: mixAlpha(accentColor, 0.2), shadow: true };
       case "secondary":
         return { bg: colors["color-surface-2"], fg: accentInk(accentColor, colors["color-text-primary"]), border: mixAlpha(accentColor, 0.25), shadow: false };
       case "danger":
       case "destructive":
-        return { bg: accentDeepened(rose, 75), fg: ON_ACCENT, border: mixAlpha(rose, 0.2), shadow: true };
+        return { bg: accentDeepened(rose, 25), fg: ON_ACCENT, border: mixAlpha(rose, 0.2), shadow: true };
       case "success":
-        return { bg: accentDeepened(mint, 55), fg: ON_ACCENT, border: mixAlpha(mint, 0.2), shadow: true };
+        return { bg: accentDeepened(mint, 45), fg: ON_ACCENT, border: mixAlpha(mint, 0.2), shadow: true };
       case "ghost":
         return { bg: "transparent", fg: colors["color-text-secondary"], border: "transparent", shadow: false };
     }

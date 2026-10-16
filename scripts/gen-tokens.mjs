@@ -261,7 +261,7 @@ function resolveAll(rawView) {
 
 /* ── Pinned ground-truth verification (fail LOUD when Home-ai moves) ── */
 
-function verifyPinned(tokens, accents) {
+function verifyPinned(tokens, accents, accentsRgb) {
   const diffs = [];
   const expect = (path, actual, wanted) => {
     if (actual === undefined) diffs.push(`MISSING ${path} (expected ${want(wanted)})`);
@@ -278,6 +278,28 @@ function verifyPinned(tokens, accents) {
     for (const [name, v] of Object.entries(PINNED_ACCENTS[theme])) {
       expect(`accents.${theme}.${name}`, accents[theme][name], v);
     }
+  }
+  // U1 cross-check: every per-accent rgb triple must equal the hex accent's
+  // channels, and each theme's color-accent-selected-rgb must be its NORI
+  // triple — the light table lives only in :root[data-theme="light"][data-accent=…]
+  // blocks, so an unseeded light view silently falls back to the dark base.
+  for (const theme of ["dark", "light"]) {
+    for (const n of Object.keys(accents[theme])) {
+      const hex = accents[theme][n];
+      if (typeof hex !== "string" || !/^#[0-9a-f]{6}$/i.test(hex)) {
+        diffs.push(`VERIFY accents.${theme}.${n}: unparseable hex ${want(hex)}`);
+        continue;
+      }
+      const expected = [hex.slice(1, 3), hex.slice(3, 5), hex.slice(5, 7)]
+        .map((h) => parseInt(h, 16))
+        .join(", ");
+      expect(`accentsRgb.${theme}.${n}`, accentsRgb[theme][n], expected);
+    }
+    expect(
+      `tokens.${theme}["color-accent-selected-rgb"]`,
+      tokens[theme]["color-accent-selected-rgb"],
+      accentsRgb[theme].nori
+    );
   }
   return diffs;
 }
@@ -298,6 +320,12 @@ function main() {
 
   const darkView = { ...raw.base, ...raw.dark };
   const lightView = { ...raw.base, ...raw.light };
+  // U1: seed each theme's color-accent-selected-rgb from its own per-accent
+  // table. The LIGHT rgb table lives only in :root[data-theme="light"][data-accent=…]
+  // blocks (globals.css:390-399), so without this the light view falls back to
+  // the dark base triple — dark-nori channels under every light accent.
+  darkView["color-accent-selected-rgb"] = accentRgb.dark.nori;
+  lightView["color-accent-selected-rgb"] = accentRgb.light.nori;
   const boostDarkView = { ...raw.base, ...raw.dark, ...raw.boostDark };
   const boostLightView = { ...raw.base, ...raw.light, ...raw.boostLight };
 
@@ -334,7 +362,7 @@ function main() {
     light: Object.fromEntries(accentNames.map((n) => [n, accentRgb.light[n]])),
   };
 
-  const diffs = verifyPinned(tokens, accents);
+  const diffs = verifyPinned(tokens, accents, accentsRgb);
   for (const theme of ["dark", "light"]) {
     for (const n of accentNames) {
       if (accentsRgb[theme][n] === undefined) {

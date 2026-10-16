@@ -101,7 +101,9 @@ export function IconButton({
       border: mixAlpha(accentColor, 0.25),
     },
     danger: {
-      bg: accentDeepened(rose, 75),
+      // Web parity: bg color-mix(rose, #000 25%) — 25% TOWARD black (naming the
+      // web recipe so the value is never re-derived by memory).
+      bg: accentDeepened(rose, 25),
       fg: ON_ACCENT,
       border: mixAlpha(rose, 0.2),
     },

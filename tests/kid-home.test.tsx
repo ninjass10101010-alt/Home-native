@@ -221,7 +221,7 @@ describe("KidHome — hero", () => {
 
     expect(getByTestId("kid-home")).toBeTruthy();
     expect(getByTestId("kid-emoji")).toBeTruthy();
-    expect(getByText("Hi Aurora 👋")).toBeTruthy();
+    expect(getByText("Hey Aurora! 👋")).toBeTruthy();
     // week points for the EXACT full name key (108 → ⭐ Level 3 by the ported math)
     expect(getByText("108")).toBeTruthy();
     expect(getByText("⭐ Level 3 this week")).toBeTruthy();

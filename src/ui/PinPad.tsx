@@ -127,7 +127,10 @@ export function PinPad({ member, onVerified, onCancel, busy = false, error = nul
             accessibilityState={{ busy }}
             disabled={busy}
             onPress={() => press(k)}
-            style={{ borderRadius: 48 }}
+            style={({ pressed }) => [
+              { borderRadius: 48 },
+              pressed && !reduceMotion ? { transform: [{ scale: 0.96 }] } : null,
+            ]}
           >
             <Material
               tier="thin"

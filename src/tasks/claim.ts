@@ -36,7 +36,22 @@ export interface WallTask {
   assigneeEmoji: string;
   points: number;
   completed: boolean;
-  pendingApproval: { byName: string; points: number } | null;
+  pendingApproval: { byName: string; points: number; at: string } | null;
+  /** Due date as an ISO day string ("2026-10-02"); "" when unset. */
+  due: string;
+  category: string;
+  priority: "high" | "medium" | "low";
+  /** Universal (open to anyone) rows are the Open board. */
+  universal: boolean;
+  /** Stealable = unclaimed past its due date (web isSnatchable's flag half). */
+  stealable: boolean;
+  crewSize: number | null;
+  crewMembers: { name: string; emoji: string; checkedIn: boolean }[];
+  /** Open-task speed bonus — the first claimer earns points + bonus (web speedBonus). */
+  speedBonus: number;
+  /** The server's own week key for the completion (never client-computed). */
+  completedInWeek: string;
+  completedBy: string;
 }
 
 /** Photo data-URLs never belong in a Text glyph (web safeDisplayEmoji parity, the 1 MiB
@@ -66,6 +81,11 @@ export function normalizeSnapshotTasks(raw: unknown): WallTask[] {
               ? ((pendingRaw as Record<string, unknown>).byName as string)
               : "",
             points: Number((pendingRaw as Record<string, unknown>).points) || 0,
+            // The server's normalized UTC instant for the tap — the queue
+            // sorts on it newest-first (task-operation-contract.ts parity).
+            at: typeof (pendingRaw as Record<string, unknown>).at === "string"
+              ? ((pendingRaw as Record<string, unknown>).at as string)
+              : "",
           }
         : null;
     out.push({
@@ -76,6 +96,28 @@ export function normalizeSnapshotTasks(raw: unknown): WallTask[] {
       points: Number(t.points) || 0,
       completed: t.completed === true,
       pendingApproval: pending,
+      due: typeof t.due === "string" && t.due ? t.due : "",
+      category: typeof t.category === "string" ? t.category : "",
+      priority: t.priority === "high" || t.priority === "low" ? t.priority : "medium",
+      universal: t.universal === true,
+      stealable: t.stealable === true,
+      crewSize: Number.isFinite(Number(t.crewSize)) && Number(t.crewSize) >= 2 ? Number(t.crewSize) : null,
+      // Server shape: crew = { members: [...] } (an OBJECT — the old
+      // Array.isArray guard silently dropped every crew).
+      crewMembers:
+        t.crew && typeof t.crew === "object" && !Array.isArray(t.crew) &&
+        Array.isArray((t.crew as Record<string, unknown>).members)
+          ? ((t.crew as Record<string, unknown>).members as unknown[])
+              .filter((m): m is Record<string, unknown> => !!m && typeof m === "object")
+              .map((m) => ({
+                name: typeof m.name === "string" ? m.name : "",
+                emoji: displayEmoji(m.emoji),
+                checkedIn: typeof m.checkedInAt === "string" && m.checkedInAt.length > 0,
+              }))
+          : [],
+      speedBonus: Number(t.speedBonus) || 0,
+      completedInWeek: typeof t.completedInWeek === "string" ? t.completedInWeek : "",
+      completedBy: typeof t.completedBy === "string" ? t.completedBy : "",
     });
   }
   return out;
@@ -113,21 +155,34 @@ const TASK_REFUSAL_COPY: Record<string, string> = {
   session_required: "Sign in again to finish that.",
   not_allowed: "That isn't allowed right now.",
   adult_only: "Only a grown-up can do that.",
+  unknown_member: "That name isn't on the family roster any more.",
   unknown_actor: "That name isn't on the family roster any more.",
   not_task_owner: "That chore isn't yours to check off.",
   unknown_task: "That chore isn't on the family's list any more.",
   "unknown-task": "That chore isn't on the family's list any more.",
+  invalid_task_state: "That chore isn't in a state that allows that.",
+  target_required: "Pick which family member that's for first.",
+  incomplete_task_state: "That chore isn't in a state that allows that.",
   already_completed: "That one's already done.",
   already_claimed: "Somebody already claimed that one.",
   already_undone: "That one was already taken back.",
+  nothing_to_undo: "There's nothing to take back on that one.",
   operation_conflict: "That change was already applied once.",
   semantic_duplicate: "That tap was already approved once.",
   ambiguous_task: "That chore matched more than one row on the family's list.",
+  not_crew_task: "That chore isn't a crew chore.",
+  invalid_crew_member: "That family member isn't on that crew.",
+  member_checked_in: "That family member already did their part.",
+  no_checkins: "Nobody's checked in on that crew yet.",
+  crew_full: "That crew is full already.",
+  crew_close_not_allowed: "Only a grown-up can close that crew.",
   member_roster_unavailable: "Consuela couldn't read the family list — try again in a moment.",
   task_store_unavailable: "Consuela couldn't read the chores — try again in a moment.",
   ledger_unavailable: "Consuela couldn't reach the points board — try again in a moment.",
+  insufficient_balance: "There aren't enough points for that yet.",
   snapshot_write_failed: "Consuela couldn't save that yet — try again in a moment.",
   payload_too_large: "That was too big to send — try again.",
+  forbidden_claim_payload: "That request didn't look right — try again.",
   unreachable: "Couldn't reach Consuela — check the connection and try again.",
 };
 

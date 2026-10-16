@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, Text, View, ViewStyle } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { TYPOGRAPHY, MIN_TARGET_DP } from "../theme/tokens";
+import { mixAlpha } from "./SoftButton";
 
 export interface ListRowProps {
   leading?: React.ReactNode;
@@ -88,7 +89,8 @@ export function ListRow({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: colors["color-border"] ?? "transparent",
-    backgroundColor: colors["color-surface-0"],
+    // web parity: bg-[var(--color-surface-0)]/30 — a wash, not a solid card
+    backgroundColor: mixAlpha(colors["color-surface-0"], 0.3),
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: "row",

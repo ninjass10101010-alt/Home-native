@@ -17,8 +17,10 @@ jest.mock("expo-secure-store", () => ({
 }));
 
 const mockRouterPush = jest.fn();
+const mockRouterBack = jest.fn();
+const mockRouterReplace = jest.fn();
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockRouterPush }),
+  useRouter: () => ({ push: mockRouterPush, back: mockRouterBack, replace: mockRouterReplace, canGoBack: () => true }),
 }));
 
 let mockMember: any = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" };
@@ -73,12 +75,15 @@ const SUCCESS_BODY = {
   houseAlert: { sent: 2, failed: 0, notes: [] },
 };
 
-const selectType = (getByTestId: (id: string) => any, id: string) =>
-  fireEvent.press(getByTestId(`emergency-type-${id}`));
-
 const typePin = (getByLabelText: (id: string) => any, pin: string) => {
   for (const k of pin) fireEvent.press(getByLabelText(k));
 };
+
+const openSituation = (getByTestId: (id: string) => any, situation: string) =>
+  fireEvent.press(getByTestId(`emergency-situation-${situation}`));
+
+const pickAlertType = (getByTestId: (id: string) => any, type: string) =>
+  fireEvent.press(getByTestId(`emergency-alert-type-${type}`));
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -86,47 +91,97 @@ beforeEach(() => {
   api.mockReset();
 });
 
-describe("EmergencyFlow — type select", () => {
-  it("renders the four big type cards and opens the PinPad with the signed-in member", async () => {
-    route(CONTACTS_BODY);
-    const { getByTestId, getByText, findByTestId } = render(<EmergencyFlow />, { wrapper: wrap });
-    expect(getByTestId("emergency-type-fire")).toBeTruthy();
-    expect(getByTestId("emergency-type-water")).toBeTruthy();
-    expect(getByTestId("emergency-type-injury")).toBeTruthy();
-    expect(getByTestId("emergency-type-general")).toBeTruthy();
-    expect(getByText("Fire")).toBeTruthy();
-    expect(getByText("Water")).toBeTruthy();
-    expect(getByText("Injury")).toBeTruthy();
-    expect(getByText("General")).toBeTruthy();
-    selectType(getByTestId, "fire");
-    expect(await findByTestId("emergency-pinpad")).toBeTruthy();
-    expect(getByText("Hi Rebecca 👋")).toBeTruthy();
-  });
-
-  it("guests get the PIN gate copy, no doomed fetch, and the generic family identity", async () => {
+describe("EmergencyFlow — signed-out banner", () => {
+  it("signed out → the amber saved-copy banner with a sign-in link that routes to the Home rail", async () => {
     mockMember = null;
     const { getByTestId, getByText, findByTestId } = render(<EmergencyFlow />, { wrapper: wrap });
-    expect(getByText("Sign in with your PIN to see your emergency contacts.")).toBeTruthy();
-    expect(api).not.toHaveBeenCalled();
-    selectType(getByTestId, "general");
-    expect(await findByTestId("emergency-pinpad")).toBeTruthy();
-    expect(getByText("Hi Family 👋")).toBeTruthy();
+    expect(await findByTestId("sync-status-banner")).toBeTruthy();
+    expect(
+      getByText("🔐 Signed out — showing your saved copy. Every change stays on this device until you sign in.")
+    ).toBeTruthy();
+    expect(getByText("Sign in with your PIN →")).toBeTruthy();
+    fireEvent.press(getByTestId("sync-status-banner-signin"));
+    expect(mockRouterPush).toHaveBeenCalledWith("/");
+  });
+
+  it("signed in → no banner", () => {
+    route(CONTACTS_BODY);
+    const { queryByTestId } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(queryByTestId("sync-status-banner")).toBeNull();
   });
 });
 
-describe("EmergencyFlow — sending states", () => {
-  it("wrong PIN → honest copy in the pad and the next entry starts fresh (input cleared)", async () => {
+describe("EmergencyFlow — emergency header bar", () => {
+  it("the emergency-tinted bar carries the title, subtitle, back-to-Home and the theme toggle", () => {
+    route(CONTACTS_BODY);
+    const { getByTestId, getByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(getByText("Emergency")).toBeTruthy();
+    expect(getByText("Urgent Contacts & Help")).toBeTruthy();
+    fireEvent.press(getByTestId("emergency-back"));
+    expect(mockRouterBack).toHaveBeenCalled();
+    expect(getByTestId("emergency-theme-toggle")).toBeTruthy();
+  });
+});
+
+describe("EmergencyFlow — common situations grid", () => {
+  it("renders the web's exact Common Situations rows (2×2 grid)", () => {
+    route(CONTACTS_BODY);
+    const { getByTestId, getByText, getAllByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(getByText("Common Situations")).toBeTruthy();
+    expect(getByTestId("emergency-situation-minor")).toBeTruthy();
+    expect(getByTestId("emergency-situation-lost")).toBeTruthy();
+    expect(getByTestId("emergency-situation-lockout")).toBeTruthy();
+    expect(getByTestId("emergency-situation-sick")).toBeTruthy();
+    expect(getByText("Minor Injury")).toBeTruthy();
+    expect(getByText("Small cuts, scrapes, or bruises")).toBeTruthy();
+    expect(getByText("Lost Item")).toBeTruthy();
+    expect(getByText("Lost keys, phone, or important item")).toBeTruthy();
+    expect(getByText("Call home")).toBeTruthy();
+    expect(getByText("Locked Out")).toBeTruthy();
+    expect(getByText("Locked out of house or car")).toBeTruthy();
+    expect(getByText("Not Feeling Well")).toBeTruthy();
+    expect(getByText("Mild illness or discomfort")).toBeTruthy();
+    expect(getAllByText("Mom or Dad").length).toBe(3);
+  });
+
+  it("tapping a situation row opens the PIN-gated alert flow (web order: PIN first)", async () => {
+    route(CONTACTS_BODY);
+    const { getByTestId, findByTestId } = render(<EmergencyFlow />, { wrapper: wrap });
+    openSituation(getByTestId, "minor");
+    expect(await findByTestId("emergency-modal")).toBeTruthy();
+    expect(await findByTestId("emergency-pinpad")).toBeTruthy();
+  });
+
+  it("guests get the generic family identity in the pad and never fire the doomed fetch", async () => {
+    mockMember = null;
+    const { getByTestId, findByTestId, getByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(api).not.toHaveBeenCalled();
+    openSituation(getByTestId, "lockout");
+    expect(await findByTestId("emergency-pinpad")).toBeTruthy();
+    expect(getByText("Hi Family 👋")).toBeTruthy();
+    expect(api).not.toHaveBeenCalled();
+  });
+});
+
+describe("EmergencyFlow — alert flow (web order: PIN → type → send)", () => {
+  it("wrong PIN → honest copy in the pad; the next entry starts fresh and can succeed", async () => {
     api.mockImplementation((path: string, init?: any) => {
       if (path.startsWith("/api/emergency-contacts")) return Promise.resolve(CONTACTS_BODY["/api/emergency-contacts"]);
       if (init?.body?.pin === "2222") return Promise.resolve(SUCCESS_BODY);
       return Promise.reject(new ApiError({ message: "Invalid PIN", status: 401, code: "Invalid PIN" }));
     });
     const { getByTestId, getByLabelText, findByText, findByTestId } = render(<EmergencyFlow />, { wrapper: wrap });
-    selectType(getByTestId, "fire");
-    await findByTestId("emergency-pinpad");
+    openSituation(getByTestId, "minor");
+    await findByText("Enter your 4-digit PIN");
     typePin(getByLabelText, "1111");
+    // PIN entry advances to the type list (web order: PIN → type → send)
+    expect(await findByTestId("emergency-alert-type-fire")).toBeTruthy();
+    pickAlertType(getByTestId, "fire");
+    // wrong PIN → back to the pad with the honest error
     expect(await findByText("Wrong PIN — try again.")).toBeTruthy();
     typePin(getByLabelText, "2222");
+    expect(await findByTestId("emergency-alert-type-fire")).toBeTruthy();
+    pickAlertType(getByTestId, "fire");
     expect(await findByText("Alert Sent")).toBeTruthy();
     const calls = api.mock.calls.filter((c: any[]) => c[0] === "/api/emergency");
     expect(calls[0][1]).toEqual({ method: "POST", body: { type: "fire", pin: "1111" } });
@@ -137,8 +192,9 @@ describe("EmergencyFlow — sending states", () => {
   it("success → calm checkmark screen, the server's message, house honesty, Done", async () => {
     route({ ...CONTACTS_BODY, "/api/emergency": SUCCESS_BODY });
     const { getByTestId, getByLabelText, findByText, getByText } = render(<EmergencyFlow />, { wrapper: wrap });
-    selectType(getByTestId, "water");
+    openSituation(getByTestId, "minor");
     typePin(getByLabelText, "1234");
+    pickAlertType(getByTestId, "water");
     expect(await findByText("Alert Sent")).toBeTruthy();
     expect(getByText("Emergency alert sent to 2 contacts.")).toBeTruthy();
     expect(getByText("House channels: 2 sent · 0 failed")).toBeTruthy();
@@ -159,8 +215,9 @@ describe("EmergencyFlow — sending states", () => {
       },
     });
     const { getByTestId, getByLabelText, findByText, getByText } = render(<EmergencyFlow />, { wrapper: wrap });
-    selectType(getByTestId, "injury");
+    openSituation(getByTestId, "sick");
     typePin(getByLabelText, "1234");
+    pickAlertType(getByTestId, "injury");
     expect(await findByText("Alert Partially Sent")).toBeTruthy();
     expect(getByText("Alert partially delivered.")).toBeTruthy();
     expect(getByText("Only 1 of 2 contacts confirmed delivery.")).toBeTruthy();
@@ -193,8 +250,9 @@ describe("EmergencyFlow — sending states", () => {
     const { getByTestId, getByLabelText, findByText, getByText, queryByText } = render(<EmergencyFlow />, {
       wrapper: wrap,
     });
-    selectType(getByTestId, "fire");
+    openSituation(getByTestId, "minor");
     typePin(getByLabelText, "1234");
+    pickAlertType(getByTestId, "fire");
     expect(await findByText("Alert Failed")).toBeTruthy();
     expect(getByText("No emergency channel confirmed delivery.")).toBeTruthy();
     expect(queryByText("Alert Partially Sent")).toBeNull();
@@ -212,8 +270,9 @@ describe("EmergencyFlow — sending states", () => {
       }),
     });
     const { getByTestId, getByLabelText, findByText } = render(<EmergencyFlow />, { wrapper: wrap });
-    selectType(getByTestId, "general");
+    openSituation(getByTestId, "lost");
     typePin(getByLabelText, "1234");
+    pickAlertType(getByTestId, "general");
     expect(
       await findByText("No emergency channel confirmed delivery. Please call emergency services directly.")
     ).toBeTruthy();
@@ -234,8 +293,9 @@ describe("EmergencyFlow — sending states", () => {
       const { getByTestId, getByLabelText, findByText, findByTestId, getByText, queryByText } = render(<EmergencyFlow />, {
         wrapper: wrap,
       });
-      selectType(getByTestId, "injury");
+      openSituation(getByTestId, "sick");
       typePin(getByLabelText, "1234");
+      pickAlertType(getByTestId, "injury");
       expect(await findByText("An emergency alert was sent recently. Wait a moment before trying again.")).toBeTruthy();
       expect(getByText("You can try again in 5 seconds.")).toBeTruthy();
       expect(getByTestId("emergency-retry").props.accessibilityState?.disabled).toBe(true);
@@ -268,8 +328,9 @@ describe("EmergencyFlow — sending states", () => {
       }),
     });
     const { getByTestId, getByLabelText, findByText } = render(<EmergencyFlow />, { wrapper: wrap });
-    selectType(getByTestId, "fire");
+    openSituation(getByTestId, "minor");
     typePin(getByLabelText, "1234");
+    pickAlertType(getByTestId, "fire");
     expect(
       await findByText(
         "Emergency contacts could not be read. No alert was sent — please call emergency services directly."
@@ -288,8 +349,9 @@ describe("EmergencyFlow — sending states", () => {
       }),
     });
     const { getByTestId, getByLabelText, findByText } = render(<EmergencyFlow />, { wrapper: wrap });
-    selectType(getByTestId, "water");
+    openSituation(getByTestId, "lost");
     typePin(getByLabelText, "1234");
+    pickAlertType(getByTestId, "water");
     expect(
       await findByText("Could not check the family PIN. Please try again or call emergency services directly.")
     ).toBeTruthy();
@@ -310,8 +372,9 @@ describe("EmergencyFlow — sending states", () => {
       }),
     });
     const { getByTestId, getByLabelText, findByText } = render(<EmergencyFlow />, { wrapper: wrap });
-    selectType(getByTestId, "injury");
+    openSituation(getByTestId, "sick");
     typePin(getByLabelText, "1234");
+    pickAlertType(getByTestId, "injury");
     expect(
       await findByText("SMS and email are not configured for alerts. Please call emergency services directly.")
     ).toBeTruthy();
@@ -323,8 +386,9 @@ describe("EmergencyFlow — sending states", () => {
       "/api/emergency": new ApiError({ message: "emergency_in_flight", status: 409, code: "emergency_in_flight" }),
     });
     const { getByTestId, getByLabelText, findByText } = render(<EmergencyFlow />, { wrapper: wrap });
-    selectType(getByTestId, "general");
+    openSituation(getByTestId, "lost");
     typePin(getByLabelText, "1234");
+    pickAlertType(getByTestId, "general");
     expect(
       await findByText("An emergency alert is already sending. Wait for it to finish before trying again.")
     ).toBeTruthy();
@@ -342,13 +406,39 @@ describe("EmergencyFlow — sending states", () => {
       }),
     });
     const { getByTestId, getByLabelText, findByText } = render(<EmergencyFlow />, { wrapper: wrap });
-    selectType(getByTestId, "water");
+    openSituation(getByTestId, "lost");
     typePin(getByLabelText, "1234");
+    pickAlertType(getByTestId, "water");
     expect(await findByText("Couldn't reach Consuela — check the connection and try again.")).toBeTruthy();
   });
 });
 
-describe("EmergencyFlow — contacts preview strip", () => {
+describe("EmergencyFlow — contacts card", () => {
+  it("signed out → the empty contacts card with the blue Open safety settings pill", async () => {
+    mockMember = null;
+    const { findByText, getByText, getByTestId } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(await findByText("No emergency contacts yet")).toBeTruthy();
+    expect(getByText("Ask a parent to add or manage emergency contacts.")).toBeTruthy();
+    expect(getByTestId("emergency-contacts-safety")).toBeTruthy();
+    fireEvent.press(getByTestId("emergency-contacts-safety"));
+    expect(mockRouterPush).toHaveBeenCalledWith("/settings");
+  });
+
+  it("signed-in child with no contacts → the ask-a-parent copy", async () => {
+    mockMember = { id: "c1", name: "Sam", role: "child", emoji: "🧒", color: "green" };
+    route({ "/api/emergency-contacts": { contacts: [], contactsSource: "live" } });
+    const { findByText, getByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(await findByText("No emergency contacts yet")).toBeTruthy();
+    expect(getByText("Ask a parent to add or manage emergency contacts.")).toBeTruthy();
+  });
+
+  it("parent with no contacts → the web's parent copy + Add contacts pill", async () => {
+    route({ "/api/emergency-contacts": { contacts: [], contactsSource: "live" } });
+    const { findByText, getByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(await findByText("Add or manage emergency contacts to get started.")).toBeTruthy();
+    expect(getByText("Add contacts")).toBeTruthy();
+  });
+
   it("signed-in members see the family's emergency contacts", async () => {
     route(CONTACTS_BODY);
     const { findByText, getByText } = render(<EmergencyFlow />, { wrapper: wrap });
@@ -358,7 +448,15 @@ describe("EmergencyFlow — contacts preview strip", () => {
     expect(getByText("(555) 987-6543")).toBeTruthy();
   });
 
-  it("contacts served from the device cache → honest stale badge over the strip (web parity)", async () => {
+  it("parent with contacts → the contacts list; the empty-state pill stays hidden (web parity)", async () => {
+    route(CONTACTS_BODY);
+    const { findByText, queryByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(await findByText("Rebecca (Mom)")).toBeTruthy();
+    expect(queryByText("Manage contacts")).toBeNull();
+    expect(queryByText("No emergency contacts yet")).toBeNull();
+  });
+
+  it("contacts served from the device cache → honest stale badge over the list (web parity)", async () => {
     route({
       "/api/emergency-contacts": {
         contacts: CONTACTS_BODY["/api/emergency-contacts"].contacts,
@@ -373,21 +471,29 @@ describe("EmergencyFlow — contacts preview strip", () => {
     expect(getByText("(555) 123-4567")).toBeTruthy();
   });
 
-  it("no contacts configured → honest empty state with ask-a-parent copy, flow intact", async () => {
-    route({ "/api/emergency-contacts": { contacts: [], contactsSource: "live" } });
-    const { findByText, getByText, getByTestId } = render(<EmergencyFlow />, { wrapper: wrap });
-    expect(await findByText("No emergency contacts yet")).toBeTruthy();
-    expect(getByText("Ask a parent to add or manage emergency contacts.")).toBeTruthy();
-    expect(getByTestId("emergency-type-fire")).toBeTruthy();
-  });
-
   it("signed-in but unreadable contacts → honest unavailable line, flow intact", async () => {
     route({
       "/api/emergency-contacts": new ApiError({ message: "unauthorized", status: 401, code: "http_401" }),
     });
     const { findByText, getByTestId } = render(<EmergencyFlow />, { wrapper: wrap });
     expect(await findByText("Couldn't load your emergency contacts right now.")).toBeTruthy();
-    expect(getByTestId("emergency-type-fire")).toBeTruthy();
+    expect(getByTestId("emergency-situation-minor")).toBeTruthy();
+  });
+});
+
+describe("EmergencyFlow — settings quick-link bar", () => {
+  it("the Open safety settings bar sits below the grid and routes to Settings", async () => {
+    mockMember = null;
+    const { findByTestId, getByTestId } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(await findByTestId("emergency-safety-bar")).toBeTruthy();
+    fireEvent.press(getByTestId("emergency-safety-bar"));
+    expect(mockRouterPush).toHaveBeenCalledWith("/settings");
+  });
+
+  it("parent → the bar reads Manage contacts in Safety (web label parity)", async () => {
+    route(CONTACTS_BODY);
+    const { findByText } = render(<EmergencyFlow />, { wrapper: wrap });
+    expect(await findByText("Manage contacts in Safety")).toBeTruthy();
   });
 });
 
@@ -398,8 +504,9 @@ describe("EmergencyFlow — stale-recipient honesty on the result screen", () =>
       "/api/emergency": { ...SUCCESS_BODY, contactsSource: "cache" },
     });
     const { getByTestId, getByLabelText, findByText, getByText } = render(<EmergencyFlow />, { wrapper: wrap });
-    selectType(getByTestId, "water");
+    openSituation(getByTestId, "lost");
     typePin(getByLabelText, "1234");
+    pickAlertType(getByTestId, "general");
     expect(await findByText("Alert Sent")).toBeTruthy();
     expect(
       getByText("Warning: stale cached contacts were used. Recipients may be out of date; verify them before retrying.")
@@ -412,8 +519,9 @@ describe("EmergencyFlow — stale-recipient honesty on the result screen", () =>
       "/api/emergency": { ...SUCCESS_BODY, contactsSource: "live" },
     });
     const { getByTestId, getByLabelText, findByText, queryByText } = render(<EmergencyFlow />, { wrapper: wrap });
-    selectType(getByTestId, "water");
+    openSituation(getByTestId, "lost");
     typePin(getByLabelText, "1234");
+    pickAlertType(getByTestId, "general");
     expect(await findByText("Alert Sent")).toBeTruthy();
     expect(queryByText(/stale cached contacts were used/)).toBeNull();
   });

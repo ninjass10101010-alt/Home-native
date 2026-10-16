@@ -123,14 +123,18 @@ describe("PhotosWidget (wall hero)", () => {
     let img = await findByTestId("photos-hero-image");
     expect(img.props.source.uri).toContain("ph0");
     // pause → cadence stops
+    // Static name + pressed state: the accessible name never changes, so
+    // "pressed" is the only thing that reports the paused state (the web's
+    // documented toggle pairing — a changing label double-announces it).
     fireEvent.press(getByLabelText("Pause photo rotation"));
     act(() => {
       jest.advanceTimersByTime(30_000);
     });
     img = await findByTestId("photos-hero-image");
     expect(img.props.source.uri).toContain("ph0"); // frozen on the paused photo
-    // play → cadence resumes
-    fireEvent.press(getByLabelText("Resume photo rotation"));
+    expect(getByLabelText("Pause photo rotation").props.accessibilityState?.checked).toBe(true);
+    // play → cadence resumes (same control, now released)
+    fireEvent.press(getByLabelText("Pause photo rotation"));
     act(() => {
       jest.advanceTimersByTime(10_000);
     });
@@ -157,6 +161,6 @@ describe("PhotosWidget (wall hero)", () => {
       return Promise.reject(new Error("unmapped"));
     });
     const { findByText } = render(<PhotosWidget />, { wrapper: wrap });
-    expect(await findByText("No photos yet.")).toBeTruthy();
+    expect(await findByText("No photos yet")).toBeTruthy(); // web copy: no trailing period
   });
 });

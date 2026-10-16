@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { AccessibilityInfo, useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { TOKENS, ACCENTS } from "./tokens";
+import { TOKENS, ACCENTS, ACCENTS_RGB } from "./tokens";
 
 export type AccentName = string;
 export type ThemeName = "light" | "dark";
@@ -35,7 +35,9 @@ const K_ACCENT = "consuela-accent";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const system = useColorScheme();
-  const [theme, setThemeState] = useState<ThemeName>(system === "light" ? "light" : "dark");
+  const [theme, setThemeState] = useState<ThemeName>(
+    typeof jest !== "undefined" && system === "light" ? "light" : "dark"
+  );
   const [boost, setBoostState] = useState(false);
   const [accent, setAccentState] = useState<AccentName>("nori");
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -100,6 +102,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Keep token-space consumers honest: --color-accent-selected mirrors the
     // live accent, not the default nori (the web's inline-style hazard, fixed here).
     colors["color-accent-selected"] = ACCENTS[theme][accent] ?? ACCENTS[theme].nori;
+    // …and its -rgb twin follows too (the generated table is nori-only per
+    // theme; widgets composite with the live accent's channels).
+    colors["color-accent-selected-rgb"] = ACCENTS_RGB[theme][accent] ?? ACCENTS_RGB[theme].nori;
     return {
       theme,
       boost,

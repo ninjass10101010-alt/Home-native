@@ -130,7 +130,18 @@ export function SettingsPage() {
           CHOOSE WHAT TO MANAGE
         </Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
-          <Text style={{ fontSize: 44 }}>⚙️</Text>
+                <View
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 32,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors["color-surface-1"] ?? colors["color-surface-2"],
+                  }}
+                >
+                  <Text style={{ fontSize: 44 }}>⚙️</Text>
+                </View>
           <Text style={{ color: colors["color-text-primary"], fontSize: 54, fontWeight: "700" }}>Settings</Text>
         </View>
         {stale && member ? (
@@ -195,10 +206,21 @@ export function SettingsPage() {
               accessibilityRole="button"
               accessibilityLabel={`${s.title}: ${s.description}`}
               onPress={() => setOpenId(s.id)}
-              style={{ width: 508 }}
+              style={{ flexBasis: "48%", flexGrow: 1, minWidth: 340 }}
             >
-              <Material tier="regular" style={{ borderRadius: 28, padding: 24, minHeight: 188 }}>
-                <Text style={{ fontSize: 44 }}>{s.icon}</Text>
+              <Material tier="thin" style={{ borderRadius: 28, padding: 24, minHeight: 188 }}>
+                <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: colors["color-surface-1"] ?? colors["color-surface-2"],
+                }}
+              >
+                  <Text style={{ fontSize: 44 }}>{s.icon}</Text>
+              </View>
                 <Text
                   style={{
                     color: colors["color-text-primary"],
@@ -253,7 +275,18 @@ function SectionFocus({
         ‹ Settings
       </SoftButton>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: 12, marginBottom: 24 }}>
-        <Text style={{ fontSize: 44 }}>{def.icon}</Text>
+        <View
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: colors["color-surface-1"] ?? colors["color-surface-2"],
+          }}
+        >
+          <Text style={{ fontSize: 44 }}>{def.icon}</Text>
+        </View>
         <View style={{ flexShrink: 1 }}>
           <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.stat.fontSize, fontWeight: "700" }}>
             {def.title}
@@ -293,7 +326,7 @@ function MeSection({ member }: { member: ServerMember }) {
     <View>
       <Material tier="regular" style={{ borderRadius: 28, padding: 24 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-          <Text style={{ fontSize: 56 }}>{member.emoji || "👤"}</Text>
+          <Text style={{ fontSize: 72 }}>{member.emoji || "👤"}</Text>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>
               {member.name}
@@ -569,7 +602,7 @@ function SafetySection({ member }: { member: ServerMember | null }) {
                   style={{ borderRadius: 999, paddingHorizontal: 20, paddingVertical: 14 }}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Text style={{ fontSize: 28 }}>{c.emoji || "👤"}</Text>
+                    <Text style={{ fontSize: 40 }}>{c.emoji || "👤"}</Text>
                     <View>
                       <Text
                         style={{

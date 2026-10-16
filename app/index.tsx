@@ -5,6 +5,7 @@ import { Screen } from "../src/theme/Screen";
 import { HomeWall } from "../src/home/HomeWall";
 import { KidHome } from "../src/home/KidHome";
 import { CapsuleDock } from "../src/nav/CapsuleDock";
+import { resolveRoute } from "../src/nav/nav-items";
 import { MoreSheet } from "../src/nav/MoreSheet";
 import { useTheme } from "../src/theme/ThemeProvider";
 import { TYPOGRAPHY } from "../src/theme/tokens";
@@ -54,11 +55,34 @@ const UNREACHABLE_COPY = "Couldn't reach Consuela — check the connection and t
  */
 export default function HomePlaceholder() {
   const { colors } = useTheme();
-  const { member, hydrated, signIn, signOut } = useAuth();
+  const { member, hydrated, signIn, signOut, poke } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [roster, setRoster] = React.useState<MembersResult>({ members: [], source: "fallback" });
+  /** True while the mount roster read is in flight — the badge must not claim
+   *  a cause (signed-out / offline) before the read has actually answered. */
+  const [rosterLoading, setRosterLoading] = React.useState(true);
+  // The wall registry, with the leaderboard bound to the live roster so its
+  // top-3 rows can show member avatars (web HomeLeaderboardWidget parity).
+  const wallWidgets = React.useMemo<Partial<Record<WidgetId, React.ComponentType>>>(
+    () => {
+      return ({
+      ...WALL_WIDGETS,
+      leaderboard: () => (
+        <LeaderboardWidget members={roster.members.map((m) => ({ name: m.name, emoji: m.emoji }))} />
+      ),
+      // House's own footer route: resolveRoute keeps the manifest's honest
+      // /soon fallback (dock alive) instead of a toast dead end.
+      homeSecurity: () => (
+        <HomeSecurityWidget
+          onOpenHomeControls={() => router.push(resolveRoute("/ha", "House") as never)}
+        />
+      ),
+      });
+    },
+    [roster.members, router]
+  );
   const [pinTarget, setPinTarget] = React.useState<RailMember | null>(null);
   const [pinError, setPinError] = React.useState<string | null>(null);
   const [railError, setRailError] = React.useState<string | null>(null);
@@ -100,13 +124,23 @@ export default function HomePlaceholder() {
     return () => clearInterval(t);
   }, [pathname, router, pinTarget, moreOpen]);
 
+  // The roster read waits for auth hydration. Without the guard it fired a
+  // doomed /api/members/admin 401 the moment the route mounted — before we
+  // knew whether a session exists — and the wall mistook the 401's cache for
+  // an offline device (web parity: the signed-out wall is a supported state).
   React.useEffect(() => {
+    if (!hydrated) return;
     let alive = true;
-    listMembersSmart().then((r) => alive && setRoster(r)).catch(() => {});
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- starting the in-flight marker before the read, so the badge can't claim a cause it doesn't know yet
+    setRosterLoading(true);
+    listMembersSmart()
+      .then((r) => alive && setRoster(r))
+      .catch(() => {})
+      .finally(() => alive && setRosterLoading(false));
     return () => {
       alive = false;
     };
-  }, [member]);
+  }, [member, hydrated]);
 
   const onSelect = async (m: RailMember) => {
     if (member?.name === m.name) return;
@@ -151,20 +185,35 @@ export default function HomePlaceholder() {
   return (
     <Screen>
       {/* Wall-touch activity resets the screensaver quiet clock. */}
-      <View style={{ flex: 1 }} onTouchStart={() => (lastTouchRef.current = Date.now())}>
+      {/* Wall-touch activity resets the screensaver quiet clock AND re-arms the
+          session idle clock (auth poke — a press is activity on the wall). */}
+      <View
+        style={{ flex: 1 }}
+        onTouchStart={() => {
+          lastTouchRef.current = Date.now();
+          poke();
+        }}
+      >
       {/* Mode switch (WS-4): a signed-in child/pet gets the gamified kid wall
           INSTEAD of the family bento; family (guest) and adult keep HomeWall. */}
       {member && member.role !== "parent" ? (
-        <KidHome />
+        <KidHome onOpenMore={() => setMoreOpen(true)} />
       ) : (
         <HomeWall
           members={roster.members}
           onSelectMember={(m) => void onSelect(m)}
           onSignOut={member ? () => void signOut() : undefined}
-          widgets={WALL_WIDGETS}
+          widgets={wallWidgets}
+          onSelectDay={(dayId) => router.push(`/meals?day=${dayId}` as never)}
+          onOpenMore={() => setMoreOpen(true)}
         />
       )}
-      {roster.source !== "live" || railError ? (
+      {/* The roster badge tells the truth about WHY the rail isn't live, and
+          the two causes are not the same failure. A signed-out session reads
+          the cache BY DESIGN (the rail is the family wall's sign-in surface) —
+          calling that "offline" asserts a network fault that does not exist.
+          A genuinely unreachable NAS is the only offline claim the wall makes. */}
+      {rosterLoading ? null : roster.source !== "live" || railError ? (
         <View style={{ position: "absolute", top: 12, left: 24, right: 24, alignItems: "center" }}>
           {railError ? (
             <Text
@@ -173,11 +222,18 @@ export default function HomePlaceholder() {
             >
               {railError}
             </Text>
-          ) : (
+          ) : roster.reason === "unreachable" ? (
             <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
               offline roster (cached)
             </Text>
-          )}
+          ) : hydrated && roster.source !== "live" ? (
+            <Text
+              testID="rail-signed-out"
+              style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}
+            >
+              Signed out — tap your picture to sign in
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -186,7 +242,6 @@ export default function HomePlaceholder() {
         hydrated={hydrated}
         pathname={pathname}
         onNavigate={(p) => router.push(p as never)}
-        onOpenMore={() => setMoreOpen(true)}
       />
       <MoreSheet
         visible={moreOpen}
