@@ -2,12 +2,13 @@
 import { render } from "@testing-library/react-native";
 import React from "react";
 import { StyleSheet, Text } from "react-native";
-import { MATERIALS, specularOpacity, SPECULAR_AT } from "../src/theme/materials";
+import { MATERIALS, specularOpacity, SPECULAR_AT, type MaterialTier } from "../src/theme/materials";
 import { Material } from "../src/theme/Material";
 import { perfTier } from "../src/theme/perf";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
 import { TOKENS } from "../src/theme/tokens";
-import { mix } from "../src/theme/mix";
+import { mix, parseColor } from "../src/theme/mix";
+import { toRgb } from "../src/lib/contrast";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -66,36 +67,104 @@ function gradientNodes(node: any): any[] {
   return out;
 }
 
+/**
+ * WS-0 round 3, finding 3. The round-2 ladder test asserted STRING LITERALS —
+ * three distinct strings in ANY order pass, so inverting the ladder and
+ * collapsing the rendered composited steps (round 2's own D-8) stayed green.
+ * These assertions are about the PROPERTY: what the three tiers composite to
+ * over the theme's canvas, compared to each other. Nothing here names a value;
+ * renaming/re-stepping the fills can only pass by changing the composite.
+ */
+const srgb = (v: number) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+const relY = (rgb: [number, number, number]) =>
+  0.2126 * srgb(rgb[0] / 255) + 0.7152 * srgb(rgb[1] / 255) + 0.0722 * srgb(rgb[2] / 255);
+const chroma = (rgb: [number, number, number]) => Math.max(...rgb) - Math.min(...rgb);
+
+type Rgb = [number, number, number];
+function fillOf(background: string): { rgb: Rgb; a: number } {
+  const m = background.match(
+    /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/i
+  );
+  if (!m) throw new Error(`unparseable material fill "${background}"`);
+  return { rgb: [+m[1], +m[2], +m[3]], a: m[4] === undefined ? 1 : parseFloat(m[4]) };
+}
+function compositeOver(fg: Rgb, a: number, bg: Rgb): Rgb {
+  return [0, 1, 2].map((i) => fg[i] * a + bg[i] * (1 - a)) as Rgb;
+}
+/** The surface a tier actually paints: its fill composited over the canvas. */
+function compositedTier(theme: "dark" | "light", tier: MaterialTier): Rgb {
+  const canvas = toRgb((TOKENS[theme] as unknown as Record<string, string>)["color-canvas"]);
+  const { rgb, a } = fillOf(MATERIALS[theme][tier].background);
+  return compositeOver(rgb, a, canvas);
+}
+
 describe("MATERIALS descriptors", () => {
-  // WS-0 round 2 (D-8/D-9): the fills are re-stepped onto real surface steps.
-  // The transcribed trio was three ALPHAS of ONE color, which rendered as a
-  // 0.0017-relY non-monotonic ladder in dark and three literal #ffffff cards in
-  // light. Blur / border / specular keep the transcribed values.
-  it("dark tiers are a monotonic surface ladder", () => {
-    expect(MATERIALS.dark.thin.background).toBe("rgba(37, 44, 60, 0.42)");
+  const T = (theme: "dark" | "light", tier: MaterialTier) => relY(compositedTier(theme, tier));
+
+  it("dark tiers composite to a strictly monotonic ladder (thin < regular < thick)", () => {
+    expect(T("dark", "thin")).toBeLessThan(T("dark", "regular"));
+    expect(T("dark", "regular")).toBeLessThan(T("dark", "thick"));
+  });
+
+  it("light tiers are monotonic the OTHER way (thick < regular < thin)", () => {
+    expect(T("light", "thick")).toBeLessThan(T("light", "regular"));
+    expect(T("light", "regular")).toBeLessThan(T("light", "thin"));
+  });
+
+  it("the dark ladder SPANS at least 1.4x from thin to thick", () => {
+    expect(T("dark", "thick") / T("dark", "thin")).toBeGreaterThanOrEqual(1.4);
+  });
+
+  it("all three tiers are pairwise distinct by >= 0.004 relY, in BOTH themes", () => {
+    for (const theme of ["dark", "light"] as const) {
+      const [thin, regular, thick] = (["thin", "regular", "thick"] as const).map((t) => T(theme, t));
+      expect(Math.abs(regular - thin)).toBeGreaterThanOrEqual(0.004);
+      expect(Math.abs(thick - regular)).toBeGreaterThanOrEqual(0.004);
+      expect(Math.abs(thick - thin)).toBeGreaterThanOrEqual(0.004);
+    }
+  });
+
+  it("no light tier composites to pure #ffffff (three white cards is not a ladder)", () => {
+    for (const tier of ["thin", "regular", "thick"] as const) {
+      const c = compositedTier("light", tier);
+      expect(c).not.toEqual([255, 255, 255]);
+      expect(relY(c)).toBeLessThan(1);
+    }
+  });
+
+  // WS-0 round 3, finding 4a: the re-stepped dark fills were BLUE surface values
+  // (chroma 23–29/255), so every wall cell wore a permanent chroma-27 blue that
+  // competed with the per-widget tone — the dark wall's chroma vocabulary
+  // collapsed to 8–32/255 when the reference spans 0→52. Near-neutral glass lets
+  // the TONE supply the chroma again.
+  it("dark glass is near-NEUTRAL (composited chroma <= 12/255 in every tier)", () => {
+    for (const tier of ["thin", "regular", "thick"] as const) {
+      expect(chroma(compositedTier("dark", tier))).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it("light glass stays near-neutral too (chroma <= 12/255 in every tier)", () => {
+    for (const tier of ["thin", "regular", "thick"] as const) {
+      expect(chroma(compositedTier("light", tier))).toBeLessThanOrEqual(12);
+    }
+  });
+
+  // Blur / border / specular are transcribed CONSTANTS, not properties — the
+  // literal pins are the right shape for them and stay.
+  it("blur / border / specular keep the transcribed values", () => {
     expect(MATERIALS.dark.thin.blur).toBe(12);
-    expect(MATERIALS.dark.regular.background).toBe("rgba(45, 53, 72, 0.58)");
     expect(MATERIALS.dark.regular.blur).toBe(20);
-    expect(MATERIALS.dark.thick.background).toBe("rgba(52, 61, 81, 0.62)");
     expect(MATERIALS.dark.thick.blur).toBe(26);
     expect(MATERIALS.dark.thick.border).toBe("rgba(255, 255, 255, 0.12)");
-  });
-  it("light tiers are three DISTINCT surfaces — never three #ffffff cards", () => {
-    expect(MATERIALS.light.thin.background).toBe("rgba(253, 254, 255, 0.58)");
-    expect(MATERIALS.light.regular.background).toBe("rgba(250, 252, 255, 0.64)");
-    expect(MATERIALS.light.thick.background).toBe("rgba(245, 248, 253, 0.72)");
     expect(MATERIALS.light.thin.border).toBe("rgba(0, 0, 0, 0.03)");
-    const fills = new Set([
-      MATERIALS.light.thin.background,
-      MATERIALS.light.regular.background,
-      MATERIALS.light.thick.background,
-    ]);
-    expect(fills.size).toBe(3);
-  });
-  it("specular alphas per tier", () => {
+    expect(MATERIALS.dark.thin.saturate).toBe(1.2);
+    expect(MATERIALS.light.thick.saturate).toBe(1.6);
     expect(specularOpacity("dark", "thin")).toBeCloseTo(0.04);
     expect(specularOpacity("dark", "regular")).toBeCloseTo(0.02);
     expect(specularOpacity("dark", "thick")).toBeCloseTo(0.07);
+    expect(specularOpacity("light", "thin")).toBeCloseTo(0.04);
+    expect(specularOpacity("light", "regular")).toBeCloseTo(0.02);
+    expect(specularOpacity("light", "thick")).toBeCloseTo(0.07);
   });
 });
 
@@ -349,5 +418,46 @@ describe("<Material> caller backgroundColor extraction", () => {
     expect(style.flex).toBe(1);
     expect(style.padding).toBe(12);
     expect(style.backgroundColor).toBeUndefined();
+  });
+
+  /**
+   * WS-0 round 3, finding 4b: the dark tone ceiling was pulling every faint
+   * wash 45% back toward a neutral surface step, which bounded the wall's
+   * luminance at the cost of its CHROMA — the per-widget cue. With the glass
+   * itself now near-neutral, the ceiling only has to stop one bright tone from
+   * owning the hierarchy, so it drops to 15%. Pinned as a PROPERTY (the
+   * wash stays recognisably its own accent, only 15% pulled back) rather than
+   * as a constant, so raising the clip back toward 45% fails here.
+   */
+  it("a faint dark caller wash keeps >= 85% of its own accent (15% ceiling, not 45%)", () => {
+    const accent = TOKENS.dark["color-accent-mint"];
+    // the WALL's per-widget tone: mixAlpha(tone, 0.10) (HomeWall.tsx)
+    const bg = mix(accent, "transparent", 10);
+    const { toJSON } = render(
+      <Material tier="regular" style={{ borderRadius: 28, backgroundColor: bg }} testID="m">
+        <Text>x</Text>
+      </Material>,
+      { wrapper: wrapTheme("dark") }
+    );
+    const layer = findNodeByStyle(
+      toJSON(),
+      (s) =>
+        s.position === "absolute" &&
+        typeof s.backgroundColor === "string" &&
+        Math.abs((parseColor(String(s.backgroundColor))?.a ?? -1) - 0.1) < 0.01
+    );
+    expect(layer).toBeTruthy();
+    const painted = parseColor(String(StyleSheet.flatten(layer.props.style)?.backgroundColor));
+    const ceiling = parseColor(TOKENS.dark["color-surface-6"]);
+    const source = parseColor(accent);
+    expect(painted && ceiling && source).toBeTruthy();
+    // residual accent: how far the paint still sits from the neutral ceiling
+    const residual = (k: "r" | "g" | "b") =>
+      Math.abs(painted![k] - ceiling![k]) / Math.max(1, Math.abs(source![k] - ceiling![k]));
+    for (const k of ["r", "g", "b"] as const) {
+      expect(residual(k)).toBeGreaterThan(0.85);
+    }
+    // …and the alpha is preserved (a mix() would have made it an opaque fill)
+    expect(painted!.a).toBeCloseTo(0.1, 3);
   });
 });

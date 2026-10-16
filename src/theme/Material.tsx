@@ -27,8 +27,16 @@ const TONE_WASH_MAX_ALPHA = 0.5;
  * the floor (WS-0 round 2 D-11). Clipping the wash's channels bounds the lift
  * without touching the hue mix or the tone border, so the wall keeps its cue
  * and its hierarchy.
+ *
+ * WS-0 round 3 (finding 4b): at 45% the clip also destroyed the wall's CHROMA
+ * vocabulary — a card kept at most 55% of its own accent, and the blue surface
+ * values underneath added a permanent chroma-27 cast that the tone had to
+ * fight. With the glass re-cut near-neutral (materials.ts), the ceiling only
+ * has to stop one bright tone from owning the hierarchy, so it drops to 15%:
+ * the wash keeps >= 85% of its own accent and the per-widget chroma spread
+ * comes back (measured dark-wall cell chroma 8–32/255 → 25–47/255).
  */
-const DARK_TONE_CEILING_CLIP = 0.45;
+const DARK_TONE_CEILING_CLIP = 0.15;
 
 /**
  * Light under-glass tone weight. Once the wash sits under the glass its

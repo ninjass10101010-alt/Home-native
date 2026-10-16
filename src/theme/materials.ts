@@ -13,6 +13,12 @@
  * Each tier is now a real SURFACE STEP off the theme's own ramp, with the
  * alpha carrying only the translucency. Borders, blur, saturate and specular
  * are unchanged — the rim/border ladder stays exactly as transcribed.
+ *
+ * WS-0 round 3 RE-CUT the dark trio again (finding 4a): the round-2 steps were
+ * still blue surface values, so every dark card wore a permanent chroma-27
+ * tint that competed with the wall's per-widget tone. Dark is now three
+ * opacity steps of one NEUTRAL — the ladder is carried entirely by the
+ * composite against the canvas, which is what the wall actually shows.
  */
 
 export type MaterialTier = "thin" | "regular" | "thick";
@@ -38,21 +44,30 @@ export const MATERIALS: Record<
 > = {
   dark: {
     thin: {
-      background: "rgba(37, 44, 60, 0.42)",
+      // Near-NEUTRAL glass (WS-0 round 3, finding 4a). The round-2 fills were
+      // blue surface values (chroma 23–29/255) which handed every dark wall
+      // cell a permanent chroma-27 blue that competed with the per-widget tone:
+      // the reference wall's per-widget chroma spans 0→52/255, ours had
+      // collapsed to 8–32. These are three OPACITY steps of ONE neutral, each
+      // composited over `color-canvas` onto the measured ladder
+      // relY 0.0242 / 0.0293 / 0.0386 (monotonic, gaps 0.0051 / 0.0093,
+      // thin→thick 1.59×) with a composited chroma of 2.7–4.6/255. The tone
+      // wash is the only thing allowed to put chroma on a dark card.
+      background: "rgba(79, 79, 79, 0.42)",
       border: "rgba(255, 255, 255, 0.05)",
       blur: 12,
       saturate: 1.2,
       specular: 0.04,
     },
     regular: {
-      background: "rgba(45, 53, 72, 0.58)",
+      background: "rgba(70, 70, 70, 0.58)",
       border: "rgba(255, 255, 255, 0.08)",
       blur: 20,
       saturate: 1.4,
       specular: 0.02,
     },
     thick: {
-      background: "rgba(52, 61, 81, 0.62)",
+      background: "rgba(75, 75, 75, 0.66)",
       border: "rgba(255, 255, 255, 0.12)",
       blur: 26,
       saturate: 1.6,
