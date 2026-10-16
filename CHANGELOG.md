@@ -4,6 +4,19 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — feat(ws5): KidHome & Rewards Shop — triple-A visual & behavioral perfection.
+  **KidHome.tsx:**
+  - Mounted `<EmergencyShield />` top-right across all modes (`Home-ai/AGENTS.md` contract).
+  - Centered hero section with `120×120dp` circular glowing avatar disc (`borderRadius: 60, borderWidth: 3`) supporting real photos with `<Image>` via `isPhotoUri` alongside `testID="kid-emoji"` `<Text>` fallback.
+  - Added level XP progress bar (`height: 12, borderRadius: 6`) within toned regular-tier hero card (`points % 50 / 50`), plus `🔄 Switch member` button and streak chip.
+  - Wrapped `🎯 Your Quests` list in a toned `.widget-card` `<Material tier="regular">` with `HomeWidgetIcon` (`variant="tasks"`).
+  - Moved `MoreButton` to top header row left of `EmergencyShield` (with `paddingRight: 88`), removing the floating button at `bottom: 116`.
+  **RewardsPage.tsx:**
+  - Styled header with uppercase `REWARD SHOP` eyebrow (`color-text-muted`) and `44sp` editorial serif `Rewards` title (`fontFamily: FONTS.display`).
+  - Upgraded `This week` (amber tone) and `All time` (violet tone) stat cards to horizontal `StatTile`s in `<Material tier="regular">` with `tabular-nums`.
+  - Wrapped reward cards in `<Material tier="regular">` (`width: "48.8%", minHeight: 156, borderRadius: 24, padding: 16`).
+  - Added selectable parent chips from `cachedParents` in `highcost-parent-modal` while preserving `parent-name-input` and `parent-pin-input`.
+
 - 2026-10-16 — feat(ws4): Tasks & Leaderboard page — triple-A visual & behavioral parity.
   **claim.ts:** extended `ClaimAction` with `"crew-join" | "crew-checkin" | "crew-remove" | "crew-close"` and preserved `awardedPoints` + `completedAt` in `normalizeSnapshotTasks`.
   **TasksPage.tsx (Header & Banner):** rendered `0 PENDING` eyebrow with 2px letterSpacing, nested `✅ Tasks` to separate 28sp checkmark glyph from 44sp title, moved `+ Add Chore` and `± Bonus/Penalty` into the header right row, and appended underlined `Sign in with your PIN →` action link to `SignedOutBanner`.

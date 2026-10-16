@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
-import { MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
+import { FONTS, MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
 import { useAuth } from "../state/AuthProvider";
 import { useSync } from "../state/SyncManager";
@@ -208,9 +208,6 @@ export function RewardsPage() {
     [highCostReward],
   );
 
-  // when member pin captured, keep modal open for parent step automatically
-  // handled by conditional rendering below.
-
   const uncelebratedHof = useMemo(() => {
     return (hof || []).filter((r: any) => {
       const rank = Number(r?.rank);
@@ -251,11 +248,27 @@ export function RewardsPage() {
   return (
     <View testID="rewards-page" style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 180, gap: 20 }} showsVerticalScrollIndicator={false}>
+        {/* Header: uppercase REWARD SHOP eyebrow + 44sp editorial serif Rewards title */}
         <View>
-          <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", letterSpacing: 2 }}>
+          <Text
+            style={{
+              color: colors["color-text-muted"],
+              fontSize: TYPOGRAPHY.label.fontSize,
+              fontWeight: "700",
+              letterSpacing: 2,
+            }}
+          >
             REWARD SHOP
           </Text>
-          <Text style={{ color: colors["color-text-primary"], fontSize: 54, fontWeight: "700", marginTop: 4 }}>
+          <Text
+            style={{
+              color: colors["color-text-primary"],
+              fontSize: 44,
+              fontWeight: "400",
+              fontFamily: FONTS.display,
+              marginTop: 4,
+            }}
+          >
             🏪 Rewards
           </Text>
           {stale && member ? (
@@ -265,24 +278,114 @@ export function RewardsPage() {
           ) : null}
         </View>
 
+        {/* Upgraded StatTiles: Material regular tier with tabular-nums */}
         <View style={{ flexDirection: "row", gap: 12 }}>
-          <Material tier="thin" style={{ flex: 1, borderRadius: 20, padding: 16, gap: 4 }}>
-            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
-              This week
-            </Text>
-            <Text testID="rewards-points-week" style={{ color: colors["color-text-primary"], fontSize: 32, fontWeight: "700" }}>
-              {weekPoints}
-            </Text>
-            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>pts</Text>
+          <Material
+            tier="regular"
+            tone={colors["color-accent-amber"] ?? accentColor}
+            style={{
+              flex: 1,
+              height: 96,
+              borderRadius: 24,
+              paddingHorizontal: 18,
+              paddingVertical: 14,
+              justifyContent: "center",
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    backgroundColor: mix(colors["color-accent-amber"] ?? accentColor, "transparent", 20),
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 22 }}>⭐</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
+                  <Text
+                    testID="rewards-points-week"
+                    style={{
+                      color: colors["color-text-primary"],
+                      fontSize: 34,
+                      fontWeight: "800",
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {weekPoints}
+                  </Text>
+                  <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+                    pts
+                  </Text>
+                </View>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                  This week
+                </Text>
+                <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                  Current race
+                </Text>
+              </View>
+            </View>
           </Material>
-          <Material tier="thin" style={{ flex: 1, borderRadius: 20, padding: 16, gap: 4 }}>
-            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
-              All time
-            </Text>
-            <Text testID="rewards-points-alltime" style={{ color: colors["color-text-primary"], fontSize: 32, fontWeight: "700" }}>
-              {allTimeLabel}
-            </Text>
-            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>pts</Text>
+
+          <Material
+            tier="regular"
+            tone={colors["color-accent-violet"] ?? accentColor}
+            style={{
+              flex: 1,
+              height: 96,
+              borderRadius: 24,
+              paddingHorizontal: 18,
+              paddingVertical: 14,
+              justifyContent: "center",
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    backgroundColor: mix(colors["color-accent-violet"] ?? accentColor, "transparent", 20),
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 22 }}>🏆</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
+                  <Text
+                    testID="rewards-points-alltime"
+                    style={{
+                      color: colors["color-text-primary"],
+                      fontSize: 34,
+                      fontWeight: "800",
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {allTimeLabel}
+                  </Text>
+                  <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+                    pts
+                  </Text>
+                </View>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                  All time
+                </Text>
+                <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                  Yours to keep
+                </Text>
+              </View>
+            </View>
           </Material>
         </View>
 
@@ -309,6 +412,7 @@ export function RewardsPage() {
           </Material>
         ) : null}
 
+        {/* Upgraded Reward Cards in Material regular tier */}
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
           {rewards.length === 0 ? (
             <View style={{ width: "100%" }}>
@@ -319,24 +423,72 @@ export function RewardsPage() {
               const cost = rewardCost(r);
               const id = r.id;
               return (
-                <View
+                <Material
                   key={String(id)}
                   testID={`reward-card-${id}`}
-                  style={{ flexBasis: "48%", minHeight: 148, gap: 8, borderRadius: 20, borderWidth: 1, borderColor: colors["color-surface-3"], padding: 14 }}
+                  tier="regular"
+                  tone={accentColor}
+                  style={{
+                    width: "48.8%",
+                    minHeight: 156,
+                    borderRadius: 24,
+                    padding: 16,
+                    justifyContent: "space-between",
+                  }}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <View style={{ width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors["color-surface-2"] }}>
-                      <Text style={{ fontSize: 24 }}>{rewardEmoji(r)}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    <View
+                      style={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: 16,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: mix(accentColor, "transparent", 22),
+                        borderWidth: 1,
+                        borderColor: mix(accentColor, "transparent", 40),
+                      }}
+                    >
+                      <Text style={{ fontSize: 28 }}>{rewardEmoji(r)}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }} numberOfLines={2}>
+                      <Text
+                        style={{
+                          color: colors["color-text-primary"],
+                          fontSize: TYPOGRAPHY.body.fontSize,
+                          fontWeight: "700",
+                        }}
+                        numberOfLines={2}
+                      >
                         {rewardTitle(r)}
                       </Text>
+                      {r.category ? (
+                        <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 2 }}>
+                          {r.category}
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                    <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: colors["color-surface-2"] }}>
-                      <Text testID={`reward-cost-${id}`} style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
+                    <View
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 999,
+                        backgroundColor: mix(colors["color-surface-2"], accentColor, 12),
+                        borderWidth: 1,
+                        borderColor: mix(accentColor, "transparent", 30),
+                      }}
+                    >
+                      <Text
+                        testID={`reward-cost-${id}`}
+                        style={{
+                          color: colors["color-text-primary"],
+                          fontSize: TYPOGRAPHY.label.fontSize,
+                          fontWeight: "700",
+                          fontVariant: ["tabular-nums"],
+                        }}
+                      >
                         {cost} pts
                       </Text>
                     </View>
@@ -346,12 +498,12 @@ export function RewardsPage() {
                       testID={`reward-redeem-${id}`}
                       disabled={busy || !member}
                       onPress={() => openRedeem(r)}
-                      style={{ minHeight: MIN_TARGET_DP }}
+                      style={{ minHeight: MIN_TARGET_DP, paddingHorizontal: 16 }}
                     >
                       Redeem
                     </SoftButton>
                   </View>
-                </View>
+                </Material>
               );
             })
           )}
@@ -476,7 +628,53 @@ export function RewardsPage() {
         dismissable={!busy}
         testID="highcost-parent-modal"
       >
-        <View style={{ gap: 12 }}>
+        <View style={{ gap: 14 }}>
+          {/* Selectable Parent Chips */}
+          {cachedParents.length > 0 ? (
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+                Select parent:
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {cachedParents.map((p) => {
+                  const isSelected = parentName.trim().toLowerCase() === p.name.trim().toLowerCase();
+                  return (
+                    <Pressable
+                      key={p.name}
+                      onPress={() => setParentName(p.name)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select parent ${p.name}`}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: 999,
+                        backgroundColor: isSelected
+                          ? mix(accentColor, "transparent", 35)
+                          : colors["color-surface-2"],
+                        borderWidth: 1,
+                        borderColor: isSelected ? accentColor : colors["color-surface-3"],
+                      }}
+                    >
+                      <Text style={{ fontSize: 16 }}>{p.emoji || "👤"}</Text>
+                      <Text
+                        style={{
+                          color: isSelected ? colors["color-text-primary"] : colors["color-text-secondary"],
+                          fontSize: TYPOGRAPHY.label.fontSize,
+                          fontWeight: isSelected ? "700" : "600",
+                        }}
+                      >
+                        {p.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
           <TextInput
             testID="parent-name-input"
             placeholder="Parent name"
