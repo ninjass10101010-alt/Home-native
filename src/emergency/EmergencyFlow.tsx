@@ -12,6 +12,7 @@ import { Modal } from "../ui/Modal";
 import { PinPad } from "../ui/PinPad";
 import { SoftButton } from "../ui/SoftButton";
 import { useToast } from "../ui/Toast";
+import { SignedOutBanner } from "../ui/SignedOutBanner";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../state/AuthProvider";
 
@@ -358,54 +359,33 @@ export function EmergencyFlow() {
           is never indistinguishable from "synced". The sign-in link routes to
           the Home rail — the app's only sign-in surface. */}
       {!member ? (
-        <Material
-          tier="thin"
+        <SignedOutBanner
           testID="sync-status-banner"
-          style={{
-            borderRadius: 20,
-            borderWidth: 1,
-            backgroundColor: mix(amber, "transparent", 15),
-            borderColor: mix(amber, "transparent", 40),
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            flexWrap: "wrap",
-            gap: 8,
-            marginBottom: 16,
-          }}
-        >
-          <Text
-            style={{
-              color: colors["color-text-primary"],
-              fontSize: TYPOGRAPHY.label.fontSize,
-              fontWeight: "600",
-              textAlign: "center",
-            }}
-          >
-            🔐 Signed out — showing your saved copy. Every change stays on this device until you sign in.
-          </Text>
-          <Pressable
-            testID="sync-status-banner-signin"
-            accessibilityRole="link"
-            accessibilityLabel="Sign in with your PIN"
-            onPress={() => router.push("/")}
-            style={{ minHeight: 64, justifyContent: "center", paddingHorizontal: 8 }}
-          >
-            <Text
-              style={{
-                color: colors["color-text-primary"],
-                fontSize: TYPOGRAPHY.label.fontSize,
-                fontWeight: "600",
-                textDecorationLine: "underline",
-                textDecorationStyle: "dotted",
-              }}
+          accessibilityLabel="Sign in with your PIN"
+          style={{ marginBottom: 16 }}
+          title="🔐 Signed out — showing your saved copy. Every change stays on this device until you sign in."
+          action={
+            <Pressable
+              testID="sync-status-banner-signin"
+              accessibilityRole="link"
+              accessibilityLabel="Sign in with your PIN"
+              onPress={() => router.push("/")}
+              style={{ minHeight: 64, justifyContent: "center", paddingHorizontal: 8 }}
             >
-              Sign in with your PIN →
-            </Text>
-          </Pressable>
-        </Material>
+              <Text
+                style={{
+                  color: colors["color-text-primary"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  fontWeight: "600",
+                  textDecorationLine: "underline",
+                  textDecorationStyle: "dotted",
+                }}
+              >
+                Sign in with your PIN →
+              </Text>
+            </Pressable>
+          }
+        />
       ) : null}
 
       {/* Emergency header bar (web TopBar variant="emergency" parity): the

@@ -4,6 +4,45 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — fix(kit): WS-0 harsh-critic round 2b — HIGH D-6 + LOW D-1 / D-12 /
+  D-13 / D-14 (amber banner, destructive glyph, header rules, gate hardening).
+  **D-6** the signed-out affordance keyed its rim off `accentColor`, so the
+  state a user must never mistake for "synced" wore the current accent (a cool
+  blue rim in the nori captures). New shared `src/ui/SignedOutBanner.tsx`
+  keys the rim and body off `color-accent-amber` explicitly and is now the only
+  implementation: `app/_design/index.tsx`, `src/emergency/EmergencyFlow.tsx`
+  and `src/tasks/TasksPage.tsx` all render through it. Values are MEASURED
+  against `reference/home/guest-dark.png` (rim `#7c5719` = amber at 45% over the
+  tier fill, body `#2b2924` = amber at 9% into `color-surface-1`, prefix ink
+  `color-accent-ink-amber` at 9.23:1 dark / 5.97:1 light). Captured rim is now
+  `rgb(118,80,17)` — within 8/255 of the reference, in every accent, in both
+  themes (light `#e8bd8c`). **D-1** the destructive specimen's brightest pixel
+  measured 3.10:1, and the root cause was the glyph, not the ink: a COLOUR emoji
+  ignores `color`, and 🗑️'s own light metal is L 0.4948 against the `#b72f47`
+  disc — exactly the critic's number. A specimen exists to demonstrate the
+  kit's ink contract, so it now paints a solid `DeleteGlyph` in
+  `color-primary-foreground` at 5.98:1 dark / 7.37:1 light with the web-parity
+  rose disc untouched; `IconButton` documents the rule. **D-12** the default
+  header band carries `HEADER_BAND_H` (exported, 58dp) and the description is
+  `numberOfLines={1}`, so a wrapping description can no longer push a cell's
+  header rule below its siblings' (the 15px break; sibling rules now agree to
+  1px). **D-13** `scripts/capture-native.mjs` now collects console errors and
+  page errors, classifies React/DOM warnings apart from network failures, prints
+  a loud banner and **exits 1** on any of them (`--allow-console-errors`
+  downgrades). Verified by re-injecting the original offending prop
+  (`originX` on the icon `<Svg>`): the harness reproduces
+  `Invalid DOM property 'transform-origin'` and fails. **D-14** a composited
+  ≥3:1 assertion for the pending/skeleton surface: `color-surface-2` composited
+  to **1.04:1** dark / **1.07:1** light over its own cell — an invisible
+  loading state the suite could not see because `contrastRatio()` refuses a
+  translucent input — so the skeleton fill is now mixed off the theme ramp
+  (`pendingSurface()`) until it clears 3:1 once composited, and
+  `scripts/assert-painted-discs.mjs` samples every wall disc interior in a real
+  browser and fails when one has no hard edge (σ/relY-span/8-bit range are all
+  reported per disc). It is wired into `npm test` as `npm run paint:audit` and
+  was proven in BOTH directions: CLEAN on the fixed wall (range 161–250), FAILED
+  on 14/14 discs when the artwork layer was un-nested. 635 tests, tsc 0, lint 0
+  errors, tokens/a11y CLEAN.
 - 2026-10-16 — fix(theme): WS-0 harsh-critic round 2b — HIGH D-4 + HIGH D-8 +
   LOW D-9 + LOW D-11 (the Material ladder and the light tone wash). **D-8/D-9**
   `MATERIALS` transcribed the three web tiers as three ALPHAS of ONE colour

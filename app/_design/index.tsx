@@ -1,5 +1,6 @@
 import React from "react";
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import { useTheme } from "../../src/theme/ThemeProvider";
 import { ACCENTS, TYPOGRAPHY, MOTION } from "../../src/theme/tokens";
 import { Screen } from "../../src/theme/Screen";
@@ -21,10 +22,33 @@ import { Modal } from "../../src/ui/Modal";
 import { PinPad } from "../../src/ui/PinPad";
 import { PageHeader } from "../../src/ui/PageHeader";
 import { useToast } from "../../src/ui/Toast";
+import { SignedOutBanner } from "../../src/ui/SignedOutBanner";
 
 /** Two-column measure: the reference's 58/42 split, and the width it starts at. */
 const TWO_COL_MIN_WIDTH = 840;
 const COLUMN_GAP = 24;
+
+/**
+ * The destructive specimen's glyph.
+ *
+ * It was the 🗑️ colour emoji, and that is exactly what made D-1 unfixable
+ * through ink: a COLOUR emoji ignores `color` entirely, and its own light
+ * metal measured L 0.4948 against the `#b72f47` disc — 3.10:1, matching the
+ * critic's number exactly. A specimen exists to demonstrate the kit's ink
+ * contract, so it has to be a glyph the contract can actually reach: this one
+ * paints `color-primary-foreground`, i.e. 5.98:1 dark / 7.37:1 light on the
+ * unchanged web-parity disc.
+ */
+function DeleteGlyph({ color, size = 22 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" accessibilityLabel="Delete">
+      <Path d="M4 7h16" stroke={color} strokeWidth={2} strokeLinecap="round" />
+      <Path d="M9 7V5.2A1.2 1.2 0 0 1 10.2 4h3.6A1.2 1.2 0 0 1 15 5.2V7" stroke={color} strokeWidth={2} strokeLinecap="round" />
+      <Path d="M6.2 7 7 19.8A1.2 1.2 0 0 0 8.2 21h7.6a1.2 1.2 0 0 0 1.2-1.2L17.8 7" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M10 11v6M14 11v6" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
 
 /** Reference-shaped section card: sectionTitle header + subtitle in a material. */
 function Section({
@@ -131,7 +155,7 @@ export default function DesignKitShowcase() {
           variant="accent"
         />
         <IconButton
-          icon={<Text style={{ fontSize: 22, color: colors["color-text-primary"] }}>🗑️</Text>}
+          icon={<DeleteGlyph color={colors["color-primary-foreground"]} />}
           label="Delete"
           variant="danger"
         />
@@ -386,25 +410,12 @@ export default function DesignKitShowcase() {
         {/* L6: the gate must show guest-specific evidence, not just a sync
             caption differing between the parent and guest captures. */}
         {member ? null : (
-          <Material
-            tier="thin"
+          <SignedOutBanner
             testID="showcase-guest-affordance"
-            style={{
-              borderRadius: 20,
-              padding: 16,
-              marginTop: 16,
-              marginBottom: 20,
-              borderWidth: 1,
-              borderColor: mixAlpha(accentColor, 0.28),
-            }}
-          >
-            <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>
-              Signed out — read-only preview
-            </Text>
-            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 4 }}>
-              Specimens only: no family data, no writes. Sign in with your PIN to edit.
-            </Text>
-          </Material>
+            title="Signed out — read-only preview"
+            message="Specimens only: no family data, no writes. Sign in with your PIN to edit."
+            style={{ marginTop: 16, marginBottom: 20, padding: 16 }}
+          />
         )}
 
         {twoColumn ? (

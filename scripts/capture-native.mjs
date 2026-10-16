@@ -16,7 +16,14 @@
  *
  * Usage: node scripts/capture-native.mjs [--ws <name>] [--route <path>]
  *   [--auth guest|child|parent] [--theme light|dark|dark-boost]
- *   [--web] [--wait <ms>] [--base <url>]
+ *   [--web] [--wait <ms>] [--base <url>] [--allow-console-errors]
+ *
+ * WS-0 round 2 (D-13): the gate FAILS on a React/DOM warning. The wall capture
+ * that shipped a LogBox toast reading "Invalid DOM property 'transfor…'" was
+ * submitted as evidence anyway — the harness never looked at the console. Every
+ * render now collects console errors + page errors, prints a loud banner, and
+ * exits non-zero when any of them is a React/DOM warning rather than a network
+ * failure. `--allow-console-errors` downgrades the fail to the banner.
  */
 import { execSync, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
@@ -38,7 +45,27 @@ const THEME = flag("theme", "dark");
 const BASE = flag("base", "http://localhost:3200");
 const FORCE_WEB = args.includes("--web");
 const WAIT_MS = Number(flag("wait", "0")) || 0;
+const ALLOW_CONSOLE_ERRORS = args.includes("--allow-console-errors");
 const PKG = "com.garciafam.consuela";
+
+/**
+ * A React/DOM warning is a defect in the shipped surface (a LogBox toast over
+ * the product wall is exactly that). A network failure is not: the harness
+ * runs against a dev preview where the LAN API is legitimately unreachable.
+ */
+const REACT_WARNING_RE =
+  /Invalid DOM property|Invalid event handler|Unknown event handler|Invalid aria prop|does not recognize the|Each child in a list|unique "key"|React does not recognize|Warning: |ReactDOM|is not a <|cannot be updated|useNativeDriver|Text strings must be rendered|Invalid hook call|deprecated|Support for defaultProps|Please update|memo\(\)/;
+const NETWORK_ONLY_RE =
+  /Failed to load resource|net::ERR|CORS policy|blocked by CORS|ERR_FAILED|ERR_CONNECTION|ERR_NAME_NOT_RESOLVED|fetch\(|ECONNREFUSED|ETIMEDOUT|XMLHttpRequest error/i;
+
+function isReactWarning(text) {
+  return REACT_WARNING_RE.test(text) && !/Failed to load resource|net::ERR|CORS policy/i.test(text);
+}
+
+function reportConsole(kind, text) {
+  const networkOnly = !isReactWarning(text) && (NETWORK_ONLY_RE.test(text) || /^\[error\]?\s*(Access to fetch|Failed to load)/i.test(text));
+  return { kind, text: text.slice(0, 300), networkOnly };
+}
 
 function hasOnlineDevice() {
   try {
@@ -160,12 +187,40 @@ async function main() {
   );
 
   const page = await ctx.newPage();
+  const consoleHits = [];
+  page.on("console", (msg) => {
+    if (msg.type() === "error" || msg.type() === "warning") {
+      consoleHits.push(reportConsole(msg.type(), msg.text()));
+    }
+  });
+  page.on("pageerror", (err) => consoleHits.push({ kind: "pageerror", text: String(err?.message ?? err).slice(0, 300), networkOnly: false }));
+
   const urlPath = ROUTE.startsWith("/") ? ROUTE : `/${ROUTE}`;
   await page.goto(`${BASE}${urlPath}`, { waitUntil: "networkidle", timeout: 30_000 }).catch(() => {});
   await page.waitForTimeout(WAIT_MS || 1600);
 
   await page.screenshot({ path: outFile, fullPage: false });
   console.log(`capture-native: ${outFile}`);
+
+  const defects = consoleHits.filter((h) => !h.networkOnly);
+  const network = consoleHits.filter((h) => h.networkOnly);
+  if (network.length) {
+    console.log(
+      `capture-native: ${network.length} network console error(s) (backend unreachable from the preview host — not a surface defect)`
+    );
+  }
+  if (defects.length) {
+    console.error("");
+    console.error("╔══════════════════════════════════════════════════════════════════╗");
+    console.error("║ capture-native: PAGE REPORTED REACT/DOM WARNINGS — GATE FAILED   ║");
+    console.error("╚══════════════════════════════════════════════════════════════════╝");
+    for (const d of defects) console.error(`  [${d.kind}] ${d.text}`);
+    console.error(`  capture: ${outFile} (written for diagnosis — DO NOT submit as evidence)`);
+    console.error("");
+    await ctx.close();
+    await browser.close();
+    if (!ALLOW_CONSOLE_ERRORS) process.exit(1);
+  }
 
   await ctx.close();
   await browser.close();

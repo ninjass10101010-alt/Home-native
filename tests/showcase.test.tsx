@@ -8,7 +8,7 @@ import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { SyncManager } from "../src/state/SyncManager";
 import { ToastProvider } from "../src/ui/Toast";
 import { ListRow } from "../src/ui/ListRow";
-import { TYPOGRAPHY } from "../src/theme/tokens";
+import { TOKENS, TYPOGRAPHY } from "../src/theme/tokens";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -151,18 +151,31 @@ describe("design-kit showcase", () => {
 
   it("CRITICAL 1: every showcase IconButton glyph carries an explicit ink", () => {
     const { getByText } = render(<DesignKitShowcase />, { wrapper: wrap });
-    for (const glyph of ["＋", "⚙️", "🗑️"]) {
+    for (const glyph of ["＋", "⚙️"]) {
       const ink = StyleSheet.flatten(getByText(glyph).props.style).color;
       expect(ink).toBeDefined();
       expect(String(ink).toLowerCase()).not.toBe("#000000");
     }
   });
 
+  // D-1: the destructive glyph is a solid SVG, not the 🗑️ colour emoji — a
+  // colour emoji ignores `color`, and its own light metal measured 3.10:1 on the
+  // `#b72f47` disc no matter what ink IconButton resolved.
+  it("D-1: the destructive specimen paints a solid glyph in primary-foreground ink", () => {
+    const { UNSAFE_root } = render(<DesignKitShowcase />, { wrapper: wrap });
+    const primary = TOKENS.light["color-primary-foreground"].toLowerCase();
+    const paths = UNSAFE_root.findAll((n: any) => n.type === "Path");
+    const strokes = paths.map((p) => p.props.stroke).filter(Boolean);
+    expect(strokes.length).toBeGreaterThan(0);
+    for (const s of new Set(strokes)) expect(String(s).toLowerCase()).toBe(primary);
+    expect(UNSAFE_root.findAll((n: any) => n.type === "Text" && n.children?.includes?.("🗑️")).length).toBe(0);
+  });
+
   it("L6: signed out, the gate shows a read-only affordance (and it is gone when signed in)", () => {
     mockAuthMember = null;
     const signedOut = render(<DesignKitShowcase />, { wrapper: wrap });
     expect(signedOut.getByTestId("showcase-guest-affordance")).toBeTruthy();
-    expect(signedOut.getByText("Signed out — read-only preview")).toBeTruthy();
+    expect(signedOut.getByText(/Signed out — read-only preview/)).toBeTruthy();
 
     mockAuthMember = {
       id: "mom",

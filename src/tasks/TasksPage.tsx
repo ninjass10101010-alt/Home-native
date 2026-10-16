@@ -18,6 +18,7 @@ import { mixAlpha, SoftButton } from "../ui/SoftButton";
 import { EmptyState } from "../ui/EmptyState";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { useToast } from "../ui/Toast";
+import { SignedOutBanner } from "../ui/SignedOutBanner";
 import { localTodayISO } from "../home/widgets/data";
 import {
   memberScoped,
@@ -1338,41 +1339,13 @@ export function TasksPage() {
           paints its own layers above any backgroundColor we pass, so the
           honest port carries the border alone. */}
       {!member ? (
-        <Pressable
+        <SignedOutBanner
           testID="tasks-guest-banner"
-          accessibilityRole="link"
           accessibilityLabel="Sign in with your PIN"
           onPress={() => router.push("/")}
-        >
-          <Material
-            tier="thin"
-            style={{
-              borderRadius: 20,
-              borderWidth: 1,
-              borderColor: mix(colors["color-accent-amber"] ?? colors["color-accent-apricot"], "transparent", 40),
-              paddingHorizontal: 20,
-              paddingVertical: 14,
-              minHeight: MIN_TARGET_DP,
-              justifyContent: "center",
-              overflow: "hidden",
-            }}
-          >
-            {/* web SyncStatusBanner: bg-amber-15. The wash is a CHILD layer
-                because Material paints its own tint above a style background. */}
-            <LinearGradient
-              colors={[
-                mix(colors["color-accent-amber"] ?? colors["color-accent-apricot"], "transparent", 15),
-                mix(colors["color-accent-amber"] ?? colors["color-accent-apricot"], "transparent", 15),
-              ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-            />
-            <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
-              {SIGNED_OUT_BANNER}
-            </Text>
-          </Material>
-        </Pressable>
+          style={{ paddingHorizontal: 20, paddingVertical: 14, minHeight: MIN_TARGET_DP, justifyContent: "center" }}
+          title={SIGNED_OUT_BANNER}
+        />
       ) : null}
 
         {/* Header (web hero parity) */}

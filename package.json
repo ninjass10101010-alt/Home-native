@@ -49,7 +49,7 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
-    "test": "npm run tokens:check && jest --watchAll=false && npm run a11y:audit",
+    "test": "npm run tokens:check && jest --watchAll=false && npm run a11y:audit && npm run paint:audit",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "tokens:gen": "node scripts/gen-tokens.mjs",
@@ -57,7 +57,8 @@
     "push:safe": "bash scripts/security/push-safe.sh",
     "reference:capture": "node scripts/capture-reference.mjs",
     "native:capture": "node scripts/capture-native.mjs",
-    "a11y:audit": "node scripts/a11y-audit.mjs"
+    "a11y:audit": "node scripts/a11y-audit.mjs",
+    "paint:audit": "node scripts/assert-painted-discs.mjs"
   },
   "private": true,
   "jest": {

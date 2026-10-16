@@ -9,6 +9,33 @@ import { READ_COPY, READ_COPY_STALE, READ_RETRY_LABEL, type ReadFailure } from "
 import { WIDGET_TONES } from "../widgets";
 import { HomeWidgetIcon, widgetIconVariantFor } from "../../ui/HomeWidgetIcon";
 
+/**
+ * The default header band, at its constant height: title line (28) + 2 gap +
+ * label line (20) + 8 bottom padding = 58. Exported so the wall can assert
+ * that sibling cells share one rule baseline.
+ */
+export const HEADER_BAND_H = TYPOGRAPHY.title.lineHeight + 2 + TYPOGRAPHY.label.lineHeight + 8;
+
+/**
+ * The pending / skeleton surface.
+ *
+ * It used to be `color-surface-2` straight off the ramp, which composites to
+ * **1.04:1** (dark) / **1.07:1** (light) over the cell it sits in — i.e. the
+ * loading state was invisible, and the suite could not see it because
+ * `contrastRatio()` REFUSES a translucent input and the token was being
+ * measured alone. A pending surface has to be perceivable, so it is mixed off
+ * the theme's own ramp until it clears 3:1 (WCAG 1.4.11) once composited over
+ * the cell: the lightest mix that does so is 3.1:1 in both themes.
+ */
+export function pendingSurface(
+  colors: Record<string, string | undefined>,
+  theme: "dark" | "light"
+): string {
+  return theme === "dark"
+    ? mix(colors["color-surface-7"] ?? "", colors["color-text-primary"] ?? "", 78)
+    : mix(colors["color-surface-2"] ?? "", colors["color-text-primary"] ?? "", 55);
+}
+
 export interface WidgetFrameProps {
   /** Widget id used to namespace testIDs (`${id}-loading` / `${id}-error`). */
   id: string;
@@ -135,6 +162,13 @@ export function WidgetFrame({
         paddingLeft: 48,
         paddingRight: 48,
         paddingBottom: 8,
+        // Constant band height: the header RULE has to land on the same y in
+        // every sibling cell or the wall reads as a broken baseline. A
+        // two-line description used to push one cell's rule 15px below its
+        // neighbours'; the description is single-line (reference parity), and
+        // the band carries the title + one label row either way.
+        minHeight: HEADER_BAND_H,
+        justifyContent: "flex-end",
         borderBottomWidth: 1,
         borderBottomColor: colors["color-border"],
       }}
@@ -154,6 +188,7 @@ export function WidgetFrame({
       </Text>
       {description ? (
         <Text
+          numberOfLines={1}
           style={{
             color: colors["color-text-secondary"],
             fontSize: TYPOGRAPHY.label.fontSize,
@@ -247,7 +282,8 @@ export function WidgetFrame({
         {[0, 1].map((i) => (
           <View
             key={i}
-            style={{ height: 64, borderRadius: 20, backgroundColor: colors["color-surface-2"] }}
+            testID={`${id}-skeleton-row-${i}`}
+            style={{ height: 64, borderRadius: 20, backgroundColor: pendingSurface(colors, theme) }}
           />
         ))}
       </View>

@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { Text } from "react-native";
+import { StyleSheet, Text } from "react-native";
 import { render } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
-import { WidgetFrame } from "../src/home/widgets/WidgetFrame";
+import { WidgetFrame, HEADER_BAND_H, pendingSurface } from "../src/home/widgets/WidgetFrame";
 import { READ_COPY, READ_COPY_STALE } from "../src/home/widgets/data";
+import { MATERIALS } from "../src/theme/materials";
 import { TOKENS } from "../src/theme/tokens";
+import { contrastRatio, toRgb } from "../src/lib/contrast";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -80,6 +82,19 @@ describe("WidgetFrame default header (U13.7) — left-aligned band + protruding 
     const { getByRole, getByText } = render(<Frame />, { wrapper: wrap });
     expect(getByRole("header").props.style).toMatchObject({ fontSize: 20, fontWeight: "700" });
     expect(getByText(base.description).props.style).toMatchObject({ fontSize: 14 });
+  });
+
+  // D-12: a two-line description used to push one cell's header RULE ~15px
+  // below its siblings' on the wall.
+  it("the header band is a constant height and the description is one line", () => {
+    const one = render(<Frame />, { wrapper: wrap });
+    const band = one.getByTestId("wf-header");
+    expect(StyleSheet.flatten(band.props.style).minHeight).toBe(HEADER_BAND_H);
+    expect(one.getByText(base.description).props.numberOfLines).toBe(1);
+    // a long description must not grow the band past the reserved height
+    const long = render(<Frame description="A very long description that would certainly wrap onto a second line on the wall" />, { wrapper: wrap });
+    expect(StyleSheet.flatten(long.getByTestId("wf-header").props.style).minHeight).toBe(HEADER_BAND_H);
+    expect(long.getAllByText(/very long description/).every((n) => n.props.numberOfLines === 1)).toBe(true);
   });
 
   it("the default band carries the bottom divider hairline", () => {
@@ -177,5 +192,59 @@ describe("WidgetFrame semantic failure tones (task 0.3) — rose for errors, amb
   it("offline + unauthorised keep the amber ink token", () => {
     expect(pillInk("offline")).toBe(TOKENS.light["color-accent-ink-amber"]);
     expect(pillInk("unauthorised")).toBe(TOKENS.light["color-accent-ink-amber"]);
+  });
+});
+
+
+/**
+ * D-14.1 — a pending/skeleton surface is a PAINTED surface, so the suite has to
+ * measure it as one. `color-surface-2` off the ramp composites to 1.04:1 dark /
+ * 1.07:1 light over the cell it sits in (i.e. an invisible loading state), and
+ * `contrastRatio()` refuses a translucent input, so nothing caught it. The
+ * skeleton's fill must clear 3:1 (WCAG 1.4.11) ONCE COMPOSITED.
+ */
+describe("WidgetFrame pending surface (D-14.1)", () => {
+  /** alpha-composite `fg` over `bg`; both may be translucent. */
+  const composite = (fg: string, bg: string): string => {
+    const f = fg.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/i);
+    const b = toRgb(bg);
+    if (!f) throw new Error(`composite: unparseable ${fg}`);
+    const a = f[4] === undefined ? 1 : parseFloat(f[4]);
+    const rgb = [1, 2, 3].map(
+      (i) => parseInt(f[i], 10) * a + b[i - 1] * (1 - a)
+    );
+    return "#" + rgb.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+  };
+
+  for (const theme of ["dark", "light"] as const) {
+    it(`${theme}: the skeleton rows clear 3:1 against the cell they sit in`, () => {
+      const colors = TOKENS[theme] as unknown as Record<string, string>;
+      // what the wall cell body composites to: the tier fill over the canvas
+      const cellBody = composite(MATERIALS[theme].regular.background, colors["color-canvas"]);
+      const ghost = pendingSurface(colors, theme);
+      expect(contrastRatio(ghost, cellBody)).toBeGreaterThanOrEqual(3);
+    });
+
+  }
+
+  it("the rendered skeleton rows paint that surface (not the raw ramp token)", () => {
+    // the jest harness defaults to the light theme; the per-theme math above
+    // pins the values and this pins the wiring
+    const { getByTestId } = render(<Frame status="loading" failure={null} hasData={false} />, { wrapper: wrap });
+    const expected = pendingSurface(TOKENS.light as unknown as Record<string, string>, "light");
+    for (const id of ["wf-skeleton-row-0", "wf-skeleton-row-1"]) {
+      expect(StyleSheet.flatten(getByTestId(id).props.style).backgroundColor).toBe(expected);
+    }
+  });
+
+  it("the ghost is strictly more visible than the ramp surface it replaced", () => {
+    for (const theme of ["dark", "light"] as const) {
+      const colors = TOKENS[theme] as unknown as Record<string, string>;
+      const cellBody = composite(MATERIALS[theme].regular.background, colors["color-canvas"]);
+      const before = contrastRatio(colors["color-surface-2"], cellBody);
+      const after = contrastRatio(pendingSurface(colors, theme), cellBody);
+      expect(after).toBeGreaterThan(before);
+      expect(after).toBeGreaterThanOrEqual(3);
+    }
   });
 });

@@ -27,6 +27,12 @@ export interface IconButtonProps {
  * RN port of ui/IconButton.tsx (wall-scale: 64/72/80 — the web's 44px floor
  * becomes 64dp on the wall per contract). Ink uses the 55% accent → body-ink
  * mix (the measured-AA accent-ink convention shared with Chip/Toast/Avatar).
+ *
+ * The destructive disc carries `color-primary-foreground`, which clears 5.98:1
+ * (dark) / 7.37:1 (light) on the rose fill — but only for a glyph `color` can
+ * actually reach. A COLOUR emoji ignores `color`: the 🗑️ specimen's own light
+ * metal measured L 0.4948 against `#b72f47` = 3.10:1 no matter what ink this
+ * resolver returned, so destructive controls take a solid/monochrome glyph.
  */
 const sizeMap: Record<IconButtonSize, number> = { sm: 64, md: 72, lg: 80 };
 
