@@ -75,16 +75,14 @@ describe("Screen + Atmosphere", () => {
     expect(TOKENS.dark["color-canvas"]).toBe("#0f1117");
   });
 
-  it("secondary violet bloom rides the top-right at .warm-glass-canvas stops (14% dark / 10% light)", () => {
-    for (const theme of ["dark", "light"] as const) {
-      const { getByTestId, toJSON } = render(<Atmosphere />, { wrapper: wrapTheme(theme) });
-      expect(getByTestId("atmosphere")).toBeTruthy();
-      const s = JSON.stringify(toJSON());
-      // stops from Home-ai globals.css:736-751 (ellipse 60% 40% at 85% 0%)
-      expect(s).toContain(
-        mix(TOKENS[theme]["color-accent-violet"], "transparent", theme === "dark" ? 14 : 10)
-      );
-      expect(s).toContain('"x":0.85'); // anchored top-right (85% horizontal)
-    }
+  it("the violet bloom rides the top-right at the BUDGETED alpha (.warm-glass-canvas's second radial, ellipse 60% 40% at 85% 0%)", () => {
+    // The web screen-blends its radials at 14% dark / 10% light; RN
+    // alpha-composites them and that veil outranked the glass plates, so the
+    // budget (tests/atmosphere.test.tsx) drops them to 2% dark / none in light.
+    const dark = JSON.stringify(render(<Atmosphere />, { wrapper: wrapTheme("dark") }).toJSON());
+    expect(dark).toContain(mix(TOKENS.dark["color-accent-violet"], "transparent", 2));
+    expect(dark).toContain('"x":0.85'); // anchored top-right (85% horizontal)
+    const light = JSON.stringify(render(<Atmosphere />, { wrapper: wrapTheme("light") }).toJSON());
+    expect(light).not.toContain(TOKENS.light["color-accent-violet"]);
   });
 });
