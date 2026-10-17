@@ -16,6 +16,7 @@ import { PinPad } from "../ui/PinPad";
 import { SoftButton } from "../ui/SoftButton";
 import { SignedOutBanner } from "../ui/SignedOutBanner";
 import { Toggle } from "../ui/Toggle";
+import { scheduleLocalReminder } from "../native/notifications";
 
 /**
  * The wall's Settings surface (WS-10): the launcher by role (web contract —
@@ -664,6 +665,14 @@ function AppearanceSection() {
           description="Bolder colors for easier reading"
           testID="settings-boost-toggle"
         />
+        <SoftButton
+          variant="secondary"
+          size="sm"
+          testID="settings-test-notification"
+          onPress={() => void scheduleLocalReminder("Consuela", "Test reminder from the wall", 5)}
+        >
+          Send test notification
+        </SoftButton>
       </Material>
 
       <Material tier="regular" style={{ borderRadius: 28, padding: 24 }}>

@@ -4,6 +4,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
+import { scheduleLocalReminder } from "../native/notifications";
 import { NavIcon } from "../ui/NavIcon";
 import { Material } from "../theme/Material";
 import { MOTION, TYPOGRAPHY } from "../theme/tokens";
@@ -270,6 +271,7 @@ export function EmergencyFlow() {
           ...(source ? { contactsSource: source } : {}),
         });
         setModalStage("result");
+        void scheduleLocalReminder("Emergency alert", res.message || "Emergency alert sent.", 2);
       } else {
         fail(humanizeServerMessage(res?.message, ""), parseContactsSource(res?.contactsSource));
       }

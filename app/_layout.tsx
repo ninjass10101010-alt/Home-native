@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "../src/state/AuthProvider";
 import { SyncManager } from "../src/state/SyncManager";
 import { ToastProvider } from "../src/ui/Toast";
 import { hydrateBaseUrl } from "../src/api/config";
+import { configureNotifications, requestNotificationPermission } from "../src/native/notifications";
 import { View } from "react-native";
 
 /**
@@ -40,6 +41,8 @@ export default function RootLayout() {
   });
   useEffect(() => {
     hydrateBaseUrl().catch(() => {});
+    configureNotifications();
+    requestNotificationPermission().catch(() => {});
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     activateKeepAwakeAsync("consuela-wall").catch(() => {});
   }, []);

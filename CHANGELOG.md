@@ -492,3 +492,9 @@ Full shipped-change history for Home-native (newest first, long-form entries).
   - House: header icon badge + serif title + subtitle, loaded-error offline banner, disarmed/armed alarm state colors, 44sp climate numeral, 2-column lights grid, removed duplicate presence chips, fixed `turnAllOff()` call.
   - Chat: sticky header bar, empty-state companion orb, FamilyBrief cards, composer moved outside ScrollView with 64dp targets.
   - Token-literal ban clean, TypeScript clean, ESLint 0 errors, 649/649 tests passing.
+
+- 2026-10-16 — feat(native): expo-notifications integration — permission request, local reminder scheduler, settings test button, emergency confirmation notification.
+  **src/native/notifications.ts (new):** configureNotifications, requestNotificationPermission, scheduleLocalReminder, cancelAllNotifications — all guarded for Jest/no-op.
+  **app/_layout.tsx:** configure handler + request permission on boot.
+  **src/settings/SettingsPage.tsx:** "Send test notification" button in Appearance card.
+  **src/emergency/EmergencyFlow.tsx:** schedule confirmation notification on successful alert.
