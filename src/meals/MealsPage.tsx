@@ -516,7 +516,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                         <Text style={{ fontSize: 18, marginVertical: 2 }}>
                           {mealEmojiText}
                         </Text>
-                        <Text style={{ color: colors["color-text-muted"], fontSize: 11, fontWeight: "600" }}>
+                        <Text style={{ color: colors["color-text-muted"], fontSize: 14, fontWeight: "600" }}>
                           {mealCountText}
                         </Text>
                       </Pressable>
@@ -753,7 +753,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                         <Text style={{ color: colors["color-text-primary"], fontSize: 22, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
                           {todayKcal}
                         </Text>
-                        <Text style={{ color: colors["color-text-muted"], fontSize: 10, fontWeight: "600" }}>
+                        <Text style={{ color: colors["color-text-muted"], fontSize: 14, fontWeight: "600" }}>
                           / 2000 kcal
                         </Text>
                       </View>
@@ -860,7 +860,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                               <Text style={{ fontSize: 22 }}>{m.emoji || "👤"}</Text>
                             )}
                           </View>
-                          <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontSize: 11, fontWeight: "600", textAlign: "center" }}>
+                          <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontSize: 14, fontWeight: "600", textAlign: "center" }}>
                             {firstName}
                           </Text>
                         </View>

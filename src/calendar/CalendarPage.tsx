@@ -306,7 +306,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
           }}
         />
         <View style={{ gap: 2, flex: 1 }}>
-          <Text style={{ color: colors["color-text-secondary"], fontSize: 13, fontWeight: "600" }}>
+          <Text style={{ color: colors["color-text-secondary"], fontSize: 14, fontWeight: "600" }}>
             {row.time ?? "All day"}
           </Text>
           <Text
@@ -701,7 +701,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                         justifyContent: "center",
                       }}
                     >
-                      <Text style={{ color: colors["color-text-primary"], fontSize: 13, fontWeight: "600" }}>
+                      <Text style={{ color: colors["color-text-primary"], fontSize: 14, fontWeight: "600" }}>
                         Today
                       </Text>
                     </Pressable>
@@ -794,7 +794,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                   <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                     {WEEKDAYS_SUN_FIRST.map((wd) => (
                       <View key={wd} style={{ flex: 1, alignItems: "center" }}>
-                        <Text style={{ color: colors["color-text-secondary"], fontSize: 12, fontWeight: "700" }}>
+                        <Text style={{ color: colors["color-text-secondary"], fontSize: 14, fontWeight: "700" }}>
                           {wd}
                         </Text>
                       </View>
@@ -930,7 +930,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                       justifyContent: "center",
                     }}
                   >
-                    <Text style={{ color: colors["color-text-primary"], fontSize: 13, fontWeight: "600" }}>
+                    <Text style={{ color: colors["color-text-primary"], fontSize: 14, fontWeight: "600" }}>
                       + Add
                     </Text>
                   </Pressable>
@@ -974,7 +974,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                     <Text
                       style={{
                         color: colors["color-text-secondary"],
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: "700",
                         letterSpacing: 1.5,
                         textTransform: "uppercase",
@@ -1009,7 +1009,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                             <Text
                               style={{
                                 color: colors["color-text-secondary"],
-                                fontSize: 10,
+                                fontSize: 14,
                                 fontWeight: "700",
                               }}
                             >
@@ -1041,7 +1041,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                                   numberOfLines={1}
                                   style={{
                                     color: colors["color-text-secondary"],
-                                    fontSize: 13,
+                                    fontSize: 14,
                                     fontWeight: "600",
                                   }}
                                 >
@@ -1119,7 +1119,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                       <Text
                         style={{
                           color: colors["color-text-secondary"],
-                          fontSize: 12,
+                          fontSize: 14,
                           fontWeight: "700",
                           textTransform: "uppercase",
                         }}
@@ -1141,7 +1141,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                           <Text
                             key={e.id || ei}
                             numberOfLines={1}
-                            style={{ color: colors["color-text-secondary"], fontSize: 12, lineHeight: 16 }}
+                            style={{ color: colors["color-text-secondary"], fontSize: 14, lineHeight: 16 }}
                           >
                             • {e.title}
                           </Text>
