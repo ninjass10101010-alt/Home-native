@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
+import { ScrollView } from "react-native";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
+import { NavIcon } from "../ui/NavIcon";
 import { Material } from "../theme/Material";
 import { MOTION, TYPOGRAPHY } from "../theme/tokens";
 import { accentInk, mix } from "../theme/mix";
@@ -74,6 +76,7 @@ interface EmergencyOk {
   message?: string;
   contactsSource?: ContactsSource;
   houseAlert?: HouseAlert;
+  details?: { houseAlert?: HouseAlert };
 }
 
 interface EmergencyContact {
@@ -173,7 +176,7 @@ function formatPhoneForDisplay(phone: string): string {
 export function EmergencyFlow() {
   const { colors, theme, setTheme } = useTheme();
   const toast = useToast();
-  const { member } = useAuth();
+  const { member, hydrated } = useAuth();
   const router = useRouter();
 
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
@@ -263,7 +266,7 @@ export function EmergencyFlow() {
           partial: res.partial === true,
           message: res.message || "Emergency alert sent.",
           ...(res.warning ? { warning: res.warning } : {}),
-          ...(res.houseAlert ? { houseAlert: res.houseAlert } : {}),
+          ...((res.details?.houseAlert ?? res.houseAlert) ? { houseAlert: (res.details?.houseAlert ?? res.houseAlert) as HouseAlert } : {}),
           ...(source ? { contactsSource: source } : {}),
         });
         setModalStage("result");
@@ -336,7 +339,7 @@ export function EmergencyFlow() {
   };
   const amberInk = accentInk(amber, colors["color-text-primary"]);
 
-  const isParent = member?.role === "parent";
+  const isParent = hydrated && member?.role === "parent";
   const emptyContactsDescription = isParent
     ? "Add or manage emergency contacts to get started."
     : "Ask a parent to add or manage emergency contacts.";
@@ -354,7 +357,7 @@ export function EmergencyFlow() {
   const roseInk = accentInk(rose, colors["color-text-primary"]);
 
   return (
-    <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
+    <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 180 }}>
       {/* Signed-out banner (web SyncStatusBanner parity): the saved-copy state
           is never indistinguishable from "synced". The sign-in link routes to
           the Home rail — the app's only sign-in surface. */}
@@ -547,7 +550,7 @@ export function EmergencyFlow() {
           chevron — a destination, not a disabled field. */}
       <ListRow
         testID="emergency-safety-bar"
-        leading={<Text style={{ fontSize: 24 }}>⚙️</Text>}
+        leading={<NavIcon iconKey="settings" size={22} color={colors["color-text-secondary"]} />}
         title={
           <Text
             style={{
@@ -562,15 +565,15 @@ export function EmergencyFlow() {
         showDisclosure
         onPress={() => router.push("/settings")}
         accessibilityLabel="Open safety settings"
-        style={{ marginBottom: 24 }}
+        style={{ marginBottom: 24, borderStyle: "dashed", backgroundColor: colors["color-surface-2"] }}
       />
 
       {/* 911 — the reference page's life-threatening card */}
-      <Material tier="regular" style={{ borderRadius: 28, padding: 24, marginTop: 24, alignItems: "center" }}>
+      <Material tier="regular" tone={rose} style={{ borderRadius: 28, padding: 24, marginTop: 24, alignItems: "center", borderColor: mix(rose, "transparent", 35), backgroundColor: mix(rose, "transparent", 10) }}>
         <Text style={{ fontSize: 44 }}>🚨</Text>
         <Text
           style={{
-            color: accentInk(rose, colors["color-text-primary"]),
+            color: roseInk,
             fontSize: TYPOGRAPHY.title.fontSize,
             fontWeight: "700",
             marginTop: 8,
@@ -586,9 +589,9 @@ export function EmergencyFlow() {
           size="lg"
           onPress={call911}
           testID="emergency-911"
-          style={{ alignSelf: "stretch", marginTop: 16 }}
+          style={{ alignSelf: "stretch", marginTop: 16, backgroundColor: mix(rose, "transparent", 18), borderWidth: 1, borderColor: mix(rose, "transparent", 30) }}
         >
-          Call 911
+          <Text style={{ color: roseInk, fontWeight: "700" }}>Call 911</Text>
         </SoftButton>
       </Material>
 
@@ -748,7 +751,7 @@ export function EmergencyFlow() {
           />
         )}
       </Modal>
-    </View>
+    </ScrollView>
   );
 }
 

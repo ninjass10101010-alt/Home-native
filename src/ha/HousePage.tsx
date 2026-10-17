@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
+import { mix } from "../theme/mix";
 import { MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { useAuth } from "../state/AuthProvider";
 import { useToast } from "../ui/Toast";
@@ -154,6 +155,7 @@ export function HousePage() {
 
   const connected = health?.wsConnected === true || health?.ok === true;
   const healthLabel = healthLoading ? "Checking…" : connected ? "Connected" : "Offline";
+  const loaded = !healthLoading;
 
   const climateAttrs = climate?.attributes ?? {};
   const currentTemp = typeof climateAttrs.current_temperature === "number" ? (climateAttrs.current_temperature as number) : null;
@@ -164,8 +166,12 @@ export function HousePage() {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 220 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>Home Controls</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 4 }}>
+          <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: mix(accentColor, "transparent", 18) }}>
+            <Text style={{ fontSize: 24 }}>🏠</Text>
+          </View>
+          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", fontFamily: "serif" }}>Home Controls</Text>
+          <View style={{ flex: 1 }} />
           <View
             testID="ha-connection-pill"
             style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: colors["color-surface-2"] }}
@@ -175,6 +181,9 @@ export function HousePage() {
             </Text>
           </View>
         </View>
+        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, marginBottom: 12, marginLeft: 60 }}>
+          Lights, climate, security & automations — live from Home Assistant
+        </Text>
 
         {!isParent ? (
           <Surface variant="warm" radius="xl" padding="md" style={{ marginBottom: 12 }}>
@@ -182,7 +191,7 @@ export function HousePage() {
           </Surface>
         ) : null}
 
-        {error && states.length === 0 ? (
+        {loaded && Boolean(error) ? (
           <Surface variant="warm" radius="xl" padding="lg" style={{ marginBottom: 12 }}>
             <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>Home Assistant is offline</Text>
             <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 4 }}>{OFFLINE_COPY}</Text>
@@ -219,7 +228,10 @@ export function HousePage() {
           {alarm ? (
             <View style={{ gap: 8 }}>
               <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>
-                {friendlyName(alarm)} · {alarm.state}
+                {friendlyName(alarm)} ·{" "}
+                <Text style={{ color: alarm.state === "disarmed" ? (colors["color-accent-mint"] ?? accentColor) : (colors["color-accent-rose"] ?? accentColor), fontWeight: "700" }}>
+                  {alarm.state === "disarmed" ? "Disarmed" : alarm.state === "armed_home" ? "Armed home" : alarm.state === "armed_away" ? "Armed away" : alarm.state}
+                </Text>
               </Text>
               {isParent ? (
                 <SoftButton
@@ -234,16 +246,7 @@ export function HousePage() {
           ) : (
             <EmptyState flat icon="🛡️" title="No alarm panel" body="Connect an alarm control panel to Home Assistant." />
           )}
-          <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 10 }}>Presence · {people.filter((p) => p.state === "home").length} home</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-            {people.length === 0 ? (
-              <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>No presence data yet</Text>
-            ) : (
-              people.map((p) => (
-                <Chip key={p.entity_id} as="span" size="sm" tone={p.state === "home" ? "success" : "neutral"} label={`👤 ${friendlyName(p).split(" ")[0]} · ${p.state === "home" ? "home" : "away"}`} />
-              ))
-            )}
-          </View>
+
         </Surface>
 
         {/* Climate */}
@@ -251,9 +254,14 @@ export function HousePage() {
           <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", marginBottom: 8 }}>Climate</Text>
           {climate ? (
             <View style={{ gap: 8 }}>
-              <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize }}>
-                {friendlyName(climate)} · {currentTemp !== null ? `${Math.round(currentTemp)}°` : "—"} → {targetTemp !== null ? `${Math.round(targetTemp)}°` : "—"} · {mode}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+                <Text style={{ color: colors["color-text-primary"], fontSize: 44, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
+                  {currentTemp !== null ? `${Math.round(currentTemp)}°` : "—"}
+                </Text>
+                <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>
+                  {friendlyName(climate)} · target {targetTemp !== null ? `${Math.round(targetTemp)}°` : "—"} · {mode}
+                </Text>
+              </View>
               {humidity !== null ? (
                 <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>Humidity {Math.round(humidity)}%</Text>
               ) : null}
@@ -287,7 +295,7 @@ export function HousePage() {
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>Lights & Switches</Text>
             {isParent && allLights.some((l) => l.state === "on") ? (
-              <SoftButton size="sm" variant="secondary" onPress={() => void turnAllOff} testID="all-lights-off">
+              <SoftButton size="sm" variant="secondary" onPress={() => void turnAllOff()} testID="all-lights-off">
                 All Lights Off
               </SoftButton>
             ) : null}
@@ -295,11 +303,11 @@ export function HousePage() {
           {domainLights.length === 0 ? (
             <EmptyState flat icon="💡" title="No lights found" body="Connect lights to Home Assistant to control them here." />
           ) : (
-            <View style={{ gap: 6 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {domainLights.map((l) => (
-                <View key={l.entity_id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: MIN_TARGET_DP }}>
+                <View key={l.entity_id} style={{ width: "48%", minHeight: MIN_TARGET_DP, flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, borderRadius: 16, backgroundColor: colors["color-surface-2"] }}>
                   <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, flex: 1 }} numberOfLines={1}>
-                    {friendlyName(l)} {l.state === "on" ? "" : "(off)"}
+                    {friendlyName(l)}
                   </Text>
                   <Toggle
                     value={l.state === "on"}

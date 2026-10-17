@@ -4,6 +4,7 @@ import { useLocalSearchParams } from "expo-router";
 import { api } from "../api/client";
 import { useTheme } from "../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../theme/tokens";
+import { mix } from "../theme/mix";
 import { useAuth } from "../state/AuthProvider";
 import { localTodayISO } from "../home/widgets/data";
 import { Modal } from "../ui/Modal";
@@ -175,7 +176,13 @@ export function ChatPage() {
 
   return (
     <View testID="chat-page" style={{ flex: 1 }}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+        <Text style={{ fontSize: 22 }}>✨</Text>
+        <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>Consuela</Text>
+        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors["color-accent-mint"] ?? accentColor }} />
+        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>AI Family Assistant</Text>
+      </View>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 120 }}>
         {/* proactive suggestions strip */}
         {member && suggestions.length > 0 ? (
           <View testID="chat-suggestions" style={{ gap: 8 }}>
@@ -231,9 +238,24 @@ export function ChatPage() {
         ) : (
           <View testID="chat-ready">
             {messages.length === 0 ? (
-              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, textAlign: "center" }}>
-                Ask Consuela anything.
-              </Text>
+              <View style={{ alignItems: "center", gap: 12, paddingVertical: 24 }}>
+                <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: mix(accentColor, "transparent", 20), alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 36 }}>✨</Text>
+                </View>
+                <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>Hi, I&apos;m Consuela</Text>
+              </View>
+            ) : null}
+            {member && status === "ready" ? (
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 8 }}>
+                {["Dinner", "Next up", "Speaking as"].map((label, i) => (
+                  <View key={label} style={{ flex: 1, padding: 12, borderRadius: 16, backgroundColor: colors["color-surface-2"] }}>
+                    <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>{label}</Text>
+                    <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, marginTop: 4 }}>
+                      {i === 2 ? member.name : "—"}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             ) : null}
             <View testID="chat-thread" style={{ gap: 10 }}>
               {messages.map((m, i) => (
@@ -257,27 +279,28 @@ export function ChatPage() {
           </View>
         )}
 
-        {member && status === "ready" ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
-            <TextInput
-              testID="chat-input"
-              value={input}
-              onChangeText={setInput}
-              placeholder="Ask Consuela…"
-              style={{ flex: 1, borderWidth: 1, borderColor: colors["color-border"], borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize }}
-            />
-            <Pressable
-              testID="chat-send"
-              accessibilityRole="button"
-              disabled={sending}
-              onPress={() => void sendPrompt(input)}
-              style={{ minHeight: 44, minWidth: 64, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", borderRadius: 12, backgroundColor: accentColor }}
-            >
-              <Text style={{ color: colors["color-text-on-accent"], fontWeight: "700" }}>{sending ? "…" : "Send"}</Text>
-            </Pressable>
-          </View>
-        ) : null}
       </ScrollView>
+
+      {member && status === "ready" ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12, paddingBottom: 120 }}>
+          <TextInput
+            testID="chat-input"
+            value={input}
+            onChangeText={setInput}
+            placeholder="Ask Consuela…"
+            style={{ flex: 1, minHeight: 64, borderWidth: 1, borderColor: colors["color-border"], borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize }}
+          />
+          <Pressable
+            testID="chat-send"
+            accessibilityRole="button"
+            disabled={sending}
+            onPress={() => void sendPrompt(input)}
+            style={{ minHeight: 64, minWidth: 64, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", borderRadius: 12, backgroundColor: accentColor }}
+          >
+            <Text style={{ color: colors["color-text-on-accent"], fontWeight: "700" }}>{sending ? "…" : "Send"}</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <Modal
         visible={!!pinTarget}

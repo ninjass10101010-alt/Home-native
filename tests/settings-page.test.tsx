@@ -21,6 +21,7 @@ const mockRouterPush = jest.fn();
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockRouterPush, canGoBack: () => false }),
   usePathname: () => "/settings",
+  useLocalSearchParams: () => ({}),
 }));
 
 const parent = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" };

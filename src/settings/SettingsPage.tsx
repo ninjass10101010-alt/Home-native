@@ -6,6 +6,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
 import { ACCENTS, TYPOGRAPHY } from "../theme/tokens";
 import { useAuth } from "../state/AuthProvider";
+import { useLocalSearchParams } from "expo-router";
 import { useSync } from "../state/SyncManager";
 import { READ_COPY_STALE } from "../home/widgets/data";
 import { Chip } from "../ui/Chip";
@@ -13,6 +14,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { Modal } from "../ui/Modal";
 import { PinPad } from "../ui/PinPad";
 import { SoftButton } from "../ui/SoftButton";
+import { SignedOutBanner } from "../ui/SignedOutBanner";
 import { Toggle } from "../ui/Toggle";
 
 /**
@@ -108,7 +110,13 @@ export function SettingsPage() {
   const { colors, accentColor } = useTheme();
   const { member, hydrated } = useAuth();
   const { stale } = useSync();
-  const [openId, setOpenId] = useState<SettingsSectionId | null>(null);
+  const params = useLocalSearchParams<{ section?: string }>();
+  const initialSection = (["me", "family", "safety", "appearance", "home", "system"] as const).includes(
+    params.section as SettingsSectionId
+  )
+    ? (params.section as SettingsSectionId)
+    : null;
+  const [openId, setOpenId] = useState<SettingsSectionId | null>(initialSection);
 
   const sections = sectionsFor(member);
   // If the signed-in member signs out mid-visit, their Me panel is gone — the
@@ -117,6 +125,13 @@ export function SettingsPage() {
 
   return (
     <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 220 }}>
+      {!member ? (
+        <SignedOutBanner
+          title={GUEST_NOTE}
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
+
       {/* Page header — reference/settings parity: eyebrow above the title. */}
       <View style={{ marginBottom: 20 }}>
         <Text
@@ -130,19 +145,8 @@ export function SettingsPage() {
           CHOOSE WHAT TO MANAGE
         </Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
-                <View
-                  style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 32,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: colors["color-surface-1"] ?? colors["color-surface-2"],
-                  }}
-                >
-                  <Text style={{ fontSize: 44 }}>⚙️</Text>
-                </View>
-          <Text style={{ color: colors["color-text-primary"], fontSize: 54, fontWeight: "700" }}>Settings</Text>
+          <Text style={{ fontSize: 40 }}>⚙️</Text>
+          <Text style={{ color: colors["color-text-primary"], fontSize: 40, fontWeight: "700", fontFamily: "serif" }}>Settings</Text>
         </View>
         {stale && member ? (
           <Text
@@ -159,11 +163,6 @@ export function SettingsPage() {
         ) : null}
       </View>
 
-      {hydrated && !member ? (
-        <Material tier="thin" style={{ borderRadius: 20, paddingHorizontal: 20, paddingVertical: 16, marginBottom: 20 }}>
-          <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>{GUEST_NOTE}</Text>
-        </Material>
-      ) : null}
 
       {!hydrated ? (
         <Material tier="thin" style={{ borderRadius: 20, padding: 24 }}>
@@ -198,7 +197,7 @@ export function SettingsPage() {
           )}
         </SectionFocus>
       ) : (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16, justifyContent: "space-between" }}>
           {sections.map((s) => (
             <Pressable
               key={s.id}
@@ -206,21 +205,10 @@ export function SettingsPage() {
               accessibilityRole="button"
               accessibilityLabel={`${s.title}: ${s.description}`}
               onPress={() => setOpenId(s.id)}
-              style={{ flexBasis: "48%", flexGrow: 1, minWidth: 340 }}
+              style={{ width: "48.8%" }}
             >
-              <Material tier="thin" style={{ borderRadius: 28, padding: 24, minHeight: 188 }}>
-                <View
-                style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 32,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: colors["color-surface-1"] ?? colors["color-surface-2"],
-                }}
-              >
-                  <Text style={{ fontSize: 44 }}>{s.icon}</Text>
-              </View>
+              <Material tier="regular" tone={accentColor} style={{ borderRadius: 28, padding: 24, minHeight: 188 }}>
+                <Text style={{ fontSize: 36 }}>{s.icon}</Text>
                 <Text
                   style={{
                     color: colors["color-text-primary"],
@@ -240,7 +228,7 @@ export function SettingsPage() {
                 >
                   {s.description}
                 </Text>
-                <View pointerEvents="none" style={{ position: "absolute", top: 0, right: 28, bottom: 0, justifyContent: "center" }}>
+                <View pointerEvents="none" style={{ position: "absolute", bottom: 20, right: 24 }}>
                   <Text style={{ color: colors["color-text-muted"], fontSize: 36 }}>›</Text>
                 </View>
               </Material>
@@ -700,6 +688,26 @@ function AppearanceSection() {
               selected={accent === a}
               onPress={() => setAccent(a)}
             />
+          ))}
+        </View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+          {Object.keys(ACCENTS.dark).map((a) => (
+            <Pressable
+              key={`swatch-${a}`}
+              testID={`settings-swatch-${a}`}
+              onPress={() => setAccent(a)}
+              style={{ width: "18%" }}
+            >
+              <View
+                style={{
+                  height: 40,
+                  borderRadius: 12,
+                  backgroundColor: ACCENTS[theme === "light" ? "light" : "dark"][a],
+                  borderWidth: accent === a ? 2 : 0,
+                  borderColor: colors["color-text-primary"],
+                }}
+              />
+            </Pressable>
           ))}
         </View>
       </Material>

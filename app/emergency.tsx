@@ -1,17 +1,37 @@
 import React from "react";
+import { View } from "react-native";
+import { usePathname, useRouter } from "expo-router";
 import { Screen } from "../src/theme/Screen";
 import { EmergencyFlow } from "../src/emergency/EmergencyFlow";
+import { CapsuleDock, MoreButton } from "../src/nav/CapsuleDock";
+import { MoreSheet } from "../src/nav/MoreSheet";
+import { useAuth } from "../src/state/AuthProvider";
 
-/**
- * /emergency — the wall's dedicated emergency surface (WS-9). Reached from
- * the always-visible Home shield; the alarm header's back returns to Home
- * (or replaces with it when opened with no history, so the route is never
- * a dead end).
- */
 export default function EmergencyRoute() {
+  const { member, hydrated, poke } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
+  const [moreOpen, setMoreOpen] = React.useState(false);
+  const role = member ? (member.role === "parent" ? "parent" : "child") : "guest";
+
   return (
     <Screen testID="emergency-route">
       <EmergencyFlow />
+      <View style={{ position: "absolute", left: 0, right: 0, bottom: 116, alignItems: "center" }} pointerEvents="box-none">
+        <MoreButton onPress={() => setMoreOpen(true)} />
+      </View>
+      <CapsuleDock
+        role={role}
+        hydrated={hydrated}
+        pathname={pathname}
+        onNavigate={(p) => { poke(); router.push(p as never); }}
+      />
+      <MoreSheet
+        visible={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        role={role}
+        onNavigate={(p) => { poke(); router.push(p as never); }}
+      />
     </Screen>
   );
 }

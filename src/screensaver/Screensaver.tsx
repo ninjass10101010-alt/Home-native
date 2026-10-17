@@ -49,7 +49,7 @@ export const POLL_MS = 60_000;
 export const STALE_MS = 5 * 60_000;
 export const DIM_AFTER_MS = 60_000;
 const TICK_MS = 15_000; // minute-precision clock + dim/stale re-check cadence
-const DIM_OPACITY = 0.35;
+const DIM_OPACITY = 0.78;
 
 const D = TOKENS.dark; // fixed dark board (web parity — see note above)
 const INK = D["color-text-primary"];
@@ -176,10 +176,11 @@ export function Screensaver({ onExit }: ScreensaverProps) {
                     {String(data.weather.tempF).split("").map((d, i) => (
                       <MonsterDigit key={`${d}-${i}`} digit={d} height={64} />
                     ))}
+                    <Text style={{ color: INK, fontSize: 40, fontWeight: "800", lineHeight: 64, marginLeft: 2 }}>°</Text>
                   </View>
                 </View>
                 <Text style={{ color: INK, fontSize: 32, fontWeight: "600" }}>{data.weather.condition}</Text>
-                <Text style={{ color: INK, fontSize: 32, fontWeight: "600" }}>{`H ${data.weather.hiF}° · L ${data.weather.loF}°`}</Text>
+                <Text style={{ color: SUB_INK, fontSize: 24, fontWeight: "600" }}>{`H ${data.weather.hiF}° · L ${data.weather.loF}°`}</Text>
               </View>
             ) : null}
           </View>
@@ -223,19 +224,21 @@ export function Screensaver({ onExit }: ScreensaverProps) {
                   </Text>
                 ) : null}
                 {(data?.events ?? []).map((e, i) => (
-                  <View key={`${e.title}-${i}`} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                    <View
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 6,
-                        backgroundColor: e.color ?? mixAlpha(INK, 0.4),
-                      }}
-                    />
-                    <Text style={{ width: 144, color: SUB_INK, fontSize: 28, fontVariant: ["tabular-nums"] }} numberOfLines={1}>
-                      {e.time}
-                    </Text>
-                    <Text style={{ flex: 1, color: INK, fontSize: 32, lineHeight: 44, fontWeight: "500" }} numberOfLines={1}>
+                  <View key={`${e.title}-${i}`} style={{ gap: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <View
+                        style={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: 6,
+                          backgroundColor: e.color ?? mixAlpha(INK, 0.4),
+                        }}
+                      />
+                      <Text style={{ color: SUB_INK, fontSize: 20, fontVariant: ["tabular-nums"] }} numberOfLines={1}>
+                        {e.time}
+                      </Text>
+                    </View>
+                    <Text style={{ color: INK, fontSize: 26, lineHeight: 32, fontWeight: "500" }} numberOfLines={2}>
                       {e.title}
                     </Text>
                   </View>
@@ -294,7 +297,7 @@ export function Screensaver({ onExit }: ScreensaverProps) {
               </Text>
               <View style={{ gap: 14 }}>
                 {(data?.briefing ?? []).map((line, i) => (
-                  <Text key={i} style={{ color: INK, fontSize: 32, lineHeight: 44, fontWeight: "500" }} numberOfLines={2}>
+                  <Text key={i} style={{ color: INK, fontSize: 26, lineHeight: 34, fontWeight: "500" }} numberOfLines={2}>
                     {line}
                   </Text>
                 ))}
