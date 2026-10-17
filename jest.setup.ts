@@ -55,6 +55,27 @@ jest.mock("expo-image-picker", () => ({
 }));
 jest.mock("expo-audio", () => ({
   useAudioRecorder: () => ({ record: jest.fn(), stop: jest.fn() }),
+  useAudioPlayer: () => ({
+    playing: false,
+    isLoaded: false,
+    currentTime: 0,
+    duration: 0,
+    play: jest.fn(),
+    pause: jest.fn(),
+    replace: jest.fn(),
+    remove: jest.fn(),
+  }),
+  useAudioPlayerStatus: () => ({ isLoaded: false, playing: false, currentTime: 0, duration: 0 }),
+  createAudioPlayer: jest.fn(() => ({
+    playing: false,
+    isLoaded: false,
+    currentTime: 0,
+    duration: 0,
+    play: jest.fn(),
+    pause: jest.fn(),
+    replace: jest.fn(),
+    remove: jest.fn(),
+  })),
   AudioModule: { requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true })) },
 }));
 jest.mock("@react-native-community/netinfo", () => ({
@@ -73,23 +94,6 @@ jest.mock("expo-linear-gradient", () => {
   // render ExpoLinearGradient), props forwarded so testIDs/styles stay queryable.
   return { LinearGradient: make("ExpoLinearGradient") };
 });
-
-// expo-av: audio playback mock for native music player tests.
-jest.mock("expo-av", () => ({
-  Audio: {
-    Sound: {
-      createAsync: jest.fn(async () => ({
-        sound: {
-          unloadAsync: jest.fn(async () => {}),
-          getStatusAsync: jest.fn(async () => ({ isPlaying: false })),
-          pauseAsync: jest.fn(async () => {}),
-          playAsync: jest.fn(async () => {}),
-          setOnPlaybackStatusUpdate: jest.fn(),
-        },
-      })),
-    },
-  },
-}));
 
 // expo-file-system: new Paths/File API mock.
 jest.mock("expo-file-system", () => {

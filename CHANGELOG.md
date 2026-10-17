@@ -4,6 +4,13 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-17 — fix(music): migrate expo-av → expo-audio (RN 0.86 / Expo SDK 57 binary incompatibility).
+  **Root cause:** `expo-av@16.0.8` ships `libexpo-av.so` referencing the JSI symbol `facebook::jsi::Value::asObject(Runtime&) const`; RN 0.86 renamed it to `asObject(IRuntime&) const`, so Android `dlopen` failed with `UnsatisfiedLinkError` and the app crashed on launch. `expo-av` was removed in Expo SDK 57 (absent from `bundledNativeModules.json`); the replacement `expo-audio@~57.0.5` was already a dependency.
+  **MusicPlayer.tsx:** replaced `expo-av` `Audio.Sound` (`createAsync`/`unloadAsync`/`setOnPlaybackStatusUpdate`) with `expo-audio` `useAudioPlayer()` + `useAudioPlayerStatus()`; playback is now `player.replace(source)` + `player.play()`/`player.pause()`; `playing`/`position`/`duration` are derived from the status hook (seconds), removing the local state and the setState-in-effect. Remote stream keeps the `consuela_session` cookie header via `AudioSource.headers`.
+  **jest.setup.ts:** swapped the `expo-av` mock for the `expo-audio` player hooks (`useAudioPlayer`, `useAudioPlayerStatus`, `createAudioPlayer`).
+  **package.json:** removed the `expo-av` dependency so its native module is no longer autolinked (`libexpo-av.so` absent from the release APK).
+  Verified: `tsc --noEmit` clean, 649/649 tests pass, `expo lint` 0 errors; release APK rebuilt and launches without crash (dashboard renders on the emulator).
+
 - 2026-10-16 — feat(ws7): Calendar & Schedule page — triple-A visual & behavioral perfection (17/17 tests).
   **CalendarPage.tsx & events-merge.ts:**
   - Removed full-page guest lockout: entire Calendar page now mounts for guests, displaying the top amber `SignedOutBanner` and inline status badge with `"Sign in with your PIN to see the family's calendar."`. Roster loads via cached storage without calling `api()` in guest mode (`readCachedMembers` -> `FALLBACK_MEMBERS`).

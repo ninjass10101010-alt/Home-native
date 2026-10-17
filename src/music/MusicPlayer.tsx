@@ -1,6 +1,6 @@
 import React from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { Audio } from "expo-av";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import * as FileSystem from "expo-file-system";
 let CastButton: any = null;
 try { CastButton = require("react-native-google-cast").CastButton; } catch { CastButton = null; }
@@ -21,12 +21,13 @@ export function MusicPlayer() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [current, setCurrent] = React.useState<Track | null>(null);
-  const [playing, setPlaying] = React.useState(false);
   const [expanded, setExpanded] = React.useState(false);
-  const [position, setPosition] = React.useState(0);
-  const [duration, setDuration] = React.useState(0);
   const [downloaded, setDownloaded] = React.useState<Set<string>>(new Set());
-  const soundRef = React.useRef<Audio.Sound | null>(null);
+  const player = useAudioPlayer();
+  const playerStatus = useAudioPlayerStatus(player);
+  const playing = !!playerStatus?.playing;
+  const position = playerStatus?.currentTime ?? 0;
+  const duration = playerStatus?.duration ?? 0;
 
   const search = async () => {
     setLoading(true);
@@ -54,45 +55,27 @@ export function MusicPlayer() {
     }
     setLyrics(null);
     try {
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
       const cookie = await loadSessionCookie();
       const base = getBaseUrl();
       const localUri = `${FileSystem.Paths.document.uri}${track.id}.m4a`;
       const info = await FileSystem.getInfoAsync(localUri);
-      const uri = info.exists ? localUri : `${base}/api/media/stream?id=${track.id}`;
-      const { sound } = await Audio.Sound.createAsync(
-        info.exists ? { uri } : { uri, headers: cookie ? { Cookie: `consuela_session=${cookie}` } : {} },
-        { shouldPlay: true }
-      );
-      soundRef.current = sound;
+      const source = info.exists
+        ? { uri: localUri }
+        : { uri: `${base}/api/media/stream?id=${track.id}`, ...(cookie ? { headers: { Cookie: `consuela_session=${cookie}` } } : {}) };
+      player.replace(source);
+      player.play();
       setCurrent(track);
-      setPlaying(true);
       void fetchLyrics(track);
-      sound.setOnPlaybackStatusUpdate((s: any) => {
-        if (s?.isLoaded) {
-          setPosition(s.positionMillis ?? 0);
-          setDuration(s.durationMillis ?? 0);
-        }
-        if (s?.didJustFinish) setPlaying(false);
-      });
     } catch (e: any) {
       setError(e?.message ?? "play_failed");
     }
   };
 
-  const toggle = async () => {
-    const s = soundRef.current;
-    if (!s) return;
-    const status: any = await s.getStatusAsync();
-    if (status?.isPlaying) {
-      await s.pauseAsync();
-      setPlaying(false);
+  const toggle = () => {
+    if (player.playing) {
+      player.pause();
     } else {
-      await s.playAsync();
-      setPlaying(true);
+      player.play();
     }
   };
 
@@ -135,12 +118,6 @@ export function MusicPlayer() {
       // ignore
     }
   };
-
-  React.useEffect(() => {
-    return () => {
-      soundRef.current?.unloadAsync();
-    };
-  }, []);
 
   return (
     <View style={{ flex: 1, padding: 16, gap: 12 }}>
