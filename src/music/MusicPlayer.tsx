@@ -1,5 +1,5 @@
 import React from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Audio } from "expo-av";
 let CastButton: any = null;
 try { CastButton = require("react-native-google-cast").CastButton; } catch { CastButton = null; }
@@ -21,6 +21,9 @@ export function MusicPlayer() {
   const [error, setError] = React.useState<string | null>(null);
   const [current, setCurrent] = React.useState<Track | null>(null);
   const [playing, setPlaying] = React.useState(false);
+  const [expanded, setExpanded] = React.useState(false);
+  const [position, setPosition] = React.useState(0);
+  const [duration, setDuration] = React.useState(0);
   const soundRef = React.useRef<Audio.Sound | null>(null);
 
   const search = async () => {
@@ -64,6 +67,10 @@ export function MusicPlayer() {
       setPlaying(true);
       void fetchLyrics(track);
       sound.setOnPlaybackStatusUpdate((s: any) => {
+        if (s?.isLoaded) {
+          setPosition(s.positionMillis ?? 0);
+          setDuration(s.durationMillis ?? 0);
+        }
         if (s?.didJustFinish) setPlaying(false);
       });
     } catch (e: any) {
@@ -143,6 +150,35 @@ export function MusicPlayer() {
             <Text style={{ color: colors["color-text-on-accent"], fontWeight: "700" }}>{playing ? "Pause" : "Play"}</Text>
           </Pressable>
         </View>
+      ) : null}
+      {expanded && current ? (
+        <View style={{ flex: 1, alignItems: "center", gap: 12, paddingVertical: 16 }}>
+          {current.artworkUrl ? (
+            <Image source={{ uri: current.artworkUrl }} style={{ width: 240, height: 240, borderRadius: 24 }} />
+          ) : (
+            <View style={{ width: 240, height: 240, borderRadius: 24, backgroundColor: colors["color-surface-2"], alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 64 }}>🎵</Text>
+            </View>
+          )}
+          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", textAlign: "center" }}>{current.title}</Text>
+          <Text style={{ color: colors["color-text-secondary"] }}>{current.artist}</Text>
+          <View style={{ width: "100%", height: 4, borderRadius: 2, backgroundColor: colors["color-surface-2"], overflow: "hidden" }}>
+            <View style={{ width: duration > 0 ? `${(position / duration) * 100}%` : "0%", height: 4, backgroundColor: accentColor }} />
+          </View>
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Pressable onPress={toggle} style={{ paddingHorizontal: 24, paddingVertical: 10, borderRadius: 12, backgroundColor: accentColor }}>
+              <Text style={{ color: colors["color-text-on-accent"], fontWeight: "700" }}>{playing ? "Pause" : "Play"}</Text>
+            </Pressable>
+            <Pressable onPress={() => setExpanded(false)} style={{ paddingHorizontal: 24, paddingVertical: 10, borderRadius: 12, backgroundColor: colors["color-surface-2"] }}>
+              <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>Minimize</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+      {!expanded && current ? (
+        <Pressable onPress={() => setExpanded(true)} style={{ alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: colors["color-surface-2"] }}>
+          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize }}>Expand now playing</Text>
+        </Pressable>
       ) : null}
       {lyrics ? (
         <View style={{ padding: 12, borderRadius: 16, backgroundColor: colors["color-surface-1"], gap: 4 }}>
