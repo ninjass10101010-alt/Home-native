@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { act, fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render, within } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { CalendarPage } from "../src/calendar/CalendarPage";
@@ -152,7 +152,7 @@ describe("CalendarPage — week strip", () => {
 
   it("tapping a day chip selects it and swaps the list to that day", async () => {
     fullRoute();
-    const { getByTestId, findByText, queryByText, getByText } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
+    const { getByTestId, findByText, getByText } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
     await findByText("Piano lesson");
     await act(async () => {
       fireEvent.press(getByTestId("cal-day-2026-10-06"));
@@ -163,7 +163,7 @@ describe("CalendarPage — week strip", () => {
     expect(await findByText("Dentist")).toBeTruthy();
     expect(getByText("9:00 AM")).toBeTruthy();
     expect(getByText("Tuesday, October 6")).toBeTruthy();
-    expect(queryByText("Piano lesson")).toBeNull();
+    expect(within(getByTestId("cal-selected-events")).queryByText("Piano lesson")).toBeNull();
   });
 });
 
@@ -177,15 +177,16 @@ describe("CalendarPage — day list merge", () => {
       "/api/google-calendar": GOOGLE_OK(GOOGLE_EVENTS),
       "/api/db/schedules": { items: schedules },
     });
-    const { findByText, getByText, toJSON } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
+    const { findByText, getByTestId, toJSON } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
     await findByText("Piano lesson");
-    expect(getByText("Beach day")).toBeTruthy();
-    expect(getByText("All day")).toBeTruthy();
-    expect(getByText("Family clean")).toBeTruthy();
-    expect(getByText("10:00 AM")).toBeTruthy();
-    expect(getByText("Soccer game")).toBeTruthy();
-    expect(getByText("3:00 PM")).toBeTruthy();
-    expect(getByText("5:30 PM")).toBeTruthy();
+    const selected = within(getByTestId("cal-selected-events"));
+    expect(selected.getByText("Beach day")).toBeTruthy();
+    expect(selected.getByText("All day")).toBeTruthy();
+    expect(selected.getByText("Family clean")).toBeTruthy();
+    expect(selected.getByText("10:00 AM")).toBeTruthy();
+    expect(selected.getByText("Soccer game")).toBeTruthy();
+    expect(selected.getByText("3:00 PM")).toBeTruthy();
+    expect(selected.getByText("5:30 PM")).toBeTruthy();
     expect(rowOrder({ toJSON })).toEqual(["g_g1", "s_s3", "g_g2", "db_e1"]);
   });
 
@@ -227,31 +228,31 @@ describe("CalendarPage — day list merge", () => {
 
   it("routines render only on the weekdays their days scope covers", async () => {
     fullRoute();
-    const { getByTestId, findByText, queryByText } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
+    const { getByTestId, findByText } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
     await findByText("Piano lesson");
     // Friday: the "friday" token + the "weekdays" token both cover it.
     await act(async () => {
       fireEvent.press(getByTestId("cal-day-2026-10-09"));
       await Promise.resolve();
     });
-    expect(await findByText("Trash day")).toBeTruthy();
-    expect(findByText("Wake up")).toBeTruthy();
+    expect(within(getByTestId("cal-selected-events")).getByText("Trash day")).toBeTruthy();
+    expect(within(getByTestId("cal-selected-events")).getByText("Wake up")).toBeTruthy();
     // Wednesday: legacy "wed" token + weekdays.
     await act(async () => {
       fireEvent.press(getByTestId("cal-day-2026-10-07"));
       await Promise.resolve();
     });
     expect(await findByText("Date night")).toBeTruthy();
-    expect(findByText("8:00 PM")).toBeTruthy();
-    expect(queryByText("Trash day")).toBeNull();
+    expect(within(getByTestId("cal-selected-events")).getByText("8:00 PM")).toBeTruthy();
+    expect(within(getByTestId("cal-selected-events")).queryByText("Trash day")).toBeNull();
     // Sunday: neither "weekdays" nor "friday" nor "wed" covers it.
     await act(async () => {
       fireEvent.press(getByTestId("cal-day-2026-10-11"));
       await Promise.resolve();
     });
-    expect(queryByText("Wake up")).toBeNull();
-    expect(queryByText("Trash day")).toBeNull();
-    expect(queryByText("Date night")).toBeNull();
+    expect(within(getByTestId("cal-selected-events")).queryByText("Wake up")).toBeNull();
+    expect(within(getByTestId("cal-selected-events")).queryByText("Trash day")).toBeNull();
+    expect(within(getByTestId("cal-selected-events")).queryByText("Date night")).toBeNull();
   });
 
   it("quiet days get the honest empty copy (today parity + generic day)", async () => {

@@ -266,3 +266,20 @@ export function schedulesForDay(rows: ScheduleRow[], date: Date): WallEvent[] {
 export function mergeDayRows(...groups: WallEvent[][]): WallEvent[] {
   return groups.flat().sort((a, b) => a.sortMinutes - b.sortMinutes);
 }
+
+/** Merged events + routines for a specific day string (YYYY-MM-DD). */
+export function mergedEventsForDay(
+  dbEvents: DbEventRow[],
+  googleRows: GoogleEventRow[],
+  schedules: ScheduleRow[],
+  dayISO: string
+): WallEvent[] {
+  const [y, m, d] = dayISO.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return mergeDayRows(
+    familyEventsForDay(dbEvents, dayISO),
+    googleEventsForDay(googleRows, dayISO),
+    schedulesForDay(schedules, date)
+  );
+}
+

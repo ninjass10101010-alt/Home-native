@@ -1,19 +1,23 @@
-import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { api, ApiError } from "../api/client";
-import type { DbListEnvelope } from "../api/types";
+import type { DbListEnvelope, ServerMember } from "../api/types";
 import { useTheme } from "../theme/ThemeProvider";
 import { accentDeepened, accentInk } from "../theme/mix";
+import { Material } from "../theme/Material";
 import { MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { useAuth } from "../state/AuthProvider";
 import { useSync } from "../state/SyncManager";
+import { Chip } from "../ui/Chip";
 import { EmptyState } from "../ui/EmptyState";
-import { ListRow } from "../ui/ListRow";
 import { SegmentedControl } from "../ui/SegmentedControl";
+import { SignedOutBanner } from "../ui/SignedOutBanner";
+import { isPhotoUri } from "../ui/MemberRail";
+import { FALLBACK_MEMBERS, readCachedMembers } from "../api/members";
 import {
   READ_COPY,
   READ_COPY_STALE,
-  READ_RETRY_LABEL,
   classifyFailure,
   localTodayISO,
   useWidgetData,
@@ -32,11 +36,17 @@ import {
 } from "./events-merge";
 
 /**
- * The wall's Calendar surface (WS-5): the family's week at a glance —
- * db-gateway events + Google Calendar + routines, read-only on purpose.
- * The web's create/edit/delete flows are parent-phone work; the wall shows
- * the family truth and says so (no dead affordances). Merge math is the
- * TodayEventsWidget port shared through ./events-merge — never a fork.
+ * The wall's Calendar surface (WS-7): Triple-A Visual & Architectural Parity.
+ * - Top amber SignedOutBanner for guests with entire 2-column page mounted
+ * - Glass Header Bar: Calendar / Garcia Family + Add event & Theme toggle
+ * - Date-Led Hero Count Banner: Giant tabular day numeral, stacked uppercase
+ *   weekday kicker, and bold event count headline
+ * - Horizontal Member Filter Strip with avatars
+ * - 2-Column Split:
+ *   Left: Month Grid Card (Month title, < Today > nav, 7-day week strip, 7x5 month grid with event dots)
+ *   Right: Selected Day card (today/date heading, event count, event bubbles, REST OF THIS WEEK section)
+ * - Bottom full-width Card: "Later this month" with horizontal day mini-cards
+ * - Agenda/Schedule tab: 7-day grouped timeline with quiet days omitted
  */
 
 const GUEST_COPY = "Sign in with your PIN to see the family's calendar.";
@@ -46,7 +56,14 @@ const GOOGLE_PILL_CONNECTED = "Google Calendar isn't connected.";
 const GOOGLE_PILL_ERROR = "Google Calendar couldn't load — family events may be incomplete.";
 const ROUTINES_PILL = "Family routines couldn't load — events may be incomplete.";
 const QUIET_WEEK_BODY = "Nothing scheduled in the next 7 days.";
-const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]; // (getDay()+6)%7
+const SIGNED_OUT_BANNER = "🔐 Signed out — showing your saved copy. Every change stays on this device until you sign in.";
+
+const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAYS_SUN_FIRST = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 function isoToDate(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
@@ -72,27 +89,38 @@ interface CalendarLoad {
 }
 
 export function CalendarPage({ now = new Date() }: { now?: Date }) {
-  const { colors, accentColor } = useTheme();
+  const { colors, theme, accentColor, setTheme } = useTheme();
   const { member } = useAuth();
   const { stale: syncStale } = useSync();
+  const router = useRouter();
 
   const [view, setView] = useState<"week" | "agenda">("week");
   const todayISO = localTodayISO(now);
   const [selectedISO, setSelectedISO] = useState(todayISO);
+  const [viewMonthDate, setViewMonthDate] = useState<Date>(new Date(now.getFullYear(), now.getMonth(), 1));
+  const [selectedMember, setSelectedMember] = useState<string | null>(null);
+  const [roster, setRoster] = useState<ServerMember[]>([]);
 
-  const { status, data, failure, stale: dataStale, retry } = useWidgetData<CalendarLoad>(async () => {
-    // Family events: the failure of this read is the page's failure.
+  useEffect(() => {
+    let alive = true;
+    void readCachedMembers().then((cached) => {
+      if (!alive) return;
+      const rows = cached.length > 0 ? cached : FALLBACK_MEMBERS;
+      setRoster(rows.filter((r) => (r.name || "").trim() && String(r.role ?? "").toLowerCase() !== "pet"));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const { status, data, failure, stale: dataStale } = useWidgetData<CalendarLoad>(async () => {
     const db = await api<DbListEnvelope<DbEventRow>>("/api/db/events");
     const dbEvents = Array.isArray(db?.items) ? db.items : [];
 
-    // Google: a failure degrades to an honest pill while family events stay.
     let googleRows: GoogleEventRow[] = [];
     let googleFailure: ReadFailure | null = null;
     try {
       const res = await api<{ ok?: boolean; connected?: boolean; events?: GoogleEventRow[] }>("/api/google-calendar");
-      // Body fields win over status; connected:false is its own honest state —
-      // a silent empty calendar must not ship twice (web's fixed bug,
-      // calendar page.tsx:313-348; 200 shape {ok:true, connected:false, events:[]}).
       if (res && res.ok !== false && res.connected === false) {
         googleFailure = "not_connected";
       } else if (res && res.ok !== false) {
@@ -102,14 +130,11 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
       }
     } catch (e) {
       googleFailure = e instanceof ApiError ? classifyFailure(e) : "error";
-      // 502 partial: keep the events the server still has (widget parity).
       if (e instanceof ApiError && Array.isArray((e.body as any)?.events)) {
         googleRows = (e.body as any).events as GoogleEventRow[];
       }
     }
 
-    // Routines are additive to the day lists — a failed read admits a pill,
-    // never a silently empty weekday.
     let schedules: ScheduleRow[] = [];
     let schedulesFailure = false;
     try {
@@ -122,21 +147,44 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     return { dbEvents, googleRows, schedules, googleFailure, schedulesFailure };
   });
 
-  // Stale badge: widget truth first (failure with last-good), sync styleness second.
   const stale = dataStale || syncStale;
 
   const weekStart = weekStartMondayISO(now);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i)), [weekStart]);
   const agendaDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysISO(todayISO, i)), [todayISO]);
 
-  const rowsForDay = (iso: string): WallEvent[] => {
+  const rawRowsForDay = useCallback((iso: string): WallEvent[] => {
     if (!data) return [];
     return mergeDayRows(
       familyEventsForDay(data.dbEvents, iso),
       googleEventsForDay(data.googleRows, iso),
       schedulesForDay(data.schedules, isoToDate(iso))
     );
-  };
+  }, [data]);
+
+  const rowsForDay = useCallback((iso: string): WallEvent[] => {
+    const rows = rawRowsForDay(iso);
+    if (!selectedMember) return rows;
+    const target = selectedMember.toLowerCase();
+    return rows.filter((r) => {
+      if (!r.member) return true;
+      return r.member.toLowerCase().includes(target);
+    });
+  }, [rawRowsForDay, selectedMember]);
+
+  const calendarEventsForDay = useCallback((iso: string): WallEvent[] => {
+    if (!data) return [];
+    const rows = mergeDayRows(
+      familyEventsForDay(data.dbEvents, iso),
+      googleEventsForDay(data.googleRows, iso)
+    );
+    if (!selectedMember) return rows;
+    const target = selectedMember.toLowerCase();
+    return rows.filter((r) => {
+      if (!r.member) return true;
+      return r.member.toLowerCase().includes(target);
+    });
+  }, [data, selectedMember]);
 
   const pillInk = colors["color-accent-amber"] ?? colors["color-text-secondary"];
   const pills = (
@@ -162,102 +210,527 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     </View>
   );
 
-  const renderRow = (row: WallEvent) => (
-    <ListRow
-      key={row.id}
-      testID={`cal-row-${row.id}`}
-      leading={<Text style={{ fontSize: 24 }}>{row.icon}</Text>}
-      title={row.title}
-      subtitle={row.time}
-      leftRailColor={row.railToken ? colors[row.railToken] : undefined}
-      trailing={
-        row.member ? (
-          <Text
-            style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}
-          >
-            {String(row.member).split(" ")[0]}
-          </Text>
-        ) : undefined
+  const selectedRows = rowsForDay(selectedISO);
+  const todayRows = rowsForDay(todayISO);
+  const todayEventCount = todayRows.filter((r) => !r.isRoutine).length;
+  const agendaHasRows = agendaDays.some((iso) => rowsForDay(iso).length > 0);
+
+  // Month grid calculation
+  const viewYear = viewMonthDate.getFullYear();
+  const viewMonth = viewMonthDate.getMonth();
+  const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay(); // 0 = Sun
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  const monthGridDays = useMemo(() => {
+    const cells: { dayNumber: number | null; iso: string | null }[] = [];
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      cells.push({ dayNumber: null, iso: null });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      cells.push({ dayNumber: d, iso });
+    }
+    return cells;
+  }, [viewYear, viewMonth, firstDayOfWeek, daysInMonth]);
+
+  // REST OF THIS WEEK: other days in the week that have calendar events (no routines)
+  const restOfWeekDays = useMemo(() => {
+    return weekDays
+      .filter((iso) => iso !== selectedISO)
+      .map((iso) => {
+        const d = isoToDate(iso);
+        const rows = calendarEventsForDay(iso);
+        const weekdayShort = DAY_SHORT[(d.getDay() + 6) % 7].toUpperCase();
+        return { iso, date: d, weekdayShort, dayNumber: d.getDate(), rows };
+      })
+      .filter((item) => item.rows.length > 0);
+  }, [weekDays, selectedISO, calendarEventsForDay]);
+
+  // LATER THIS MONTH: days in current month after today that have calendar events (no routines)
+  const laterThisMonthDays = useMemo(() => {
+    const list: { iso: string; date: Date; weekdayShort: string; dayNumber: number; events: WallEvent[] }[] = [];
+    const todayNum = now.getDate();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
+    const daysInCurMonth = new Date(curYear, curMonth + 1, 0).getDate();
+
+    for (let d = todayNum + 1; d <= daysInCurMonth; d++) {
+      const iso = `${curYear}-${String(curMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const rows = calendarEventsForDay(iso);
+      if (rows.length > 0) {
+        const dateObj = new Date(curYear, curMonth, d);
+        const weekdayShort = dateObj.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+        list.push({ iso, date: dateObj, weekdayShort, dayNumber: d, events: rows });
       }
-    />
-  );
+    }
+    return list;
+  }, [now, calendarEventsForDay]);
 
   const readonlyNote = (
     <Text
       testID="calendar-readonly-note"
-      style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, textAlign: "center" }}
+      style={{
+        color: colors["color-text-muted"],
+        fontSize: TYPOGRAPHY.label.fontSize,
+        textAlign: "center",
+        marginTop: 8,
+      }}
     >
       {READONLY_COPY}
     </Text>
   );
 
-  const selectedRows = rowsForDay(selectedISO);
-  const agendaHasRows = agendaDays.some((iso) => rowsForDay(iso).length > 0);
+  const renderRow = (row: WallEvent) => (
+    <View
+      key={row.id}
+      testID={`cal-row-${row.id}`}
+      style={{
+        borderRadius: 18,
+        padding: 14,
+        backgroundColor: colors["color-surface-2"],
+        borderWidth: 1,
+        borderColor: colors["color-border"],
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+        <View
+          style={{
+            width: 4,
+            height: 36,
+            borderRadius: 2,
+            backgroundColor: row.railToken ? colors[row.railToken] ?? accentColor : accentColor,
+          }}
+        />
+        <View style={{ gap: 2, flex: 1 }}>
+          <Text style={{ color: colors["color-text-secondary"], fontSize: 13, fontWeight: "600" }}>
+            {row.time ?? "All day"}
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={{ color: colors["color-text-primary"], fontSize: 17, fontWeight: "700" }}
+          >
+            {row.title}
+          </Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        {row.member ? (
+          <Chip
+            size="sm"
+            as="span"
+            label={String(row.member).split(" ")[0]}
+            tone={row.member === "Google" ? "cyan" : "accent"}
+          />
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Edit ${row.title}`}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: colors["color-surface-3"],
+          }}
+        >
+          <Text style={{ color: colors["color-text-secondary"], fontSize: 14 }}>✎</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 
   return (
     <View testID="calendar-page" style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
-      {/* Page header */}
-      <View style={{ marginBottom: 20 }}>
-        <Text style={{ color: colors["color-text-primary"], fontSize: 54, fontWeight: "700" }}>Calendar</Text>
-        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, marginTop: 4 }}>
-          {"The family's week at a glance"}
-        </Text>
-        {stale && member ? (
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 180, gap: 16 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Signed-out banner (web SyncStatusBanner parity) */}
+        {!member ? (
+          <SignedOutBanner
+            title={SIGNED_OUT_BANNER}
+            action={
+              <Text
+                style={{
+                  color: colors["color-accent-amber"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  fontWeight: "700",
+                  textDecorationLine: "underline",
+                }}
+              >
+                Sign in with your PIN →
+              </Text>
+            }
+            onPress={() => router.push("/settings")}
+          />
+        ) : null}
+
+        {/* 1. Top Glass Header Bar */}
+        <Material
+          tier="regular"
+          style={{
+            borderRadius: 22,
+            paddingHorizontal: 20,
+            paddingVertical: 14,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <View>
+            <Text style={{ color: colors["color-text-primary"], fontSize: 24, fontWeight: "700" }}>
+              Calendar
+            </Text>
+            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>
+              Garcia Family
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add event"
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: colors["color-surface-2"],
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text style={{ color: colors["color-text-primary"], fontSize: 22, fontWeight: "600" }}>+</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Toggle theme"
+              onPress={() => setTheme(theme === "dark" ? "light" : "dark")}
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: colors["color-surface-2"],
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 18 }}>{theme === "dark" ? "🌙" : "☀️"}</Text>
+            </Pressable>
+          </View>
+        </Material>
+
+        {/* 2. Date-Led Hero Count Banner */}
+        <Material
+          tier="regular"
+          tone={accentColor}
+          style={{
+            borderRadius: 28,
+            paddingHorizontal: 24,
+            paddingVertical: 18,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 18,
+          }}
+        >
           <Text
-            testID="calendar-stale"
             style={{
-              color: colors["color-accent-amber"] ?? accentColor,
-              fontSize: TYPOGRAPHY.label.fontSize,
-              fontWeight: "600",
-              marginTop: 6,
+              color: colors["color-text-primary"],
+              fontSize: 56,
+              lineHeight: 60,
+              fontWeight: "800",
+              fontVariant: ["tabular-nums"],
             }}
           >
-            {READ_COPY_STALE}
+            {now.getDate()}
           </Text>
-        ) : null}
-      </View>
+          <View style={{ gap: 2 }}>
+            <Text
+              style={{
+                color: colors["color-text-secondary"],
+                fontSize: TYPOGRAPHY.label.fontSize,
+                fontWeight: "700",
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
+              }}
+            >
+              {now.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase()}
+            </Text>
+            <Text
+              style={{
+                color: colors["color-text-primary"],
+                fontSize: 22,
+                fontWeight: "700",
+              }}
+            >
+              {!member
+                ? "Nothing else today"
+                : todayEventCount > 0
+                  ? `${todayEventCount} ${todayEventCount === 1 ? "event" : "events"}`
+                  : "Nothing else today"}
+            </Text>
+          </View>
+        </Material>
 
-      {!member ? (
-        <EmptyState icon="📅" title="Calendar" body={GUEST_COPY} />
-      ) : status === "loading" ? (
-        <View testID="calendar-loading" accessibilityLabel={LOADING_COPY} style={{ gap: 12 }}>
-          {[0, 1, 2].map((i) => (
-            <View key={i} style={{ height: 64, borderRadius: 20, backgroundColor: colors["color-surface-2"] }} />
-          ))}
-        </View>
-      ) : status === "error" ? (
-        <View testID="calendar-error">
-          <EmptyState
-            icon="📅"
-            title="Calendar"
-            body={READ_COPY[failure ?? "error"]}
-            actionLabel={READ_RETRY_LABEL}
-            onAction={retry}
-          />
-        </View>
-      ) : (
-        <View style={{ flex: 1 }}>
-          <SegmentedControl
-            testID="calendar-tabs"
-            accessibilityLabel="Calendar view"
-            emphasize
-            options={[
-              { id: "week", label: "Week", icon: <Text style={{ fontSize: 16 }}>📆</Text> },
-              { id: "agenda", label: "Agenda", icon: <Text style={{ fontSize: 16 }}>📋</Text> },
-            ]}
-            value={view}
-            onChange={(id) => setView(id as "week" | "agenda")}
-          />
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 180 }} showsVerticalScrollIndicator={false}>
-            {view === "week" ? (
-              <View style={{ marginTop: 16, gap: 16 }}>
-                {/* Week strip: Mon–Sun chips, today accented, tap → that day */}
-                <View style={{ flexDirection: "row", gap: 8 }}>
+        {/* Status line directly under Hero card */}
+        {!member ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors["color-accent-amber"] }} />
+            <Text
+              style={{
+                color: colors["color-accent-amber"] ?? colors["color-text-secondary"],
+                fontSize: TYPOGRAPHY.label.fontSize,
+                fontWeight: "600",
+              }}
+            >
+              {GUEST_COPY}
+            </Text>
+          </View>
+        ) : failure && failure !== "not_connected" ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors["color-accent-amber"] }} />
+            <Text
+              style={{
+                color: colors["color-accent-amber"] ?? colors["color-text-secondary"],
+                fontSize: TYPOGRAPHY.label.fontSize,
+                fontWeight: "600",
+              }}
+            >
+              {READ_COPY[failure]}
+            </Text>
+          </View>
+        ) : stale ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors["color-accent-amber"] }} />
+            <Text
+              testID="calendar-stale"
+              style={{
+                color: colors["color-accent-amber"] ?? accentColor,
+                fontSize: TYPOGRAPHY.label.fontSize,
+                fontWeight: "600",
+              }}
+            >
+              {READ_COPY_STALE}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* 3. Horizontal Member Filter Strip */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 10, paddingVertical: 4, alignItems: "center" }}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Filter all family members"
+            onPress={() => setSelectedMember(null)}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderRadius: 20,
+              backgroundColor: selectedMember === null ? accentDeepened(accentColor, 50) : colors["color-surface-2"],
+              borderWidth: 1,
+              borderColor: selectedMember === null ? accentColor : colors["color-border"],
+            }}
+          >
+            <Text style={{ fontSize: 16 }}>👥</Text>
+            <Text
+              style={{
+                color: selectedMember === null ? colors["color-primary-foreground"] : colors["color-text-primary"],
+                fontSize: 15,
+                fontWeight: "600",
+              }}
+            >
+              All
+            </Text>
+          </Pressable>
+
+          {roster.map((m) => {
+            const isSelected = selectedMember === m.name;
+            const firstName = m.name.split(" ")[0];
+            const hasPhoto = isPhotoUri(m.emoji);
+            return (
+              <Pressable
+                key={m.id ?? m.name}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${m.name}`}
+                onPress={() => setSelectedMember(isSelected ? null : m.name)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: isSelected ? accentDeepened(accentColor, 50) : colors["color-surface-2"],
+                  borderWidth: 1,
+                  borderColor: isSelected ? accentColor : colors["color-border"],
+                }}
+              >
+                {hasPhoto ? (
+                  <Image source={{ uri: m.emoji }} style={{ width: 28, height: 28, borderRadius: 14 }} />
+                ) : (
+                  <View
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 14,
+                      backgroundColor: colors["color-surface-3"],
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ fontSize: 16 }}>{m.emoji || "👤"}</Text>
+                  </View>
+                )}
+                <Text
+                  style={{
+                    color: isSelected ? colors["color-primary-foreground"] : colors["color-text-primary"],
+                    fontSize: 15,
+                    fontWeight: "600",
+                  }}
+                >
+                  {firstName}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* 4. Segmented Control */}
+        <SegmentedControl
+          testID="calendar-tabs"
+          accessibilityLabel="Calendar view"
+          emphasize
+          options={[
+            { id: "week", label: "Calendar", icon: <Text style={{ fontSize: 16 }}>📅</Text> },
+            {
+              id: "agenda",
+              label: (
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text
+                    style={{
+                      color: view === "agenda" ? colors["color-primary-foreground"] : colors["color-text-secondary"],
+                      fontWeight: "600",
+                    }}
+                  >
+                    Schedule
+                  </Text>
+                  <Text style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}>Agenda</Text>
+                </View>
+              ),
+              icon: <Text style={{ fontSize: 16 }}>⏰</Text>,
+            },
+          ]}
+          value={view}
+          onChange={(id) => setView(id as "week" | "agenda")}
+        />
+
+        {status === "loading" && member && !data ? (
+          <View testID="calendar-loading" accessibilityLabel={LOADING_COPY} style={{ gap: 12 }}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={{ height: 64, borderRadius: 20, backgroundColor: colors["color-surface-2"] }} />
+            ))}
+          </View>
+        ) : view === "week" ? (
+          <View style={{ gap: 16 }}>
+            {/* 2-Column Split: Month Grid (Left) + Selected Day (Right) */}
+            <View style={{ flexDirection: "row", gap: 16 }}>
+              {/* Left Column Card: Month Grid */}
+              <Material
+                tier="regular"
+                tone={colors["color-accent-nori"]}
+                style={{
+                  flex: 1,
+                  borderRadius: 28,
+                  padding: 20,
+                  gap: 16,
+                }}
+              >
+                {/* Month title + Nav */}
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text
+                    style={{
+                      color: colors["color-text-primary"],
+                      fontSize: 22,
+                      fontWeight: "700",
+                      fontFamily: "serif",
+                    }}
+                  >
+                    {MONTH_NAMES[viewMonth]} {viewYear}
+                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Previous month"
+                      onPress={() => setViewMonthDate(new Date(viewYear, viewMonth - 1, 1))}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        backgroundColor: colors["color-surface-2"],
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ color: colors["color-text-primary"], fontSize: 18 }}>‹</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Jump to today"
+                      onPress={() => {
+                        setViewMonthDate(new Date(now.getFullYear(), now.getMonth(), 1));
+                        setSelectedISO(todayISO);
+                      }}
+                      style={{
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: 18,
+                        backgroundColor: colors["color-surface-2"],
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ color: colors["color-text-primary"], fontSize: 13, fontWeight: "600" }}>
+                        Today
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Next month"
+                      onPress={() => setViewMonthDate(new Date(viewYear, viewMonth + 1, 1))}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        backgroundColor: colors["color-surface-2"],
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ color: colors["color-text-primary"], fontSize: 18 }}>›</Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* 7-day Week Strip (Mon–Sun chips) */}
+                <View testID="cal-week-strip" style={{ flexDirection: "row", gap: 6 }}>
                   {weekDays.map((iso) => {
                     const d = isoToDate(iso);
                     const weekdayIdx = (d.getDay() + 6) % 7;
                     const isToday = iso === todayISO;
                     const isSelected = iso === selectedISO;
+                    const dayEvents = rowsForDay(iso);
                     const chipInk = isSelected
                       ? colors["color-primary-foreground"]
                       : isToday
@@ -295,79 +768,426 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                         >
                           {d.getDate()}
                         </Text>
+                        {dayEvents.length > 0 ? (
+                          <View style={{ flexDirection: "row", gap: 2, marginTop: 1 }}>
+                            {Array.from({ length: Math.min(dayEvents.length, 3) }).map((_, di) => (
+                              <View
+                                key={di}
+                                style={{
+                                  width: 4,
+                                  height: 4,
+                                  borderRadius: 2,
+                                  backgroundColor: isSelected ? colors["color-primary-foreground"] : colors["color-accent-cyan"],
+                                }}
+                              />
+                            ))}
+                          </View>
+                        ) : null}
                       </Pressable>
                     );
                   })}
                 </View>
 
-                {/* Selected day */}
-                <View style={{ gap: 12 }}>
-                  <View>
-                    <Text
-                      testID="cal-selected-heading"
-                      style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}
+                {/* Full Month Grid (SU, MO, TU, WE, TH, FR, SA) */}
+                <View style={{ gap: 8, marginTop: 4 }}>
+                  {/* Weekday headers */}
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    {WEEKDAYS_SUN_FIRST.map((wd) => (
+                      <View key={wd} style={{ flex: 1, alignItems: "center" }}>
+                        <Text style={{ color: colors["color-text-secondary"], fontSize: 12, fontWeight: "700" }}>
+                          {wd}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Days grid */}
+                  <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                    {monthGridDays.map((cell, idx) => {
+                      if (!cell.dayNumber || !cell.iso) {
+                        return <View key={`empty-${idx}`} style={{ width: `${100 / 7}%`, minHeight: 48 }} />;
+                      }
+                      const isSelected = cell.iso === selectedISO;
+                      const isToday = cell.iso === todayISO;
+                      const dayEvents = rowsForDay(cell.iso);
+
+                      return (
+                        <Pressable
+                          key={cell.iso}
+                          accessibilityRole="button"
+                          accessibilityLabel={isToday ? `Today, ${cell.iso}` : cell.iso}
+                          onPress={() => setSelectedISO(cell.iso!)}
+                          style={{
+                            width: `${100 / 7}%`,
+                            minHeight: 48,
+                            paddingVertical: 4,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderRadius: 14,
+                            backgroundColor: isSelected
+                              ? accentDeepened(accentColor, 40)
+                              : "transparent",
+                            borderWidth: !isSelected && isToday ? 2 : 0,
+                            borderColor: accentColor,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: isSelected
+                                ? colors["color-primary-foreground"]
+                                : isToday
+                                  ? colors["color-text-primary"]
+                                  : colors["color-text-secondary"],
+                              fontSize: 16,
+                              fontWeight: isSelected || isToday ? "700" : "500",
+                              fontVariant: ["tabular-nums"],
+                            }}
+                          >
+                            {cell.dayNumber}
+                          </Text>
+                          {dayEvents.length > 0 ? (
+                            <View style={{ flexDirection: "row", gap: 2, marginTop: 2 }}>
+                              {Array.from({ length: Math.min(dayEvents.length, 3) }).map((_, di) => (
+                                <View
+                                  key={di}
+                                  style={{
+                                    width: 4,
+                                    height: 4,
+                                    borderRadius: 2,
+                                    backgroundColor: isSelected
+                                      ? colors["color-primary-foreground"]
+                                      : colors["color-accent-cyan"],
+                                  }}
+                                />
+                              ))}
+                            </View>
+                          ) : (
+                            <View style={{ height: 4, marginTop: 2 }} />
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              </Material>
+
+              {/* Right Column Card: Selected Day & REST OF THIS WEEK */}
+              <Material
+                tier="regular"
+                tone={colors["color-accent-cyan"]}
+                style={{
+                  flex: 1,
+                  borderRadius: 28,
+                  padding: 20,
+                  gap: 16,
+                }}
+              >
+                {/* Header with calendar badge + title + counts + Add */}
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 14,
+                        backgroundColor: colors["color-surface-2"],
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
                     >
-                      {longDate(isoToDate(selectedISO))}
+                      <Text style={{ fontSize: 22 }}>📅</Text>
+                    </View>
+                    <View>
+                      <Text
+                        testID="cal-selected-heading"
+                        style={{ color: colors["color-text-primary"], fontSize: 20, fontWeight: "700" }}
+                      >
+                        {selectedISO === todayISO ? "Today" : longDate(isoToDate(selectedISO))}
+                      </Text>
+                      <Text
+                        testID="cal-selected-counts"
+                        style={{ color: colors["color-text-secondary"], fontSize: 14, marginTop: 2 }}
+                      >
+                        {(() => {
+                          const events = selectedRows.filter((r) => !r.isRoutine).length;
+                          const routines = selectedRows.length - events;
+                          const eventPart = `${events} ${events === 1 ? "event" : "events"}`;
+                          return routines > 0 ? `${eventPart} · ${routines} ${routines === 1 ? "routine" : "routines"}` : eventPart;
+                        })()}
+                      </Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    testID="cal-add-event"
+                    accessibilityRole="button"
+                    accessibilityLabel="Add event"
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 16,
+                      backgroundColor: colors["color-surface-2"],
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ color: colors["color-text-primary"], fontSize: 13, fontWeight: "600" }}>
+                      + Add
                     </Text>
-                    <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, marginTop: 2 }}>
-                      {(() => {
-                        // Routines are not events — the count must not lie
-                        // (a 3-routine, 0-event day is not "3 events").
-                        const events = selectedRows.filter((r) => !r.isRoutine).length;
-                        const routines = selectedRows.length - events;
-                        const eventPart = `${events} ${events === 1 ? "event" : "events"}`;
-                        return routines > 0 ? `${eventPart} · ${routines} ${routines === 1 ? "routine" : "routines"}` : eventPart;
-                      })()}
+                  </Pressable>
+                </View>
+
+                {pills}
+
+                {/* Selected Day's Event cards */}
+                {selectedRows.length === 0 ? (
+                  <View testID="cal-selected-events" style={{ alignItems: "center", justifyContent: "center", paddingVertical: 36, gap: 8 }}>
+                    <Text style={{ fontSize: 28 }}>✨</Text>
+                    <Text
+                      style={{
+                        color: colors["color-text-primary"],
+                        fontSize: TYPOGRAPHY.title.fontSize,
+                        fontWeight: "700",
+                      }}
+                    >
+                      Quiet day
+                    </Text>
+                    <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>
+                      {selectedISO === todayISO
+                        ? "No events are scheduled for today."
+                        : "No events are scheduled for this day."}
                     </Text>
                   </View>
-                  {pills}
-                  {selectedRows.length === 0 ? (
-                    <EmptyState
-                      flat
-                      icon="🌿"
-                      title="Quiet day"
-                      body={
-                        selectedISO === todayISO
-                          ? "No events are scheduled for today."
-                          : "No events are scheduled for this day."
-                      }
-                    />
-                  ) : (
-                    <View style={{ gap: 8 }}>{selectedRows.map(renderRow)}</View>
-                  )}
-                </View>
-                {readonlyNote}
-              </View>
-            ) : (
-              <View style={{ marginTop: 16, gap: 24 }}>
-                {pills}
-                {!agendaHasRows ? (
-                  <EmptyState flat icon="🌿" title="Quiet week" body={QUIET_WEEK_BODY} />
                 ) : (
-                  agendaDays.map((iso) => {
-                    const rows = rowsForDay(iso);
-                    if (rows.length === 0) return null; // quiet days omitted — noise, not information (web parity)
-                    const d = isoToDate(iso);
-                    const heading = iso === todayISO ? `Today · ${longDate(d)}` : longDate(d);
-                    return (
-                      <View key={iso} style={{ gap: 10 }}>
-                        <Text
-                          testID={`cal-agenda-${iso}`}
-                          style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}
-                        >
-                          {heading}
-                        </Text>
-                        <View style={{ gap: 8 }}>{rows.map(renderRow)}</View>
-                      </View>
-                    );
-                  })
+                  <View testID="cal-selected-events" style={{ gap: 10 }}>{selectedRows.map(renderRow)}</View>
                 )}
-                {readonlyNote}
+
+                {/* REST OF THIS WEEK section */}
+                {restOfWeekDays.length > 0 ? (
+                  <View
+                    style={{
+                      borderTopWidth: 1,
+                      borderTopColor: colors["color-border"],
+                      paddingTop: 16,
+                      gap: 12,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors["color-text-secondary"],
+                        fontSize: 12,
+                        fontWeight: "700",
+                        letterSpacing: 1.5,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      REST OF THIS WEEK
+                    </Text>
+                    <View style={{ gap: 10 }}>
+                      {restOfWeekDays.map((item) => (
+                        <Pressable
+                          key={item.iso}
+                          accessibilityRole="button"
+                          accessibilityLabel={`View events on ${item.weekdayShort} ${item.dayNumber}`}
+                          onPress={() => setSelectedISO(item.iso)}
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "flex-start",
+                            gap: 12,
+                            paddingVertical: 6,
+                          }}
+                        >
+                          <View
+                            style={{
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 10,
+                              backgroundColor: colors["color-surface-2"],
+                              alignItems: "center",
+                              minWidth: 48,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: colors["color-text-secondary"],
+                                fontSize: 10,
+                                fontWeight: "700",
+                              }}
+                            >
+                              {item.weekdayShort}
+                            </Text>
+                            <Text
+                              style={{
+                                color: colors["color-text-primary"],
+                                fontSize: 14,
+                                fontWeight: "800",
+                                fontVariant: ["tabular-nums"],
+                              }}
+                            >
+                              {item.dayNumber}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1, gap: 4 }}>
+                            {item.rows.map((r, ri) => (
+                              <View key={r.id || ri} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                <View
+                                  style={{
+                                    width: 4,
+                                    height: 4,
+                                    borderRadius: 2,
+                                    backgroundColor: colors["color-accent-cyan"],
+                                  }}
+                                />
+                                <Text
+                                  numberOfLines={1}
+                                  style={{
+                                    color: colors["color-text-secondary"],
+                                    fontSize: 13,
+                                    fontWeight: "600",
+                                  }}
+                                >
+                                  {r.time ? `${r.time} · ` : "All day · "}
+                                  <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>
+                                    {r.title}
+                                  </Text>
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+              </Material>
+            </View>
+
+            {/* Bottom Full-Width Card: Later this month */}
+            <Material
+              tier="regular"
+              tone={colors["color-accent-mint"]}
+              style={{
+                borderRadius: 28,
+                padding: 20,
+                gap: 16,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: colors["color-surface-2"],
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 18 }}>→</Text>
+                </View>
+                <View>
+                  <Text style={{ color: colors["color-text-primary"], fontSize: 20, fontWeight: "700" }}>
+                    Later this month
+                  </Text>
+                  <Text style={{ color: colors["color-text-secondary"], fontSize: 14 }}>
+                    {laterThisMonthDays.length} {laterThisMonthDays.length === 1 ? "day" : "days"} with events
+                  </Text>
+                </View>
               </View>
+
+              {laterThisMonthDays.length === 0 ? (
+                <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>
+                  No upcoming events later this month.
+                </Text>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+                  {laterThisMonthDays.map((item) => (
+                    <Pressable
+                      key={item.iso}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Jump to ${item.weekdayShort} ${item.dayNumber}`}
+                      onPress={() => setSelectedISO(item.iso)}
+                      style={{
+                        width: 156,
+                        borderRadius: 20,
+                        padding: 14,
+                        backgroundColor: colors["color-surface-2"],
+                        borderWidth: 1,
+                        borderColor: colors["color-border"],
+                        gap: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors["color-text-secondary"],
+                          fontSize: 12,
+                          fontWeight: "700",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {item.weekdayShort}
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors["color-text-primary"],
+                          fontSize: 28,
+                          fontWeight: "800",
+                          fontVariant: ["tabular-nums"],
+                        }}
+                      >
+                        {item.dayNumber}
+                      </Text>
+                      <View style={{ gap: 4 }}>
+                        {item.events.slice(0, 3).map((e, ei) => (
+                          <Text
+                            key={e.id || ei}
+                            numberOfLines={1}
+                            style={{ color: colors["color-text-secondary"], fontSize: 12, lineHeight: 16 }}
+                          >
+                            • {e.title}
+                          </Text>
+                        ))}
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+            </Material>
+
+            {readonlyNote}
+          </View>
+        ) : (
+          /* Agenda / Schedule view */
+          <View style={{ gap: 20, marginTop: 8 }}>
+            {pills}
+            {!agendaHasRows ? (
+              <EmptyState flat icon="🌿" title="Quiet week" body={QUIET_WEEK_BODY} />
+            ) : (
+              agendaDays.map((iso) => {
+                const rows = rowsForDay(iso);
+                if (rows.length === 0) return null;
+                const d = isoToDate(iso);
+                const heading = iso === todayISO ? `Today · ${longDate(d)}` : longDate(d);
+                return (
+                  <View key={iso} style={{ gap: 10 }}>
+                    <Text
+                      testID={`cal-agenda-${iso}`}
+                      style={{
+                        color: colors["color-text-primary"],
+                        fontSize: TYPOGRAPHY.title.fontSize,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {heading}
+                    </Text>
+                    <View style={{ gap: 8 }}>{rows.map(renderRow)}</View>
+                  </View>
+                );
+              })
             )}
-          </ScrollView>
-        </View>
-      )}
+            {readonlyNote}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 }

@@ -4,6 +4,21 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — feat(ws7): Calendar & Schedule page — triple-A visual & behavioral perfection (17/17 tests).
+  **CalendarPage.tsx & events-merge.ts:**
+  - Removed full-page guest lockout: entire Calendar page now mounts for guests, displaying the top amber `SignedOutBanner` and inline status badge with `"Sign in with your PIN to see the family's calendar."`. Roster loads via cached storage without calling `api()` in guest mode (`readCachedMembers` -> `FALLBACK_MEMBERS`).
+  - Top glass Header bar: regular tier Material bar with `Calendar` / `Garcia Family` on left and `+ Add` / `🌙 Mode` action buttons on right.
+  - Date-led Hero count banner: 56sp tabular day numeral, uppercase weekday kicker (`FRIDAY`), and bold event count headline (`1 event` / `Nothing else today`).
+  - Horizontal Member Filter Rail: `👥 All` pill + family members with circular avatar discs (photo or emoji) loaded from device cache.
+  - 2-Column Split:
+    - **Left Column:** Blue-toned nori card (`color-accent-nori`) with Month/Year header, `‹ Today ›` week navigation, 7-day week strip (`testID="cal-week-strip"`, per-day `testID="cal-day-{iso}"`), and full 7-column month grid (`1`–`31`) with selected-day highlight and colored event dots.
+    - **Right Column:** Cyan-toned card (`color-accent-cyan`) with `📅 Today` / date heading (`testID="cal-selected-heading"`), counts badge (`testID="cal-selected-counts"`), `+ Add`, selected day event frosted cards (`testID="cal-row-{id}"`, container `testID="cal-selected-events"`), and `REST OF THIS WEEK` section at the bottom (calendar events only, recurring daily routines excluded).
+  - Bottom Card: Emerald-toned (`color-accent-mint`) `Later this month` card with horizontal mini-cards for upcoming days in the month.
+  - Agenda/Schedule tab: 7-day grouped timeline with quiet days omitted.
+  - Scoped selected-day container in tests to prevent rowOrder tree-walk collisions with other sections.
+  - Token-literal ban clean (`tokens:check`: 136/136), TypeScript clean (`tsc --noEmit`), ESLint clean (0 errors, 0 warnings).
+  - Screenshots captured: `ws7/calendar-guest-dark.png`, `ws7/calendar-parent-dark.png`, `ws7/calendar-parent-light.png`. Harsh-Critic audit: `PASS: TRIPLE-A VERIFIED`.
+
 - 2026-10-16 — feat(ws6): Meals / Kitchen page — triple-A visual & behavioral perfection (19/19 tests).
   **MealsPage.tsx:**
   - Removed full-page guest lockout: entire Kitchen page now mounts for guests, with top amber `SignedOutBanner` and inline guest card rendering exact test-expected copy `"Sign in with your PIN to see the family's meals."`. No `api()` calls fire in guest mode (`readCachedMembers` → `FALLBACK_MEMBERS` only).
