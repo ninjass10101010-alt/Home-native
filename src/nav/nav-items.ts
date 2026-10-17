@@ -248,6 +248,7 @@ export const EXEMPT_ROUTES: Readonly<Record<string, string>> = {
   "/ledger": "Parent-only finance embed; v2 on native.",
   "/meals/archive": "Week-restore drill-down of /meals; listed in OWN_DESTINATION_ROUTES.",
   "/player": "Reached from Home's Music widget; a drill-down, not a cap.",
+  "/music": "Native music player (port of the web /player surface); a drill-down, not a cap.",
   "/screensaver": "Idle wall board — reached by inactivity, not nav.",
   "/suggestions": "Reached from Home's Suggestions widget ('See all').",
   "/weather": "Reached from Home's weather cell poster — a drill-down, not a cap.",

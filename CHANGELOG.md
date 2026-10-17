@@ -498,3 +498,5 @@ Full shipped-change history for Home-native (newest first, long-form entries).
   **app/_layout.tsx:** configure handler + request permission on boot.
   **src/settings/SettingsPage.tsx:** "Send test notification" button in Appearance card.
   **src/emergency/EmergencyFlow.tsx:** schedule confirmation notification on successful alert.
+
+- 2026-10-16 — feat(native): music player port (expo-av) + CastButton integration; /music route exempted in nav manifest.
