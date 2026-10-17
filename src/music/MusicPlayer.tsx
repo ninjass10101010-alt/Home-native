@@ -1,6 +1,7 @@
 import React from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Audio } from "expo-av";
+import * as FileSystem from "expo-file-system";
 let CastButton: any = null;
 try { CastButton = require("react-native-google-cast").CastButton; } catch { CastButton = null; }
 import { getBaseUrl } from "../api/config";
@@ -24,6 +25,7 @@ export function MusicPlayer() {
   const [expanded, setExpanded] = React.useState(false);
   const [position, setPosition] = React.useState(0);
   const [duration, setDuration] = React.useState(0);
+  const [downloaded, setDownloaded] = React.useState<Set<string>>(new Set());
   const soundRef = React.useRef<Audio.Sound | null>(null);
 
   const search = async () => {
@@ -58,8 +60,11 @@ export function MusicPlayer() {
       }
       const cookie = await loadSessionCookie();
       const base = getBaseUrl();
+      const localUri = `${FileSystem.Paths.document.uri}${track.id}.m4a`;
+      const info = await FileSystem.getInfoAsync(localUri);
+      const uri = info.exists ? localUri : `${base}/api/media/stream?id=${track.id}`;
       const { sound } = await Audio.Sound.createAsync(
-        { uri: `${base}/api/media/stream?id=${track.id}`, headers: cookie ? { Cookie: `consuela_session=${cookie}` } : {} },
+        info.exists ? { uri } : { uri, headers: cookie ? { Cookie: `consuela_session=${cookie}` } : {} },
         { shouldPlay: true }
       );
       soundRef.current = sound;
@@ -114,6 +119,23 @@ export function MusicPlayer() {
     await playTrack(queue[nextIndex], false);
   };
 
+  const downloadCurrent = async () => {
+    if (!current) return;
+    try {
+      const cookie = await loadSessionCookie();
+      const base = getBaseUrl();
+      const dest = `${FileSystem.Paths.document.uri}${current.id}.m4a`;
+      const res = await FileSystem.downloadAsync(`${base}/api/media/stream?id=${current.id}`, dest, {
+        headers: cookie ? { Cookie: `consuela_session=${cookie}` } : {},
+      });
+      if (res.status === 200) {
+        setDownloaded((d) => new Set(d).add(current.id));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   React.useEffect(() => {
     return () => {
       soundRef.current?.unloadAsync();
@@ -148,6 +170,9 @@ export function MusicPlayer() {
           <Text style={{ color: colors["color-text-secondary"] }}>{current.artist}</Text>
           <Pressable onPress={toggle} style={{ alignSelf: "flex-start", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, backgroundColor: accentColor }}>
             <Text style={{ color: colors["color-text-on-accent"], fontWeight: "700" }}>{playing ? "Pause" : "Play"}</Text>
+          </Pressable>
+          <Pressable onPress={downloadCurrent} style={{ alignSelf: "flex-start", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, backgroundColor: colors["color-surface-2"] }}>
+            <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>{downloaded.has(current.id) ? "Downloaded" : "Download"}</Text>
           </Pressable>
         </View>
       ) : null}
