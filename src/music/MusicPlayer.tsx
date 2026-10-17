@@ -14,6 +14,9 @@ export function MusicPlayer() {
   const { colors, accentColor } = useTheme();
   const [query, setQuery] = React.useState("");
   const [tracks, setTracks] = React.useState<Track[]>([]);
+  const [queue, setQueue] = React.useState<Track[]>([]);
+  const [queueIndex, setQueueIndex] = React.useState(0);
+  const [lyrics, setLyrics] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [current, setCurrent] = React.useState<Track | null>(null);
@@ -39,7 +42,12 @@ export function MusicPlayer() {
     }
   };
 
-  const playTrack = async (track: Track) => {
+  const playTrack = async (track: Track, replaceQueue = true) => {
+    if (replaceQueue) {
+      setQueue([track]);
+      setQueueIndex(0);
+    }
+    setLyrics(null);
     try {
       if (soundRef.current) {
         await soundRef.current.unloadAsync();
@@ -54,6 +62,7 @@ export function MusicPlayer() {
       soundRef.current = sound;
       setCurrent(track);
       setPlaying(true);
+      void fetchLyrics(track);
       sound.setOnPlaybackStatusUpdate((s: any) => {
         if (s?.didJustFinish) setPlaying(false);
       });
@@ -73,6 +82,29 @@ export function MusicPlayer() {
       await s.playAsync();
       setPlaying(true);
     }
+  };
+
+  const fetchLyrics = async (track: Track) => {
+    try {
+      const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(track.artist)}&track_name=${encodeURIComponent(track.title)}`;
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const json = await res.json();
+      setLyrics(typeof json?.syncedLyrics === "string" ? json.syncedLyrics : (typeof json?.plainLyrics === "string" ? json.plainLyrics : null));
+    } catch {
+      setLyrics(null);
+    }
+  };
+
+  const addToQueue = (track: Track) => {
+    setQueue((q) => [...q, track]);
+  };
+
+  const playNext = async () => {
+    if (queue.length === 0) return;
+    const nextIndex = (queueIndex + 1) % queue.length;
+    setQueueIndex(nextIndex);
+    await playTrack(queue[nextIndex], false);
   };
 
   React.useEffect(() => {
@@ -107,12 +139,36 @@ export function MusicPlayer() {
           </Pressable>
         </View>
       ) : null}
+      {lyrics ? (
+        <View style={{ padding: 12, borderRadius: 16, backgroundColor: colors["color-surface-1"], gap: 4 }}>
+          <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>Lyrics</Text>
+          <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{lyrics}</Text>
+        </View>
+      ) : null}
+      {queue.length > 1 ? (
+        <View style={{ gap: 4 }}>
+          <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>Queue ({queue.length})</Text>
+          {queue.map((t, i) => (
+            <Pressable key={`q-${t.id}-${i}`} onPress={() => { setQueueIndex(i); void playTrack(t, false); }} style={{ paddingVertical: 6 }}>
+              <Text style={{ color: i === queueIndex ? accentColor : colors["color-text-primary"] }}>{t.title} — {t.artist}</Text>
+            </Pressable>
+          ))}
+          <Pressable onPress={playNext} style={{ alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: accentColor }}>
+            <Text style={{ color: colors["color-text-on-accent"], fontWeight: "700" }}>Next</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <ScrollView style={{ flex: 1 }}>
         {tracks.map((t) => (
-          <Pressable key={t.id} onPress={() => playTrack(t)} style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}>
-            <Text style={{ color: colors["color-text-primary"], fontWeight: "600" }}>{t.title}</Text>
-            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{t.artist}</Text>
-          </Pressable>
+          <View key={t.id} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors["color-border"], gap: 8 }}>
+            <Pressable style={{ flex: 1 }} onPress={() => playTrack(t)}>
+              <Text style={{ color: colors["color-text-primary"], fontWeight: "600" }}>{t.title}</Text>
+              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{t.artist}</Text>
+            </Pressable>
+            <Pressable onPress={() => addToQueue(t)} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: colors["color-surface-2"] }}>
+              <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize }}>+Queue</Text>
+            </Pressable>
+          </View>
         ))}
       </ScrollView>
     </View>
