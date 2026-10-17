@@ -73,3 +73,41 @@ jest.mock("expo-linear-gradient", () => {
   // render ExpoLinearGradient), props forwarded so testIDs/styles stay queryable.
   return { LinearGradient: make("ExpoLinearGradient") };
 });
+
+// expo-av: audio playback mock for native music player tests.
+jest.mock("expo-av", () => ({
+  Audio: {
+    Sound: {
+      createAsync: jest.fn(async () => ({
+        sound: {
+          unloadAsync: jest.fn(async () => {}),
+          getStatusAsync: jest.fn(async () => ({ isPlaying: false })),
+          pauseAsync: jest.fn(async () => {}),
+          playAsync: jest.fn(async () => {}),
+          setOnPlaybackStatusUpdate: jest.fn(),
+        },
+      })),
+    },
+  },
+}));
+
+// expo-file-system: new Paths/File API mock.
+jest.mock("expo-file-system", () => {
+  const File = jest.fn().mockImplementation((dir: any, name: string) => ({
+    uri: `file:///mock/${name}`,
+    exists: false,
+  }));
+  (File as any).downloadFileAsync = jest.fn(async () => ({ exists: true }));
+  const Paths = { document: { uri: "file:///mock/" } };
+  return { __esModule: true, default: { Paths, File }, Paths, File };
+});
+
+// expo-notifications: no-op mock.
+jest.mock("expo-notifications", () => ({
+  setNotificationHandler: jest.fn(),
+  getPermissionsAsync: jest.fn(async () => ({ granted: true })),
+  requestPermissionsAsync: jest.fn(async () => ({ granted: true })),
+  scheduleNotificationAsync: jest.fn(async () => "id"),
+  cancelAllScheduledNotificationsAsync: jest.fn(async () => {}),
+  SchedulableTriggerInputTypes: { TIME_INTERVAL: "timeInterval" },
+}));
