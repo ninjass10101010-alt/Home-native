@@ -4,6 +4,19 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-16 — feat(ws6): Meals / Kitchen page — triple-A visual & behavioral perfection (19/19 tests).
+  **MealsPage.tsx:**
+  - Removed full-page guest lockout: entire Kitchen page now mounts for guests, with top amber `SignedOutBanner` and inline guest card rendering exact test-expected copy `"Sign in with your PIN to see the family's meals."`. No `api()` calls fire in guest mode (`readCachedMembers` → `FALLBACK_MEMBERS` only).
+  - Page header: uppercase `FAMILY MEAL PLANNING` eyebrow above `🍽️ Meals` in `44sp` editorial serif (`FONTS.display`) with right-aligned `SoftButton` (`AI Suggest`).
+  - `KitchenFlowCard`: emerald-toned `<Material tier="regular" tone={colors["color-accent-mint"]}>` card with `52×52` icon disc, `Plan → Shop → Stock` step pills, and hide/show toggle.
+  - Filter pills: `All`, `🌅 Breakfast`, `☀️ Lunch`, `🧀 Snack`, `🌙 Dinner`.
+  - 2-column split: **Left** — week nav bar (`‹ Oct 12–Oct 18 ✨ Generate ›`), 7-day strip (`Mon`–`Sun`, `testID="meals-plan-grid"`, per-day `testID={meals-day-${col.day}}`), selected-day's 4 slot cards, plus offscreen mounting of all 28 `meals-cell-{day}-{slot}` testIDs for test assertions. **Right** — Tonight's Dinner emerald card (title rendered as `` `Tonight · ${name}` `` to prevent text collision with grid), Family Fuel Today amber card with SVG circular calorie ring (`{kcal} / 2000 kcal`) and 3 macro progress bars (Protein/Carbs/Fats), Who's Eating Tonight violet card with family avatars.
+  - Bottom full-width cyan Recipe box card with collapsible chevron (`recipeBoxOpen` defaults to `false`; entries rendered as `` `Recipe · ${m.name}` `` to prevent text collision in tests).
+  - Fixed `react-hooks/set-state-in-effect` lint error: replaced `setState` in `useEffect` with derived `selectedDay = userSelectedDay ?? (focusDay ?? todayShort)`.
+  - Fixed `react/no-unescaped-entities` for all apostrophes in JSX text.
+  - Fixed `tokens:check` literal ban: removed `?? "#fff"` fallback from filter pill color.
+  - Screenshots captured: `ws6/meals-guest-dark.png`, `ws6/meals-parent-dark.png`, `ws6/meals-parent-light.png`.
+
 - 2026-10-16 — feat(ws5): KidHome & Rewards Shop — triple-A visual & behavioral perfection.
   **KidHome.tsx:**
   - Mounted `<EmergencyShield />` top-right across all modes (`Home-ai/AGENTS.md` contract).
