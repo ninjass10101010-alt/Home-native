@@ -33,7 +33,7 @@ jest.mock("../src/music/playback", () => ({
 }));
 
 import React from "react";
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { MusicPlayer } from "../src/music/MusicPlayer";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 
@@ -45,32 +45,32 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-it("renders now playing and drives the transport", () => {
+it("renders now playing and drives the transport", async () => {
   const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
-  expect(getByTestId("np-title").props.children).toBe("Song");
+  await waitFor(() => expect(getByTestId("np-title").props.children).toBe("Song"));
   fireEvent.press(getByTestId("np-play"));
   expect(mockToggle).toHaveBeenCalled();
   fireEvent.press(getByTestId("np-next"));
   expect(mockNext).toHaveBeenCalled();
 });
 
-it("lists downloads and removes one", () => {
+it("lists downloads and removes one", async () => {
   mockDownloads = [{
     id: "abc12345678", title: "Song", artist: "Artist", album: "",
     durationSeconds: 200, artworkUrl: null, fileUri: "file:///x", bytes: 1000, savedAt: 1,
   }];
   const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
-  expect(getByTestId("music-download-abc12345678")).toBeTruthy();
+  await waitFor(() => expect(getByTestId("music-download-abc12345678")).toBeTruthy());
   fireEvent.press(getByTestId("music-download-remove-abc12345678"));
   expect(mockRemoveDownload).toHaveBeenCalledWith("abc12345678");
 });
 
-it("shows a recently played shelf when idle", () => {
+it("shows a recently played shelf when idle", async () => {
   mockCurrent = null;
   mockHistory = [{
     id: "zzz99999999", title: "Older", artist: "Artist", album: "",
     durationSeconds: 100, artworkUrl: null, explicit: false, source: "youtube_music",
   }];
   const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
-  expect(getByTestId("music-history-zzz99999999")).toBeTruthy();
+  await waitFor(() => expect(getByTestId("music-history-zzz99999999")).toBeTruthy());
 });

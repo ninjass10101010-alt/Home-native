@@ -11,6 +11,19 @@ import HomeRoute from "../app/index";
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
+jest.mock("../src/music/playback", () => ({
+  usePlayback: () => ({
+    current: null, queue: [], index: -1, playing: false, position: 0, duration: 0,
+    buffering: false, repeat: "off", shuffle: false, error: null,
+    downloads: [], downloadBytes: 0, history: [],
+    settings: { repeat: "off", shuffle: false, explicitFilter: true },
+    play: jest.fn(async () => {}), playQueueAt: jest.fn(), toggle: jest.fn(), next: jest.fn(async () => {}),
+    previous: jest.fn(async () => {}), seek: jest.fn(async () => {}), setRepeat: jest.fn(),
+    cycleRepeatMode: jest.fn(), toggleShuffleMode: jest.fn(), addToQueue: jest.fn(),
+    removeFromQueue: jest.fn(), moveQueueItem: jest.fn(), downloadCurrent: jest.fn(),
+    removeDownload: jest.fn(), setExplicitFilter: jest.fn(),
+  }),
+}));
 jest.mock("expo-secure-store", () => ({
   getItemAsync: jest.fn(async () => null),
   setItemAsync: jest.fn(async () => {}),

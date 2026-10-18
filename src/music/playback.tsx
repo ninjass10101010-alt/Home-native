@@ -200,7 +200,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       player.pause();
       return;
     }
-    void goTo(index);
+    queueMicrotask(() => { void goTo(index); });
   }, [current?.id, goTo, player, queue, status?.didJustFinish]);
 
   const toggle = React.useCallback(() => {
@@ -341,7 +341,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       addToQueue, current, cycleRepeatMode, downloadCurrent, downloads, duration, error, history,
       moveQueueItem, next, play, playQueueAt, playing, position, previous, queue.index,
       queue.repeat, queue.shuffle, queue.tracks, removeDownload, removeFromQueue, seek,
-      setRepeat, settings, status?.isBuffering, toggle, toggleShuffleMode,
+      setExplicitFilter, setRepeat, settings, status?.isBuffering, toggle, toggleShuffleMode,
     ]
   );
 

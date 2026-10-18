@@ -28,7 +28,7 @@ export function MusicPlayer() {
   const [searching, setSearching] = React.useState(false);
   const [searchError, setSearchError] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState<Tab>("lyrics");
-  const [lyrics, setLyrics] = React.useState<LyricLine[] | null>(null);
+  const [lyricsFor, setLyricsFor] = React.useState<{ id: string; lines: LyricLine[] | null } | null>(null);
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [seekWidth, setSeekWidth] = React.useState(0);
 
@@ -36,14 +36,13 @@ export function MusicPlayer() {
   const explicitHidden = (track: MediaTrack) => track.explicit && !allowExplicit;
 
   React.useEffect(() => {
-    if (!current) {
-      setLyrics(null);
-      return;
-    }
+    if (!current) return;
     let alive = true;
-    void fetchLyrics(current).then((lines) => { if (alive) setLyrics(lines); });
+    void fetchLyrics(current).then((lines) => { if (alive) setLyricsFor({ id: current.id, lines }); });
     return () => { alive = false; };
-  }, [current?.id]);
+  }, [current]);
+
+  const lyrics = current && lyricsFor?.id === current.id ? lyricsFor.lines : null;
 
   const search = async () => {
     const term = query.trim();
