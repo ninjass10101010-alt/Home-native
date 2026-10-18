@@ -32,6 +32,7 @@ export const NAV_ICON_KEYS = [
   "mountain",
   "memory",
   "photos",
+  "music",
 ] as const;
 
 export type NavIconKey = (typeof NAV_ICON_KEYS)[number];
@@ -133,6 +134,15 @@ export const NAV_ITEMS: readonly NavItemDefinition[] = [
     group: "more",
     wall: false,
   },
+  {
+    path: "/music",
+    label: "Music",
+    iconKey: "music",
+    description: "Search, play and download music",
+    roles: SIGNED_IN_ROLES,
+    group: "more",
+    wall: false,
+  },
 ];
 
 /**
@@ -216,6 +226,7 @@ const LIVE_ROUTES: ReadonlySet<string> = new Set([
   "/meals",
   "/calendar",
   "/photos",
+  "/music",
   "/settings",
   "/emergency",
   "/weather",
@@ -248,7 +259,6 @@ export const EXEMPT_ROUTES: Readonly<Record<string, string>> = {
   "/ledger": "Parent-only finance embed; v2 on native.",
   "/meals/archive": "Week-restore drill-down of /meals; listed in OWN_DESTINATION_ROUTES.",
   "/player": "Reached from Home's Music widget; a drill-down, not a cap.",
-  "/music": "Native music player (port of the web /player surface); a drill-down, not a cap.",
   "/screensaver": "Idle wall board — reached by inactivity, not nav.",
   "/suggestions": "Reached from Home's Suggestions widget ('See all').",
   "/weather": "Reached from Home's weather cell poster — a drill-down, not a cap.",

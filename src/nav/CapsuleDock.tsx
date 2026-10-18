@@ -32,6 +32,7 @@ export const NAV_ICONS: Record<NavIconKey | "more", string> = {
   mountain: "⛰️",
   memory: "🧠",
   photos: "📸",
+  music: "🎵",
   more: "☰",
 };
 

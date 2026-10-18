@@ -32,12 +32,19 @@ describe("nav manifest (port of Home-ai nav-items contracts)", () => {
     expect(guest).not.toContain("/rewards");
   });
 
-  it("More… sheet counts: 7 parent / 6 kid / 4 guest (photos IS in the sheet)", () => {
-    expect(moreNavItemsForRole("parent")).toHaveLength(7);
-    expect(moreNavItemsForRole("child")).toHaveLength(6);
-    expect(moreNavItemsForRole("pet")).toHaveLength(6);
+  it("More… sheet counts: 8 parent / 7 kid / 4 guest (music IS signed-in only)", () => {
+    expect(moreNavItemsForRole("parent")).toHaveLength(8);
+    expect(moreNavItemsForRole("child")).toHaveLength(7);
+    expect(moreNavItemsForRole("pet")).toHaveLength(7);
     expect(moreNavItemsForRole("guest")).toHaveLength(4);
     expect(moreNavItemsForRole("parent").map((i) => i.path)).toContain("/photos");
+    expect(moreNavItemsForRole("parent").map((i) => i.path)).toContain("/music");
+    expect(moreNavItemsForRole("guest").map((i) => i.path)).not.toContain("/music");
+  });
+
+  it("/music is a manifest destination, not an exemption", () => {
+    expect(NAV_ITEMS.some((item) => item.path === "/music")).toBe(true);
+    expect(EXEMPT_ROUTES["/music"]).toBeUndefined();
   });
 
   it("personal destinations leave the guest wall (money-mountain, memory, photos)", () => {

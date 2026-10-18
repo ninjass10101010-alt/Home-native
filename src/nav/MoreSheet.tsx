@@ -17,7 +17,7 @@ export interface MoreSheetProps {
 }
 
 /** The Home "More…" sheet: the manifest's secondary items for the role,
- *  as ListRows with their one-line blurbs. Counts per role: 7/6/4. */
+ *  as ListRows with their one-line blurbs. Counts per role: 8/7/4. */
 export function MoreSheet({ visible, onClose, role, onNavigate, testID }: MoreSheetProps) {
   const { colors, accentColor } = useTheme();
   const items = moreNavItemsForRole(role);

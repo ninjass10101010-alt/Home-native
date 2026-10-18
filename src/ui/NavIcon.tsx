@@ -139,6 +139,14 @@ function renderIconPaths(iconKey: NavIconKey | "more", strokeColor: string): Rea
           <Circle cx="9" cy="9" r="1.1" />
         </>
       );
+    case "music":
+      return (
+        <>
+          <Path d="M9 18V5l10-2v13" />
+          <Circle cx="6" cy="18" r="3" />
+          <Circle cx="16" cy="16" r="3" />
+        </>
+      );
     case "more":
       return <Path d="M4 7h16M4 12h16M4 17h16" />;
   }

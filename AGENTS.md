@@ -36,7 +36,7 @@ Routes live in `app/` (repo-root, expo-router). Non-route code lives in `src/`. 
 
 - Single device: ApoloSign 1080×1920 portrait, Android 15. No phone/landscape/responsive modes.
 - Type floor 14sp; tap targets ≥64dp; AA contrast light+dark+boost; token-only colors (`npm run tokens:check`).
-- One nav surface: manifest-driven capsule dock (7 caps/role, kid swaps House→Rewards; More… 7/6/4); caps paint after auth hydration.
+- One nav surface: manifest-driven capsule dock (7 caps/role, kid swaps House→Rewards; More… 8/7/4); caps paint after auth hydration.
 - Materials thin/regular/thick via one `Material` component; perf tiers via `perf.ts`; reduced-motion + boost honored.
 - Backend: LAN HTTP to the Home-ai Next.js API layer (`http://nas.local:3000` default) — never direct to PocketBase or providers. Body fields win over HTTP status. Stale data is badged or hidden, never faked.
 - Quality gate: every surface passes the harsh-critic loop in `docs/critic-loop.md` before it counts as done.
