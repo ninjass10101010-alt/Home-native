@@ -11,6 +11,7 @@ import { TOKENS } from "../src/theme/tokens";
 import { AuthProvider, useAuth } from "../src/state/AuthProvider";
 import { SyncManager } from "../src/state/SyncManager";
 import { PlaybackProvider } from "../src/music/playback";
+import { MiniPlayer } from "../src/music/MiniPlayer";
 import { ToastProvider } from "../src/ui/Toast";
 import { hydrateBaseUrl } from "../src/api/config";
 import { configureNotifications } from "../src/native/notifications";
@@ -65,6 +66,7 @@ export default function RootLayout() {
                 <NavigationBar hidden />
                 <PokeBoundary>
                   <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }} />
+                  <MiniPlayer />
                 </PokeBoundary>
               </ToastProvider>
             </SyncManager>
