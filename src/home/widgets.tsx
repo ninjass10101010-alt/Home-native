@@ -49,11 +49,13 @@ export const ALL_WIDGETS: WidgetDef[] = [
 export const WALL_DEFAULT_WIDGETS: WidgetId[] = [
   "photos",
   "morningBriefing", "weather", "todayEvents", "tasks",
-  "currentMeal", "aiQuickAsk", "leaderboard",
+  "currentMeal", "music", "leaderboard",
   "homeSecurity", "homeClimate", "homeLights",
-  "schedule", "consuelaSuggestions", "music", "financeLedger",
+  "aiQuickAsk", "schedule", "consuelaSuggestions", "financeLedger",
 ];
-export const WALL_HIDDEN_WIDGETS: WidgetId[] = ["schedule", "consuelaSuggestions", "music", "financeLedger"];
+export const WALL_HIDDEN_WIDGETS: WidgetId[] = [
+  "aiQuickAsk", "schedule", "consuelaSuggestions", "financeLedger",
+];
 
 /** Only photos earns 2 cells on the wall board (the portrait hero). */
 export const WALL_SPANS: Partial<Record<WidgetId, number>> = { photos: 2 };

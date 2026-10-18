@@ -90,7 +90,7 @@ describe("HomeWall (the 12-cell wall bento)", () => {
   it("dense row-major placement fills the 3×4 grid (web grid-flow-dense port)", () => {
     expect(wallColumns().map((c) => c.map((d) => d.id))).toEqual([
       ["photos", "currentMeal", "homeSecurity"],
-      ["morningBriefing", "todayEvents", "aiQuickAsk", "homeClimate"],
+      ["morningBriefing", "todayEvents", "music", "homeClimate"],
       ["weather", "tasks", "leaderboard", "homeLights"],
     ]);
   });
@@ -278,7 +278,7 @@ describe("widget registry", () => {
     expect(ids).toEqual([
       "photos",
       "morningBriefing", "weather", "todayEvents", "tasks",
-      "currentMeal", "aiQuickAsk", "leaderboard",
+      "currentMeal", "music", "leaderboard",
       "homeSecurity", "homeClimate", "homeLights",
     ]);
   });

@@ -30,7 +30,7 @@ import { HomeSecurityWidget } from "../src/home/widgets/HomeSecurityWidget";
 import { HomeClimateWidget } from "../src/home/widgets/HomeClimateWidget";
 import { HomeLightsWidget } from "../src/home/widgets/HomeLightsWidget";
 import { LeaderboardWidget } from "../src/home/widgets/LeaderboardWidget";
-import { QuickAskWidget } from "../src/home/widgets/QuickAskWidget";
+import { MusicWidget } from "../src/home/widgets/MusicWidget";
 
 /** Wave 1 live widgets — the full 11-cell wall is live as of Task 5/6. */
 const WALL_WIDGETS: Partial<Record<WidgetId, React.ComponentType>> = {
@@ -44,7 +44,7 @@ const WALL_WIDGETS: Partial<Record<WidgetId, React.ComponentType>> = {
   homeClimate: HomeClimateWidget,
   homeLights: HomeLightsWidget,
   leaderboard: LeaderboardWidget,
-  aiQuickAsk: QuickAskWidget,
+  music: MusicWidget,
 };
 
 const WRONG_PIN_COPY = "Wrong PIN — try again.";
