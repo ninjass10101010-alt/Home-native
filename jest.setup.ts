@@ -53,31 +53,40 @@ jest.mock("expo-image-picker", () => ({
   launchImageLibraryAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
   MediaTypeOptions: { All: "All", Images: "Images", Videos: "Videos" },
 }));
-jest.mock("expo-audio", () => ({
-  useAudioRecorder: () => ({ record: jest.fn(), stop: jest.fn() }),
-  useAudioPlayer: () => ({
+jest.mock("expo-audio", () => {
+  const makePlayer = () => ({
     playing: false,
-    isLoaded: false,
+    isLoaded: true,
     currentTime: 0,
     duration: 0,
     play: jest.fn(),
     pause: jest.fn(),
     replace: jest.fn(),
+    seekTo: jest.fn(async () => {}),
     remove: jest.fn(),
-  }),
-  useAudioPlayerStatus: () => ({ isLoaded: false, playing: false, currentTime: 0, duration: 0 }),
-  createAudioPlayer: jest.fn(() => ({
-    playing: false,
-    isLoaded: false,
-    currentTime: 0,
-    duration: 0,
-    play: jest.fn(),
-    pause: jest.fn(),
-    replace: jest.fn(),
-    remove: jest.fn(),
-  })),
-  AudioModule: { requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true })) },
-}));
+    setActiveForLockScreen: jest.fn(),
+    updateLockScreenMetadata: jest.fn(),
+    setPlaybackRate: jest.fn(),
+  });
+  return {
+    useAudioRecorder: () => ({ record: jest.fn(), stop: jest.fn() }),
+    useAudioPlayer: () => makePlayer(),
+    useAudioPlayerStatus: () => ({
+      isLoaded: true,
+      playing: false,
+      currentTime: 0,
+      duration: 0,
+      isBuffering: false,
+      didJustFinish: false,
+    }),
+    createAudioPlayer: jest.fn(() => makePlayer()),
+    setAudioModeAsync: jest.fn(async () => {}),
+    AudioModule: {
+      requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true })),
+      setAudioModeAsync: jest.fn(async () => {}),
+    },
+  };
+});
 jest.mock("@react-native-community/netinfo", () => ({
   addEventListener: jest.fn(() => jest.fn()),
   fetch: jest.fn(async () => ({ isConnected: true })),
@@ -95,15 +104,38 @@ jest.mock("expo-linear-gradient", () => {
   return { LinearGradient: make("ExpoLinearGradient") };
 });
 
-// expo-file-system: new Paths/File API mock.
+// expo-file-system: new Paths/File/Directory API mock.
 jest.mock("expo-file-system", () => {
-  const File = jest.fn().mockImplementation((dir: any, name: string) => ({
-    uri: `file:///mock/${name}`,
+  const join = (parts: any[]): string =>
+    parts
+      .map((part) => (typeof part === "string" ? part : part?.uri ?? ""))
+      .join("/")
+      .replace(/([^:])\/{2,}/g, "$1/");
+  const File = jest.fn().mockImplementation((...parts: any[]) => ({
+    uri: join(parts),
     exists: false,
+    size: 0,
+    delete: jest.fn(),
+    create: jest.fn(),
   }));
-  (File as any).downloadFileAsync = jest.fn(async () => ({ exists: true }));
-  const Paths = { document: { uri: "file:///mock/" } };
-  return { __esModule: true, default: { Paths, File }, Paths, File };
+  (File as any).downloadFileAsync = jest.fn(async (_url: string, destination: any) => destination);
+  const Directory = jest.fn().mockImplementation((...parts: any[]) => ({
+    uri: join(parts),
+    exists: false,
+    create: jest.fn(),
+    delete: jest.fn(),
+  }));
+  const Paths = {
+    document: { uri: "file:///mock/" },
+    cache: { uri: "file:///mock-cache/" },
+  };
+  return {
+    __esModule: true,
+    default: { Paths, File, Directory },
+    Paths,
+    File,
+    Directory,
+  };
 });
 
 // expo-notifications: no-op mock.

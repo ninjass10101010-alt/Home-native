@@ -10,6 +10,7 @@ import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { TOKENS } from "../src/theme/tokens";
 import { AuthProvider, useAuth } from "../src/state/AuthProvider";
 import { SyncManager } from "../src/state/SyncManager";
+import { PlaybackProvider } from "../src/music/playback";
 import { ToastProvider } from "../src/ui/Toast";
 import { hydrateBaseUrl } from "../src/api/config";
 import { configureNotifications } from "../src/native/notifications";
@@ -57,15 +58,17 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
         <AuthProvider>
-          <SyncManager>
-            <ToastProvider>
-              <StatusBar hidden />
-              <NavigationBar hidden />
-              <PokeBoundary>
-                <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }} />
-              </PokeBoundary>
-            </ToastProvider>
-          </SyncManager>
+          <PlaybackProvider>
+            <SyncManager>
+              <ToastProvider>
+                <StatusBar hidden />
+                <NavigationBar hidden />
+                <PokeBoundary>
+                  <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }} />
+                </PokeBoundary>
+              </ToastProvider>
+            </SyncManager>
+          </PlaybackProvider>
         </AuthProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
