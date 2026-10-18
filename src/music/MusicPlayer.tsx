@@ -20,7 +20,7 @@ export function MusicPlayer() {
     current, queue, playing, position, duration, error,
     play, toggle, next, previous, seek, repeat, shuffle,
     cycleRepeatMode, toggleShuffleMode, downloadCurrent, addToQueue, settings,
-    downloads, downloadBytes, removeDownload,
+    downloads, downloadBytes, removeDownload, history,
   } = usePlayback();
 
   const [query, setQuery] = React.useState("");
@@ -251,6 +251,25 @@ export function MusicPlayer() {
           <Text style={{ color: colors["color-text-secondary"], textAlign: "center" }}>Millions of songs, no ads. Sign in to play.</Text>
         </Material>
       )}
+
+      {!current && history.length > 0 ? (
+        <Material tier="thin" style={{ borderRadius: 20, padding: 18, gap: 6 }}>
+          <Text style={{ color: colors["color-text-primary"], fontWeight: "800", fontSize: TYPOGRAPHY.title.fontSize }}>Recently played</Text>
+          {history.slice(0, 8).map((track) => (
+            <Pressable
+              key={track.id}
+              testID={`music-history-${track.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Play ${track.title} by ${track.artist}`}
+              onPress={() => void play(track, history)}
+              style={{ minHeight: 52, justifyContent: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}
+            >
+              <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontWeight: "700" }}>{track.title}</Text>
+              <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{track.artist}</Text>
+            </Pressable>
+          ))}
+        </Material>
+      ) : null}
     </ScrollView>
   );
 }

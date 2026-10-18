@@ -5,7 +5,9 @@ import { getBaseUrl } from "../api/config";
 import { loadSessionCookie } from "../api/session";
 import {
   appendHistory,
+  DOWNLOAD_CAP_BYTES,
   loadDownloads,
+  loadHistory,
   loadMusicSettings,
   removeDownloadEntry,
   saveDownloads,
@@ -40,6 +42,7 @@ export interface PlaybackValue {
   error: string | null;
   downloads: DownloadEntry[];
   downloadBytes: number;
+  history: MediaTrack[];
   settings: MusicSettings;
   play: (track: MediaTrack, queue?: MediaTrack[]) => Promise<void>;
   playQueueAt: (tracks: MediaTrack[], index: number) => Promise<void>;
@@ -71,6 +74,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = React.useState<QueueState>(() => createQueue([], -1));
   const [error, setError] = React.useState<string | null>(null);
   const [downloads, setDownloads] = React.useState<DownloadEntry[]>([]);
+  const [history, setHistory] = React.useState<MediaTrack[]>([]);
   const [settings, setSettings] = React.useState<MusicSettings>({
     repeat: "off",
     shuffle: false,
@@ -90,9 +94,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       interruptionMode: "doNotMix",
       playsInSilentMode: true,
     }).catch(() => {});
-    void Promise.all([loadDownloads(), loadMusicSettings()]).then(([list, saved]) => {
+    void Promise.all([loadDownloads(), loadMusicSettings(), loadHistory()]).then(([list, saved, recent]) => {
       setDownloads(list);
       setSettings(saved);
+      setHistory(recent);
       setQueue((q) => ({ ...q, repeat: saved.repeat, shuffle: saved.shuffle }));
     });
   }, []);
@@ -125,7 +130,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
           albumTitle: track.album,
           artworkUrl: track.artworkUrl ?? undefined,
         });
-        void appendHistory(track);
+        void appendHistory(track).then(setHistory).catch(() => {});
       } catch (e) {
         setError(e instanceof Error ? e.message : "play_failed");
       } finally {
@@ -251,6 +256,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       if (!directory.exists) directory.create({ intermediates: true, idempotent: true });
       const cookie = await loadSessionCookie();
       if (!dest.exists) {
+        if (totalDownloadBytes(downloads) >= DOWNLOAD_CAP_BYTES) {
+          setError("Download limit reached (2 GB). Delete a track first.");
+          return;
+        }
         await File.downloadFileAsync(
           `${getBaseUrl()}/api/media/stream?id=${encodeURIComponent(current.id)}`,
           dest,
@@ -310,6 +319,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       error,
       downloads,
       downloadBytes: totalDownloadBytes(downloads),
+      history,
       settings,
       play,
       playQueueAt,
@@ -328,7 +338,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setExplicitFilter,
     }),
     [
-      addToQueue, current, cycleRepeatMode, downloadCurrent, downloads, duration, error,
+      addToQueue, current, cycleRepeatMode, downloadCurrent, downloads, duration, error, history,
       moveQueueItem, next, play, playQueueAt, playing, position, previous, queue.index,
       queue.repeat, queue.shuffle, queue.tracks, removeDownload, removeFromQueue, seek,
       setRepeat, settings, status?.isBuffering, toggle, toggleShuffleMode,
