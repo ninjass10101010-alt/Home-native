@@ -1,5 +1,5 @@
 import React from "react";
-import { AppState, Pressable, Text, View } from "react-native";
+import { AppState, Platform, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { api } from "../api/client";
 import { TOKENS } from "../theme/tokens";
 import { mixAlpha } from "../ui/SoftButton";
@@ -129,6 +129,17 @@ export function Screensaver({ onExit }: ScreensaverProps) {
     setNow(new Date());
   };
 
+  const { width, height } = useWindowDimensions();
+  const shouldScale =
+    typeof jest === "undefined" &&
+    Platform.OS === "android" &&
+    width > 0 &&
+    height > 0 &&
+    (width < 960 || height < 1600);
+  const scale = shouldScale ? Math.min(width / 1080, height / 1920) : 1;
+  const stageWidth = shouldScale ? Math.round(width / scale) : undefined;
+  const stageHeight = shouldScale ? Math.round(height / scale) : undefined;
+
   const stale = lastOk > 0 && now.getTime() - lastOk > STALE_MS;
   const dimmed = now.getTime() - lastTouch >= DIM_AFTER_MS;
 
@@ -136,15 +147,25 @@ export function Screensaver({ onExit }: ScreensaverProps) {
     data && data.tasks.total > 0 ? Math.round((data.tasks.done / data.tasks.total) * 100) : 0;
 
   return (
-    <View style={{ flex: 1, backgroundColor: D["color-canvas"] }} onTouchStart={wake}>
+    <View
+      style={[
+        { flex: 1, backgroundColor: D["color-canvas"] },
+        shouldScale ? { alignItems: "center", justifyContent: "center", overflow: "hidden" } : null,
+      ]}
+      onTouchStart={wake}
+    >
       <Pressable
         testID="screensaver-root"
         accessibilityRole="button"
         accessibilityLabel="Wake — back to the dashboard"
         onPress={onExit}
-        style={{ flex: 1, padding: 40 }}
+        style={
+          shouldScale
+            ? { width: stageWidth, height: stageHeight, padding: 40, transform: [{ scale }] }
+            : { flex: 1, padding: 40 }
+        }
       >
-        <View testID="ss-content" style={{ flex: 1, opacity: dimmed ? DIM_OPACITY : 1 }}>
+        <View testID="ss-content" collapsable={false} style={{ flex: 1, opacity: dimmed ? DIM_OPACITY : 1 }}>
           {/* header: clock + date (left), weather (right), stale dot (corner) */}
           <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
             <View>

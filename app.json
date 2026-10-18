@@ -6,13 +6,20 @@
     "scheme": "consuela",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "backgroundColor": "#0f1117",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f1117"
+    },
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.garciafam.consuela",
+      "backgroundColor": "#0f1117",
       "softwareKeyboardLayoutMode": "pan",
       "blockedPermissions": ["android.permission.RECORD_AUDIO"],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0f1117",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

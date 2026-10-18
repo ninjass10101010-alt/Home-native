@@ -14,7 +14,7 @@ import {
   mergeMemberFallbacks,
   FALLBACK_MEMBERS,
 } from "../src/api/members";
-import { _resetBaseUrlCache } from "../src/api/config";
+import { _resetBaseUrlCache, getBaseUrl, setBaseUrl, onBaseUrlChange, LAN_BASE_URLS } from "../src/api/config";
 import { ServerMember } from "../src/api/types";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
@@ -115,6 +115,16 @@ describe("api client", () => {
     expect(calls[0].init.headers["Content-Type"]).toBeUndefined();
     await api("/api/db/events", { method: "POST", body: { a: 1 } });
     expect(calls[1].init.headers["Content-Type"]).toBe("application/json");
+  });
+
+  it("LAN_BASE_URLS includes the NAS LAN IP and setBaseUrl notifies listeners", async () => {
+    expect(LAN_BASE_URLS).toContain("http://192.168.0.28:3000");
+    const seen: string[] = [];
+    const unsub = onBaseUrlChange((u) => seen.push(u));
+    await setBaseUrl("http://192.168.0.28:3000/");
+    unsub();
+    expect(getBaseUrl()).toBe("http://192.168.0.28:3000");
+    expect(seen).toEqual(["http://192.168.0.28:3000"]);
   });
 });
 

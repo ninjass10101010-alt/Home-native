@@ -281,4 +281,16 @@ describe("MemberRail", () => {
     );
     expect(getByLabelText("Signed in as Rebecca (Mom)")).toBeTruthy();
   });
+
+  it("photo-URI members on MemberRail render an Image and never dump raw data: URI into Text", () => {
+    const photoMembers = [{ name: "Aurora", emoji: "data:image/jpeg;base64,AAAA", color: "purple" }];
+    const { UNSAFE_root, queryByText } = render(
+      <MemberRail members={photoMembers} currentName="Aurora" onSelect={() => {}} />,
+      { wrapper: wrap }
+    );
+    const images = UNSAFE_root.findAll((n: any) => n.type === "Image");
+    expect(images).toHaveLength(1);
+    expect(images[0].props.source).toEqual({ uri: "data:image/jpeg;base64,AAAA" });
+    expect(queryByText("data:image/jpeg;base64,AAAA")).toBeNull();
+  });
 });

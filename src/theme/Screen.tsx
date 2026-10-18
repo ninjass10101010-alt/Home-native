@@ -1,8 +1,11 @@
 import React from "react";
-import { View, ViewStyle } from "react-native";
+import { Platform, useWindowDimensions, View, ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "./ThemeProvider";
 import { Atmosphere } from "./Atmosphere";
+
+const DESIGN_WIDTH = 1080;
+const DESIGN_HEIGHT = 1920;
 
 export interface ScreenProps {
   children: React.ReactNode;
@@ -23,15 +26,62 @@ export interface ScreenProps {
  * Every route wraps Screen: canvas background (token), the atmosphere
  * gradient, safe-area padding. CapsuleDock floats above (rendered by the
  * layout or route, per its own contract).
+ *
+ * On physical Android hardware (where OS density may be 160/213/240/320/480 dpi
+ * so useWindowDimensions() is not 1080×1920 dp), the 1080×1920 wall stage is
+ * proportionally scaled to fit the exact device viewport without clipping.
  */
 export function Screen({ children, style, testID, atmosphere = true }: ScreenProps) {
   const { colors } = useTheme();
+  const { width, height } = useWindowDimensions();
+  const shouldScale =
+    typeof jest === "undefined" &&
+    Platform.OS === "android" &&
+    width > 0 &&
+    height > 0 &&
+    (width < 960 || height < 1600);
+
+  if (!shouldScale) {
+    return (
+      <View testID={testID} style={[{ flex: 1, backgroundColor: colors["color-canvas"] }, style]}>
+        {atmosphere ? <Atmosphere /> : null}
+        <SafeAreaView style={{ flex: 1 }} edges={["top", "left", "right"]}>
+          {children}
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  const scale = Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT);
+  const stageWidth = Math.round(width / scale);
+  const stageHeight = Math.round(height / scale);
+
   return (
-    <View testID={testID} style={[{ flex: 1, backgroundColor: colors["color-canvas"] }, style]}>
+    <View
+      testID={testID}
+      style={[
+        {
+          flex: 1,
+          backgroundColor: colors["color-canvas"],
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+        },
+        style,
+      ]}
+    >
       {atmosphere ? <Atmosphere /> : null}
-      <SafeAreaView style={{ flex: 1 }} edges={["top", "left", "right"]}>
-        {children}
-      </SafeAreaView>
+      <View
+        style={{
+          width: stageWidth,
+          height: stageHeight,
+          transform: [{ scale }],
+        }}
+      >
+        <SafeAreaView style={{ flex: 1 }} edges={["left", "right"]}>
+          {children}
+        </SafeAreaView>
+      </View>
     </View>
   );
 }

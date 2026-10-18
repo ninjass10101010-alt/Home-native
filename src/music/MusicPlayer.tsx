@@ -2,12 +2,18 @@ import React from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import * as FileSystem from "expo-file-system";
-let CastButton: any = null;
-try { CastButton = require("react-native-google-cast").CastButton; } catch { CastButton = null; }
 import { getBaseUrl } from "../api/config";
 import { loadSessionCookie } from "../api/session";
 import { useTheme } from "../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../theme/tokens";
+
+let CastButton: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- optional native cast module
+  CastButton = require("react-native-google-cast").CastButton;
+} catch {
+  CastButton = null;
+}
 
 type Track = { id: string; title: string; artist: string; artworkUrl?: string | null };
 

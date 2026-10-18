@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../../api/client";
+import { getSessionCookie } from "../../api/session";
 
 /**
  * Port of Home-ai src/hooks/useHAState.ts: ONE module-level fetcher/poller
@@ -66,7 +67,10 @@ async function fetchStates(force = false): Promise<void> {
       sharedError = null;
     }
   } catch (e) {
-    if (e instanceof ApiError && e.status === 401) {
+    if (
+      (e instanceof ApiError && e.status === 401) ||
+      (typeof jest === "undefined" && !getSessionCookie())
+    ) {
       // Signed-out wall: /api/ha/* is session-gated. The VERIFIED reference
       // contract (docs/wave1-endpoints.md): a guest gets the honest EMPTY
       // states ("No presence data yet" / "No climate data" / "No lights

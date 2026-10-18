@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ScrollView } from "react-native";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
@@ -11,6 +10,7 @@ import { MOTION, TYPOGRAPHY } from "../theme/tokens";
 import { accentInk, mix } from "../theme/mix";
 import { IconButton } from "../ui/IconButton";
 import { ListRow } from "../ui/ListRow";
+import { isPhotoUri } from "../ui/MemberRail";
 import { Modal } from "../ui/Modal";
 import { PinPad } from "../ui/PinPad";
 import { SoftButton } from "../ui/SoftButton";
@@ -498,7 +498,15 @@ export function EmergencyFlow() {
                 {contacts.map((c) => (
                   <Material key={String(c.id)} tier="thin" style={{ borderRadius: 999, paddingHorizontal: 20, paddingVertical: 14 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text style={{ fontSize: 28 }}>{c.emoji || "👤"}</Text>
+                      {c.emoji && isPhotoUri(c.emoji) ? (
+                        <Image
+                          source={{ uri: c.emoji }}
+                          style={{ width: 32, height: 32, borderRadius: 16 }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Text style={{ fontSize: 28 }}>{c.emoji || "👤"}</Text>
+                      )}
                       <View>
                         <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
                           {c.name}

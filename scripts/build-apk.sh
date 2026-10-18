@@ -10,12 +10,19 @@ export ANDROID_HOME="${ANDROID_HOME:-/usr/local/share/android-commandlinetools}"
 export JAVA_HOME="${JAVA_HOME:-$HOME/Library/Java/JavaVirtualMachines/jdk-21.0.12.1+1/Contents/Home}"
 export PATH="$ANDROID_HOME/platform-tools:$PATH"
 
+npx expo prebuild --platform android
+
 if [ ! -f android/local.properties ]; then
   printf "sdk.dir=%s\n" "$ANDROID_HOME" > android/local.properties
 fi
 
-npx expo prebuild --platform android
-cd android && ./gradlew :app:assembleDebug
-APK="$(pwd)/app/build/outputs/apk/debug/app-debug.apk"
+# Ensure LAN HTTP cleartext traffic is permitted in standalone release APKs on Android 9+
+MANIFEST="android/app/src/main/AndroidManifest.xml"
+if [ -f "$MANIFEST" ] && ! grep -q 'android:usesCleartextTraffic="true"' "$MANIFEST"; then
+  sed -i '' 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
+fi
+
+cd android && ./gradlew :app:assembleRelease
+APK="$(pwd)/app/build/outputs/apk/release/app-release.apk"
 echo "built: $APK"
 adb install -r "$APK" && echo "installed OK" || echo "install skipped (no device attached)"

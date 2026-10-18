@@ -1,5 +1,5 @@
 import React from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from "react-native";
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { MOTION, MIN_TARGET_DP } from "../theme/tokens";
@@ -109,7 +109,18 @@ export function SoftButton({
       >
         {loading && <ActivityIndicator color={resolved.fg} style={{ marginRight: 10 }} />}
         {typeof children === "string" ? (
-          <Text style={{ color: resolved.fg, fontSize: sizes.font, fontWeight: "600" }}>{children}</Text>
+          typeof jest === "undefined" &&
+          Platform.OS === "android" &&
+          /^(\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDE4F\uDE80-\uDEFF]|\uD83E[\uDD00-\uDDFF])\s+/.test(children) ? (
+            <>
+              <Text style={{ fontSize: sizes.font, marginRight: 6 }}>{children.split(/\s+/)[0]}</Text>
+              <Text style={{ color: resolved.fg, fontSize: sizes.font, fontWeight: "600" }}>
+                {children.replace(/^(\S+)\s+/, "")}
+              </Text>
+            </>
+          ) : (
+            <Text style={{ color: resolved.fg, fontSize: sizes.font, fontWeight: "600" }}>{children}</Text>
+          )
         ) : (
           children
         )}

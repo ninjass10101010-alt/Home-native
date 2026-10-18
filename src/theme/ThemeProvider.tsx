@@ -1,5 +1,6 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -82,18 +83,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const setTheme = (t: ThemeName) => {
+  const setTheme = useCallback((t: ThemeName) => {
     setThemeState(t);
     AsyncStorage.setItem(K_THEME, t).catch(() => {});
-  };
-  const setBoost = (b: boolean) => {
+  }, []);
+  const setBoost = useCallback((b: boolean) => {
     setBoostState(b);
     AsyncStorage.setItem(K_BOOST, b ? "1" : "0").catch(() => {});
-  };
-  const setAccent = (a: AccentName) => {
+  }, []);
+  const setAccent = useCallback((a: AccentName) => {
     setAccentState(a);
     AsyncStorage.setItem(K_ACCENT, a).catch(() => {});
-  };
+  }, []);
 
   const value = useMemo<ThemeValue>(() => {
     const base = TOKENS[theme];

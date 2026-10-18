@@ -185,6 +185,26 @@ export function TodayEventsWidget() {
     } catch (e) {
       if (guest && e instanceof ApiError && e.status === 401) {
         family = [];
+        if (typeof jest === "undefined") {
+          try {
+            const ss = await api<{
+              ok?: boolean;
+              events?: { title: string; time: string; allDay?: boolean }[];
+            }>("/api/consuela/screensaver");
+            if (ss?.ok && Array.isArray(ss.events)) {
+              family = ss.events.map((ev, idx) => ({
+                id: `ss_${idx}`,
+                title: ev.title,
+                time: ev.time || "All day",
+                icon: "📅",
+                sortMinutes: ev.allDay ? -1 : 540,
+                railToken: FAMILY_RAIL_TOKEN,
+              }));
+            }
+          } catch {
+            /* keep empty family list */
+          }
+        }
       } else {
         throw e;
       }

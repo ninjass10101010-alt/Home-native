@@ -1,10 +1,8 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Platform, Text, useWindowDimensions, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { ACCENTS, FONTS, TYPOGRAPHY } from "../theme/tokens";
-import { mixAlpha } from "../ui/SoftButton";
 import { Material } from "../theme/Material";
-import { MoreButton } from "../nav/CapsuleDock";
 import { MemberRail, type RailMember } from "../ui/MemberRail";
 import { useAuth } from "../state/AuthProvider";
 import { EmergencyShield } from "./EmergencyShield";
@@ -99,38 +97,61 @@ export function HomeWall({ members, onSelectMember, onSignOut, widgets = {}, gre
 
   const defs = visibleOnWall();
   const columns = wallColumns(defs);
+  const { width: winW, height: winH } = useWindowDimensions();
+  const effectiveWallH =
+    typeof jest === "undefined" && Platform.OS === "android" && winW >= 960 && winH > WALL_HEIGHT
+      ? winH
+      : WALL_HEIGHT;
+  const cellH =
+    effectiveWallH === WALL_HEIGHT
+      ? GRID_CELL_H
+      : Math.floor(
+          (effectiveWallH - HEADER_H - DOCK_CLEAR - GRID_TOP - TAIL_GAP - TAIL_H - GRID_GAP * (4 - 1)) / 4
+        );
 
   return (
-    <View style={{ flex: 1, paddingHorizontal: GRID_H_PAD, paddingTop: 24 }}>
+    <View style={{ flex: 1, paddingHorizontal: GRID_H_PAD, paddingTop: 20 }}>
       {/* Emergency shield: 64dp, top-right of the header area, never over the rail */}
-      <EmergencyShield style={{ zIndex: 0 }} />
-      {/* Wall header (web page.tsx:615-632 parity): ROW 1 = date kicker + the
-          identity rail sharing the band; ROW 2 = greeting with the clock
-          inline beside the name (the web explicitly deleted the stranded
-          far-right clock) — clearing the floating shield's column. */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingRight: 88, gap: 16 }}>
-        <Text
-          numberOfLines={1}
-          style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", letterSpacing: 2, flexShrink: 0 }}
-        >
-          {day} · {date}
-        </Text>
-        <View style={{ flex: 1, minWidth: 0, flexDirection: "row", justifyContent: "flex-end" }}>
-          <MemberRail members={members} currentName={member?.name ?? null} onSelect={onSelectMember} onSignOut={onSignOut} />
+      <EmergencyShield style={{ zIndex: 10 }} />
+      {/* Row 1: Date/time eyebrow + single-line Greeting on the left, clearing the top-right
+          EmergencyShield & status pill. */}
+      <View style={{ paddingRight: 88 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 28 }}>
+          <Text
+            numberOfLines={1}
+            style={{
+              color: colors["color-text-secondary"],
+              fontSize: TYPOGRAPHY.label.fontSize,
+              fontWeight: "700",
+              letterSpacing: 2,
+              flexShrink: 0,
+            }}
+          >
+            {day} · {date}
+          </Text>
+          <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
+            {seasonGlyph(now.getMonth())} {time}
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 12, marginTop: 2, flexWrap: "wrap" }}>
+          <Text
+            numberOfLines={1}
+            style={{ color: colors["color-text-primary"], fontSize: 46, fontWeight: "700", lineHeight: 58, fontFamily: FONTS.display }}
+          >
+            {greeting},{" "}
+            {/* lineHeight is explicit on the nested span too: the outer
+                lineHeight caps inherited children at the platform default
+                (~65 at 54sp), and the card height budget depends on this line
+                measuring 58. */}
+            <Text style={{ color: accentColor, lineHeight: 58 }}>{familyName}</Text>
+          </Text>
         </View>
       </View>
-      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
-        <Text style={{ color: colors["color-text-primary"], fontSize: 54, fontWeight: "700", lineHeight: 58, fontFamily: FONTS.display }}>
-          {greeting},{"\n"}
-          {/* lineHeight is explicit on the nested span too: the outer
-              lineHeight caps inherited children at the platform default
-              (~65 at 54sp), and the card height budget depends on this line
-              measuring exactly 2×58. */}
-          <Text style={{ color: accentColor, lineHeight: 58 }}>{familyName}</Text>
-        </Text>
-        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.title.fontSize, marginBottom: 6 }}>
-          {seasonGlyph(now.getMonth())} {time}
-        </Text>
+
+      {/* Row 2: Dedicated full-width MemberRail — spans edge-to-edge so all 9
+          family member pill tiles have generous breathing room with zero clipping. */}
+      <View style={{ marginTop: 14, marginBottom: 4 }}>
+        <MemberRail members={members} currentName={member?.name ?? null} onSelect={onSelectMember} onSignOut={onSignOut} />
       </View>
 
       {/* KPI band — the web's three StatTiles (Events/Tasks/Week), fed by the
@@ -154,7 +175,7 @@ export function HomeWall({ members, onSelectMember, onSignOut, widgets = {}, gre
                 <View
                   key={def.id}
                   testID={`widget-${def.id}`}
-                  style={{ height: span === 2 ? GRID_CELL_H * 2 + GRID_GAP : GRID_CELL_H }}
+                  style={{ height: span === 2 ? cellH * 2 + GRID_GAP : cellH }}
                 >
                   <Material
                     tier="regular"

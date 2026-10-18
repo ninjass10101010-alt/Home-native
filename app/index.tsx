@@ -14,7 +14,8 @@ import { type RailMember } from "../src/ui/MemberRail";
 import { PinPad } from "../src/ui/PinPad";
 import { Modal } from "../src/ui/Modal";
 import { useAuth, pinRequiredFor } from "../src/state/AuthProvider";
-import { listMembersSmart, type MembersResult } from "../src/api/members";
+import { getCachedMembersSync, listMembersSmart, type MembersResult } from "../src/api/members";
+import { onBaseUrlChange } from "../src/api/config";
 import { ApiError } from "../src/api/client";
 import { PinRequired } from "../src/api/auth";
 import { idleBoardDue, IDLE_CHECK_MS } from "../src/home/idle";
@@ -60,10 +61,17 @@ export default function HomePlaceholder() {
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = React.useState(false);
-  const [roster, setRoster] = React.useState<MembersResult>({ members: [], source: "fallback" });
+  const [roster, setRoster] = React.useState<MembersResult>(() => {
+    const syncCached = typeof getCachedMembersSync === "function" ? getCachedMembersSync() : [];
+    return syncCached.length > 0
+      ? { members: syncCached, source: "cache", reason: "signed-out" }
+      : { members: [], source: "fallback" };
+  });
   /** True while the mount roster read is in flight — the badge must not claim
    *  a cause (signed-out / offline) before the read has actually answered. */
-  const [rosterLoading, setRosterLoading] = React.useState(true);
+  const [rosterLoading, setRosterLoading] = React.useState(
+    () => (typeof getCachedMembersSync === "function" ? getCachedMembersSync().length === 0 : true)
+  );
   // The wall registry, with the leaderboard bound to the live roster so its
   // top-3 rows can show member avatars (web HomeLeaderboardWidget parity).
   const wallWidgets = React.useMemo<Partial<Record<WidgetId, React.ComponentType>>>(
@@ -132,14 +140,20 @@ export default function HomePlaceholder() {
   React.useEffect(() => {
     if (!hydrated) return;
     let alive = true;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- starting the in-flight marker before the read, so the badge can't claim a cause it doesn't know yet
-    setRosterLoading(true);
-    listMembersSmart()
-      .then((r) => alive && setRoster(r))
-      .catch(() => {})
-      .finally(() => alive && setRosterLoading(false));
+    const loadRoster = () => {
+      setRosterLoading(true);
+      listMembersSmart()
+        .then((r) => alive && setRoster(r))
+        .catch(() => {})
+        .finally(() => alive && setRosterLoading(false));
+    };
+    loadRoster();
+    const unsub = onBaseUrlChange(() => {
+      if (alive) loadRoster();
+    });
     return () => {
       alive = false;
+      unsub();
     };
   }, [member, hydrated]);
 
@@ -216,17 +230,17 @@ export default function HomePlaceholder() {
           A genuinely unreachable NAS is the only offline claim the wall makes. */}
       {rosterLoading ? null : roster.source !== "live" || railError ? (
         <View
+          pointerEvents="none"
           style={{
             position: "absolute",
-            top: 4,
-            left: 24,
-            right: 100,
-            borderRadius: 14,
+            top: 24,
+            right: 104,
+            borderRadius: 999,
             borderWidth: 1,
             borderColor: mix(colors["color-accent-amber"], "transparent", 40),
             backgroundColor: mix(colors["color-accent-amber"], "transparent", 15),
-            paddingHorizontal: 12,
-            paddingVertical: 6,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
             alignItems: "center",
             justifyContent: "center",
           }}

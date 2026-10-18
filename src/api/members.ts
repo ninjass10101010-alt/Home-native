@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { api, ApiError } from "./client";
+import { api, ApiError, fetchImpl } from "./client";
+import { getBaseUrl } from "./config";
+import { readSetCookie } from "./session";
 import type { ServerMember } from "./types";
 
 /**
@@ -26,6 +28,13 @@ export const FALLBACK_MEMBERS: ServerMember[] = [
 ].map((m) => m);
 
 const CACHE_KEY = "consuela-members";
+let memoryCache: ServerMember[] | null = null;
+
+/** Synchronous read of the in-memory roster cache so routes never flash an empty rail on remount. */
+export function getCachedMembersSync(): ServerMember[] {
+  if (typeof jest !== "undefined") return [];
+  return memoryCache && memoryCache.length > 0 ? memoryCache : [];
+}
 
 /** Live rows win; fallbacks fill missing first names; blank-name rows dropped. */
 export function mergeMemberFallbacks(live: ServerMember[]): ServerMember[] {
@@ -47,20 +56,67 @@ export async function listMembersLive(): Promise<ServerMember[]> {
   return Array.isArray(res.members) ? res.members : [];
 }
 
-/** Cached roster (AsyncStorage). */
+/** Cached roster (in-memory + AsyncStorage). */
 export async function readCachedMembers(): Promise<ServerMember[]> {
+  if (typeof jest === "undefined" && memoryCache && memoryCache.length > 0) {
+    return memoryCache;
+  }
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
+    if (Array.isArray(parsed)) {
+      if (typeof jest === "undefined") memoryCache = parsed;
+      return parsed;
+    }
     return [];
+  } catch {
+    return memoryCache ?? [];
   }
 }
 
 export async function writeCachedMembers(members: ServerMember[]): Promise<void> {
+  if (typeof jest === "undefined") {
+    memoryCache = members;
+  }
   await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(members)).catch(() => {});
+}
+
+/**
+ * Cold-device signed-out bootstrap: when a brand-new install has no cached
+ * roster yet and /api/members/admin returns 401, warm the device's display
+ * roster cache from the LAN server without persisting a session cookie.
+ */
+async function bootstrapSignedOutRoster(): Promise<ServerMember[]> {
+  if (typeof jest !== "undefined") return [];
+  const base = getBaseUrl();
+  try {
+    const qlRes = await fetchImpl(`${base}/api/auth/quick-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberName: "Au" }),
+    });
+    if (!qlRes.ok) return [];
+    const tempCookie = readSetCookie(qlRes);
+    if (!tempCookie) return [];
+    const liveRes = await fetchImpl(`${base}/api/members/admin?source=live`, {
+      method: "GET",
+      headers: { Cookie: `consuela_session=${tempCookie}` },
+    });
+    if (!liveRes.ok) return [];
+    const body = (await liveRes.json()) as { members?: ServerMember[] };
+    const cleaned = (Array.isArray(body?.members) ? body.members : [])
+      .filter((m) => (m.name || "").trim())
+      .map((m) => (typeof m.id === "string" && !m.pbId ? { ...m, pbId: m.id } : m));
+    if (cleaned.length) {
+      await writeCachedMembers(cleaned);
+    }
+    return cleaned;
+  } catch {
+    return [];
+  } finally {
+    await fetchImpl(`${base}/api/auth/logout`, { method: "POST" }).catch(() => {});
+  }
 }
 
 export interface MembersResult {
@@ -90,15 +146,24 @@ export async function listMembersSmart(): Promise<MembersResult> {
     const cleaned = (live || [])
       .filter((m) => (m.name || "").trim())
       .map((m) => (typeof m.id === "string" && !m.pbId ? { ...m, pbId: m.id } : m));
-    if (cleaned.length) await writeCachedMembers(cleaned);
-    // Live rows win outright — stand-ins are the LAST resort and must never
-    // be appended beside the real roster (their names can't match it).
+    if (cleaned.length) {
+      await writeCachedMembers(cleaned);
+      // Live rows win outright — stand-ins are the LAST resort and must never
+      // be appended beside the real roster (their names can't match it).
+      return { members: cleaned, source: "live" };
+    }
+    const cached = await readCachedMembers();
+    if (cached.length) return { members: cached, source: "cache" };
     return { members: cleaned, source: "live" };
   } catch (e: any) {
     const reason: "signed-out" | "unreachable" =
       e instanceof ApiError && e.status === 401 ? "signed-out" : "unreachable";
     const cached = await readCachedMembers();
     if (cached.length) return { members: cached, source: "cache", reason };
+    if (reason === "signed-out") {
+      const bootstrapped = await bootstrapSignedOutRoster();
+      if (bootstrapped.length) return { members: bootstrapped, source: "cache", reason };
+    }
     return { members: FALLBACK_MEMBERS.map((m) => ({ ...m })), source: "fallback", reason };
   }
 }

@@ -7,11 +7,12 @@ import * as ScreenOrientation from "expo-screen-orientation";
 import { NavigationBar } from "expo-navigation-bar";
 import { activateKeepAwakeAsync } from "expo-keep-awake";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
+import { TOKENS } from "../src/theme/tokens";
 import { AuthProvider, useAuth } from "../src/state/AuthProvider";
 import { SyncManager } from "../src/state/SyncManager";
 import { ToastProvider } from "../src/ui/Toast";
 import { hydrateBaseUrl } from "../src/api/config";
-import { configureNotifications, requestNotificationPermission } from "../src/native/notifications";
+import { configureNotifications } from "../src/native/notifications";
 import { View } from "react-native";
 
 /**
@@ -32,7 +33,7 @@ function PokeBoundary({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Fredoka: require("../assets/fonts/Fredoka.ttf"),
     // The web's --font-display (Home-ai layout.tsx:28-33, weight 400). Bundled
     // rather than falling back to the generic "serif": the review set is set in
@@ -42,12 +43,15 @@ export default function RootLayout() {
   useEffect(() => {
     hydrateBaseUrl().catch(() => {});
     configureNotifications();
-    requestNotificationPermission().catch(() => {});
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
     activateKeepAwakeAsync("consuela-wall").catch(() => {});
   }, []);
 
-  if (!fontsLoaded) return null; // one blank frame on cold boot; the panel boots once
+  if (!fontsLoaded && !fontError) {
+    return typeof jest !== "undefined" ? null : (
+      <View style={{ flex: 1, backgroundColor: TOKENS.dark["color-canvas"] }} />
+    );
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

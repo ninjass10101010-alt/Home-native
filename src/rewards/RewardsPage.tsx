@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
 import { FONTS, MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
@@ -11,6 +11,7 @@ import { Modal } from "../ui/Modal";
 import { PinPad } from "../ui/PinPad";
 import { SoftButton } from "../ui/SoftButton";
 import { EmptyState } from "../ui/EmptyState";
+import { isPhotoUri } from "../ui/MemberRail";
 import { readCachedMembers } from "../api/members";
 import {
   celebrateHallOfFame,
@@ -658,7 +659,11 @@ export function RewardsPage() {
                         borderColor: isSelected ? accentColor : colors["color-surface-3"],
                       }}
                     >
-                      <Text style={{ fontSize: 16 }}>{p.emoji || "👤"}</Text>
+                      {p.emoji && isPhotoUri(p.emoji) ? (
+                        <Image source={{ uri: p.emoji }} style={{ width: 20, height: 20, borderRadius: 10 }} resizeMode="cover" />
+                      ) : (
+                        <Text style={{ fontSize: 16 }}>{p.emoji || "👤"}</Text>
+                      )}
                       <Text
                         style={{
                           color: isSelected ? colors["color-text-primary"] : colors["color-text-secondary"],

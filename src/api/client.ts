@@ -1,4 +1,4 @@
-import { getBaseUrl } from "./config";
+import { DEFAULT_BASE_URL, getBaseUrl, LAN_BASE_URLS, setBaseUrl } from "./config";
 import { getSessionCookie } from "./session";
 
 /**
@@ -41,8 +41,9 @@ export interface ApiInit {
   onResponse?: (res: Response) => void;
 }
 
+const defaultFetchImpl: typeof fetch = (...args) => fetch(...args);
 /** Injectable for tests. */
-export let fetchImpl: typeof fetch = (...args) => fetch(...args);
+export let fetchImpl: typeof fetch = defaultFetchImpl;
 export function _setFetchImpl(f: typeof fetch) {
   fetchImpl = f;
 }
@@ -66,24 +67,56 @@ export async function api<T = unknown>(path: string, init: ApiInit = {}): Promis
   if (cookie) headers["Cookie"] = `consuela_session=${cookie}`;
   if (init.body !== undefined) headers["Content-Type"] = "application/json";
 
+  const serializedBody = init.body !== undefined ? JSON.stringify(init.body) : undefined;
+  const primaryBase = getBaseUrl();
+
   const ctrl = new AbortController();
   const timeout = setTimeout(() => ctrl.abort(), init.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
-    let res: Response;
+    let res: Response | null = null;
     try {
-      res = await fetchImpl(`${getBaseUrl()}${path}`, {
+      res = await fetchImpl(`${primaryBase}${path}`, {
         method: init.method ?? "GET",
         headers,
-        body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+        body: serializedBody,
         signal: ctrl.signal,
       });
     } catch {
-      throw new ApiError({
-        message: "Couldn't reach Consuela — check the connection",
-        status: 0,
-        code: "unreachable",
-        retryable: true,
-      });
+      if (
+        typeof jest === "undefined" &&
+        fetchImpl === defaultFetchImpl &&
+        !ctrl.signal.aborted &&
+        primaryBase === DEFAULT_BASE_URL
+      ) {
+        for (const candidate of LAN_BASE_URLS) {
+          if (candidate === primaryBase) continue;
+          const fbCtrl = new AbortController();
+          const fbTimer = setTimeout(() => fbCtrl.abort(), 3_000);
+          try {
+            const fbRes = await fetchImpl(`${candidate}${path}`, {
+              method: init.method ?? "GET",
+              headers,
+              body: serializedBody,
+              signal: fbCtrl.signal,
+            });
+            res = fbRes;
+            void setBaseUrl(candidate);
+            break;
+          } catch {
+            /* try next LAN candidate */
+          } finally {
+            clearTimeout(fbTimer);
+          }
+        }
+      }
+      if (!res) {
+        throw new ApiError({
+          message: "Couldn't reach Consuela — check the connection",
+          status: 0,
+          code: "unreachable",
+          retryable: true,
+        });
+      }
     }
 
     init.onResponse?.(res);

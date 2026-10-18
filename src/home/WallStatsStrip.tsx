@@ -1,6 +1,6 @@
 import React from "react";
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
-import { Pressable, Text, View } from "react-native";
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
+import { Platform, Pressable, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../theme/tokens";
 import { accentDeepened, accentInk, mix } from "../theme/mix";
@@ -70,16 +70,18 @@ function StatTile({ label, detail, value, pending, icon, widgetId, tone, testID 
   const toneColor = colors[toneToken(tone)] ?? accentColor;
   const ink = colors[toneInkToken(tone)] ?? mix(toneColor, colors["color-text-primary"], 45);
 
-  const pulse = useSharedValue(reduceMotion ? 1 : 0.55);
+  const skipLoop = reduceMotion || !pending || (typeof jest === "undefined" && Platform.OS === "android");
+  const pulse = useSharedValue(skipLoop ? 1 : 0.55);
   const animatedStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
   React.useEffect(() => {
-    if (reduceMotion) {
+    if (skipLoop) {
       pulse.value = 1; // eslint-disable-line react-hooks/immutability
-      return;
+      return () => cancelAnimation(pulse);
     }
     pulse.value = withRepeat(withSequence(withTiming(1, { duration: 900 }), withTiming(0.55, { duration: 900 })), -1, false);
+    return () => cancelAnimation(pulse);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- shared value write is idiom
-  }, [reduceMotion]);
+  }, [skipLoop]);
 
   return (
     <Material
@@ -240,8 +242,13 @@ export function ThisWeekCard({ onSelectDay, onOpenMore }: ThisWeekCardProps) {
   const sage = accentInk(colors["color-accent-sage"] ?? tone, colors["color-text-primary"]);
 
   return (
-    <Material tier="regular" tone={tone} style={{ borderRadius: 20, padding: 12, gap: 10, height: THIS_WEEK_H }} testID="wall-this-week">
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors["color-border"], paddingBottom: 8 }}>
+    <Material
+      tier="regular"
+      tone={tone}
+      style={{ borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, gap: 6, height: THIS_WEEK_H }}
+      testID="wall-this-week"
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: colors["color-border"], paddingBottom: 6 }}>
         <View
           style={{
             width: 34,
@@ -285,8 +292,8 @@ export function ThisWeekCard({ onSelectDay, onOpenMore }: ThisWeekCardProps) {
             style={{
               flex: 1,
               alignItems: "center",
-              gap: 3,
-              paddingVertical: 7,
+              gap: 2,
+              paddingVertical: 5,
               borderRadius: 16,
               borderWidth: 1,
               borderColor: cell.isToday ? isTodayFill : colors["color-border"],

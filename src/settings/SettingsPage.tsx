@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { api, ApiError } from "../api/client";
+import { getBaseUrl, LAN_BASE_URLS, setBaseUrl } from "../api/config";
 import type { ServerMember } from "../api/types";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
@@ -11,6 +12,7 @@ import { useSync } from "../state/SyncManager";
 import { READ_COPY_STALE } from "../home/widgets/data";
 import { Chip } from "../ui/Chip";
 import { EmptyState } from "../ui/EmptyState";
+import { isPhotoUri } from "../ui/MemberRail";
 import { Modal } from "../ui/Modal";
 import { PinPad } from "../ui/PinPad";
 import { SoftButton } from "../ui/SoftButton";
@@ -193,6 +195,11 @@ export function SettingsPage() {
             <SafetySection member={member} />
           ) : open.id === "appearance" ? (
             <AppearanceSection />
+          ) : open.id === "system" ? (
+            <View style={{ gap: 16 }}>
+              <DeferredSection />
+              <ServerConnectionSection />
+            </View>
           ) : (
             <DeferredSection />
           )}
@@ -302,6 +309,101 @@ function DeferredSection() {
   );
 }
 
+function ServerConnectionSection() {
+  const { colors, accentColor } = useTheme();
+  const [urlInput, setUrlInput] = useState(() => getBaseUrl());
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  const saveAndTest = async (targetUrl?: string) => {
+    const next = (targetUrl ?? urlInput).trim();
+    if (!next) return;
+    setUrlInput(next);
+    setTesting(true);
+    setStatusMsg(null);
+    await setBaseUrl(next);
+    try {
+      await api("/api/consuela/screensaver", { timeoutMs: 4000 });
+      setStatusMsg(`Connected to ${getBaseUrl()}`);
+    } catch (e) {
+      if (e instanceof ApiError && e.status > 0) {
+        setStatusMsg(`Connected to ${getBaseUrl()}`);
+      } else {
+        setStatusMsg(`Couldn't reach ${getBaseUrl()} — check LAN IP & port.`);
+      }
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <Material tier="regular" style={{ borderRadius: 24, padding: 24, gap: 14 }}>
+      <Text
+        style={{
+          color: colors["color-text-secondary"],
+          fontSize: TYPOGRAPHY.label.fontSize,
+          fontWeight: "700",
+          letterSpacing: 2,
+        }}
+      >
+        FAMILY SERVER URL (LAN)
+      </Text>
+      <TextInput
+        testID="settings-server-url-input"
+        value={urlInput}
+        onChangeText={setUrlInput}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="http://192.168.0.28:3000"
+        placeholderTextColor={colors["color-text-muted"]}
+        style={{
+          minHeight: 64,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: colors["color-border"],
+          backgroundColor: colors["color-surface-1"],
+          paddingHorizontal: 16,
+          color: colors["color-text-primary"],
+          fontSize: TYPOGRAPHY.body.fontSize,
+        }}
+      />
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {LAN_BASE_URLS.slice(0, 3).map((preset) => (
+          <Chip
+            key={preset}
+            label={preset.replace(/^http:\/\//, "")}
+            tone="neutral"
+            selected={urlInput === preset}
+            onPress={() => void saveAndTest(preset)}
+          />
+        ))}
+      </View>
+      <SoftButton
+        variant="primary"
+        size="md"
+        testID="settings-server-url-save"
+        disabled={testing}
+        onPress={() => void saveAndTest()}
+      >
+        {testing ? "Testing connection…" : "Save & test connection"}
+      </SoftButton>
+      {statusMsg ? (
+        <Text
+          style={{
+            color: statusMsg.startsWith("Connected")
+              ? colors["color-accent-mint"] ?? accentColor
+              : colors["color-accent-amber"] ?? accentColor,
+            fontSize: TYPOGRAPHY.label.fontSize,
+            fontWeight: "600",
+          }}
+        >
+          {statusMsg}
+        </Text>
+      ) : null}
+    </Material>
+  );
+}
+
 function MeSection({ member }: { member: ServerMember }) {
   const { colors } = useTheme();
   const { signOut } = useAuth();
@@ -310,12 +412,21 @@ function MeSection({ member }: { member: ServerMember }) {
     typeof member.role === "string" && member.role.length > 0
       ? member.role.charAt(0).toUpperCase() + member.role.slice(1)
       : "Member";
+  const hasPhoto = member.emoji ? isPhotoUri(member.emoji) : false;
 
   return (
     <View>
       <Material tier="regular" style={{ borderRadius: 28, padding: 24 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
-          <Text style={{ fontSize: 72 }}>{member.emoji || "👤"}</Text>
+          {hasPhoto ? (
+            <Image
+              source={{ uri: member.emoji }}
+              style={{ width: 72, height: 72, borderRadius: 36 }}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text style={{ fontSize: 72 }}>{member.emoji || "👤"}</Text>
+          )}
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>
               {member.name}
@@ -591,7 +702,15 @@ function SafetySection({ member }: { member: ServerMember | null }) {
                   style={{ borderRadius: 999, paddingHorizontal: 20, paddingVertical: 14 }}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Text style={{ fontSize: 40 }}>{c.emoji || "👤"}</Text>
+                    {c.emoji && isPhotoUri(c.emoji) ? (
+                      <Image
+                        source={{ uri: c.emoji }}
+                        style={{ width: 40, height: 40, borderRadius: 20 }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <Text style={{ fontSize: 40 }}>{c.emoji || "👤"}</Text>
+                    )}
                     <View>
                       <Text
                         style={{

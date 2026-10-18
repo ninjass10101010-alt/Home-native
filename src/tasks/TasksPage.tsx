@@ -1713,7 +1713,11 @@ export function TasksPage() {
                       gap: 6,
                     }}
                   >
-                    <Text style={{ fontSize: 16 }}>{m.emoji}</Text>
+                    {isPhotoUri(m.emoji) ? (
+                      <Image source={{ uri: m.emoji }} style={{ width: 20, height: 20, borderRadius: 10 }} resizeMode="cover" />
+                    ) : (
+                      <Text style={{ fontSize: 16 }}>{m.emoji}</Text>
+                    )}
                     <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: selected ? "700" : "500" }}>
                       {m.name}
                     </Text>
@@ -1758,7 +1762,11 @@ export function TasksPage() {
                       gap: 6,
                     }}
                   >
-                    <Text style={{ fontSize: 16 }}>{m.emoji}</Text>
+                    {isPhotoUri(m.emoji) ? (
+                      <Image source={{ uri: m.emoji }} style={{ width: 20, height: 20, borderRadius: 10 }} resizeMode="cover" />
+                    ) : (
+                      <Text style={{ fontSize: 16 }}>{m.emoji}</Text>
+                    )}
                     <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: selected ? "700" : "500" }}>
                       {m.name}
                     </Text>

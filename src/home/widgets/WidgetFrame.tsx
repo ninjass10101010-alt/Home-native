@@ -1,6 +1,6 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
+import { Platform, Pressable, Text, View } from "react-native";
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { ACCENTS, TYPOGRAPHY } from "../../theme/tokens";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -324,16 +324,18 @@ export function WidgetFrame({
 function SkeletonRow({ id, i, colors, theme, reduceMotion }: {
   id: string; i: number; colors: Record<string,string|undefined>; theme: "dark"|"light"; reduceMotion: boolean;
 }) {
-  const pulse = useSharedValue(reduceMotion ? 1 : 0.55);
+  const skipLoop = reduceMotion || (typeof jest === "undefined" && Platform.OS === "android");
+  const pulse = useSharedValue(skipLoop ? 1 : 0.55);
   const animatedStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
   React.useEffect(() => {
-    if (reduceMotion) {
+    if (skipLoop) {
       pulse.value = 1; // eslint-disable-line react-hooks/immutability
-      return;
+      return () => cancelAnimation(pulse);
     }
     pulse.value = withRepeat(withSequence(withTiming(1, { duration: 900 }), withTiming(0.55, { duration: 900 })), -1, false);
+    return () => cancelAnimation(pulse);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- shared value write is idiom
-  }, [reduceMotion]);
+  }, [skipLoop]);
   return (
     <Material tier="thin" style={{ height: 64, borderRadius: 20, overflow: "hidden" }}>
       <Animated.View

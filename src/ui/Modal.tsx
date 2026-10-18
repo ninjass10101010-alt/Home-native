@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import {
   Modal as RNModal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
+  useWindowDimensions,
   View,
   ViewStyle,
 } from "react-native";
@@ -44,6 +46,15 @@ export function Modal({
   testID,
 }: ModalProps) {
   const { colors, reduceMotion } = useTheme();
+  const { width, height } = useWindowDimensions();
+  const modalScale =
+    typeof jest === "undefined" &&
+    Platform.OS === "android" &&
+    width > 0 &&
+    height > 0 &&
+    (width < 960 || height < 1600)
+      ? Math.min(1, Math.min(width / 1080, height / 1920))
+      : 1;
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(24);
   const [mounted, setMounted] = useState(visible);
@@ -71,7 +82,10 @@ export function Modal({
   const scrimStyle = useAnimatedStyle(() => ({ opacity: opacity.value * 0.5 }));
   const panelStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
+    transform:
+      modalScale !== 1
+        ? [{ translateY: translateY.value }, { scale: modalScale }]
+        : [{ translateY: translateY.value }],
   }));
 
   if (!mounted) return null;

@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { AppState } from "react-native";
 import { api, ApiError } from "../api/client";
+import { onBaseUrlChange } from "../api/config";
 import { useAuth } from "./AuthProvider";
 
 export type SyncError = "unreachable" | "unauthorized" | "server" | null;
@@ -186,7 +187,13 @@ export function SyncManager({ children }: { children: React.ReactNode }) {
     const sub = AppState.addEventListener("change", (s) => {
       if (s === "active") void refreshNow();
     });
-    return () => sub.remove();
+    const unsubUrl = onBaseUrlChange(() => {
+      void refreshNow();
+    });
+    return () => {
+      sub.remove();
+      unsubUrl();
+    };
   }, [refreshNow]);
 
   const value = useMemo<SyncValue>(

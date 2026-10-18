@@ -20,8 +20,10 @@ That script (checked into this repo): `npx expo prebuild` → `android/gradlew :
 
 1. Enable USB debugging on the ApoloSign (Settings → Developer options).
 2. Connect via USB (or use `adb connect <tablet-ip>` for wireless — the tablet is on the home LAN).
-3. `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`
-4. Launch "Consuela" from the launcher — it should cold-start into family Home in portrait, full-screen, stay-awake. The member rail + PIN flow arrive via the web's own `/api/auth/*` cookie semantics.
+3. Install the standalone release APK (no Metro dev server required):
+   `adb install -r android/app/build/outputs/apk/release/app-release.apk`
+   (or debug APK: `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`)
+4. Launch "Consuela" from the launcher — it cold-starts into family Home in portrait, full-screen, stay-awake, connecting to the NAS backend (`http://192.168.0.28:3000` by default, configurable in-app under **Settings → System → Family Server (Next.js / PocketBase broker)**). The member rail + PIN flow arrive via the web's own `/api/auth/*` cookie semantics.
 
 ## Kiosk / always-on pinning (device-side, AFTER install)
 

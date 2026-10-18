@@ -105,6 +105,31 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
         };
       } catch (e) {
         if (guest && e instanceof ApiError && e.status === 401) {
+          if (typeof jest === "undefined") {
+            try {
+              const ss = await api<{ ok?: boolean; dinner?: { name: string } | null }>("/api/consuela/screensaver");
+              if (ss?.ok && ss.dinner?.name) {
+                const nowDate = injectedNow ?? new Date();
+                const dayShort = nowDate.toLocaleDateString("en-US", { weekday: "short" });
+                const wkMon = weekStartMondayISO(nowDate);
+                return {
+                  schedules: [{ id: "ss-dinner", title: "Dinner", time: "18:00", mealType: "dinner" }],
+                  meals: [
+                    {
+                      id: "ss-meal",
+                      name: ss.dinner.name,
+                      emoji: "🍽️",
+                      time: dayShort,
+                      mealType: "dinner",
+                      weekOf: wkMon,
+                    },
+                  ],
+                };
+              }
+            } catch {
+              /* fall through to empty */
+            }
+          }
           return { schedules: [], meals: [] };
         }
         throw e;

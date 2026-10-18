@@ -54,8 +54,18 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
   const inkRose = colors["color-accent-ink-rose"] ?? rose;
 
   return (
-    <View testID={testID} style={style} accessibilityLabel="Family members">
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, alignItems: "center" }}>
+    <View testID={testID} style={[{ width: "100%" }, style]} accessibilityLabel="Family members">
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: "space-between",
+          gap: 10,
+          alignItems: "center",
+          paddingHorizontal: 2,
+        }}
+      >
         {members.map((m) => {
           const current = m.name === currentName;
           // color arrives as a NAME from the roster — resolve to a token first
@@ -67,44 +77,46 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
               accessibilityRole="button"
               accessibilityLabel={current ? `Signed in as ${m.name}` : `Sign in as ${m.name}`}
               onPress={() => onSelect(m)}
-              style={{ alignItems: "center", minWidth: Math.max(88, MIN_TARGET_DP) }}
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: Math.max(84, MIN_TARGET_DP),
+                minHeight: MIN_TARGET_DP,
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                borderRadius: 20,
+                borderWidth: current ? 1.5 : 1,
+                borderColor: current
+                  ? mix(memberHex, "transparent", 55)
+                  : mix(colors["color-text-primary"] ?? accentColor, "transparent", 10),
+                backgroundColor: current
+                  ? mix(memberHex, "transparent", 20)
+                  : mix(colors["color-text-primary"] ?? accentColor, "transparent", 5),
+                gap: 6,
+              }}
             >
-              <View
-                style={{
-                  width: 88,
-                  height: 88,
-                  borderRadius: 44,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 3,
-                  borderColor: current ? memberHex : "transparent",
-                  backgroundColor: current ? mix(memberHex, "transparent", 20) : "transparent",
-                }}
-              >
+              <View style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center" }}>
                 <Material
                   tier="regular"
                   style={{
-                    width: 72,
-                    height: 72,
-                    borderRadius: 36,
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
                     alignItems: "center",
                     justifyContent: "center",
                     backgroundColor: mix(memberHex, "transparent", 18),
-                    borderWidth: 1.5,
-                    borderColor: mix(memberHex, "transparent", 45),
+                    borderWidth: current ? 2 : 1.5,
+                    borderColor: current ? memberHex : mix(memberHex, "transparent", 40),
                   }}
                 >
                   {photo ? (
-                    <>
-                      <Image
-                        source={{ uri: m.emoji }}
-                        style={{ width: 68, height: 68, borderRadius: 34 }}
-                        resizeMode="cover"
-                      />
-                      <Text style={{ position: "absolute", opacity: 0, fontSize: 14 }}>{m.emoji}</Text>
-                    </>
+                    <Image
+                      source={{ uri: m.emoji }}
+                      style={{ width: 44, height: 44, borderRadius: 22 }}
+                      resizeMode="cover"
+                    />
                   ) : (
-                    <Text style={{ fontSize: 34 }}>{m.emoji}</Text>
+                    <Text style={{ fontSize: 24 }}>{m.emoji}</Text>
                   )}
                 </Material>
                 {current ? (
@@ -113,34 +125,35 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
                       position: "absolute",
                       top: -2,
                       right: -2,
-                      width: 26,
-                      height: 26,
-                      borderRadius: 13,
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
                       backgroundColor: colors["color-accent-mint"] ?? "transparent",
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
-                    <Text style={{ color: colors["color-primary-foreground"], fontSize: 14, fontWeight: "800" }}>✓</Text>
+                    <Text style={{ color: colors["color-primary-foreground"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "800" }}>✓</Text>
                   </View>
                 ) : null}
               </View>
               <Text
                 numberOfLines={1}
                 style={{
-                  marginTop: 6,
                   color: current ? colors["color-text-primary"] : colors["color-text-secondary"],
                   fontSize: TYPOGRAPHY.label.fontSize,
-                  fontWeight: current ? "700" : "500",
-                  maxWidth: 96,
+                  lineHeight: 18,
+                  fontWeight: current ? "700" : "600",
+                  maxWidth: 84,
+                  textAlign: "center",
                 }}
               >
-                  {/* web WallMemberRail parity: FIRST name only, with the
-                      "✓ " prefix marking the session's own tile (a suffixed
-                      name truncated the rail instead of fitting it). */}
-                  {current ? "✓ " : ""}
-                  {m.name.split(" ")[0]}
-                </Text>
+                {/* web WallMemberRail parity: FIRST name only, with the
+                    "✓ " prefix marking the session's own tile (a suffixed
+                    name truncated the rail instead of fitting it). */}
+                {current ? "✓ " : ""}
+                {m.name.split(" ")[0]}
+              </Text>
             </Pressable>
           );
         })}

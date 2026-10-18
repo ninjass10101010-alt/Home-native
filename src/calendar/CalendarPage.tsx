@@ -1082,7 +1082,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                     justifyContent: "center",
                   }}
                 >
-                  <Text style={{ fontSize: 18 }}>→</Text>
+                  <Text style={{ color: colors["color-text-primary"], fontSize: 18, fontWeight: "700" }}>→</Text>
                 </View>
                 <View>
                   <Text style={{ color: colors["color-text-primary"], fontSize: 20, fontWeight: "700" }}>

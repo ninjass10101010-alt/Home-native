@@ -205,12 +205,12 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
 
   const detailSlot = detail ? SLOT_META[detail.slot] : null;
 
-  const FILTER_OPTIONS: { id: "all" | MealSlotId; label: string }[] = [
+  const FILTER_OPTIONS: { id: "all" | MealSlotId; icon?: string; label: string }[] = [
     { id: "all", label: "All" },
-    { id: "breakfast", label: "🌅 Breakfast" },
-    { id: "lunch", label: "☀️ Lunch" },
-    { id: "snack", label: "🥨 Snack" },
-    { id: "dinner", label: "🌙 Dinner" },
+    { id: "breakfast", icon: "🌅", label: "Breakfast" },
+    { id: "lunch", icon: "☀️", label: "Lunch" },
+    { id: "snack", icon: "🥨", label: "Snack" },
+    { id: "dinner", icon: "🌙", label: "Dinner" },
   ];
 
   const visibleSlots = SLOT_ORDER.filter((s) => mealFilter === "all" || s === mealFilter);
@@ -405,12 +405,16 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                     key={f.id}
                     onPress={() => setMealFilter(f.id)}
                     style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
                       paddingHorizontal: 16,
                       paddingVertical: 8,
                       borderRadius: 999,
                       backgroundColor: isSelected ? accentColor : colors["color-surface-2"],
                     }}
                   >
+                    {f.icon ? <Text style={{ fontSize: 16 }}>{f.icon}</Text> : null}
                     <Text
                       style={{
                         color: isSelected ? colors["color-text-on-accent"] : colors["color-text-primary"],
@@ -536,6 +540,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                     return (
                       <View key={slot} testID={`meals-slot-${slot}`} style={{ gap: 6 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <Text style={{ fontSize: 18 }}>{meta.icon}</Text>
                           <Text
                             style={{
                               color: accentInk(slotAccent, colors["color-text-primary"]),
@@ -543,7 +548,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                               fontWeight: "700",
                             }}
                           >
-                            {`${meta.icon} ${meta.label}`}
+                            {meta.label}
                           </Text>
                           <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
                             {`· ${meta.time}`}
@@ -612,12 +617,15 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                               borderWidth: 1.5,
                               borderStyle: "dashed",
                               borderColor: colors["color-surface-3"],
+                              flexDirection: "row",
+                              gap: 6,
                               alignItems: "center",
                               justifyContent: "center",
                             }}
                           >
+                            <Text style={{ fontSize: 16 }}>{meta.icon}</Text>
                             <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
-                              {`${meta.icon} Plan ${meta.label}`}
+                              {`Plan ${meta.label}`}
                             </Text>
                           </View>
                         )}
@@ -837,12 +845,12 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                       {`${familyMembers.length} / ${familyMembers.length}`}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, paddingLeft: 8 }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, paddingLeft: 4 }}>
                     {familyMembers.map((m) => {
                       const isPhoto = m.emoji ? isPhotoUri(m.emoji) : false;
                       const firstName = m.name.split(" ")[0] || m.name;
                       return (
-                        <View key={m.name} style={{ alignItems: "center", gap: 4, width: 54 }}>
+                        <View key={m.name} style={{ alignItems: "center", gap: 4, minWidth: 60, paddingHorizontal: 2 }}>
                           <View
                             style={{
                               width: 44,
