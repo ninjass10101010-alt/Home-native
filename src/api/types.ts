@@ -13,6 +13,9 @@ export interface ServerMember {
   color: string;
   avatarSize?: "xs" | "sm" | "md" | "base" | "lg";
   glow?: boolean;
+  /** PocketBase record creation timestamp (live rows) — the Family editor
+   *  derives the roster's "Mon YYYY" joined subtitle from it. */
+  created?: string;
   age?: number; // may be absent → treat as PIN-required; server decides
   phone?: string;
   email?: string;
