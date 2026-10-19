@@ -147,3 +147,17 @@ jest.mock("expo-notifications", () => ({
   cancelAllScheduledNotificationsAsync: jest.fn(async () => {}),
   SchedulableTriggerInputTypes: { TIME_INTERVAL: "timeInterval" },
 }));
+
+// expo-youtube-engine: native module is unavailable in jsdom. Individual tests
+// override these with jest.mock when they assert behaviour.
+jest.mock("./modules/youtube-engine", () => ({
+  search: jest.fn(async () => []),
+  related: jest.fn(async () => []),
+  resolveAudio: jest.fn(async () => ({
+    url: "https://example.invalid/audio.m4a",
+    mimeType: "audio/mp4",
+    contentLength: 1024,
+    durationSeconds: 120,
+    expiresAt: 0,
+  })),
+}));
