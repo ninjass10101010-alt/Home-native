@@ -19,6 +19,7 @@ import { SoftButton } from "../ui/SoftButton";
 import { SignedOutBanner } from "../ui/SignedOutBanner";
 import { Toggle } from "../ui/Toggle";
 import { scheduleLocalReminder } from "../native/notifications";
+import { FamilySection } from "./FamilySection";
 
 /**
  * The wall's Settings surface (WS-10): the launcher by role (web contract —
@@ -32,8 +33,10 @@ import { scheduleLocalReminder } from "../native/notifications";
  *                and unavailable honesty); editing is deferred, never faked.
  *   Appearance → theme/boost/accent, live through ThemeProvider (the kit's
  *                showcase pattern, no new primitives).
- *   Family / Home / Connections & System → honest deferral cards (the full
- *                settings wave), never dead controls.
+ *   Family     → the live roster + member CRUD (FamilySection — the
+ *                2026-10-19 family settings wave: add/edit/remove, starter PIN).
+ *   Home / Connections & System → honest deferral cards (the full settings
+ *                wave), never dead controls.
  */
 
 type SettingsSectionId = "me" | "family" | "safety" | "appearance" | "home" | "system";
@@ -195,6 +198,8 @@ export function SettingsPage() {
             <SafetySection member={member} />
           ) : open.id === "appearance" ? (
             <AppearanceSection />
+          ) : open.id === "family" ? (
+            <FamilySection member={member} />
           ) : open.id === "system" ? (
             <View style={{ gap: 16 }}>
               <DeferredSection />

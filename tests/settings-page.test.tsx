@@ -354,10 +354,18 @@ describe("SettingsPage — Safety", () => {
   });
 });
 
-describe("SettingsPage — deferred sections (parent)", () => {
-  it("Family, Home and Connections & System render the honest deferral copy", async () => {
+describe("SettingsPage — Family is real; Home and System stay deferred (parent)", () => {
+  it("Family renders the roster surface, not the deferral card", async () => {
+    route({ "/api/members/admin": { members: [parent] } });
+    const { getByTestId, findByTestId, queryByText } = render(<SettingsPage />, { wrapper: wrap });
+    fireEvent.press(getByTestId("settings-section-family"));
+    expect(await findByTestId("family-section")).toBeTruthy();
+    expect(queryByText("Settings for the whole family arrive with the full settings wave.")).toBeNull();
+  });
+
+  it("Home and Connections & System render the honest deferral copy", async () => {
     const { getByTestId, findByText, queryByText } = render(<SettingsPage />, { wrapper: wrap });
-    for (const id of ["family", "home", "system"]) {
+    for (const id of ["home", "system"]) {
       fireEvent.press(getByTestId(`settings-section-${id}`));
       expect(await findByText("Settings for the whole family arrive with the full settings wave.")).toBeTruthy();
       fireEvent.press(getByTestId("settings-back"));
