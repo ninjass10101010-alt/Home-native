@@ -5,6 +5,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class NewPipeDownloader(
@@ -14,9 +15,18 @@ class NewPipeDownloader(
     .build()
 ) : Downloader() {
   override fun execute(request: Request): Response {
+    val method = request.httpMethod().uppercase(Locale.ROOT)
+    val bodyBytes = request.dataToSend()
     val builder = okhttp3.Request.Builder()
       .url(request.url())
-      .method(request.httpMethod(), request.dataToSend()?.toRequestBody())
+    when (method) {
+      "POST", "PUT", "PATCH" ->
+        builder.method(method, (bodyBytes ?: ByteArray(0)).toRequestBody())
+      "GET", "HEAD" ->
+        builder.method(method, null)
+      else ->
+        builder.method(method, bodyBytes?.toRequestBody())
+    }
 
     request.headers().forEach { (name, values) ->
       values.forEach { value -> builder.addHeader(name, value) }
