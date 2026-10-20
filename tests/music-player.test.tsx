@@ -32,6 +32,16 @@ jest.mock("../src/music/playback", () => ({
   }),
 }));
 
+jest.mock("../modules/youtube-engine", () => ({
+  search: jest.fn(async () => [
+    { id: "abc12345678", title: "Found", artist: "A", album: "", durationSeconds: 100,
+      artworkUrl: null, explicit: false, source: "youtube_music" },
+  ]),
+  related: jest.fn(async () => []),
+  resolveAudio: jest.fn(async () => ({ url: "https://x.y/audio.m4a", mimeType: "audio/mp4",
+    contentLength: 1, durationSeconds: 1, expiresAt: 0 })),
+}));
+
 import React from "react";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { MusicPlayer } from "../src/music/MusicPlayer";
@@ -63,6 +73,17 @@ it("lists downloads and removes one", async () => {
   await waitFor(() => expect(getByTestId("music-download-abc12345678")).toBeTruthy());
   fireEvent.press(getByTestId("music-download-remove-abc12345678"));
   expect(mockRemoveDownload).toHaveBeenCalledWith("abc12345678");
+});
+
+it("searches through the native engine", async () => {
+  mockCurrent = null;
+  const { search } = require("../modules/youtube-engine");
+  const { getByTestId, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+  const input = getByTestId("music-search-input");
+  fireEvent.changeText(input, "beatles");
+  fireEvent.press(getByTestId("music-search-submit"));
+  expect(await findByText("Found")).toBeTruthy();
+  expect(search).toHaveBeenCalledWith("beatles", expect.any(Number));
 });
 
 it("shows a recently played shelf when idle", async () => {

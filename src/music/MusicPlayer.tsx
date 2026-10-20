@@ -1,7 +1,6 @@
 import React from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { getBaseUrl } from "../api/config";
-import { loadSessionCookie } from "../api/session";
+import { search as engineSearch } from "../../modules/youtube-engine";
 import { useAuth } from "../state/AuthProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { FONTS, TYPOGRAPHY } from "../theme/tokens";
@@ -50,13 +49,8 @@ export function MusicPlayer() {
     setSearching(true);
     setSearchError(null);
     try {
-      const cookie = await loadSessionCookie();
-      const response = await fetch(`${getBaseUrl()}/api/media/search?q=${encodeURIComponent(term)}`, {
-        headers: cookie ? { Cookie: `consuela_session=${cookie}` } : {},
-      });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json?.error ?? "search_failed");
-      setResults((Array.isArray(json?.tracks) ? json.tracks : []).filter((t: MediaTrack) => !explicitHidden(t)));
+      const tracks = await engineSearch(term, 20);
+      setResults(tracks.filter((t) => !explicitHidden(t)));
     } catch (e) {
       setSearchError(e instanceof Error ? e.message : "search_failed");
       setResults([]);
