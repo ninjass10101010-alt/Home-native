@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Text, TextInput, View } from "react-native";
 import { ApiError } from "../api/client";
-import { addMember, listMembersLive, updateMember, writeCachedMembers } from "../api/members";
+import { addMember, listMembersLive, removeMember, updateMember, writeCachedMembers } from "../api/members";
 import type { MemberAvatarSize, MemberRole } from "../api/members";
 import type { ServerMember } from "../api/types";
 import { useTheme } from "../theme/ThemeProvider";
@@ -45,6 +45,7 @@ const ADULTS_ONLY_COPY: Record<"add" | "edit" | "remove", string> = {
 const UNREACHABLE_COPY = "Couldn't reach Consuela — check the connection and try again.";
 const SAVE_FAILED_COPY = "Couldn't save that change. Try again.";
 const MEMBER_CHANGED_COPY = "That member changed on the server — the roster just refreshed.";
+const LAST_PARENT_COPY = "At least one parent must remain.";
 
 const duplicateCopy = (name: string) => `${name} is already on the family list.`;
 
@@ -102,6 +103,18 @@ function saveErrorCopy(e: unknown, action: "add" | "edit", displayName: string):
   return SAVE_FAILED_COPY;
 }
 
+/** Body-wins-over-status error mapping for removes (last_parent is 400 +
+ *  code "last_parent" — status alone would misclassify it). */
+function removeErrorCopy(e: unknown): string {
+  if (e instanceof ApiError) {
+    if (e.code === "last_parent") return LAST_PARENT_COPY;
+    if (e.status === 401 || e.status === 403) return ADULTS_ONLY_COPY.remove;
+    if (e.status === 404) return MEMBER_CHANGED_COPY;
+    if (e.status === 0) return UNREACHABLE_COPY;
+  }
+  return SAVE_FAILED_COPY;
+}
+
 /** PB `created` ("2024-05-12 08:00:00.000Z") → "May 2024"; "" when unparsable.
  *  The space→T swap keeps Hermes' ISO-only Date parser happy. */
 function formatJoined(created?: string): string {
@@ -130,6 +143,9 @@ export function FamilySection({ member }: { member: ServerMember | null }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<ServerMember | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [removePending, setRemovePending] = useState<ServerMember | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   const loadRoster = useCallback(async () => {
     setState("loading");
@@ -151,6 +167,23 @@ export function FamilySection({ member }: { member: ServerMember | null }) {
     },
     [loadRoster]
   );
+
+  const confirmRemove = useCallback(async () => {
+    const target = removePending;
+    if (!target || removing) return;
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      await removeMember({ id: memberRowId(target), name: target.name });
+      setRemovePending(null);
+      await loadRoster();
+      setFeedback(`Removed ${target.name}.`);
+    } catch (e) {
+      setRemoveError(removeErrorCopy(e));
+    } finally {
+      setRemoving(false);
+    }
+  }, [removePending, removing, loadRoster]);
 
   // Session-gated read: kids/guests never mount this section's fetch.
   useEffect(() => {
@@ -252,6 +285,19 @@ export function FamilySection({ member }: { member: ServerMember | null }) {
                   >
                     ✎ Edit
                   </SoftButton>
+                  <SoftButton
+                    variant="ghost"
+                    size="sm"
+                    testID={`family-remove-${mid}`}
+                    accessibilityLabel={`Remove ${m.name}`}
+                    onPress={() => {
+                      setRemovePending(m);
+                      setRemoveError(null);
+                    }}
+                    style={{ flex: 1 }}
+                  >
+                    ✕ Remove
+                  </SoftButton>
                 </View>
               </Material>
             );
@@ -287,6 +333,56 @@ export function FamilySection({ member }: { member: ServerMember | null }) {
         onClose={() => setEditorOpen(false)}
         onSaved={onSaved}
       />
+      <Modal
+        visible={removePending !== null}
+        onClose={() => {
+          if (!removing) {
+            setRemovePending(null);
+            setRemoveError(null);
+          }
+        }}
+        title={removePending ? `Remove ${removePending.name}?` : "Remove member"}
+        description="They'll disappear from avatars, tasks, and the family row on every device."
+        dismissable={!removing}
+        testID="family-delete-modal"
+        footer={
+          <>
+            <SoftButton
+              variant="danger"
+              size="lg"
+              testID="family-delete-confirm"
+              loading={removing}
+              onPress={() => void confirmRemove()}
+              style={{ flex: 1 }}
+            >
+              Remove member
+            </SoftButton>
+            <SoftButton
+              variant="secondary"
+              size="lg"
+              testID="family-delete-cancel"
+              disabled={removing}
+              onPress={() => {
+                setRemovePending(null);
+                setRemoveError(null);
+              }}
+              style={{ flex: 1 }}
+            >
+              Cancel
+            </SoftButton>
+          </>
+        }
+      >
+        {removeError ? (
+          <Text
+            accessibilityRole="alert"
+            testID="family-delete-error"
+            style={{ color: colors["color-accent-rose"] ?? colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, marginBottom: 8 }}
+          >
+            {removeError}
+          </Text>
+        ) : null}
+      </Modal>
     </View>
   );
 }

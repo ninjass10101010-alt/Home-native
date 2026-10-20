@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
@@ -61,6 +61,13 @@ const getCalls = () =>
   api.mock.calls.filter((c: any[]) => c[0].startsWith("/api/members/admin") && (!c[1] || !c[1].method));
 const storedPayloads = () =>
   (AsyncStorage.setItem as jest.Mock).mock.calls.map((c: any[]) => c[1]).join("\n");
+
+/**
+ * The Modal unmounts on a real 150ms exit timer; the state commit only lands
+ * when the event loop yields OUTSIDE act (waitFor's act-wrapped poll never
+ * observes it). A real 400ms settle first makes the exit deterministic.
+ */
+const settleModalExit = () => new Promise((res) => setTimeout(res, 400));
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -164,8 +171,9 @@ describe("FamilySection — add member flow", () => {
     expect(typeof posts[0][1].body.joined).toBe("string");
     expect(posts[0][1].body.joined.length).toBeGreaterThan(0);
     fireEvent.press(r.getByTestId("family-starter-pin-done"));
-    // The Modal unmounts after its exit animation — wait for it.
-    await waitFor(() => expect(r.queryByTestId("family-field-name")).toBeNull());
+    // The Modal unmounts on its 150ms exit timer — settle outside act first.
+    await settleModalExit();
+    expect(r.queryByTestId("family-field-name")).toBeNull();
     expect(await r.findByText("Added Waffles Jr.")).toBeTruthy();
     expect(getCalls().length).toBeGreaterThanOrEqual(2); // initial read + post-save refetch
     expect(storedPayloads()).not.toContain("4321");
@@ -238,8 +246,9 @@ describe("FamilySection — edit member flow", () => {
       name: "Rebecca (Mom)",
       patch: { name: "Becky", emoji: "🐱", role: "parent", age: undefined, avatarSize: "md", glow: false, pin: "5678" },
     });
-    // The Modal unmounts after its exit animation — wait for it.
-    await waitFor(() => expect(r.queryByTestId("family-field-name")).toBeNull());
+    // The Modal unmounts on its 150ms exit timer — settle outside act first.
+    await settleModalExit();
+    expect(r.queryByTestId("family-field-name")).toBeNull();
     expect(storedPayloads()).not.toContain("5678");
   });
 
@@ -257,5 +266,47 @@ describe("FamilySection — edit member flow", () => {
     fireEvent.press(r.getByTestId("family-editor-save"));
     expect(await r.findByText("That member changed on the server — the roster just refreshed.")).toBeTruthy();
     expect(r.getByTestId("family-field-name")).toBeTruthy();
+  });
+});
+
+describe("FamilySection — remove member flow", () => {
+  const openRemove = async (id = "c1") => {
+    memberRoute();
+    const r = render(<FamilySection member={parent} />, { wrapper: wrap });
+    await r.findByTestId(`family-member-${id}`);
+    fireEvent.press(r.getByTestId(`family-remove-${id}`));
+    await r.findByTestId("family-delete-confirm");
+    return r;
+  };
+
+  it("confirm dialog copy; Cancel fires no DELETE", async () => {
+    const r = await openRemove();
+    expect(r.getByText("Remove Aurora?")).toBeTruthy();
+    expect(r.getByText("They'll disappear from avatars, tasks, and the family row on every device.")).toBeTruthy();
+    fireEvent.press(r.getByTestId("family-delete-cancel"));
+    // The Modal unmounts on its 150ms exit timer — settle outside act first.
+    await settleModalExit();
+    expect(r.queryByTestId("family-delete-confirm")).toBeNull();
+    expect(writeCalls("DELETE")).toHaveLength(0);
+  });
+
+  it("confirm → DELETE { id, name }, roster refetch, Removed feedback", async () => {
+    const r = await openRemove();
+    fireEvent.press(r.getByTestId("family-delete-confirm"));
+    expect(await r.findByText("Removed Aurora.")).toBeTruthy();
+    await settleModalExit();
+    expect(r.queryByTestId("family-delete-confirm")).toBeNull();
+    expect(writeCalls("DELETE")).toHaveLength(1);
+    expect(writeCalls("DELETE")[0][1].body).toEqual({ id: "c1", name: "Aurora" });
+  });
+
+  it("last_parent → honest copy, confirm stays open, no retry storm", async () => {
+    const r = await openRemove("p1");
+    memberRoute({ delete: new ApiError({ message: "last_parent", status: 400, code: "last_parent", body: { error: "last_parent" } }) });
+    fireEvent.press(r.getByTestId("family-delete-confirm"));
+    expect(await r.findByTestId("family-delete-error")).toBeTruthy();
+    expect(r.getByTestId("family-delete-error").props.children).toBe("At least one parent must remain.");
+    expect(r.getByTestId("family-delete-confirm")).toBeTruthy();
+    expect(writeCalls("DELETE")).toHaveLength(1);
   });
 });

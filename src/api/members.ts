@@ -210,3 +210,8 @@ export async function updateMember(args: {
 }): Promise<void> {
   await api("/api/members/admin", { method: "PATCH", body: args });
 }
+
+/** DELETE /api/members/admin — { id, name } (web body shape). */
+export async function removeMember(args: { id: string; name: string }): Promise<void> {
+  await api("/api/members/admin", { method: "DELETE", body: args });
+}
