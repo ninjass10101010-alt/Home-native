@@ -33,3 +33,20 @@ describe("LRC parser", () => {
     expect(currentLineIndex(lines, 5000)).toBe(1);
   });
 });
+
+describe("fetchLyrics", () => {
+  it("fetches lyrics from LRCLIB directly", async () => {
+    global.fetch = jest.fn(async (url: string) => ({
+      ok: true,
+      json: async () => ({ syncedLyrics: "[00:01.00]hello", plainLyrics: "hello" }),
+      url,
+    })) as unknown as typeof fetch;
+    const { fetchLyrics } = require("../src/music/lyrics");
+    const lines = await fetchLyrics({
+      id: "abc12345678", title: "Song", artist: "Artist", album: "Album",
+      durationSeconds: 120, artworkUrl: null, explicit: false, source: "youtube_music",
+    });
+    expect(lines?.[0]?.text).toBe("hello");
+    expect(String((global.fetch as jest.Mock).mock.calls[0][0])).toContain("lrclib.net/api/get");
+  });
+});

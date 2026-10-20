@@ -1,5 +1,3 @@
-import { getBaseUrl } from "../api/config";
-import { loadSessionCookie } from "../api/session";
 import type { MediaTrack } from "./types";
 
 export interface LyricLine {
@@ -64,27 +62,31 @@ export function currentLineIndex(lines: LyricLine[], positionMs: number): number
 const cache = new Map<string, LyricLine[]>();
 const MAX_CACHE = 100;
 
-/** Fetch + cache parsed lyrics. Returns null when the server has none. */
+const LRCLIB_GET = "https://lrclib.net/api/get";
+
+/** Fetch + cache parsed lyrics from LRCLIB. Returns null when none exist. */
 export async function fetchLyrics(track: MediaTrack): Promise<LyricLine[] | null> {
   const cached = cache.get(track.id);
   if (cached) return cached;
 
-  const cookie = await loadSessionCookie();
-  if (!cookie) return null;
-
   try {
-    const params = new URLSearchParams({ id: track.id, title: track.title, artist: track.artist });
+    const params = new URLSearchParams({
+      track_name: track.title,
+      artist_name: track.artist,
+    });
+    if (track.album) params.set("album_name", track.album);
     if (typeof track.durationSeconds === "number") {
       params.set("duration", String(Math.round(track.durationSeconds)));
     }
-    const response = await fetch(`${getBaseUrl()}/api/media/lyrics?${params.toString()}`, {
-      headers: { Cookie: `consuela_session=${cookie}` },
+    const response = await fetch(`${LRCLIB_GET}?${params.toString()}`, {
+      headers: { "User-Agent": "Consuela/1.0 (family dashboard)" },
     });
     if (!response.ok) return null;
-    const data = (await response.json()) as { lyrics?: string | null; synced?: boolean };
-    if (typeof data.lyrics !== "string" || !data.lyrics.trim()) return null;
-    const parsed = parseLrc(data.lyrics);
-    const result = parsed.length > 0 ? parsed : [{ timeMs: 0, text: data.lyrics }];
+    const data = (await response.json()) as { syncedLyrics?: string | null; plainLyrics?: string | null };
+    const raw = data.syncedLyrics || data.plainLyrics || "";
+    if (!raw.trim()) return null;
+    const parsed = parseLrc(raw);
+    const result = parsed.length > 0 ? parsed : [{ timeMs: 0, text: raw }];
     cache.set(track.id, result);
     if (cache.size > MAX_CACHE) {
       const oldest = cache.keys().next().value;
