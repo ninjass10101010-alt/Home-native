@@ -3,6 +3,13 @@ const mockPlay = jest.fn();
 const mockPause = jest.fn();
 const mockSeek = jest.fn(async () => {});
 const mockLock = jest.fn();
+const mockResolve = jest.fn(async (_id: string) => ({
+  url: "https://rr1---sn-test.googlevideo.com/videoplayback?x=1",
+  mimeType: "audio/mp4",
+  contentLength: 1024,
+  durationSeconds: 120,
+  expiresAt: 0,
+}));
 
 jest.mock("expo-audio", () => ({
   useAudioPlayer: () => ({
@@ -17,7 +24,11 @@ jest.mock("expo-audio", () => ({
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
-jest.mock("../src/api/session", () => ({ loadSessionCookie: jest.fn(async () => "token") }));
+jest.mock("../modules/youtube-engine", () => ({
+  resolveAudio: (id: string) => mockResolve(id),
+  search: jest.fn(async () => []),
+  related: jest.fn(async () => []),
+}));
 
 import React from "react";
 import { act, render, waitFor } from "@testing-library/react-native";
@@ -31,29 +42,23 @@ const track: MediaTrack = {
 };
 
 function Probe() {
-  const { current, position, play, toggle } = usePlayback();
+  const { current, play } = usePlayback();
   return (
     <>
       <Text testID="title">{current?.title ?? "none"}</Text>
-      <Text testID="position">{String(position)}</Text>
       <Text testID="play" onPress={() => void play(track)}>play</Text>
-      <Text testID="toggle" onPress={toggle}>toggle</Text>
     </>
   );
 }
 
-it("plays through the proxied stream with the session cookie", async () => {
+it("resolves the stream on-device and plays the native URL", async () => {
   const { getByTestId } = render(
     <PlaybackProvider><Probe /></PlaybackProvider>
   );
   await act(async () => { getByTestId("play").props.onPress(); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Song"));
-  expect(mockReplace).toHaveBeenCalledWith(
-    expect.objectContaining({
-      uri: expect.stringContaining("/api/media/stream?id=abc12345678"),
-      headers: { Cookie: "consuela_session=token" },
-    })
-  );
+  expect(mockResolve).toHaveBeenCalledWith("abc12345678");
+  expect(mockReplace).toHaveBeenCalledWith({ uri: "https://rr1---sn-test.googlevideo.com/videoplayback?x=1" });
   expect(mockPlay).toHaveBeenCalled();
   expect(mockLock).toHaveBeenCalledWith(true, expect.objectContaining({ title: "Song" }));
 });

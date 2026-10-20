@@ -1,8 +1,7 @@
 import React from "react";
 import { Directory, File, Paths } from "expo-file-system";
 import { AudioModule, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { getBaseUrl } from "../api/config";
-import { loadSessionCookie } from "../api/session";
+import { resolveAudio } from "../../modules/youtube-engine";
 import {
   appendHistory,
   DOWNLOAD_CAP_BYTES,
@@ -80,6 +79,18 @@ function localFileFor(id: string): File {
   return new File(musicDir(), `${id}.m4a`);
 }
 
+/**
+ * Resolve the playable URL on-device. Engine failures surface as the stable
+ * JS-land code `resolve_failed`; the raw message is only for other errors.
+ */
+async function resolveStreamUrl(id: string): Promise<string> {
+  try {
+    return (await resolveAudio(id)).url;
+  } catch {
+    throw new Error("resolve_failed");
+  }
+}
+
 export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const player = useAudioPlayer();
   const status = useAudioPlayerStatus(player);
@@ -126,14 +137,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       finishedRef.current = null;
       setError(null);
       try {
-        const cookie = await loadSessionCookie();
         const local = localFileFor(track.id);
         const source = local.exists
           ? { uri: local.uri }
-          : {
-              uri: `${getBaseUrl()}/api/media/stream?id=${encodeURIComponent(track.id)}`,
-              headers: cookie ? { Cookie: `consuela_session=${cookie}` } : undefined,
-            };
+          : { uri: await resolveStreamUrl(track.id) };
 
         player.replace(source);
         player.play();
@@ -267,17 +274,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     try {
       const directory = new Directory(musicDir());
       if (!directory.exists) directory.create({ intermediates: true, idempotent: true });
-      const cookie = await loadSessionCookie();
       if (!dest.exists) {
         if (totalDownloadBytes(downloads) >= DOWNLOAD_CAP_BYTES) {
           setError("Download limit reached (2 GB). Delete a track first.");
           return;
         }
-        await File.downloadFileAsync(
-          `${getBaseUrl()}/api/media/stream?id=${encodeURIComponent(current.id)}`,
-          dest,
-          { headers: cookie ? { Cookie: `consuela_session=${cookie}` } : undefined, idempotent: true }
-        );
+        const url = await resolveStreamUrl(current.id);
+        await File.downloadFileAsync(url, dest, { idempotent: true });
       }
       const entry: DownloadEntry = {
         id: current.id,
