@@ -14,7 +14,7 @@ module.exports = function withNewpipeDesugaring(config) {
 ${MARKER}
 android {
     compileOptions {
-        isCoreLibraryDesugaringEnabled = true
+        coreLibraryDesugaringEnabled = true
     }
 }
 dependencies {
