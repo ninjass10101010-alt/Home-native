@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Text, TextInput, View } from "react-native";
+import type { TextStyle } from "react-native";
 import { ApiError } from "../api/client";
 import { addMember, listMembersLive, removeMember, updateMember, writeCachedMembers } from "../api/members";
 import type { MemberAvatarSize, MemberRole } from "../api/members";
@@ -187,6 +188,7 @@ export function FamilySection({ member }: { member: ServerMember | null }) {
 
   // Session-gated read: kids/guests never mount this section's fetch.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- "loading" is the declared initial state; the honest refetch is async (Modal.tsx uses the same idiom)
     if (member && member.role === "parent") void loadRoster();
   }, [member, loadRoster]);
 
@@ -413,6 +415,7 @@ function MemberEditorDialog({
   useEffect(() => {
     if (!visible) return;
     sessionRef.current += 1;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- open-time prefill: the form must never flash the previous member's values (Modal.tsx mount idiom)
     setStarterPin(null);
     setError(null);
     setErrors({});
@@ -533,14 +536,14 @@ function MemberEditorDialog({
     fontSize: TYPOGRAPHY.body.fontSize,
   };
 
-  const labelStyle = {
+  const labelStyle: TextStyle = {
     color: colors["color-text-secondary"],
     fontSize: TYPOGRAPHY.label.fontSize,
     fontWeight: "700",
     letterSpacing: 2,
   };
 
-  const errorStyle = {
+  const errorStyle: TextStyle = {
     color: colors["color-accent-rose"] ?? colors["color-text-primary"],
     fontSize: TYPOGRAPHY.label.fontSize,
   };

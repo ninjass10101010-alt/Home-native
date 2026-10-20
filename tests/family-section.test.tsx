@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { FamilySection } from "../src/settings/FamilySection";
+import type { ServerMember } from "../src/api/types";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -29,11 +30,11 @@ jest.setTimeout(20000);
 const wrap = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 const flush = () => act(async () => {});
 
-const parent = {
+const parent: ServerMember = {
   id: "p1", pbId: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱",
   color: "green", avatarSize: "md", glow: false, created: "2024-05-12 08:00:00.000Z",
 };
-const child = {
+const child: ServerMember = {
   id: "c1", pbId: "c1", name: "Aurora", role: "child", emoji: "🌸",
   color: "amber", age: 8, avatarSize: "sm", glow: true, created: "2018-03-02 08:00:00.000Z",
 };
