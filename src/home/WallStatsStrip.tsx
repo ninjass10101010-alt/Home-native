@@ -1,32 +1,54 @@
 import React from "react";
-import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../theme/tokens";
 import { accentDeepened, accentInk, mix } from "../theme/mix";
 import { Material } from "../theme/Material";
 import { MoreButton } from "../nav/CapsuleDock";
 import { HomeWidgetIcon, widgetIconVariantFor } from "../ui/HomeWidgetIcon";
+import { AnimatedEmoji } from "../ui/AnimatedEmoji";
 import { useWallStats, weekSkeletonFor, type WallDayCell } from "./wall-stats";
 
 /**
  * The wall header's KPI band — port of Home-ai page.tsx:744-754 (three
  * StatTiles, one baseline, calm tones). The numeral is the thing being read
- * from across the room, so it is the loudest element on a tile; the icon is a
- * 28dp disc, and the label/detail pair paints the tone ink (the same
+ * from across the room, so it is the loudest element on a tile; the icon is
+ * the web's clay HomeWidgetIcon, whose own glow halo is the reference's
+ * round tinted disc, and the label/detail pair paints the tone ink (the same
  * accent-ink recipe Chip/Avatar use) so AA holds over the tone wash.
  *
+ * Composition (web StatTile `compact wide`, measured on the 1080px wall
+ * capture): [icon][gap][numeral] … [label / detail, right-aligned]. The
+ * numeral is LEFT-aligned right after the icon and the label block hugs the
+ * tile's right edge — the tile is a short, wide PILL, not a card with a
+ * number floating in the middle of it.
+ *
  * Honesty: only truth renders. `null` tiles stay blank until their source
- * answers ("—" for the Week tile, per the web); a tile never promises 0 for a
- * read that hasn't landed.
+ * answers — the tile wears the web's own unknown-value GLYPH (a muted em
+ * dash) in the numeral slot, never a fabricated 0 and never a blank that
+ * could be mistaken for a rendered value.
  */
 
 type ToneKey = "accent" | "success" | "warning" | "danger";
 
-/** Compact KPI band height (web StatTile compact): 10+10 padding around the
- *  30/20/20 numeral+label+detail stack, beside a 28dp icon disc. A FIXED
- *  height also keeps the band from reflowing as answers land. */
-const KPI_TILE_H = 92;
+/**
+ * KPI band height. The web's wide StatTile measures 75px at the wall's
+ * 1080px viewport (1px border + 12px padding + a 28px icon row + the second
+ * 16px label row). The native's 14sp label floor costs 8px more than the
+ * web's 12px label, so 78 keeps the reference's short, wide pill proportion
+ * instead of the old 92px card — and it puts the band back on the wall
+ * header's own budget (78 tile + 12 margin = the 90 the header reserves).
+ * A FIXED height also keeps the band from reflowing as answers land.
+ */
+const KPI_TILE_H = 78;
+/** The web's StatTile `gap-x-3` — the gap between the icon and the numeral. */
+const KPI_ICON_GAP = 12;
+/** The web's `grid gap-3 sm:gap-4` on the KPI band — 16px at the wall width. */
+const KPI_BAND_GAP = 16;
+/** The web's icon chip: `h-7 w-7 rounded-xl` around a `size="sm"` (32px)
+ *  HomeWidgetIcon, whose 22/48 glow halo reads as the reference's round
+ *  tinted disc. */
+const KPI_ICON_PX = 32;
 /** "This Week" card height — the same 190 the wall's tail budget reserves
  *  (measured content 177 leaves 13dp of slack). Definite for the same reason
  *  as KPI_TILE_H above. */
@@ -57,7 +79,8 @@ interface TileProps {
   label: string;
   detail: string;
   value: string;
-  /** True = the source hasn't answered: show a numeral skeleton, never a blank. */
+  /** True = the source hasn't answered: the numeral slot wears the muted
+   *  em-dash placeholder — never a blank, never a fabricated 0. */
   pending?: boolean;
   icon: string;
   widgetId: string;
@@ -66,22 +89,10 @@ interface TileProps {
 }
 
 function StatTile({ label, detail, value, pending, icon, widgetId, tone, testID }: TileProps) {
-  const { colors, accentColor, reduceMotion } = useTheme();
+  const { colors, accentColor } = useTheme();
   const toneColor = colors[toneToken(tone)] ?? accentColor;
   const ink = colors[toneInkToken(tone)] ?? mix(toneColor, colors["color-text-primary"], 45);
-
-  const skipLoop = reduceMotion || !pending || (typeof jest === "undefined" && Platform.OS === "android");
-  const pulse = useSharedValue(skipLoop ? 1 : 0.55);
-  const animatedStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
-  React.useEffect(() => {
-    if (skipLoop) {
-      pulse.value = 1; // eslint-disable-line react-hooks/immutability
-      return () => cancelAnimation(pulse);
-    }
-    pulse.value = withRepeat(withSequence(withTiming(1, { duration: 900 }), withTiming(0.55, { duration: 900 })), -1, false);
-    return () => cancelAnimation(pulse);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- shared value write is idiom
-  }, [skipLoop]);
+  const variant = widgetIconVariantFor(widgetId);
 
   return (
     <Material
@@ -90,47 +101,57 @@ function StatTile({ label, detail, value, pending, icon, widgetId, tone, testID 
       style={{
         flex: 1,
         height: KPI_TILE_H,
-        borderRadius: 22,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+        borderRadius: 24,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
         justifyContent: "center",
       }}
       testID={testID}
     >
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <View
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 11,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: mix(toneColor, "transparent", 20),
-            }}
-          >
-            {widgetIconVariantFor(widgetId) ? (
-              <HomeWidgetIcon variant={widgetIconVariantFor(widgetId)!} size={22} title={label} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: KPI_ICON_GAP }}>
+          {/* The icon is the web's clay HomeWidgetIcon at `size="sm"` — the
+              same artwork, and the same round glow halo behind it. The web
+              seats it in a `rounded-xl bg-white/7%` chip; on the wall that
+              chip is invisible, so the native paints the artwork on the
+              card instead of tinting a square behind it (which read as a
+              flat sticker, not a disc). */}
+          <View style={{ width: KPI_ICON_PX, height: KPI_ICON_PX, alignItems: "center", justifyContent: "center" }}>
+            {variant ? (
+              <HomeWidgetIcon variant={variant} size="sm" />
             ) : (
-              <Text style={{ fontSize: 16 }}>{icon}</Text>
+              <AnimatedEmoji emoji={icon} size={22} />
             )}
           </View>
           {pending ? (
-            <Material
-              tier="thin"
+            /* The numeral slot while its read is unanswered: the WEB's own
+               unknown-value glyph — a muted em dash, exactly the "—" the
+               reference's guest capture shows on the Week tile. It is
+               deliberately SUBORDINATE to a real numeral (secondary ink, not
+               primary) so it can never be read as a count, and it is a GLYPH,
+               not a slab, so the tile never reads as a hole. Secondary ink
+               clears AA on the tile's own wash in both themes (7.5:1 dark /
+               6.1:1 light), so the placeholder never drops the contrast
+               floor. Static, too: a pulsing dash would flicker the floor it
+               is supposed to sit under. */
+            <Text
               testID={`${testID}-pending`}
-              style={{ width: 34, height: 28, borderRadius: 8, overflow: "hidden" }}
+              accessibilityLabel="Not known yet"
+              style={{
+                color: colors["color-text-secondary"],
+                fontSize: TYPOGRAPHY.stat.fontSize,
+                lineHeight: TYPOGRAPHY.stat.fontSize + 4,
+                fontWeight: "800",
+              }}
             >
-              <Animated.View
-                style={[animatedStyle, { flex: 1, backgroundColor: mix(colors["color-surface-3"], colors["color-surface-4"], 50) }]}
-              />
-            </Material>
+              {"—"}
+            </Text>
           ) : (
             <Text
               style={{
                 color: colors["color-text-primary"],
-                fontSize: 32,
-                lineHeight: 36,
+                fontSize: TYPOGRAPHY.stat.fontSize,
+                lineHeight: TYPOGRAPHY.stat.fontSize + 4,
                 fontWeight: "800",
                 fontVariant: ["tabular-nums"],
               }}
@@ -139,15 +160,18 @@ function StatTile({ label, detail, value, pending, icon, widgetId, tone, testID 
             </Text>
           )}
         </View>
+        {/* The label block hugs the tile's right edge (the web's
+            `md:col-start-3 md:justify-self-end md:text-right`), label over
+            detail, both in the tone ink. */}
         <View style={{ alignItems: "flex-end", justifyContent: "center", flexShrink: 1 }}>
           <Text
-            style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: 18, fontWeight: "700" }}
+            style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "600" }}
             numberOfLines={1}
           >
             {label}
           </Text>
           <Text
-            style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: 18 }}
+            style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight }}
             numberOfLines={1}
           >
             {detail}
@@ -166,7 +190,7 @@ export function WallStatStrip() {
   // events amber, tasks rose, all-clear mint. No progress hairline (the web
   // deleted it: a percentage under "Days planned" reads as a share of events).
   return (
-    <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }} testID="wall-stat-row">
+    <View style={{ flexDirection: "row", gap: KPI_BAND_GAP, marginTop: 12 }} testID="wall-stat-row">
       <StatTile
         testID="wall-stat-events"
         icon="📅"
@@ -193,7 +217,8 @@ export function WallStatStrip() {
         widgetId="week"
         label="Week"
         detail="Days planned"
-        value={plannedDays === null ? "—" : String(plannedDays)}
+        value={plannedDays === null ? "" : String(plannedDays)}
+        pending={plannedDays === null}
         tone="accent"
       />
     </View>

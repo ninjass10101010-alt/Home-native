@@ -8,9 +8,19 @@ import { displayEmoji } from "../../tasks/claim";
 import { isPhotoUri } from "../../ui/MemberRail";
 import { weekStartMondayISO } from "./data";
 import { WidgetFrame } from "./WidgetFrame";
+import { AnimatedEmoji } from "../../ui/AnimatedEmoji";
+import { EmptyState } from "../../ui/EmptyState";
 
 const EMPTY_LEADERBOARD = "Be the first!";
 const EMPTY_PRIZES = "New week — prizes up for grabs 🥇🥈🥉";
+/**
+ * The signed-out wall. The race needs a session (/api/tasks/sync is
+ * server-auth), so the card says so — it never pretends the week is empty
+ * and it never fakes a podium. It keeps the reference's empty-state SHAPE
+ * (crown → a bold line → the prizes line) so the tile reads as a state
+ * instead of a hole in the wall.
+ */
+const GUEST_LEADERBOARD = "Sign in with your PIN";
 const VISIBLE_RANKS = 3;
 
 interface Ranked {
@@ -84,7 +94,7 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
   // U5.1 taxonomy: "unreachable" is the family's connection; "server" is the
   // NAS answering and failing — an error, not offline.
   const failure = guest
-    ? "unauthorised"
+    ? null
     : syncError === "unreachable"
       ? "offline"
       : syncError === "unauthorized"
@@ -92,7 +102,13 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
         : syncError === "server"
           ? "error"
           : null;
-  const status = guest || (syncError !== null && !hasData) ? "error" : hasData ? "ready" : "loading";
+  const status = guest
+    ? "ready"
+    : syncError !== null && !hasData
+      ? "error"
+      : hasData
+        ? "ready"
+        : "loading";
 
   return (
     <WidgetFrame
@@ -105,23 +121,15 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
       stale={!guest && syncStale}
       onRetry={refreshNow}
     >
-      {hasData ? (
-        <View style={{ gap: 4, alignSelf: "stretch" }}>
-          {ranked.length === 0 ? (
-            // The reference's empty week: crown + the prizes line, NO countdown.
-            <View style={{ alignItems: "center", gap: 4 }}>
-              <Text style={{ fontSize: 32 }}>👑</Text>
-              <Text
-                style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}
-              >
-                {EMPTY_LEADERBOARD}
-              </Text>
-              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
-                {EMPTY_PRIZES}
-              </Text>
-            </View>
-          ) : (
-            ranked.slice(0, VISIBLE_RANKS).map((r) => {
+      {guest ? (
+        <RaceState title={GUEST_LEADERBOARD} />
+      ) : hasData ? (
+        ranked.length === 0 ? (
+          // The reference's empty week: crown + the prizes line, NO countdown.
+          <RaceState title={EMPTY_LEADERBOARD} />
+        ) : (
+          <View style={{ gap: 4, alignSelf: "stretch" }}>
+            {ranked.slice(0, VISIBLE_RANKS).map((r) => {
               const m = memberFor(r.name);
               const photo = m?.emoji ? isPhotoUri(m.emoji) : false;
               return (
@@ -140,7 +148,7 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
                     {photo && m ? (
                       <Image source={{ uri: m.emoji }} style={{ width: 36, height: 36, borderRadius: 18 }} />
                     ) : (
-                      <Text style={{ fontSize: 20 }}>{displayEmoji(m?.emoji)}</Text>
+                      <AnimatedEmoji emoji={displayEmoji(m?.emoji)} size={20} />
                     )}
                   </View>
                   <Text
@@ -154,9 +162,7 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
                   </Text>
                 </View>
               );
-            })
-          )}
-          {ranked.length > 0 ? (
+            })}
             <Text
               style={{
                 color: colors["color-text-secondary"],
@@ -167,8 +173,8 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
             >
               Resets in {daysUntilReset()} days
             </Text>
-          ) : null}
-        </View>
+          </View>
+        )
       ) : null}
     </WidgetFrame>
   );
@@ -176,6 +182,42 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
 
 function medal(rank: number): string {
   return rank === 0 ? "🥇" : rank === 1 ? "🥈" : rank === 2 ? "🥉" : `${rank + 1}.`;
+}
+
+/**
+ * The reference's leaderboard empty state, in the native's house shape:
+ * the crown above a bold line, then the prizes line (the web's EmptyState
+ * + the prize-race paragraph — HomeLeaderboardWidget.tsx:231-250).
+ *
+ * The block is TOP-aligned on purpose: in the reference the crown sits ~26px
+ * under the card's rule and the card's lower half is left as air (the
+ * reference capture measures the crown's top at 26px below the rule, the
+ * title 56px below it, and the prizes line 95px below it). Centring the
+ * block in the body instead left the tile reading as a void.
+ */
+function RaceState({ title }: { title: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, alignItems: "stretch" }}>
+      <EmptyState
+        flat
+        icon={<AnimatedEmoji emoji="👑" size={30} />}
+        title={title}
+        style={{ justifyContent: "flex-start", paddingTop: 8 }}
+      />
+      <Text
+        style={{
+          color: colors["color-text-secondary"],
+          fontSize: TYPOGRAPHY.label.fontSize,
+          lineHeight: TYPOGRAPHY.label.lineHeight,
+          textAlign: "center",
+          marginTop: 12,
+        }}
+      >
+        {EMPTY_PRIZES}
+      </Text>
+    </View>
+  );
 }
 
 export default LeaderboardWidget;

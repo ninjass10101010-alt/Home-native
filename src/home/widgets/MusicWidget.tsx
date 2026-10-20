@@ -45,14 +45,20 @@ export function MusicWidget() {
           </Text>
         </Pressable>
       ) : (
-        <Pressable
-          testID="music-widget-open"
-          accessibilityRole="button"
-          accessibilityLabel={current ? `Open music. ${current.title} by ${current.artist}` : "Open music"}
-          onPress={open}
-          style={{ flex: 1, gap: 10 }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <View style={{ flex: 1, gap: 10 }}>
+          {/* The artwork/title is the "open music" target; the transport
+              controls are SIBLINGS of it, not children - a Pressable nested
+              inside a Pressable renders <button> inside <button> on web
+              (invalid HTML, and the capture harness treats it as a defect)
+              and swallows the inner tap on Android. */}
+          <Pressable
+            testID="music-widget-open"
+            accessibilityRole="button"
+            accessibilityLabel={current ? `Open music. ${current.title} by ${current.artist}` : "Open music"}
+            onPress={open}
+            style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+          >
+
             <Material tier="thin" style={{ width: ART, height: ART, borderRadius: 16, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               {current?.artworkUrl ? (
                 <Image source={{ uri: current.artworkUrl }} style={{ width: ART, height: ART }} resizeMode="cover" />
@@ -68,7 +74,7 @@ export function MusicWidget() {
                 {current ? current.artist : "Search YouTube Music from the player"}
               </Text>
             </View>
-          </View>
+          </Pressable>
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Pressable
@@ -99,11 +105,19 @@ export function MusicWidget() {
             >
               <Text style={{ fontSize: 16, color: colors["color-text-primary"] }}>▶▶</Text>
             </Pressable>
-            <Text style={{ marginLeft: "auto", color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
-              Open →
-            </Text>
+            <Pressable
+              testID="music-widget-open-link"
+              accessibilityRole="button"
+              accessibilityLabel="Open music"
+              onPress={open}
+              style={{ marginLeft: "auto", minHeight: 48, justifyContent: "center" }}
+            >
+              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+                Open →
+              </Text>
+            </Pressable>
           </View>
-        </Pressable>
+        </View>
       )}
     </WidgetFrame>
   );

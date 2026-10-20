@@ -1,5 +1,14 @@
 import React from "react";
 import Svg, { Circle, G, Path, Rect } from "react-native-svg";
+import Animated, {
+  cancelAnimation,
+  useAnimatedProps,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import {
   HOME_WIDGET_ICON_PALETTES,
@@ -9,6 +18,7 @@ import {
   type HomeWidgetIconVariant,
 } from "../theme/materials";
 import { mix } from "../theme/mix";
+import { WidgetIconMotion } from "./widgetIconMotion";
 
 export { HOME_WIDGET_ICON_VARIANTS, type HomeWidgetIconVariant };
 
@@ -122,9 +132,9 @@ function renderArtwork(
             opacity={0.45}
           />
           <G fill={p.detail}>
-            <Circle cx="16" cy="22" r="2.6" />
-            <Circle cx="24" cy="22" r="2.6" />
-            <Circle cx="32" cy="22" r="2.6" />
+            <TypingDot cx={16} cy={22} r={2.6} index={0} />
+            <TypingDot cx={24} cy={22} r={2.6} index={1} />
+            <TypingDot cx={32} cy={22} r={2.6} index={2} />
           </G>
           <Circle cx="35" cy="34" r="6" fill={accentFill} opacity={op} />
         </G>
@@ -149,19 +159,57 @@ function renderArtwork(
     case "leaderboard":
       return (
         <G>
-          <Path d="M14 7h20v11c0 7-4.5 11-10 11S14 25 14 18V7Z" fill={p.mid} />
+          {/* The web's trophy (Home-ai HomeWidgetIcon.tsx:124-138) with two
+              native corrections:
+              1. the body is a SOLID clay stack (shaded base → mid body → lit
+                 top) instead of the web's `fill="url(#…)"` gradient — a
+                 `<Defs>`-scoped gradient ref never resolves on
+                 react-native-web and dropped the whole subtree;
+              2. every shape carries a DARK KEYLINE. The disc's own tone
+                 wash is a dark olive in the dark theme and a PALE PEACH in
+                 the light one, so a flat amber cup read 4:1 on the first and
+                 1.4:1 on the second (amber on amber — the trophy vanished).
+                 The keyline (the palette's own ink) draws the silhouette in
+                 the light theme while the gold body carries it in the dark
+                 one — the trophy reads in BOTH. */}
           <Path
             d="M14 11H8v3c0 5 3 8 7 8M34 11h6v3c0 5-3 8-7 8"
-            stroke={p.lo}
-            strokeWidth="3"
+            stroke={p.ink}
+            strokeWidth="5.6"
             fill="none"
             strokeLinecap="round"
           />
-          <Path d="M24 29v7M16 42h16l-2-6H18l-2 6Z" fill={p.lo} />
-          <Circle cx="19" cy="13" r="3.2" fill={HOME_WIDGET_ICON_SHINE} opacity={0.34} />
+          <Path
+            d="M14 11H8v3c0 5 3 8 7 8M34 11h6v3c0 5-3 8-7 8"
+            stroke={p.mid}
+            strokeWidth="3.4"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <Path d="M14 7h20v11c0 7-4.5 11-10 11S14 25 14 18V7Z" fill={p.lo} />
+          <Path d="M14 7h20v11.5c-4.6 5-15.4 5-20 0V7Z" fill={p.mid} />
+          <Path d="M14 7h20v3.4c-4.6 2.4-15.4 2.4-20 0V7Z" fill={p.hi} opacity={0.92} />
+          <Path
+            d="M14 7h20v11c0 7-4.5 11-10 11S14 25 14 18V7Z"
+            fill="none"
+            stroke={p.ink}
+            strokeWidth="2.2"
+            strokeLinejoin="round"
+          />
+          <LeaderboardShine />
           <Path
             d="m24 11 2 4.2 4.6.7-3.3 3.2.8 4.6L24 21.6l-4.1 2.1.8-4.6-3.3-3.2 4.6-.7L24 11Z"
             fill={p.detail}
+            stroke={p.ink}
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
+          <Path
+            d="M24 29v7M16 42h16l-2-6H18l-2 6Z"
+            fill={p.lo}
+            stroke={p.ink}
+            strokeWidth="1.4"
+            strokeLinejoin="round"
           />
           <Rect x="33" y="33" width="9" height="9" rx="3" fill={accentFill} opacity={op} />
         </G>
@@ -331,13 +379,104 @@ function renderArtwork(
   }
 }
 
+
+/**
+ * The "ask" bubble's typing dots — the web's `.hwi-m-ask circle` rule
+ * (globals.css:4285) lifts each dot in turn, staggered by 0.16s.
+ */
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
+
+/**
+ * The leaderboard's shine — the web's `.hwi-m-leaderboard` sweep
+ * (globals.css:4238-4242), a white bar that glides across the cup.
+ *
+ * The web clips the bar to the cup (`<clipPath>`), which react-native-svg
+ * does not implement on react-native-web (no ClipPath in the web build), so
+ * the bar here stays inside the cup's straight-sided band and fades at its
+ * travel limits instead of being clipped away.
+ *
+ * The sweep rides the ARTWORK, never the disc: the shared "sweep" motion
+ * spec drives the whole icon and fades it to zero opacity for a third of
+ * every cycle, which blanked the trophy on the wall (the disc rendered as
+ * a flat empty amber circle). The leaderboard draws its own motion.
+ */
+function LeaderboardShine() {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    // The web's 5.4s sweep, held inside the cup's band.
+    const loop = withRepeat(
+      withSequence(
+        withTiming(0, { duration: 900 }),
+        withTiming(1, { duration: 1500 }),
+        withTiming(1, { duration: 900 }),
+        withTiming(0, { duration: 1200 })
+      ),
+      -1,
+      false
+    );
+    t.value = loop;
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+  const animatedProps = useAnimatedProps(() => ({
+    x: 15 + 10 * t.value,
+    opacity: t.value < 0.14 ? t.value / 0.14 : t.value > 0.86 ? (1 - t.value) / 0.14 : 0.4,
+  }));
+  return (
+    <AnimatedRect
+      x={15}
+      y={9}
+      width={5}
+      height={13}
+      rx={2.5}
+      fill={HOME_WIDGET_ICON_SHINE}
+      animatedProps={animatedProps}
+    />
+  );
+}
+
+function TypingDot({ cx, cy, r, index }: { cx: number; cy: number; r: number; index: number }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    // The web staggers the three dots by 0.16s each.
+    const loop = withRepeat(
+      withSequence(
+        withTiming(0, { duration: 525 }),
+        withTiming(1, { duration: 525 }),
+        withTiming(1, { duration: 450 })
+      ),
+      -1,
+      false
+    );
+    t.value = index > 0 ? withDelay(index * 160, loop) : loop;
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t, index]);
+  const animatedProps = useAnimatedProps(() => ({
+    opacity: t.value > 0 ? 0.8 + 0.2 * t.value : 0.8,
+    transform: [{ translateY: t.value > 0 ? -2.5 * t.value : 0 }],
+  }));
+  return <AnimatedCircle cx={cx} cy={cy} r={r} animatedProps={animatedProps} />;
+}
+
 export function HomeWidgetIcon({ variant, state = "default", size = "md", title }: HomeWidgetIconProps) {
   const { accentColor } = useTheme();
   const p = HOME_WIDGET_ICON_PALETTES[variant];
   const px = typeof size === "number" ? size : SIZE_PX[size];
   const accentFill = mix(accentColor, p.ink, 72);
 
-  return (
+  const art = (
     <Svg
       width={px}
       height={px}
@@ -349,6 +488,18 @@ export function HomeWidgetIcon({ variant, state = "default", size = "md", title 
       {renderArtwork(variant, p, accentFill, state)}
     </Svg>
   );
+
+  // The web's leaderboard motion is a shine bar INSIDE the icon
+  // (globals.css:4283 → `.hwi-m-leaderboard` rides the clipped white rect),
+  // and the leaderboard draws its own shine (see LeaderboardShine). The
+  // shared wrapper's "sweep" spec instead drives the WHOLE disc — and its
+  // opacity dips to 0 for a third of every 5.4s cycle, so the trophy
+  // BLANKED OUT: the wall showed an empty amber disc (on the device and in
+  // the capture), which is the one thing a wall icon may never do. Every
+  // other variant keeps the shared motion untouched.
+  if (variant === "leaderboard") return art;
+
+  return <WidgetIconMotion variant={variant}>{art}</WidgetIconMotion>;
 }
 
 export default HomeWidgetIcon;

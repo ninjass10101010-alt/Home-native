@@ -27,7 +27,20 @@ import {
 } from "./queue";
 import type { DownloadEntry, MediaTrack, QueueState, RepeatMode } from "./types";
 
-export const MUSIC_DIR = `${Paths.document.uri}music/`;
+/**
+ * The downloads directory — resolved LAZILY, not at module load.
+ * `Paths.document` throws on web (expo-file-system is native-only), and a
+ * module-scope read of it broke the whole app tree on the web preview
+ * (the music provider is mounted in the root layout, so the throw took the
+ * entire wall down — including the paint audit's web probe).
+ */
+export function musicDir(): string {
+  try {
+    return `${Paths.document.uri}music/`;
+  } catch {
+    return "";
+  }
+}
 
 export interface PlaybackValue {
   current: MediaTrack | null;
@@ -64,7 +77,7 @@ export interface PlaybackValue {
 const Ctx = React.createContext<PlaybackValue | null>(null);
 
 function localFileFor(id: string): File {
-  return new File(MUSIC_DIR, `${id}.m4a`);
+  return new File(musicDir(), `${id}.m4a`);
 }
 
 export function PlaybackProvider({ children }: { children: React.ReactNode }) {
@@ -252,7 +265,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     if (!current) return;
     const dest = localFileFor(current.id);
     try {
-      const directory = new Directory(MUSIC_DIR);
+      const directory = new Directory(musicDir());
       if (!directory.exists) directory.create({ intermediates: true, idempotent: true });
       const cookie = await loadSessionCookie();
       if (!dest.exists) {

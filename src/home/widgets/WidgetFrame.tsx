@@ -7,6 +7,7 @@ import { useTheme } from "../../theme/ThemeProvider";
 import { useAuth } from "../../state/AuthProvider";
 import { mix } from "../../theme/mix";
 import { Material } from "../../theme/Material";
+import { AnimatedEmoji } from "../../ui/AnimatedEmoji";
 import { mixAlpha } from "../../ui/SoftButton";
 import { READ_COPY, READ_COPY_STALE, READ_RETRY_LABEL, type ReadFailure } from "./data";
 import { WIDGET_TONES } from "../widgets";
@@ -154,7 +155,7 @@ export function WidgetFrame({
         {widgetIconVariantFor(id) ? (
           <HomeWidgetIcon variant={widgetIconVariantFor(id)!} size={38} title={title} />
         ) : (
-          <Text style={{ fontSize: 24, lineHeight: 28 }}>{icon}</Text>
+          <AnimatedEmoji emoji={icon} size={24} />
         )}
       </View>
     </View>

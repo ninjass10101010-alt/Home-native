@@ -16,6 +16,7 @@ import { ListRow } from "../ui/ListRow";
 import { useToast } from "../ui/Toast";
 import { EmergencyShield } from "./EmergencyShield";
 import { HomeWidgetIcon } from "../ui/HomeWidgetIcon";
+import { AnimatedEmoji } from "../ui/AnimatedEmoji";
 import { isPhotoUri } from "../ui/MemberRail";
 import { READ_COPY_STALE } from "./widgets/data";
 import {
@@ -232,16 +233,12 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
                 resizeMode="cover"
               />
             ) : null}
-            <Text
+            <AnimatedEmoji
+              emoji={kidEmoji(member?.emoji)}
+              size={64}
+              style={hasPhoto ? { position: "absolute", width: 0, height: 0, opacity: 0 } : undefined}
               testID="kid-emoji"
-              style={
-                hasPhoto
-                  ? { position: "absolute", width: 0, height: 0, opacity: 0 }
-                  : { fontSize: 64, lineHeight: 72 }
-              }
-            >
-              {kidEmoji(member?.emoji)}
-            </Text>
+            />
           </View>
           <Text
             style={{

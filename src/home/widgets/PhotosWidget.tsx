@@ -7,11 +7,10 @@ import { api, ApiError } from "../../api/client";
 import { photoSource, type WallPhoto } from "../../photos/library";
 import { mix } from "../../theme/mix";
 import { useTheme } from "../../theme/ThemeProvider";
-import { MOTION, TYPOGRAPHY } from "../../theme/tokens";
+import { MOTION, RADII, TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
-import { SoftButton } from "../../ui/SoftButton";
-import { READ_COPY_STALE, READ_RETRY_LABEL, useWidgetData } from "./data";
-import { WidgetFrame } from "./WidgetFrame";
+import { READ_COPY, READ_COPY_STALE, READ_RETRY_LABEL, useWidgetData } from "./data";
+import { pendingSurface } from "./WidgetFrame";
 
 interface PhotoSettings {
   rotateSeconds: number; // clamped 10–600, default 75
@@ -81,9 +80,18 @@ function fallbackCaption(takenAt?: string): string | null {
  * within one rotation. Pause/play is a hard a11y requirement (WCAG 2.2.2):
  * reduceMotion starts paused, an explicit press always wins. Cookie-auth
  * image bytes via source.headers (RN fresco).
+ *
+ * The cell is CHROME-FREE — the reference's Photos cell is the photo itself
+ * (edge to edge, one pause control at the top-right, a caption over a scrim)
+ * or a PLAIN centred state (reference/home/guest-dark.png): a muted glyph, the
+ * honest headline, one action. It never wears a title band and never wears an
+ * identity disc. The disc used to be painted by the shared WidgetFrame at
+ * (-6, -6) against the cell's own 28dp radius, so the card's corner clipped
+ * it into an orphaned sticker floating over the photo — the widget header the
+ * reference does not have.
  */
 export function PhotosWidget() {
-  const { colors, reduceMotion } = useTheme();
+  const { colors, theme, reduceMotion } = useTheme();
   const router = useRouter();
   const { status, data: batch, failure, stale, retry } = useWidgetData<PhotosState>(() => loadPhotos());
 
@@ -154,29 +162,27 @@ export function PhotosWidget() {
   const allFailed = !!data && data.photos.length > 0 && photos.length === 0;
 
   // Guest state (reference capture): "Photos unavailable" + Try again — the
-  // photo bytes are session-gated, so a signed-out wall says exactly that,
-  // never a generic PIN line on a title-bearing card.
+  // photo bytes are session-gated, so a signed-out wall says exactly that.
+  // The reference's guest cell is PLAIN and CENTRED: a muted glyph, the
+  // headline, the action. No title band, no disc, and no paragraph under the
+  // headline (the reference capture shows none).
   if (failure === "unauthorised") {
     return (
-      <View testID="photos-unavailable" style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 24 }}>
-        <Text style={{ fontSize: 32 }}>📡</Text>
-        <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>
-          Photos unavailable
-        </Text>
-        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, textAlign: "center" }}>
-          {/* React Native does not decode HTML entities in JSX text — the copy
-              lives in an expression (eslint's no-unescaped-entities parity). */}
-          {"The family photo library can't be reached right now."}
-        </Text>
-        <SoftButton variant="primary" size="sm" onPress={retry} testID="photos-unavailable-retry" accessibilityLabel="Photos unavailable. Try again">
-          {READ_RETRY_LABEL}
-        </SoftButton>
+      <View testID="photos-unavailable" style={{ flex: 1 }}>
+        <EmptyState
+          flat
+          icon="📡"
+          title="Photos unavailable"
+          actionLabel={READ_RETRY_LABEL}
+          onAction={retry}
+          style={{ flex: 1 }}
+        />
       </View>
     );
   }
 
   // Full-bleed hero (reference: the photo IS the card — no title band): the
-  // ready state renders bare; the WidgetFrame chrome serves loading/error only.
+  // ready state renders bare; the plain states below serve loading/error.
   if (status === "ready" && data) {
     if (allFailed) {
       return (
@@ -198,7 +204,7 @@ export function PhotosWidget() {
     }
     const caption = current.caption || fallbackCaption(current.takenAt);
     return (
-      <View style={{ flex: 1, borderRadius: 16, overflow: "hidden" }}>
+      <View style={{ flex: 1, borderRadius: RADII.xl, overflow: "hidden" }}>
         {prev ? (
           <Image source={photoSource(prev)} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} resizeMode="cover" />
         ) : null}
@@ -305,20 +311,54 @@ export function PhotosWidget() {
     );
   }
 
-  // Loading / non-guest failures ride the shared frame (skeletons + pill).
+  // Loading: the web paints a bare skeleton surface for this tile
+  // (`.wall-photo-skeleton`) — no title, no icon, nothing that could pass for
+  // a photo. The native paints the SAME perceivable skeleton surface the rest
+  // of the wall uses (pendingSurface clears 3:1 once composited), with the
+  // honest line under it, so the cell is a state and never a blank hole.
+  if (status === "loading") {
+    return (
+      <View
+        testID="photos-loading"
+        accessibilityLabel="Loading photos"
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: pendingSurface(colors, theme),
+        }}
+      >
+        <Text
+          style={{
+            color: colors["color-text-secondary"],
+            fontSize: TYPOGRAPHY.label.fontSize,
+            lineHeight: TYPOGRAPHY.label.lineHeight,
+            fontWeight: "600",
+          }}
+        >
+          {"Loading photos…"}
+        </Text>
+      </View>
+    );
+  }
+
+  // A failed read with nothing to show: the SAME plain centred composition as
+  // the guest state (reference parity), plus the shared read vocabulary so the
+  // family knows WHICH failure it is — offline is not the same story as a
+  // broken library. Never a title-bearing card (the reference's Photos cell
+  // has no title) and never a fabricated photo.
   return (
-    <WidgetFrame
-      id="photos"
-      icon="📸"
-      title="Photos"
-      status={status}
-      failure={failure}
-      hasData={data !== null}
-      stale={stale}
-      onRetry={retry}
-    >
-      {null}
-    </WidgetFrame>
+    <View testID="photos-error" style={{ flex: 1 }}>
+      <EmptyState
+        flat
+        icon="📡"
+        title="Photos unavailable"
+        body={failure ? READ_COPY[failure] : undefined}
+        actionLabel={READ_RETRY_LABEL}
+        onAction={retry}
+        style={{ flex: 1 }}
+      />
+    </View>
   );
 }
 

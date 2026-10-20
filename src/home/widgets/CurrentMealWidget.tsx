@@ -4,8 +4,9 @@ import { api, ApiError } from "../../api/client";
 import type { DbListEnvelope } from "../../api/types";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
-import { TYPOGRAPHY } from "../../theme/tokens";
+import { TYPOGRAPHY, RADII } from "../../theme/tokens";
 import { mix } from "../../theme/mix";
+import { AnimatedEmoji } from "../../ui/AnimatedEmoji";
 import { Chip } from "../../ui/Chip";
 import { WidgetFrame } from "./WidgetFrame";
 import { useWidgetData, weekStartMondayISO } from "./data";
@@ -37,6 +38,32 @@ const MEAL_THEMES: Record<string, { icon: string; label: string }> = {
   dinner: { icon: "🌙", label: "Dinner" },
   snack: { icon: "🍎", label: "Snack" },
 };
+
+/**
+ * The card's SEASONAL mood — the web's `atm.accentColor` (Home-ai
+ * SEASON_ATMOSPHERE) plus the season glyph.
+ *
+ * The web does NOT drive this card's hairlines from the widget tone: the
+ * time chip's border, the inner panel's edge and the emoji well's ring all
+ * ride the SEASON accent, so an autumn wall card wears a warm amber hairline
+ * on its teal glass (reference/home/parent-dark.png, captured 9 Oct). The RN
+ * token ramp carries the same four families, so the season resolves to a
+ * token colour only — no literal.
+ *
+ * The glyph mirrors the wall's own season mark (HomeWall's seasonGlyph) so
+ * the corner particle and the greeting band speak with one voice.
+ */
+function seasonMood(
+  colors: Record<string, string | undefined>,
+  fallback: string,
+  now: Date
+): { glyph: string; accent: string } {
+  const m = now.getMonth();
+  if (m >= 2 && m < 5) return { glyph: "🌸", accent: colors["color-accent-rose"] ?? fallback };
+  if (m >= 5 && m < 8) return { glyph: "☀️", accent: colors["color-accent-amber"] ?? fallback };
+  if (m >= 8 && m < 11) return { glyph: "🍂", accent: colors["color-accent-apricot"] ?? fallback };
+  return { glyph: "❄️", accent: colors["color-accent-nori"] ?? fallback };
+}
 
 /** null = unparseable (excluded from selection — a 0-min sentinel always reads "passed"). */
 function parseTimeToMinutes(t?: string): number | null {
@@ -79,7 +106,7 @@ export interface CurrentMealWidgetProps {
  * same verified db-gateway surface as events.
  */
 export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) {
-  const { colors, accentColor } = useTheme();
+  const { colors, accentColor, theme: themeName } = useTheme();
   const { member, hydrated } = useAuth();
   const guest = hydrated && !member;
   const [tickNow, setTickNow] = React.useState<Date | null>(null);
@@ -186,33 +213,86 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
   // meal accent mints the card border at 30%, matching `accentColor`+`30` web fill.
   const mint = colors["color-accent-mint"] ?? accentColor;
 
-  // Title band (reference): plain "🌙 Dinner Time" title with a COMPACT time
-  // chip beside it — styled with mint translucent glass matching web reference.
+  // The header + the day's panel are tinted by the SEASON (the web's
+  // atmospheric accent), not by the widget tone — see seasonMood().
+  const season = seasonMood(colors, accentColor, now);
+
+  // The chip's ink is the widget tone's strong variant (the web's
+  // `--widget-accent-strong`): mint ink on the seasonal hairline.
+  const mintInk = colors["color-accent-ink-mint"] ?? mint;
+
+  // The identity disc (WidgetFrame) hangs at the card's top-left corner and
+  // is 52dp tall; the reference's title band starts BELOW it (the web seats
+  // the disc over the card edge, the RN cell is inset by the Material's 14dp
+  // padding). This pad keeps the moon glyph clear of the disc — before it,
+  // the disc ate the 🌙.
+  const HEADER_TOP_PAD = 52;
+
+  // The time chip — the web's `meal-time-badge`: a seasonal hairline over a
+  // seasonal wash, with the widget tone's strong ink. It is NOT a solid mint
+  // pill: mint-on-mint was 1.9:1 in the baseline capture. The web's
+  // `rounded-lg` resolves to the app's --radius-lg (20px), so the chip reads
+  // as a soft stadium, not a hard 10px pill.
+  const timeChip = (
+    <View
+      style={{
+        borderRadius: RADII.lg,
+        borderWidth: 1,
+        borderColor: mix(season.accent, "transparent", 24),
+        backgroundColor: mix(season.accent, "transparent", 9),
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+      }}
+    >
+      <Text style={{ color: mintInk, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+        {timeStr}
+      </Text>
+    </View>
+  );
+
+  // Header band (reference): a centered row — the slot's glyph, the serif-free
+  // bold slot title, then the compact time chip — with the subtitle under it.
   const header = (
-    <View style={{ alignItems: "center", gap: 6 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, justifyContent: "center" }}>
+    <View style={{ alignItems: "center", paddingTop: HEADER_TOP_PAD }}>
+      {/* The season's floating particle (the web's `meal-float-gentle`
+          corner emoji), seated at the card's top-right like the reference. */}
+      <Text
+        style={{
+          position: "absolute",
+          top: -6,
+          right: -6,
+          fontSize: 30,
+          opacity: 0.16,
+        }}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        {season.glyph}
+      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <AnimatedEmoji emoji={theme.icon} size={20} />
         <Text
-          style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}
+          style={{
+            color: colors["color-text-primary"],
+            fontSize: TYPOGRAPHY.title.fontSize,
+            fontWeight: "700",
+            lineHeight: TYPOGRAPHY.title.lineHeight,
+          }}
           accessibilityRole="header"
         >
-          {`${theme.icon} ${theme.label} Time`}
+          {`${theme.label} Time`}
         </Text>
-        <View
-          style={{
-            borderRadius: 9999,
-            borderWidth: 1,
-            borderColor: mix(mint, "transparent", 32),
-            backgroundColor: mix(mint, "transparent", 16),
-            paddingHorizontal: 12,
-            paddingVertical: 4,
-          }}
-        >
-          <Text style={{ color: colors["color-accent-ink-mint"] ?? mint, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
-            {timeStr}
-          </Text>
-        </View>
+        {timeChip}
       </View>
-      <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+      <Text
+        style={{
+          color: colors["color-text-secondary"],
+          fontSize: TYPOGRAPHY.label.fontSize,
+          lineHeight: TYPOGRAPHY.label.lineHeight,
+          marginTop: 4,
+          textAlign: "center",
+        }}
+      >
         {subtitle}
       </Text>
     </View>
@@ -254,31 +334,50 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
       header={header}
       showDisc
     >
+      {/* The day's meal panel (the web's `meal-card-glow`): a COMPACT row —
+          the reference seats it directly under the subtitle with the rest of
+          the card left as deep glass. It used to be `flex: 1`, which let the
+          inner card swallow the whole cell and turned the meal name into a
+          caption floating on a pale wash. */}
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: 14,
-          borderRadius: 20,
+          gap: 12,
+          // The web's `rounded-2xl` resolves to the app's --radius-2xl (36px).
+          borderRadius: RADII.xxl,
           borderWidth: 1,
-          borderColor: mix(mint, "transparent", 24),
-          backgroundColor: mix(mint, "transparent", 8),
+          borderColor: mix(season.accent, "transparent", 9),
+          backgroundColor: mix(season.accent, "transparent", 4),
           padding: 14,
-          flex: 1,
-          minHeight: 0,
         }}
       >
+        {/* The plate well (the web's `meal-emoji-glow`): the seasonal tint
+            under a warm ring, never an opaque surface tile — an opaque tile
+            turned the white 🍽️ into a white blob on a white card. The web's
+            `rounded-2xl` on a 56px box clamps to a circle, and the warm halo
+            around it is the card's one piece of depth. */}
         <View
           style={{
-            width: 64,
-            height: 64,
-            borderRadius: 16,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: colors["color-surface-2"],
+            backgroundColor:
+              themeName === "light"
+                ? mix(season.accent, "black", 78)
+                : mix(season.accent, "transparent", 8),
+            borderWidth: 1,
+            borderColor: mix(season.accent, "transparent", 32),
+            shadowColor: mix(season.accent, "transparent", 30),
+            shadowOpacity: 1,
+            shadowRadius: 16,
+            shadowOffset: { width: 0, height: 0 },
+            elevation: 6,
           }}
         >
-          <Text style={{ fontSize: 28 }}>{meal?.emoji || "🍽️"}</Text>
+          <AnimatedEmoji emoji={meal?.emoji || "🍽️"} size={28} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text
@@ -291,9 +390,24 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
             tags.length > 0 ? (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                 {tags.slice(0, 3).map((t) => (
-                  <Chip key={t} as="span" size="sm" tone="success" label={t} />
+                  <Chip
+                    key={t}
+                    as="span"
+                    size="sm"
+                    tone="success"
+                    label={t}
+                    style={{ height: 26, paddingHorizontal: 10, borderRadius: 8 }}
+                  />
                 ))}
-                {tags.length > 3 ? <Chip as="span" size="sm" tone="neutral" label={`+${tags.length - 3}`} /> : null}
+                {tags.length > 3 ? (
+                  <Chip
+                    as="span"
+                    size="sm"
+                    tone="neutral"
+                    label={`+${tags.length - 3}`}
+                    style={{ height: 26, paddingHorizontal: 10, borderRadius: 8 }}
+                  />
+                ) : null}
               </View>
             ) : null
           ) : (
