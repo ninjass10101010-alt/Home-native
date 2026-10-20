@@ -238,6 +238,21 @@ export function FamilySection({ member }: { member: ServerMember | null }) {
                     </Text>
                   </View>
                 </View>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                  <SoftButton
+                    variant="secondary"
+                    size="sm"
+                    testID={`family-edit-${mid}`}
+                    accessibilityLabel={`Edit ${m.name}`}
+                    onPress={() => {
+                      setEditing(m);
+                      setEditorOpen(true);
+                    }}
+                    style={{ flex: 1 }}
+                  >
+                    ✎ Edit
+                  </SoftButton>
+                </View>
               </Material>
             );
           })}

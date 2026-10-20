@@ -22,6 +22,10 @@ jest.mock("../src/api/client", () => ({
 const { api } = jest.requireMock("../src/api/client") as { api: jest.Mock };
 const { ApiError } = jest.requireActual("../src/api/client") as { ApiError: any };
 
+// Modal exit animations + multi-await flows take seconds under concurrent
+// dev load — the 5s default flakes. 20s keeps the suite honest, not slow.
+jest.setTimeout(20000);
+
 const wrap = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 const flush = () => act(async () => {});
 
@@ -193,5 +197,65 @@ describe("FamilySection — add member flow", () => {
       expect(r.getByTestId("family-field-name")).toBeTruthy(); // failure keeps the form
       r.unmount();
     }
+  });
+});
+
+describe("FamilySection — edit member flow", () => {
+  const openEdit = async (id = "p1") => {
+    memberRoute();
+    const r = render(<FamilySection member={parent} />, { wrapper: wrap });
+    await r.findByTestId(`family-member-${id}`);
+    fireEvent.press(r.getByTestId(`family-edit-${id}`));
+    await r.findByTestId("family-field-name");
+    return r;
+  };
+
+  it("edit mode prefills the form from the member", async () => {
+    const r = await openEdit();
+    expect(r.getByTestId("family-field-name").props.value).toBe("Rebecca (Mom)");
+    expect(r.getByTestId("family-role-parent").props.accessibilityState?.selected).toBe(true);
+    expect(r.getByTestId("family-size-md").props.accessibilityState?.selected).toBe(true);
+    expect(r.getByTestId("family-field-glow").props.accessibilityState?.checked).toBe(false);
+    expect(r.getByTestId("family-field-pin")).toBeTruthy();
+  });
+
+  it("stored sm size + glow prefill on a child row (legacy base maps to md)", async () => {
+    const r = await openEdit("c1");
+    expect(r.getByTestId("family-size-sm").props.accessibilityState?.selected).toBe(true);
+    expect(r.getByTestId("family-field-glow").props.accessibilityState?.checked).toBe(true);
+  });
+
+  it("PATCH body carries { id, name, patch } with the typed PIN; success closes and feeds back", async () => {
+    const r = await openEdit();
+    fireEvent.changeText(r.getByTestId("family-field-name"), "Becky");
+    fireEvent.changeText(r.getByTestId("family-field-pin"), "5678");
+    fireEvent.press(r.getByTestId("family-editor-save"));
+    expect(await r.findByText("Updated Becky.")).toBeTruthy();
+    const patches = writeCalls("PATCH");
+    expect(patches).toHaveLength(1);
+    expect(patches[0][1].body).toEqual({
+      id: "p1",
+      name: "Rebecca (Mom)",
+      patch: { name: "Becky", emoji: "🐱", role: "parent", age: undefined, avatarSize: "md", glow: false, pin: "5678" },
+    });
+    // The Modal unmounts after its exit animation — wait for it.
+    await waitFor(() => expect(r.queryByTestId("family-field-name")).toBeNull());
+    expect(storedPayloads()).not.toContain("5678");
+  });
+
+  it("blank PIN ⇒ the pin key is never sent", async () => {
+    const r = await openEdit();
+    fireEvent.changeText(r.getByTestId("family-field-name"), "Becky");
+    fireEvent.press(r.getByTestId("family-editor-save"));
+    await r.findByText("Updated Becky.");
+    expect("pin" in writeCalls("PATCH")[0][1].body.patch).toBe(false);
+  });
+
+  it("PATCH 404 → the changed-on-server copy and the dialog stays open", async () => {
+    const r = await openEdit();
+    memberRoute({ patch: new ApiError({ message: "Member not found", status: 404, code: "Member not found", body: { error: "Member not found" } }) });
+    fireEvent.press(r.getByTestId("family-editor-save"));
+    expect(await r.findByText("That member changed on the server — the roster just refreshed.")).toBeTruthy();
+    expect(r.getByTestId("family-field-name")).toBeTruthy();
   });
 });
