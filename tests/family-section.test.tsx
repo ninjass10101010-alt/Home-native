@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { act, fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
@@ -50,6 +50,13 @@ const memberRoute = (opts: { get?: unknown; post?: unknown; patch?: unknown; del
     }
     return Promise.reject(new ApiError({ message: "unmapped path", status: 404, code: "not_found" }));
   });
+
+const writeCalls = (method: string) =>
+  api.mock.calls.filter((c: any[]) => c[0] === "/api/members/admin" && c[1]?.method === method);
+const getCalls = () =>
+  api.mock.calls.filter((c: any[]) => c[0].startsWith("/api/members/admin") && (!c[1] || !c[1].method));
+const storedPayloads = () =>
+  (AsyncStorage.setItem as jest.Mock).mock.calls.map((c: any[]) => c[1]).join("\n");
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -106,5 +113,85 @@ describe("FamilySection — roster read", () => {
     memberRoute({ get: { members: [{ ...child, emoji: "http://nas.local:3000/api/photos/file?r=1&f=a.jpg" }], source: "live" } });
     const { findByTestId } = render(<FamilySection member={parent} />, { wrapper: wrap });
     expect(await findByTestId("family-member-c1")).toBeTruthy();
+  });
+});
+
+describe("FamilySection — add member flow", () => {
+  const openAddDialog = async () => {
+    memberRoute();
+    const r = render(<FamilySection member={parent} />, { wrapper: wrap });
+    await r.findByTestId("family-member-p1");
+    fireEvent.press(r.getByTestId("family-add-member"));
+    await r.findByTestId("family-field-name");
+    return r;
+  };
+
+  it("add mode shows the intro copy and no PIN field", async () => {
+    const { getByTestId, queryByTestId, getByText } = await openAddDialog();
+    expect(queryByTestId("family-field-pin")).toBeNull();
+    expect(getByText("The server assigns their starter PIN after the member is added.")).toBeTruthy();
+    expect(getByTestId("family-role-child").props.accessibilityState?.selected).toBe(true);
+  });
+
+  it("validation: empty name and bad age block the save with honest copy", async () => {
+    const { getByTestId, getByText } = await openAddDialog();
+    fireEvent.press(getByTestId("family-editor-save"));
+    expect(getByText("Enter a name so tasks and avatars know who this is.")).toBeTruthy();
+    fireEvent.changeText(getByTestId("family-field-name"), "Waffles Jr");
+    fireEvent.changeText(getByTestId("family-field-age"), "999");
+    fireEvent.press(getByTestId("family-editor-save"));
+    expect(getByText("Age must be 1–120 (or blank).")).toBeTruthy();
+    expect(writeCalls("POST")).toHaveLength(0);
+  });
+
+  it("happy add: POST body shape, starter PIN panel, Done clears, roster refetch, PIN never stored", async () => {
+    const r = await openAddDialog();
+    fireEvent.changeText(r.getByTestId("family-field-name"), "Waffles Jr");
+    fireEvent.press(r.getByTestId("family-role-pet"));
+    memberRoute({ post: { success: true, starterPin: "4321" } });
+    fireEvent.press(r.getByTestId("family-editor-save"));
+    expect(await r.findByTestId("family-starter-pin")).toBeTruthy();
+    expect(r.getByTestId("family-starter-pin").props.children).toBe("4321");
+    const posts = writeCalls("POST");
+    expect(posts).toHaveLength(1);
+    expect(posts[0][1].body).toMatchObject({
+      name: "Waffles Jr", emoji: "😊", role: "pet", avatarSize: "md", glow: false,
+    });
+    expect(typeof posts[0][1].body.joined).toBe("string");
+    expect(posts[0][1].body.joined.length).toBeGreaterThan(0);
+    fireEvent.press(r.getByTestId("family-starter-pin-done"));
+    // The Modal unmounts after its exit animation — wait for it.
+    await waitFor(() => expect(r.queryByTestId("family-field-name")).toBeNull());
+    expect(await r.findByText("Added Waffles Jr.")).toBeTruthy();
+    expect(getCalls().length).toBeGreaterThanOrEqual(2); // initial read + post-save refetch
+    expect(storedPayloads()).not.toContain("4321");
+  });
+
+  it("server omits the starter PIN → honest copy, dialog stays open, roster still refreshes", async () => {
+    const r = await openAddDialog();
+    fireEvent.changeText(r.getByTestId("family-field-name"), "Mia");
+    memberRoute({ post: { success: true } });
+    fireEvent.press(r.getByTestId("family-editor-save"));
+    expect(await r.findByText("Member added, but the server did not return a starter PIN. Try again.")).toBeTruthy();
+    expect(r.getByTestId("family-field-name")).toBeTruthy();
+    expect(getCalls().length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("write errors map to honest copy: 403 adults, 409 duplicate, unreachable, other", async () => {
+    const cases: { err: any; copy: string }[] = [
+      { err: new ApiError({ message: "adult_only", status: 403, code: "adult_only", body: { error: "adult_only" } }), copy: "Adults only — sign in as a parent to add members." },
+      { err: new ApiError({ message: "duplicate", status: 409, code: "duplicate", body: { error: "duplicate" } }), copy: "Waffles Jr is already on the family list." },
+      { err: new ApiError({ message: "unreachable", status: 0, code: "unreachable" }), copy: "Couldn't reach Consuela — check the connection and try again." },
+      { err: new ApiError({ message: "http_500", status: 500, code: "http_500" }), copy: "Couldn't save that change. Try again." },
+    ];
+    for (const c of cases) {
+      const r = await openAddDialog();
+      fireEvent.changeText(r.getByTestId("family-field-name"), "Waffles Jr");
+      memberRoute({ post: c.err });
+      fireEvent.press(r.getByTestId("family-editor-save"));
+      expect(await r.findByText(c.copy)).toBeTruthy();
+      expect(r.getByTestId("family-field-name")).toBeTruthy(); // failure keeps the form
+      r.unmount();
+    }
   });
 });

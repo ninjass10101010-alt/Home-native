@@ -167,3 +167,46 @@ export async function listMembersSmart(): Promise<MembersResult> {
     return { members: FALLBACK_MEMBERS.map((m) => ({ ...m })), source: "fallback", reason };
   }
 }
+
+export type MemberRole = "parent" | "child" | "pet";
+export type MemberAvatarSize = "xs" | "sm" | "md" | "lg";
+
+export interface MemberAdminPayload {
+  name: string;
+  emoji: string;
+  role: MemberRole;
+  age?: number;
+  avatarSize: MemberAvatarSize;
+  glow: boolean;
+}
+
+export interface MemberPatchPayload {
+  name?: string;
+  emoji?: string;
+  role?: MemberRole;
+  age?: number;
+  avatarSize?: MemberAvatarSize;
+  glow?: boolean;
+  pin?: string;
+}
+
+/** POST /api/members/admin — parent-only (the server re-reads the live
+ *  PocketBase identity; the wall renders the verdict). `joined` is the
+ *  "Mon YYYY" display string web parity sends on create. */
+export async function addMember(payload: MemberAdminPayload): Promise<{ starterPin?: string }> {
+  const joined = new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  return api<{ starterPin?: string }>("/api/members/admin", {
+    method: "POST",
+    body: { ...payload, joined },
+  });
+}
+
+/** PATCH /api/members/admin — { id, name, patch } (web body shape; the
+ *  `pin` key only travels when the parent typed one). */
+export async function updateMember(args: {
+  id: string;
+  name: string;
+  patch: MemberPatchPayload;
+}): Promise<void> {
+  await api("/api/members/admin", { method: "PATCH", body: args });
+}
