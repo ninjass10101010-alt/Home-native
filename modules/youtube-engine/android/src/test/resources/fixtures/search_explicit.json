@@ -1,0 +1,3516 @@
+{
+ "contents": {
+  "tabbedSearchResultsRenderer": {
+   "tabs": [
+    {
+     "tabRenderer": {
+      "selected": true,
+      "content": {
+       "sectionListRenderer": {
+        "contents": [
+         {
+          "musicCardShelfRenderer": {
+           "trackingParams": "CJQDEPqRBRgAIhMIy62hk4fLlwMVu0IGBR07szbB",
+           "thumbnail": {
+            "musicThumbnailRenderer": {
+             "thumbnail": {
+              "thumbnails": [
+               {
+                "url": "https://i.ytimg.com/vi/xFYQQPAOz7Y/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3lh_5HvRJQh-u5raoyEpfVL5vy8hw",
+                "width": 400,
+                "height": 225
+               }
+              ]
+             },
+             "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+             "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT",
+             "trackingParams": "CNQDEIS_AiITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+            }
+           },
+           "title": {
+            "runs": [
+             {
+              "text": "Lose Yourself",
+              "navigationEndpoint": {
+               "clickTrackingParams": "CJQDEPqRBRgAIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+               "watchEndpoint": {
+                "videoId": "xFYQQPAOz7Y",
+                "watchEndpointMusicSupportedConfigs": {
+                 "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"
+                 }
+                }
+               }
+              }
+             }
+            ]
+           },
+           "subtitle": {
+            "runs": [
+             {
+              "text": "Video"
+             },
+             {
+              "text": " \u2022 "
+             },
+             {
+              "text": "Eminem",
+              "navigationEndpoint": {
+               "clickTrackingParams": "CJQDEPqRBRgAIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+               "browseEndpoint": {
+                "browseId": "UCedvOgsKFzcK3hA5taf3KoQ",
+                "browseEndpointContextSupportedConfigs": {
+                 "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                 }
+                }
+               }
+              }
+             },
+             {
+              "text": " \u2022 "
+             },
+             {
+              "text": "528M views"
+             },
+             {
+              "text": " \u2022 "
+             },
+             {
+              "text": "5:28"
+             }
+            ],
+            "accessibility": {
+             "accessibilityData": {
+              "label": "Video \u2022 Eminem \u2022 528 million views \u2022 5 minutes, 28 seconds"
+             }
+            }
+           },
+           "contents": [
+            {
+             "messageRenderer": {
+              "text": {
+               "runs": [
+                {
+                 "text": "More from YouTube"
+                }
+               ]
+              },
+              "trackingParams": "CNMDEJY7GAAiEwjLraGTh8uXAxW7QgYFHTuzNsE=",
+              "style": {
+               "value": "RENDER_STYLE_SIMPLE_HEADER"
+              }
+             }
+            },
+            {
+             "musicResponsiveListItemRenderer": {
+              "trackingParams": "CMQDEMGhCBgBIhMIy62hk4fLlwMVu0IGBR07szbB",
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://i.ytimg.com/vi/Cbtgk20s6wA/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3kSJK3evPQHR8Wepa0IlYXm0WjSZA",
+                   "width": 400,
+                   "height": 225
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT",
+                "trackingParams": "CNIDEIS_AiITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+               }
+              },
+              "overlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "3422552064",
+                   "3422552064"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "playNavigationEndpoint": {
+                   "clickTrackingParams": "CNEDEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wcoBBCi1TJU=",
+                   "watchEndpoint": {
+                    "videoId": "Cbtgk20s6wA",
+                    "watchEndpointMusicSupportedConfigs": {
+                     "watchEndpointMusicConfig": {
+                      "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                     }
+                    }
+                   }
+                  },
+                  "trackingParams": "CNEDEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wQ==",
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "iconColor": 4294967295,
+                  "backgroundColor": 0,
+                  "activeBackgroundColor": 0,
+                  "loadingIndicatorColor": 14745645,
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "iconLoadingColor": 0,
+                  "activeScaleFactor": 1,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_SMALL",
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "Play Eminem - Lose Yourself \u2022 LIVE \u2022 The 92nd Academy Awards \u2022 Oscars 2020 - \u041f\u0440\u043e\u0441\u0442\u043e \u043a\u0430\u043d\u0430\u043b"
+                   }
+                  },
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "Pause Eminem - Lose Yourself \u2022 LIVE \u2022 The 92nd Academy Awards \u2022 Oscars 2020 - \u041f\u0440\u043e\u0441\u0442\u043e \u043a\u0430\u043d\u0430\u043b"
+                   }
+                  }
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Eminem - Lose Yourself \u2022 LIVE \u2022 The 92nd Academy Awards \u2022 Oscars 2020",
+                    "navigationEndpoint": {
+                     "clickTrackingParams": "CMQDEMGhCBgBIhMIy62hk4fLlwMVu0IGBR07szbBmgEDEPQkygEEKLVMlQ==",
+                     "watchEndpoint": {
+                      "videoId": "Cbtgk20s6wA",
+                      "watchEndpointMusicSupportedConfigs": {
+                       "watchEndpointMusicConfig": {
+                        "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ]
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "\u041f\u0440\u043e\u0441\u0442\u043e \u043a\u0430\u043d\u0430\u043b",
+                    "navigationEndpoint": {
+                     "clickTrackingParams": "CMQDEMGhCBgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                     "browseEndpoint": {
+                      "browseId": "UCu01m_ntP4chy3cxwbE1aQA",
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                       }
+                      }
+                     }
+                    }
+                   },
+                   {
+                    "text": " \u2022 "
+                   },
+                   {
+                    "text": "72M views"
+                   },
+                   {
+                    "text": " \u2022 "
+                   },
+                   {
+                    "text": "4:07"
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "\u041f\u0440\u043e\u0441\u0442\u043e \u043a\u0430\u043d\u0430\u043b \u2022 72 million views \u2022 4 minutes, 7 seconds"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               }
+              ],
+              "menu": {
+               "menuRenderer": {
+                "items": [
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Start mix"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "MIX"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CNADEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbBmgEDEPQkygEEKLVMlQ==",
+                    "watchEndpoint": {
+                     "videoId": "Cbtgk20s6wA",
+                     "playlistId": "RDAMVMCbtgk20s6wA",
+                     "params": "wAEB",
+                     "loggingContext": {
+                      "vssLoggingContext": {
+                       "serializedContextData": "GhFSREFNVk1DYnRnazIwczZ3QQ%3D%3D"
+                      }
+                     },
+                     "watchEndpointMusicSupportedConfigs": {
+                      "watchEndpointMusicConfig": {
+                       "musicVideoType": "MUSIC_VIDEO_TYPE_UGC"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CNADEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Play next"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "QUEUE_PLAY_NEXT"
+                   },
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CM4DEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "Cbtgk20s6wA",
+                      "onEmptyQueue": {
+                       "clickTrackingParams": "CM4DEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "watchEndpoint": {
+                        "videoId": "Cbtgk20s6wA"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AFTER_CURRENT_VIDEO",
+                     "commands": [
+                      {
+                       "clickTrackingParams": "CM4DEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "Song will play next"
+                            }
+                           ]
+                          },
+                          "trackingParams": "CM8DEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   },
+                   "trackingParams": "CM4DEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Add to queue"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_REMOTE_QUEUE"
+                   },
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CMwDEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "Cbtgk20s6wA",
+                      "onEmptyQueue": {
+                       "clickTrackingParams": "CMwDEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "watchEndpoint": {
+                        "videoId": "Cbtgk20s6wA"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AT_END",
+                     "commands": [
+                      {
+                       "clickTrackingParams": "CMwDEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "Song added to queue"
+                            }
+                           ]
+                          },
+                          "trackingParams": "CM0DEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   },
+                   "trackingParams": "CMwDEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "toggleMenuServiceItemRenderer": {
+                   "defaultText": {
+                    "runs": [
+                     {
+                      "text": "Add to liked songs"
+                     }
+                    ]
+                   },
+                   "defaultIcon": {
+                    "iconType": "FAVORITE"
+                   },
+                   "defaultServiceEndpoint": {
+                    "clickTrackingParams": "CMoDEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "Like this song"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "Improve recommendations and save music after signing in"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "Sign in"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "clickTrackingParams": "CMsDEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         },
+                         "trackingParams": "CMsDEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "toggledText": {
+                    "runs": [
+                     {
+                      "text": "Remove from liked songs"
+                     }
+                    ]
+                   },
+                   "toggledIcon": {
+                    "iconType": "UNFAVORITE"
+                   },
+                   "trackingParams": "CMoDEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemDownloadRenderer": {
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CMkDENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "offlineVideoEndpoint": {
+                     "videoId": "Cbtgk20s6wA",
+                     "onAddCommand": {
+                      "clickTrackingParams": "CMkDENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                      "getDownloadActionCommand": {
+                       "videoId": "Cbtgk20s6wA",
+                       "params": "CAI%3D"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CMkDENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbB",
+                   "badgeIcon": {
+                    "iconType": "PREMIUM_STANDALONE_CAIRO"
+                   }
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Save to playlist"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_PLAYLIST"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CMcDEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "Save this for later"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "Make playlists and share them after signing in"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "Sign in"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "clickTrackingParams": "CMgDEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         },
+                         "trackingParams": "CMgDEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CMcDEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Share"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "SHARE"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CMYDEJH7BRgGIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "shareEntityEndpoint": {
+                     "serializedShareEntity": "CgtDYnRnazIwczZ3QQ%3D%3D",
+                     "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+                    }
+                   },
+                   "trackingParams": "CMYDEJH7BRgGIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 }
+                ],
+                "trackingParams": "CMUDEKc7IhMIy62hk4fLlwMVu0IGBR07szbB",
+                "accessibility": {
+                 "accessibilityData": {
+                  "label": "Action menu"
+                 }
+                }
+               }
+              },
+              "playlistItemData": {
+               "videoId": "Cbtgk20s6wA"
+              },
+              "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
+              "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
+             }
+            }
+           ],
+           "buttons": [
+            {
+             "buttonRenderer": {
+              "style": "STYLE_DARK_ON_WHITE",
+              "size": "SIZE_DEFAULT",
+              "isDisabled": false,
+              "text": {
+               "runs": [
+                {
+                 "text": "Play"
+                }
+               ]
+              },
+              "icon": {
+               "iconType": "PLAY_ARROW"
+              },
+              "accessibility": {
+               "label": "Play"
+              },
+              "trackingParams": "CKUDEJTSBRgEIhMIy62hk4fLlwMVu0IGBR07szbB",
+              "accessibilityData": {
+               "accessibilityData": {
+                "label": "Play"
+               }
+              },
+              "command": {
+               "clickTrackingParams": "CKUDEJTSBRgEIhMIy62hk4fLlwMVu0IGBR07szbBMgZzZWFyY2hSFGVtaW5lbSBsb3NlIHlvdXJzZWxmmgEDEPQkygEEKLVMlQ==",
+               "watchEndpoint": {
+                "videoId": "xFYQQPAOz7Y",
+                "params": "wAEB",
+                "watchEndpointMusicSupportedConfigs": {
+                 "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"
+                 }
+                }
+               }
+              }
+             }
+            },
+            {
+             "buttonRenderer": {
+              "style": "STYLE_WHITE_TRANSLUCENT",
+              "text": {
+               "runs": [
+                {
+                 "text": "Save"
+                }
+               ]
+              },
+              "icon": {
+               "iconType": "PLAYLIST_ADD"
+              },
+              "accessibility": {
+               "label": "Save to playlist"
+              },
+              "trackingParams": "CKMDEJimCBgFIhMIy62hk4fLlwMVu0IGBR07szbB",
+              "accessibilityData": {
+               "accessibilityData": {
+                "label": "Save to playlist"
+               }
+              },
+              "command": {
+               "clickTrackingParams": "CKMDEJimCBgFIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+               "modalEndpoint": {
+                "modal": {
+                 "modalWithTitleAndButtonRenderer": {
+                  "title": {
+                   "runs": [
+                    {
+                     "text": "Save this for later"
+                    }
+                   ]
+                  },
+                  "content": {
+                   "runs": [
+                    {
+                     "text": "Make playlists and share them after signing in"
+                    }
+                   ]
+                  },
+                  "button": {
+                   "buttonRenderer": {
+                    "style": "STYLE_BLUE_TEXT",
+                    "isDisabled": false,
+                    "text": {
+                     "runs": [
+                      {
+                       "text": "Sign in"
+                      }
+                     ]
+                    },
+                    "navigationEndpoint": {
+                     "clickTrackingParams": "CKQDEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                     "signInEndpoint": {
+                      "hack": true
+                     }
+                    },
+                    "trackingParams": "CKQDEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           ],
+           "menu": {
+            "menuRenderer": {
+             "items": [
+              {
+               "menuNavigationItemRenderer": {
+                "text": {
+                 "runs": [
+                  {
+                   "text": "Start mix"
+                  }
+                 ]
+                },
+                "icon": {
+                 "iconType": "MIX"
+                },
+                "navigationEndpoint": {
+                 "clickTrackingParams": "CKIDEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbBmgEDEPQkygEEKLVMlQ==",
+                 "watchEndpoint": {
+                  "videoId": "xFYQQPAOz7Y",
+                  "playlistId": "RDAMVMxFYQQPAOz7Y",
+                  "params": "wAEB",
+                  "loggingContext": {
+                   "vssLoggingContext": {
+                    "serializedContextData": "GhFSREFNVk14RllRUVBBT3o3WQ%3D%3D"
+                   }
+                  },
+                  "watchEndpointMusicSupportedConfigs": {
+                   "watchEndpointMusicConfig": {
+                    "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"
+                   }
+                  }
+                 }
+                },
+                "trackingParams": "CKIDEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbB"
+               }
+              },
+              {
+               "menuServiceItemRenderer": {
+                "text": {
+                 "runs": [
+                  {
+                   "text": "Play next"
+                  }
+                 ]
+                },
+                "icon": {
+                 "iconType": "QUEUE_PLAY_NEXT"
+                },
+                "serviceEndpoint": {
+                 "clickTrackingParams": "CKADEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                 "queueAddEndpoint": {
+                  "queueTarget": {
+                   "videoId": "xFYQQPAOz7Y",
+                   "onEmptyQueue": {
+                    "clickTrackingParams": "CKADEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "watchEndpoint": {
+                     "videoId": "xFYQQPAOz7Y"
+                    }
+                   }
+                  },
+                  "queueInsertPosition": "INSERT_AFTER_CURRENT_VIDEO",
+                  "commands": [
+                   {
+                    "clickTrackingParams": "CKADEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "addToToastAction": {
+                     "item": {
+                      "notificationTextRenderer": {
+                       "successResponseText": {
+                        "runs": [
+                         {
+                          "text": "Song will play next"
+                         }
+                        ]
+                       },
+                       "trackingParams": "CKEDEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                      }
+                     }
+                    }
+                   }
+                  ]
+                 }
+                },
+                "trackingParams": "CKADEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbB"
+               }
+              },
+              {
+               "menuServiceItemRenderer": {
+                "text": {
+                 "runs": [
+                  {
+                   "text": "Add to queue"
+                  }
+                 ]
+                },
+                "icon": {
+                 "iconType": "ADD_TO_REMOTE_QUEUE"
+                },
+                "serviceEndpoint": {
+                 "clickTrackingParams": "CJ4DEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                 "queueAddEndpoint": {
+                  "queueTarget": {
+                   "videoId": "xFYQQPAOz7Y",
+                   "onEmptyQueue": {
+                    "clickTrackingParams": "CJ4DEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "watchEndpoint": {
+                     "videoId": "xFYQQPAOz7Y"
+                    }
+                   }
+                  },
+                  "queueInsertPosition": "INSERT_AT_END",
+                  "commands": [
+                   {
+                    "clickTrackingParams": "CJ4DEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "addToToastAction": {
+                     "item": {
+                      "notificationTextRenderer": {
+                       "successResponseText": {
+                        "runs": [
+                         {
+                          "text": "Song added to queue"
+                         }
+                        ]
+                       },
+                       "trackingParams": "CJ8DEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                      }
+                     }
+                    }
+                   }
+                  ]
+                 }
+                },
+                "trackingParams": "CJ4DEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbB"
+               }
+              },
+              {
+               "toggleMenuServiceItemRenderer": {
+                "defaultText": {
+                 "runs": [
+                  {
+                   "text": "Add to liked songs"
+                  }
+                 ]
+                },
+                "defaultIcon": {
+                 "iconType": "FAVORITE"
+                },
+                "defaultServiceEndpoint": {
+                 "clickTrackingParams": "CJwDEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                 "modalEndpoint": {
+                  "modal": {
+                   "modalWithTitleAndButtonRenderer": {
+                    "title": {
+                     "runs": [
+                      {
+                       "text": "Like this song"
+                      }
+                     ]
+                    },
+                    "content": {
+                     "runs": [
+                      {
+                       "text": "Improve recommendations and save music after signing in"
+                      }
+                     ]
+                    },
+                    "button": {
+                     "buttonRenderer": {
+                      "style": "STYLE_BLUE_TEXT",
+                      "isDisabled": false,
+                      "text": {
+                       "runs": [
+                        {
+                         "text": "Sign in"
+                        }
+                       ]
+                      },
+                      "navigationEndpoint": {
+                       "clickTrackingParams": "CJ0DEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "signInEndpoint": {
+                        "hack": true
+                       }
+                      },
+                      "trackingParams": "CJ0DEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "toggledText": {
+                 "runs": [
+                  {
+                   "text": "Remove from liked songs"
+                  }
+                 ]
+                },
+                "toggledIcon": {
+                 "iconType": "UNFAVORITE"
+                },
+                "trackingParams": "CJwDEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbB"
+               }
+              },
+              {
+               "menuServiceItemDownloadRenderer": {
+                "serviceEndpoint": {
+                 "clickTrackingParams": "CJsDENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                 "offlineVideoEndpoint": {
+                  "videoId": "xFYQQPAOz7Y",
+                  "onAddCommand": {
+                   "clickTrackingParams": "CJsDENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                   "getDownloadActionCommand": {
+                    "videoId": "xFYQQPAOz7Y",
+                    "params": "CAI%3D"
+                   }
+                  }
+                 }
+                },
+                "trackingParams": "CJsDENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbB",
+                "badgeIcon": {
+                 "iconType": "PREMIUM_STANDALONE_CAIRO"
+                }
+               }
+              },
+              {
+               "menuNavigationItemRenderer": {
+                "text": {
+                 "runs": [
+                  {
+                   "text": "Save to playlist"
+                  }
+                 ]
+                },
+                "icon": {
+                 "iconType": "ADD_TO_PLAYLIST"
+                },
+                "navigationEndpoint": {
+                 "clickTrackingParams": "CJkDEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                 "modalEndpoint": {
+                  "modal": {
+                   "modalWithTitleAndButtonRenderer": {
+                    "title": {
+                     "runs": [
+                      {
+                       "text": "Save this for later"
+                      }
+                     ]
+                    },
+                    "content": {
+                     "runs": [
+                      {
+                       "text": "Make playlists and share them after signing in"
+                      }
+                     ]
+                    },
+                    "button": {
+                     "buttonRenderer": {
+                      "style": "STYLE_BLUE_TEXT",
+                      "isDisabled": false,
+                      "text": {
+                       "runs": [
+                        {
+                         "text": "Sign in"
+                        }
+                       ]
+                      },
+                      "navigationEndpoint": {
+                       "clickTrackingParams": "CJoDEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "signInEndpoint": {
+                        "hack": true
+                       }
+                      },
+                      "trackingParams": "CJoDEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                     }
+                    }
+                   }
+                  }
+                 }
+                },
+                "trackingParams": "CJkDEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbB"
+               }
+              },
+              {
+               "menuNavigationItemRenderer": {
+                "text": {
+                 "runs": [
+                  {
+                   "text": "Go to artist"
+                  }
+                 ]
+                },
+                "icon": {
+                 "iconType": "ARTIST"
+                },
+                "navigationEndpoint": {
+                 "clickTrackingParams": "CJgDEJD7BRgGIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                 "browseEndpoint": {
+                  "browseId": "UCedvOgsKFzcK3hA5taf3KoQ",
+                  "browseEndpointContextSupportedConfigs": {
+                   "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                   }
+                  }
+                 }
+                },
+                "trackingParams": "CJgDEJD7BRgGIhMIy62hk4fLlwMVu0IGBR07szbB"
+               }
+              },
+              {
+               "menuNavigationItemRenderer": {
+                "text": {
+                 "runs": [
+                  {
+                   "text": "Share"
+                  }
+                 ]
+                },
+                "icon": {
+                 "iconType": "SHARE"
+                },
+                "navigationEndpoint": {
+                 "clickTrackingParams": "CJcDEJH7BRgHIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                 "shareEntityEndpoint": {
+                  "serializedShareEntity": "Cgt4RllRUVBBT3o3WQ%3D%3D",
+                  "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+                 }
+                },
+                "trackingParams": "CJcDEJH7BRgHIhMIy62hk4fLlwMVu0IGBR07szbB"
+               }
+              }
+             ],
+             "trackingParams": "CJYDEKc7IhMIy62hk4fLlwMVu0IGBR07szbB",
+             "accessibility": {
+              "accessibilityData": {
+               "label": "Action menu"
+              }
+             }
+            }
+           },
+           "onTap": {
+            "clickTrackingParams": "CJQDEPqRBRgAIhMIy62hk4fLlwMVu0IGBR07szbBMgZzZWFyY2hItp-7gI-IhKvEAVIUZW1pbmVtIGxvc2UgeW91cnNlbGaaAQMQ9CTKAQQotUyV",
+            "watchEndpoint": {
+             "videoId": "xFYQQPAOz7Y",
+             "watchEndpointMusicSupportedConfigs": {
+              "watchEndpointMusicConfig": {
+               "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"
+              }
+             }
+            }
+           },
+           "thumbnailOverlay": {
+            "musicItemThumbnailOverlayRenderer": {
+             "background": {
+              "verticalGradient": {
+               "gradientLayerColors": [
+                "3422552064",
+                "3422552064"
+               ]
+              }
+             },
+             "content": {
+              "musicPlayButtonRenderer": {
+               "playNavigationEndpoint": {
+                "clickTrackingParams": "CJUDEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wcoBBCi1TJU=",
+                "watchEndpoint": {
+                 "videoId": "xFYQQPAOz7Y",
+                 "watchEndpointMusicSupportedConfigs": {
+                  "watchEndpointMusicConfig": {
+                   "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"
+                  }
+                 }
+                }
+               },
+               "trackingParams": "CJUDEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wQ==",
+               "playIcon": {
+                "iconType": "PLAY_ARROW"
+               },
+               "pauseIcon": {
+                "iconType": "PAUSE"
+               },
+               "iconColor": 4294967295,
+               "backgroundColor": 0,
+               "activeBackgroundColor": 0,
+               "loadingIndicatorColor": 14745645,
+               "playingIcon": {
+                "iconType": "VOLUME_UP"
+               },
+               "iconLoadingColor": 0,
+               "activeScaleFactor": 1,
+               "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_LARGE",
+               "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+               "accessibilityPlayData": {
+                "accessibilityData": {
+                 "label": "Play Lose Yourself - Eminem"
+                }
+               },
+               "accessibilityPauseData": {
+                "accessibilityData": {
+                 "label": "Pause Lose Yourself - Eminem"
+                }
+               }
+              }
+             },
+             "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+             "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+            }
+           }
+          }
+         },
+         {
+          "itemSectionRenderer": {
+           "contents": [
+            {
+             "musicResponsiveListItemRenderer": {
+              "trackingParams": "CIEDEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsE=",
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://yt3.googleusercontent.com/2moJtcAYOkXNBpRllYC9qiJcONdI9k29nH9Q-Hjl_tdh229x0pOlPEPWvhHmO8gqhVrZrWKuNQrpi9pJ=w60-h60-s-l90-rj",
+                   "width": 60,
+                   "height": 60
+                  },
+                  {
+                   "url": "https://yt3.googleusercontent.com/2moJtcAYOkXNBpRllYC9qiJcONdI9k29nH9Q-Hjl_tdh229x0pOlPEPWvhHmO8gqhVrZrWKuNQrpi9pJ=w120-h120-s-l90-rj",
+                   "width": 120,
+                   "height": 120
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT",
+                "trackingParams": "CJMDEIS_AiITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+               }
+              },
+              "overlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "3422552064",
+                   "3422552064"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "playNavigationEndpoint": {
+                   "clickTrackingParams": "CJIDEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wcoBBCi1TJU=",
+                   "watchEndpoint": {
+                    "videoId": "zlJ0Aj9y67c",
+                    "playerParams": "0gcJCQkB-iE-y48-",
+                    "watchEndpointMusicSupportedConfigs": {
+                     "watchEndpointMusicConfig": {
+                      "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                     }
+                    }
+                   }
+                  },
+                  "trackingParams": "CJIDEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wQ==",
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "iconColor": 4294967295,
+                  "backgroundColor": 0,
+                  "activeBackgroundColor": 0,
+                  "loadingIndicatorColor": 14745645,
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "iconLoadingColor": 0,
+                  "activeScaleFactor": 1,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_SMALL",
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "Play Lose Yourself - Eminem"
+                   }
+                  },
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "Pause Lose Yourself - Eminem"
+                   }
+                  }
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Lose Yourself",
+                    "navigationEndpoint": {
+                     "clickTrackingParams": "CIEDEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsGaAQMQ9CTKAQQotUyV",
+                     "watchEndpoint": {
+                      "videoId": "zlJ0Aj9y67c",
+                      "watchEndpointMusicSupportedConfigs": {
+                       "watchEndpointMusicConfig": {
+                        "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ]
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Song"
+                   },
+                   {
+                    "text": " \u2022 "
+                   },
+                   {
+                    "text": "Eminem",
+                    "navigationEndpoint": {
+                     "clickTrackingParams": "CIEDEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsHKAQQotUyV",
+                     "browseEndpoint": {
+                      "browseId": "UCedvOgsKFzcK3hA5taf3KoQ",
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "Song \u2022 Eminem"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "2.9B plays"
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "2.9 billion plays"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               }
+              ],
+              "menu": {
+               "menuRenderer": {
+                "items": [
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Start mix"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "MIX"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CJEDEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbBmgEDEPQkygEEKLVMlQ==",
+                    "watchEndpoint": {
+                     "videoId": "zlJ0Aj9y67c",
+                     "playlistId": "RDAMVMzlJ0Aj9y67c",
+                     "params": "wAEB",
+                     "loggingContext": {
+                      "vssLoggingContext": {
+                       "serializedContextData": "GhFSREFNVk16bEowQWo5eTY3Yw%3D%3D"
+                      }
+                     },
+                     "watchEndpointMusicSupportedConfigs": {
+                      "watchEndpointMusicConfig": {
+                       "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CJEDEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Play next"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "QUEUE_PLAY_NEXT"
+                   },
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CI8DEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "zlJ0Aj9y67c",
+                      "onEmptyQueue": {
+                       "clickTrackingParams": "CI8DEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "watchEndpoint": {
+                        "videoId": "zlJ0Aj9y67c"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AFTER_CURRENT_VIDEO",
+                     "commands": [
+                      {
+                       "clickTrackingParams": "CI8DEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "Song will play next"
+                            }
+                           ]
+                          },
+                          "trackingParams": "CJADEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   },
+                   "trackingParams": "CI8DEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Add to queue"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_REMOTE_QUEUE"
+                   },
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CI0DEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "zlJ0Aj9y67c",
+                      "onEmptyQueue": {
+                       "clickTrackingParams": "CI0DEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "watchEndpoint": {
+                        "videoId": "zlJ0Aj9y67c"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AT_END",
+                     "commands": [
+                      {
+                       "clickTrackingParams": "CI0DEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "Song added to queue"
+                            }
+                           ]
+                          },
+                          "trackingParams": "CI4DEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   },
+                   "trackingParams": "CI0DEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "toggleMenuServiceItemRenderer": {
+                   "defaultText": {
+                    "runs": [
+                     {
+                      "text": "Add to liked songs"
+                     }
+                    ]
+                   },
+                   "defaultIcon": {
+                    "iconType": "FAVORITE"
+                   },
+                   "defaultServiceEndpoint": {
+                    "clickTrackingParams": "CIsDEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "Like this song"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "Improve recommendations and save music after signing in"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "Sign in"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "clickTrackingParams": "CIwDEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         },
+                         "trackingParams": "CIwDEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "toggledText": {
+                    "runs": [
+                     {
+                      "text": "Remove from liked songs"
+                     }
+                    ]
+                   },
+                   "toggledIcon": {
+                    "iconType": "UNFAVORITE"
+                   },
+                   "trackingParams": "CIsDEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemDownloadRenderer": {
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CIoDENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "offlineVideoEndpoint": {
+                     "videoId": "zlJ0Aj9y67c",
+                     "onAddCommand": {
+                      "clickTrackingParams": "CIoDENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                      "getDownloadActionCommand": {
+                       "videoId": "zlJ0Aj9y67c",
+                       "params": "CAI%3D"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CIoDENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbB",
+                   "badgeIcon": {
+                    "iconType": "PREMIUM_STANDALONE_CAIRO"
+                   }
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Save to playlist"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_PLAYLIST"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CIgDEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "Save this for later"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "Make playlists and share them after signing in"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "Sign in"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "clickTrackingParams": "CIkDEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         },
+                         "trackingParams": "CIkDEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CIgDEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Go to album"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ALBUM"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CIcDEI_7BRgGIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "browseEndpoint": {
+                     "browseId": "MPREb_iwMjyngE7Gd",
+                     "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {
+                       "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CIcDEI_7BRgGIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Go to artist"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ARTIST"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CIYDEJD7BRgHIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "browseEndpoint": {
+                     "browseId": "UCedvOgsKFzcK3hA5taf3KoQ",
+                     "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {
+                       "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CIYDEJD7BRgHIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "View song credits"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "PEOPLE_GROUP"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CIUDEK-jChgIIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "browseEndpoint": {
+                     "browseId": "MPTCzlJ0Aj9y67c",
+                     "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {
+                       "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CIUDEK-jChgIIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Share"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "SHARE"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CIQDEJH7BRgJIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "shareEntityEndpoint": {
+                     "serializedShareEntity": "Cgt6bEowQWo5eTY3Yw%3D%3D",
+                     "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+                    }
+                   },
+                   "trackingParams": "CIQDEJH7BRgJIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 }
+                ],
+                "trackingParams": "CIMDEKc7IhMIy62hk4fLlwMVu0IGBR07szbB",
+                "accessibility": {
+                 "accessibilityData": {
+                  "label": "Action menu"
+                 }
+                }
+               }
+              },
+              "badges": [
+               {
+                "musicInlineBadgeRenderer": {
+                 "trackingParams": "CIIDEKHtAhgDIhMIy62hk4fLlwMVu0IGBR07szbB",
+                 "icon": {
+                  "iconType": "MUSIC_EXPLICIT_BADGE"
+                 },
+                 "accessibilityData": {
+                  "accessibilityData": {
+                   "label": "Explicit"
+                  }
+                 }
+                }
+               }
+              ],
+              "playlistItemData": {
+               "videoId": "zlJ0Aj9y67c"
+              },
+              "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
+              "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
+             }
+            }
+           ],
+           "trackingParams": "CIADELsvGAEiEwjLraGTh8uXAxW7QgYFHTuzNsE="
+          }
+         },
+         {
+          "itemSectionRenderer": {
+           "contents": [
+            {
+             "musicResponsiveListItemRenderer": {
+              "trackingParams": "CPoCENVoGAAiEwjLraGTh8uXAxW7QgYFHTuzNsE=",
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://lh3.googleusercontent.com/JFI6JZrS-Lco4UdpqDfHY5Wgwy51VXWxmNdI7bCBU5CDlIpN6WWyisZ7MGlpjbrxEGYMFpsqoR_UwcE=w60-h60-p-l90-rj",
+                   "width": 60,
+                   "height": 60
+                  },
+                  {
+                   "url": "https://lh3.googleusercontent.com/JFI6JZrS-Lco4UdpqDfHY5Wgwy51VXWxmNdI7bCBU5CDlIpN6WWyisZ7MGlpjbrxEGYMFpsqoR_UwcE=w120-h120-p-l90-rj",
+                   "width": 120,
+                   "height": 120
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_CIRCLE",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL",
+                "trackingParams": "CP8CEIS_AiITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Eminem"
+                   }
+                  ]
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Artist"
+                   },
+                   {
+                    "text": " \u2022 "
+                   },
+                   {
+                    "text": "264M monthly audience"
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "Artist \u2022 264M monthly audience"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               }
+              ],
+              "menu": {
+               "menuRenderer": {
+                "items": [
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Shuffle play"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "MUSIC_SHUFFLE"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CP4CEJrzBRgAIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "watchPlaylistEndpoint": {
+                     "playlistId": "RDAOASZzAB4N6PSfsOwzAhxYyQ",
+                     "params": "wAEB8gECGAE%3D"
+                    }
+                   },
+                   "trackingParams": "CP4CEJrzBRgAIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Start mix"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "MIX"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CP0CEJvzBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "watchPlaylistEndpoint": {
+                     "playlistId": "RDEMASZzAB4N6PSfsOwzAhxYyQ",
+                     "params": "wAEB"
+                    }
+                   },
+                   "trackingParams": "CP0CEJvzBRgBIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Share"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "SHARE"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CPwCEJH7BRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "shareEntityEndpoint": {
+                     "serializedShareEntity": "GhhVQ2Vkdk9nc0tGemNLM2hBNXRhZjNLb1E%3D",
+                     "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+                    }
+                   },
+                   "trackingParams": "CPwCEJH7BRgCIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 }
+                ],
+                "trackingParams": "CPsCEKc7IhMIy62hk4fLlwMVu0IGBR07szbB",
+                "accessibility": {
+                 "accessibilityData": {
+                  "label": "Action menu"
+                 }
+                }
+               }
+              },
+              "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
+              "navigationEndpoint": {
+               "clickTrackingParams": "CPoCENVoGAAiEwjLraGTh8uXAxW7QgYFHTuzNsHKAQQotUyV",
+               "browseEndpoint": {
+                "browseId": "UCedvOgsKFzcK3hA5taf3KoQ",
+                "browseEndpointContextSupportedConfigs": {
+                 "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                 }
+                }
+               }
+              },
+              "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
+             }
+            }
+           ],
+           "trackingParams": "CPkCELsvGAIiEwjLraGTh8uXAxW7QgYFHTuzNsE="
+          }
+         },
+         {
+          "itemSectionRenderer": {
+           "contents": [
+            {
+             "musicResponsiveListItemRenderer": {
+              "trackingParams": "COYCEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsE=",
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://yt3.googleusercontent.com/IUuZFSUqFLMQlejTtsnLM_cB16A0T1g-savL7DYbWz5NFh2-DOw5-v9_PREJt9keX48NSan-8yUQCPM=w60-h60-l90-rj",
+                   "width": 60,
+                   "height": 60
+                  },
+                  {
+                   "url": "https://yt3.googleusercontent.com/IUuZFSUqFLMQlejTtsnLM_cB16A0T1g-savL7DYbWz5NFh2-DOw5-v9_PREJt9keX48NSan-8yUQCPM=w120-h120-l90-rj",
+                   "width": 120,
+                   "height": 120
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT",
+                "trackingParams": "CPgCEIS_AiITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+               }
+              },
+              "overlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "3422552064",
+                   "3422552064"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "playNavigationEndpoint": {
+                   "clickTrackingParams": "CPcCEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wcoBBCi1TJU=",
+                   "watchEndpoint": {
+                    "videoId": "BDrG1q-9rTY",
+                    "watchEndpointMusicSupportedConfigs": {
+                     "watchEndpointMusicConfig": {
+                      "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                     }
+                    }
+                   }
+                  },
+                  "trackingParams": "CPcCEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wQ==",
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "iconColor": 4294967295,
+                  "backgroundColor": 0,
+                  "activeBackgroundColor": 0,
+                  "loadingIndicatorColor": 14745645,
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "iconLoadingColor": 0,
+                  "activeScaleFactor": 1,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_SMALL",
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "Play Space Bound - Eminem"
+                   }
+                  },
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "Pause Space Bound - Eminem"
+                   }
+                  }
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Space Bound",
+                    "navigationEndpoint": {
+                     "clickTrackingParams": "COYCEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsGaAQMQ9CTKAQQotUyV",
+                     "watchEndpoint": {
+                      "videoId": "BDrG1q-9rTY",
+                      "watchEndpointMusicSupportedConfigs": {
+                       "watchEndpointMusicConfig": {
+                        "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ]
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Song"
+                   },
+                   {
+                    "text": " \u2022 "
+                   },
+                   {
+                    "text": "Eminem",
+                    "navigationEndpoint": {
+                     "clickTrackingParams": "COYCEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsHKAQQotUyV",
+                     "browseEndpoint": {
+                      "browseId": "UCedvOgsKFzcK3hA5taf3KoQ",
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "Song \u2022 Eminem"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "514M plays"
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "514 million plays"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               }
+              ],
+              "menu": {
+               "menuRenderer": {
+                "items": [
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Start mix"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "MIX"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CPYCEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbBmgEDEPQkygEEKLVMlQ==",
+                    "watchEndpoint": {
+                     "videoId": "BDrG1q-9rTY",
+                     "playlistId": "RDAMVMBDrG1q-9rTY",
+                     "params": "wAEB",
+                     "loggingContext": {
+                      "vssLoggingContext": {
+                       "serializedContextData": "GhFSREFNVk1CRHJHMXEtOXJUWQ%3D%3D"
+                      }
+                     },
+                     "watchEndpointMusicSupportedConfigs": {
+                      "watchEndpointMusicConfig": {
+                       "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CPYCEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Play next"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "QUEUE_PLAY_NEXT"
+                   },
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CPQCEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "BDrG1q-9rTY",
+                      "onEmptyQueue": {
+                       "clickTrackingParams": "CPQCEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "watchEndpoint": {
+                        "videoId": "BDrG1q-9rTY"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AFTER_CURRENT_VIDEO",
+                     "commands": [
+                      {
+                       "clickTrackingParams": "CPQCEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "Song will play next"
+                            }
+                           ]
+                          },
+                          "trackingParams": "CPUCEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   },
+                   "trackingParams": "CPQCEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Add to queue"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_REMOTE_QUEUE"
+                   },
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CPICEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "BDrG1q-9rTY",
+                      "onEmptyQueue": {
+                       "clickTrackingParams": "CPICEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "watchEndpoint": {
+                        "videoId": "BDrG1q-9rTY"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AT_END",
+                     "commands": [
+                      {
+                       "clickTrackingParams": "CPICEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "Song added to queue"
+                            }
+                           ]
+                          },
+                          "trackingParams": "CPMCEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   },
+                   "trackingParams": "CPICEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "toggleMenuServiceItemRenderer": {
+                   "defaultText": {
+                    "runs": [
+                     {
+                      "text": "Add to liked songs"
+                     }
+                    ]
+                   },
+                   "defaultIcon": {
+                    "iconType": "FAVORITE"
+                   },
+                   "defaultServiceEndpoint": {
+                    "clickTrackingParams": "CPACEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "Like this song"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "Improve recommendations and save music after signing in"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "Sign in"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "clickTrackingParams": "CPECEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         },
+                         "trackingParams": "CPECEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "toggledText": {
+                    "runs": [
+                     {
+                      "text": "Remove from liked songs"
+                     }
+                    ]
+                   },
+                   "toggledIcon": {
+                    "iconType": "UNFAVORITE"
+                   },
+                   "trackingParams": "CPACEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemDownloadRenderer": {
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CO8CENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "offlineVideoEndpoint": {
+                     "videoId": "BDrG1q-9rTY",
+                     "onAddCommand": {
+                      "clickTrackingParams": "CO8CENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                      "getDownloadActionCommand": {
+                       "videoId": "BDrG1q-9rTY",
+                       "params": "CAI%3D"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CO8CENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbB",
+                   "badgeIcon": {
+                    "iconType": "PREMIUM_STANDALONE_CAIRO"
+                   }
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Save to playlist"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_PLAYLIST"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CO0CEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "Save this for later"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "Make playlists and share them after signing in"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "Sign in"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "clickTrackingParams": "CO4CEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         },
+                         "trackingParams": "CO4CEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CO0CEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Go to album"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ALBUM"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "COwCEI_7BRgGIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "browseEndpoint": {
+                     "browseId": "MPREb_UUFKiZYr3uO",
+                     "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {
+                       "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "COwCEI_7BRgGIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Go to artist"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ARTIST"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "COsCEJD7BRgHIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "browseEndpoint": {
+                     "browseId": "UCedvOgsKFzcK3hA5taf3KoQ",
+                     "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {
+                       "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "COsCEJD7BRgHIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "View song credits"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "PEOPLE_GROUP"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "COoCEK-jChgIIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "browseEndpoint": {
+                     "browseId": "MPTCBDrG1q-9rTY",
+                     "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {
+                       "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "COoCEK-jChgIIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Share"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "SHARE"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "COkCEJH7BRgJIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "shareEntityEndpoint": {
+                     "serializedShareEntity": "CgtCRHJHMXEtOXJUWQ%3D%3D",
+                     "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+                    }
+                   },
+                   "trackingParams": "COkCEJH7BRgJIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 }
+                ],
+                "trackingParams": "COgCEKc7IhMIy62hk4fLlwMVu0IGBR07szbB",
+                "accessibility": {
+                 "accessibilityData": {
+                  "label": "Action menu"
+                 }
+                }
+               }
+              },
+              "badges": [
+               {
+                "musicInlineBadgeRenderer": {
+                 "trackingParams": "COcCEKHtAhgDIhMIy62hk4fLlwMVu0IGBR07szbB",
+                 "icon": {
+                  "iconType": "MUSIC_EXPLICIT_BADGE"
+                 },
+                 "accessibilityData": {
+                  "accessibilityData": {
+                   "label": "Explicit"
+                  }
+                 }
+                }
+               }
+              ],
+              "playlistItemData": {
+               "videoId": "BDrG1q-9rTY"
+              },
+              "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
+              "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
+             }
+            }
+           ],
+           "trackingParams": "COUCELsvGAMiEwjLraGTh8uXAxW7QgYFHTuzNsE="
+          }
+         },
+         {
+          "itemSectionRenderer": {
+           "contents": [
+            {
+             "musicResponsiveListItemRenderer": {
+              "trackingParams": "CNICEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsE=",
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://yt3.googleusercontent.com/GJmbTYfaMrWuPSzhOAy7jGCQ70a2UN2-0moTq-uh_Prd73-Au51FDHhGteg543a7iBv1Y9SPm4huMSBS=w60-h60-s-l90-rj",
+                   "width": 60,
+                   "height": 60
+                  },
+                  {
+                   "url": "https://yt3.googleusercontent.com/GJmbTYfaMrWuPSzhOAy7jGCQ70a2UN2-0moTq-uh_Prd73-Au51FDHhGteg543a7iBv1Y9SPm4huMSBS=w120-h120-s-l90-rj",
+                   "width": 120,
+                   "height": 120
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT",
+                "trackingParams": "COQCEIS_AiITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+               }
+              },
+              "overlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "3422552064",
+                   "3422552064"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "playNavigationEndpoint": {
+                   "clickTrackingParams": "COMCEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wcoBBCi1TJU=",
+                   "watchEndpoint": {
+                    "videoId": "MJNGXnvHYPg",
+                    "watchEndpointMusicSupportedConfigs": {
+                     "watchEndpointMusicConfig": {
+                      "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                     }
+                    }
+                   }
+                  },
+                  "trackingParams": "COMCEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wQ==",
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "iconColor": 4294967295,
+                  "backgroundColor": 0,
+                  "activeBackgroundColor": 0,
+                  "loadingIndicatorColor": 14745645,
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "iconLoadingColor": 0,
+                  "activeScaleFactor": 1,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_SMALL",
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "Play Sing For The Moment - Eminem"
+                   }
+                  },
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "Pause Sing For The Moment - Eminem"
+                   }
+                  }
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Sing For The Moment",
+                    "navigationEndpoint": {
+                     "clickTrackingParams": "CNICEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsGaAQMQ9CTKAQQotUyV",
+                     "watchEndpoint": {
+                      "videoId": "MJNGXnvHYPg",
+                      "watchEndpointMusicSupportedConfigs": {
+                       "watchEndpointMusicConfig": {
+                        "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ]
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Song"
+                   },
+                   {
+                    "text": " \u2022 "
+                   },
+                   {
+                    "text": "Eminem",
+                    "navigationEndpoint": {
+                     "clickTrackingParams": "CNICEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsHKAQQotUyV",
+                     "browseEndpoint": {
+                      "browseId": "UCedvOgsKFzcK3hA5taf3KoQ",
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "Song \u2022 Eminem"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "886M plays"
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "886 million plays"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               }
+              ],
+              "menu": {
+               "menuRenderer": {
+                "items": [
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Start mix"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "MIX"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "COICEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbBmgEDEPQkygEEKLVMlQ==",
+                    "watchEndpoint": {
+                     "videoId": "MJNGXnvHYPg",
+                     "playlistId": "RDAMVMMJNGXnvHYPg",
+                     "params": "wAEB",
+                     "loggingContext": {
+                      "vssLoggingContext": {
+                       "serializedContextData": "GhFSREFNVk1NSk5HWG52SFlQZw%3D%3D"
+                      }
+                     },
+                     "watchEndpointMusicSupportedConfigs": {
+                      "watchEndpointMusicConfig": {
+                       "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "COICEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Play next"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "QUEUE_PLAY_NEXT"
+                   },
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "COACEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "MJNGXnvHYPg",
+                      "onEmptyQueue": {
+                       "clickTrackingParams": "COACEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "watchEndpoint": {
+                        "videoId": "MJNGXnvHYPg",
+                        "playerParams": "0gcJCbMBfxgHrFLt"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AFTER_CURRENT_VIDEO",
+                     "commands": [
+                      {
+                       "clickTrackingParams": "COACEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "Song will play next"
+                            }
+                           ]
+                          },
+                          "trackingParams": "COECEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   },
+                   "trackingParams": "COACEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Add to queue"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_REMOTE_QUEUE"
+                   },
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CN4CEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "MJNGXnvHYPg",
+                      "onEmptyQueue": {
+                       "clickTrackingParams": "CN4CEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "watchEndpoint": {
+                        "videoId": "MJNGXnvHYPg"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AT_END",
+                     "commands": [
+                      {
+                       "clickTrackingParams": "CN4CEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "Song added to queue"
+                            }
+                           ]
+                          },
+                          "trackingParams": "CN8CEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   },
+                   "trackingParams": "CN4CEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "toggleMenuServiceItemRenderer": {
+                   "defaultText": {
+                    "runs": [
+                     {
+                      "text": "Add to liked songs"
+                     }
+                    ]
+                   },
+                   "defaultIcon": {
+                    "iconType": "FAVORITE"
+                   },
+                   "defaultServiceEndpoint": {
+                    "clickTrackingParams": "CNwCEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "Like this song"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "Improve recommendations and save music after signing in"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "Sign in"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "clickTrackingParams": "CN0CEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         },
+                         "trackingParams": "CN0CEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "toggledText": {
+                    "runs": [
+                     {
+                      "text": "Remove from liked songs"
+                     }
+                    ]
+                   },
+                   "toggledIcon": {
+                    "iconType": "UNFAVORITE"
+                   },
+                   "trackingParams": "CNwCEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemDownloadRenderer": {
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CNsCENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "offlineVideoEndpoint": {
+                     "videoId": "MJNGXnvHYPg",
+                     "onAddCommand": {
+                      "clickTrackingParams": "CNsCENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                      "getDownloadActionCommand": {
+                       "videoId": "MJNGXnvHYPg",
+                       "params": "CAI%3D"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CNsCENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbB",
+                   "badgeIcon": {
+                    "iconType": "PREMIUM_STANDALONE_CAIRO"
+                   }
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Save to playlist"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_PLAYLIST"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CNkCEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "Save this for later"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "Make playlists and share them after signing in"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "Sign in"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "clickTrackingParams": "CNoCEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         },
+                         "trackingParams": "CNoCEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CNkCEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Go to album"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ALBUM"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CNgCEI_7BRgGIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "browseEndpoint": {
+                     "browseId": "MPREb_6hyn9PhqicQ",
+                     "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {
+                       "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CNgCEI_7BRgGIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Go to artist"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ARTIST"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CNcCEJD7BRgHIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "browseEndpoint": {
+                     "browseId": "UCedvOgsKFzcK3hA5taf3KoQ",
+                     "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {
+                       "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CNcCEJD7BRgHIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "View song credits"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "PEOPLE_GROUP"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CNYCEK-jChgIIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "browseEndpoint": {
+                     "browseId": "MPTCMJNGXnvHYPg",
+                     "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {
+                       "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CNYCEK-jChgIIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Share"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "SHARE"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CNUCEJH7BRgJIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "shareEntityEndpoint": {
+                     "serializedShareEntity": "CgtNSk5HWG52SFlQZw%3D%3D",
+                     "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+                    }
+                   },
+                   "trackingParams": "CNUCEJH7BRgJIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 }
+                ],
+                "trackingParams": "CNQCEKc7IhMIy62hk4fLlwMVu0IGBR07szbB",
+                "accessibility": {
+                 "accessibilityData": {
+                  "label": "Action menu"
+                 }
+                }
+               }
+              },
+              "badges": [
+               {
+                "musicInlineBadgeRenderer": {
+                 "trackingParams": "CNMCEKHtAhgDIhMIy62hk4fLlwMVu0IGBR07szbB",
+                 "icon": {
+                  "iconType": "MUSIC_EXPLICIT_BADGE"
+                 },
+                 "accessibilityData": {
+                  "accessibilityData": {
+                   "label": "Explicit"
+                  }
+                 }
+                }
+               }
+              ],
+              "playlistItemData": {
+               "videoId": "MJNGXnvHYPg"
+              },
+              "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
+              "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
+             }
+            }
+           ],
+           "trackingParams": "CNECELsvGAQiEwjLraGTh8uXAxW7QgYFHTuzNsE="
+          }
+         },
+         {
+          "itemSectionRenderer": {
+           "contents": [
+            {
+             "musicResponsiveListItemRenderer": {
+              "trackingParams": "CMACEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsE=",
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "url": "https://yt3.googleusercontent.com/rtg2XiKnfTlnqabcFA3323I0vtrYc7Igf38XeI-qN_H_x20qhWkAXrNl9IDd6wk7erCtCzTqucBZrxNpEQ=w60-h60-l90-rj",
+                   "width": 60,
+                   "height": 60
+                  },
+                  {
+                   "url": "https://yt3.googleusercontent.com/rtg2XiKnfTlnqabcFA3323I0vtrYc7Igf38XeI-qN_H_x20qhWkAXrNl9IDd6wk7erCtCzTqucBZrxNpEQ=w120-h120-l90-rj",
+                   "width": 120,
+                   "height": 120
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT",
+                "trackingParams": "CNACEIS_AiITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+               }
+              },
+              "overlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "3422552064",
+                   "3422552064"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "playNavigationEndpoint": {
+                   "clickTrackingParams": "CM8CEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wcoBBCi1TJU=",
+                   "watchEndpoint": {
+                    "videoId": "8ibh8HAq0Mk",
+                    "watchEndpointMusicSupportedConfigs": {
+                     "watchEndpointMusicConfig": {
+                      "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                     }
+                    }
+                   }
+                  },
+                  "trackingParams": "CM8CEMjeAiITCMutoZOHy5cDFbtCBgUdO7M2wQ==",
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "iconColor": 4294967295,
+                  "backgroundColor": 0,
+                  "activeBackgroundColor": 0,
+                  "loadingIndicatorColor": 14745645,
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "iconLoadingColor": 0,
+                  "activeScaleFactor": 1,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_SMALL",
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "Play Lose Yourself - Saliva"
+                   }
+                  },
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "Pause Lose Yourself - Saliva"
+                   }
+                  }
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+               }
+              },
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Lose Yourself",
+                    "navigationEndpoint": {
+                     "clickTrackingParams": "CMACEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsGaAQMQ9CTKAQQotUyV",
+                     "watchEndpoint": {
+                      "videoId": "8ibh8HAq0Mk",
+                      "watchEndpointMusicSupportedConfigs": {
+                       "watchEndpointMusicConfig": {
+                        "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ]
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "Song"
+                   },
+                   {
+                    "text": " \u2022 "
+                   },
+                   {
+                    "text": "Saliva",
+                    "navigationEndpoint": {
+                     "clickTrackingParams": "CMACEOFnGAAiEwjLraGTh8uXAxW7QgYFHTuzNsHKAQQotUyV",
+                     "browseEndpoint": {
+                      "browseId": "UCzjMi7EaV2L5dYvH-_FQ4ow",
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      }
+                     }
+                    }
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "Song \u2022 Saliva"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "889K plays"
+                   }
+                  ],
+                  "accessibility": {
+                   "accessibilityData": {
+                    "label": "889 thousand plays"
+                   }
+                  }
+                 },
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+                }
+               }
+              ],
+              "menu": {
+               "menuRenderer": {
+                "items": [
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Start mix"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "MIX"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CM4CEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbBmgEDEPQkygEEKLVMlQ==",
+                    "watchEndpoint": {
+                     "videoId": "8ibh8HAq0Mk",
+                     "playlistId": "RDAMVM8ibh8HAq0Mk",
+                     "params": "wAEB",
+                     "loggingContext": {
+                      "vssLoggingContext": {
+                       "serializedContextData": "GhFSREFNVk04aWJoOEhBcTBNaw%3D%3D"
+                      }
+                     },
+                     "watchEndpointMusicSupportedConfigs": {
+                      "watchEndpointMusicConfig": {
+                       "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CM4CEJvzBRgAIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Play next"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "QUEUE_PLAY_NEXT"
+                   },
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CMwCEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "8ibh8HAq0Mk",
+                      "onEmptyQueue": {
+                       "clickTrackingParams": "CMwCEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "watchEndpoint": {
+                        "videoId": "8ibh8HAq0Mk"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AFTER_CURRENT_VIDEO",
+                     "commands": [
+                      {
+                       "clickTrackingParams": "CMwCEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "Song will play next"
+                            }
+                           ]
+                          },
+                          "trackingParams": "CM0CEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   },
+                   "trackingParams": "CMwCEL7uBRgBIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Add to queue"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_REMOTE_QUEUE"
+                   },
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CMoCEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "queueAddEndpoint": {
+                     "queueTarget": {
+                      "videoId": "8ibh8HAq0Mk",
+                      "onEmptyQueue": {
+                       "clickTrackingParams": "CMoCEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "watchEndpoint": {
+                        "videoId": "8ibh8HAq0Mk"
+                       }
+                      }
+                     },
+                     "queueInsertPosition": "INSERT_AT_END",
+                     "commands": [
+                      {
+                       "clickTrackingParams": "CMoCEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                       "addToToastAction": {
+                        "item": {
+                         "notificationTextRenderer": {
+                          "successResponseText": {
+                           "runs": [
+                            {
+                             "text": "Song added to queue"
+                            }
+                           ]
+                          },
+                          "trackingParams": "CMsCEMrHAyITCMutoZOHy5cDFbtCBgUdO7M2wQ=="
+                         }
+                        }
+                       }
+                      }
+                     ]
+                    }
+                   },
+                   "trackingParams": "CMoCEPvvBRgCIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "toggleMenuServiceItemRenderer": {
+                   "defaultText": {
+                    "runs": [
+                     {
+                      "text": "Add to liked songs"
+                     }
+                    ]
+                   },
+                   "defaultIcon": {
+                    "iconType": "FAVORITE"
+                   },
+                   "defaultServiceEndpoint": {
+                    "clickTrackingParams": "CMgCEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "Like this song"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "Improve recommendations and save music after signing in"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "Sign in"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "clickTrackingParams": "CMkCEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         },
+                         "trackingParams": "CMkCEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "toggledText": {
+                    "runs": [
+                     {
+                      "text": "Remove from liked songs"
+                     }
+                    ]
+                   },
+                   "toggledIcon": {
+                    "iconType": "UNFAVORITE"
+                   },
+                   "trackingParams": "CMgCEIyfBhgDIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuServiceItemDownloadRenderer": {
+                   "serviceEndpoint": {
+                    "clickTrackingParams": "CMcCENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "offlineVideoEndpoint": {
+                     "videoId": "8ibh8HAq0Mk",
+                     "onAddCommand": {
+                      "clickTrackingParams": "CMcCENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                      "getDownloadActionCommand": {
+                       "videoId": "8ibh8HAq0Mk",
+                       "params": "CAI%3D"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CMcCENGqBRgEIhMIy62hk4fLlwMVu0IGBR07szbB",
+                   "badgeIcon": {
+                    "iconType": "PREMIUM_STANDALONE_CAIRO"
+                   }
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Save to playlist"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ADD_TO_PLAYLIST"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CMUCEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "modalEndpoint": {
+                     "modal": {
+                      "modalWithTitleAndButtonRenderer": {
+                       "title": {
+                        "runs": [
+                         {
+                          "text": "Save this for later"
+                         }
+                        ]
+                       },
+                       "content": {
+                        "runs": [
+                         {
+                          "text": "Make playlists and share them after signing in"
+                         }
+                        ]
+                       },
+                       "button": {
+                        "buttonRenderer": {
+                         "style": "STYLE_BLUE_TEXT",
+                         "isDisabled": false,
+                         "text": {
+                          "runs": [
+                           {
+                            "text": "Sign in"
+                           }
+                          ]
+                         },
+                         "navigationEndpoint": {
+                          "clickTrackingParams": "CMYCEPBbIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                          "signInEndpoint": {
+                           "hack": true
+                          }
+                         },
+                         "trackingParams": "CMYCEPBbIhMIy62hk4fLlwMVu0IGBR07szbB"
+                        }
+                       }
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CMUCEMOUBhgFIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Go to album"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ALBUM"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CMQCEI_7BRgGIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "browseEndpoint": {
+                     "browseId": "MPREb_iSFO0UsB2N9",
+                     "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {
+                       "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CMQCEI_7BRgGIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Go to artist"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "ARTIST"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CMMCEJD7BRgHIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "browseEndpoint": {
+                     "browseId": "UCzjMi7EaV2L5dYvH-_FQ4ow",
+                     "browseEndpointContextSupportedConfigs": {
+                      "browseEndpointContextMusicConfig": {
+                       "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "CMMCEJD7BRgHIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 },
+                 {
+                  "menuNavigationItemRenderer": {
+                   "text": {
+                    "runs": [
+                     {
+                      "text": "Share"
+                     }
+                    ]
+                   },
+                   "icon": {
+                    "iconType": "SHARE"
+                   },
+                   "navigationEndpoint": {
+                    "clickTrackingParams": "CMICEJH7BRgIIhMIy62hk4fLlwMVu0IGBR07szbBygEEKLVMlQ==",
+                    "shareEntityEndpoint": {
+                     "serializedShareEntity": "Cgs4aWJoOEhBcTBNaw%3D%3D",
+                     "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+                    }
+                   },
+                   "trackingParams": "CMICEJH7BRgIIhMIy62hk4fLlwMVu0IGBR07szbB"
+                  }
+                 }
+                ],
+                "trackingParams": "CMECEKc7IhMIy62hk4fLlwMVu0IGBR07szbB",
+                "accessibility": {
+                 "accessibilityData": {
+                  "label": "Action menu"
+                 }
+                }
+               }
+              },
+              "playlistItemData": {
+               "videoId": "8ibh8HAq0Mk"
+              },
+              "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
+              "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
+             }
+            }
+           ],
+           "trackingParams": "CL8CELsvGAUiEwjLraGTh8uXAxW7QgYFHTuzNsE="
+          }
+         }
+        ],
+        "trackingParams": "CAIQui8iEwjLraGTh8uXAxW7QgYFHTuzNsE="
+       }
+      }
+     }
+    }
+   ]
+  }
+ }
+}
