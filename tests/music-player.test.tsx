@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
@@ -11,6 +12,27 @@ const mockToggle = jest.fn();
 const mockNext = jest.fn(async () => {});
 const mockSeek = jest.fn(async () => {});
 const mockRemoveDownload = jest.fn();
+/**
+ * Notifies the mocked provider when the family's own list changes, so the
+ * editor re-renders the way the REAL provider does (it holds the list in
+ * state and hands it down).
+ */
+const mockDeniedSubscribers = new Set<() => void>();
+const mockAddDenied = jest.fn(async (term: string) => {
+  const t = term.trim();
+  if (!t) return;
+  if (!mockDenied.some((d) => d.toLowerCase() === t.toLowerCase())) {
+    mockDenied = [...mockDenied, t];
+    mockDeniedSubscribers.forEach((notify) => notify());
+  }
+});
+const mockRemoveDenied = jest.fn(async (term: string) => {
+  const t = term.trim().toLowerCase();
+  const next = mockDenied.filter((d) => d.toLowerCase() !== t);
+  if (next.length === mockDenied.length) return;
+  mockDenied = next;
+  mockDeniedSubscribers.forEach((notify) => notify());
+});
 const DEFAULT_CURRENT = {
   id: "abc12345678", title: "Song", artist: "Artist", album: "Album",
   durationSeconds: 200, artworkUrl: null, explicit: false, source: "youtube_music",
@@ -26,23 +48,44 @@ let mockMember: any = null;
 /** The family's own deny-list, as the provider hands it to the surfaces. */
 let mockDenied: string[] = [];
 
-jest.mock("../src/music/playback", () => ({
-  usePlayback: () => ({
-    current: mockCurrent,
-    queue: mockQueue, index: 0, playing: false, position: 10, duration: 200, buffering: false,
-    repeat: "off", shuffle: false, error: null,
-    downloads: mockDownloads, downloadBytes: mockDownloads.reduce((sum, item) => sum + item.bytes, 0),
-    history: mockHistory,
-    settings: { repeat: "off", shuffle: false, explicitFilter: mockExplicitFilter },
-    // The provider owns the role-aware policy — the surfaces read it from
-    // there so the rule can never drift between them.
-    policy: { isParent: mockMember?.role === "parent", filterOn: mockExplicitFilter !== false, denied: mockDenied },
-    play: mockPlay, playQueueAt: jest.fn(), toggle: mockToggle, next: mockNext, previous: jest.fn(),
-    seek: mockSeek, setRepeat: jest.fn(), cycleRepeatMode: jest.fn(), toggleShuffleMode: jest.fn(),
-    addToQueue: jest.fn(), removeFromQueue: jest.fn(), moveQueueItem: jest.fn(),
-    downloadCurrent: jest.fn(), removeDownload: mockRemoveDownload, setExplicitFilter: jest.fn(),
-  }),
-}));
+jest.mock("../src/music/playback", () => {
+  // The mocked provider holds the family's own list and hands it down, like
+  // the real one: a change re-renders every surface that reads it.
+  const React = require("react");
+  return {
+    usePlayback: () => {
+      const [, force] = React.useReducer((n: number) => n + 1, 0);
+      React.useEffect(() => {
+        const notify = () => force();
+        mockDeniedSubscribers.add(notify);
+        return () => { mockDeniedSubscribers.delete(notify); };
+      }, []);
+      return {
+        current: mockCurrent,
+        queue: mockQueue, index: 0, playing: false, position: 10, duration: 200, buffering: false,
+        repeat: "off", shuffle: false, error: null,
+        downloads: mockDownloads, downloadBytes: mockDownloads.reduce((sum, item) => sum + item.bytes, 0),
+        history: mockHistory,
+        settings: { repeat: "off", shuffle: false, explicitFilter: mockExplicitFilter },
+        // The provider owns the role-aware policy — the surfaces read it from
+        // there so the rule can never drift between them. The POLICY carries
+        // the list NORMALIZED (that is what the rule matches on)...
+        policy: {
+          isParent: mockMember?.role === "parent",
+          filterOn: mockExplicitFilter !== false,
+          denied: mockDenied.map((term) => term.trim().toLowerCase().replace(/\s+/g, " ")),
+        },
+        // ...while the LIST itself keeps the terms as the parent typed them.
+        denylist: mockDenied.map((term, index) => ({ term, addedAt: index })),
+        play: mockPlay, playQueueAt: jest.fn(), toggle: mockToggle, next: mockNext, previous: jest.fn(),
+        seek: mockSeek, setRepeat: jest.fn(), cycleRepeatMode: jest.fn(), toggleShuffleMode: jest.fn(),
+        addToQueue: jest.fn(), removeFromQueue: jest.fn(), moveQueueItem: jest.fn(),
+        downloadCurrent: jest.fn(), removeDownload: mockRemoveDownload, setExplicitFilter: jest.fn(),
+        addDenied: mockAddDenied, removeDenied: mockRemoveDenied,
+      };
+    },
+  };
+});
 
 const CLEAN_TRACK = {
   id: "clean11111", title: "Found", artist: "A", album: "", durationSeconds: 100,
@@ -435,5 +478,82 @@ describe("the other track surfaces", () => {
     mockCurrent = CLEAN_TRACK;
     const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
     expect(getByTestId("np-title").props.children).toBe("Found");
+  });
+});
+
+/**
+ * The parent-only editor: a parent names what stays away from the kids.
+ * A kid role NEVER sees the control — not the button, not the list.
+ */
+describe("the parent-only deny-list editor", () => {
+  it("a kid never sees the Blocked button", () => {
+    mockMember = KID;
+    const { queryByText, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    expect(queryByText("Blocked")).toBeNull();
+    expect(queryByTestId("music-deny-open")).toBeNull();
+  });
+
+  it("a parent sees the Blocked button and can open the editor", async () => {
+    mockMember = PARENT;
+    const { getByText, findByTestId, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+    expect(getByText("Blocked")).toBeTruthy();
+    fireEvent.press(getByText("Blocked"));
+    expect(await findByTestId("music-deny-modal")).toBeTruthy();
+    expect(await findByText("Blocked artists & songs")).toBeTruthy();
+    expect(await findByText("Anything matching these stays away from the kids.")).toBeTruthy();
+  });
+
+  it("the editor lists the terms and can add and remove one", async () => {
+    mockMember = PARENT;
+    mockDenied = ["eminem"];
+    const { getByText, getByTestId, findByText, queryByText } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.press(getByText("Blocked"));
+    // the family's own list is listed as it was typed
+    expect(await findByText("eminem")).toBeTruthy();
+    // add a term
+    fireEvent.changeText(getByTestId("music-deny-input"), "drake");
+    fireEvent.press(getByTestId("music-deny-add"));
+    expect(mockAddDenied).toHaveBeenCalledWith("drake");
+    expect(await findByText("drake")).toBeTruthy();
+    // remove a term
+    fireEvent.press(getByTestId("music-deny-remove-0"));
+    expect(mockRemoveDenied).toHaveBeenCalledWith("eminem");
+    await waitFor(() => expect(queryByText("eminem")).toBeNull());
+  });
+
+  it("says so plainly when nothing is blocked yet", async () => {
+    mockMember = PARENT;
+    const { getByText, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.press(getByText("Blocked"));
+    expect(await findByText("Nothing blocked yet.")).toBeTruthy();
+  });
+
+  it("a parent sees a denied row marked 'Blocked for kids'", async () => {
+    mockCurrent = null;
+    mockMember = PARENT;
+    mockDenied = ["eminem"];
+    mockSearchOutcome = { tracks: [DENIED_TRACK, CLEAN_TRACK], explicitKnown: true };
+    const { getByTestId, findByText, findByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.changeText(getByTestId("music-search-input"), "eminem");
+    fireEvent.press(getByTestId("music-search-submit"));
+    expect(await findByText("Till I Collapse")).toBeTruthy();
+    expect(await findByText("Blocked for kids")).toBeTruthy();
+    expect(await findByTestId(`music-result-blocked-${DENIED_TRACK.id}`)).toBeTruthy();
+    // a row that is not denied carries no marker
+    expect(() => getByTestId(`music-result-blocked-${CLEAN_TRACK.id}`)).toThrow();
+  });
+
+  it("a denied row is not rendered for a kid", async () => {
+    mockCurrent = null;
+    mockMember = KID;
+    mockDenied = ["eminem"];
+    mockSearchOutcome = { tracks: [DENIED_TRACK, CLEAN_TRACK], explicitKnown: true };
+    const { getByTestId, findByText, queryByText, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.changeText(getByTestId("music-search-input"), "eminem");
+    fireEvent.press(getByTestId("music-search-submit"));
+    expect(await findByText("Found")).toBeTruthy();
+    expect(queryByText("Till I Collapse")).toBeNull();
+    expect(queryByText("Blocked for kids")).toBeNull();
+    expect(queryByTestId(`music-result-blocked-${DENIED_TRACK.id}`)).toBeNull();
   });
 });
