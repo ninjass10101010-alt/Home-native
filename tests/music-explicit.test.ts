@@ -1,4 +1,15 @@
-import { countUnrated, isExplicitHidden } from "../src/music/explicit";
+import {
+  countUnrated,
+  isExplicitHidden,
+  searchNote,
+  NOTE_NO_RESULTS,
+  NOTE_NOTHING_HERE,
+  NOTE_NOTHING_HERE_PARENT,
+  NOTE_UNRATED_ALL,
+  NOTE_UNRATED_SOME,
+  NOTE_UNKNOWN_RATINGS,
+  type SearchFacts,
+} from "../src/music/explicit";
 
 const track = (explicit: boolean | null) => ({
   id: "abc12345678", title: "Song", artist: "Artist", album: "",
@@ -38,5 +49,112 @@ describe("explicit policy", () => {
     const missing = { ...track(null), explicit: undefined as unknown as null };
     expect(countUnrated([missing])).toBe(1);
     expect(isExplicitHidden(missing, { isParent: false, filterOn: true })).toBe(true);
+  });
+});
+
+/**
+ * The search-note truth table.
+ *
+ * The rule, re-derived here from the contract (not from the implementation):
+ * something to play → no note · nothing returned → "no songs matched" · a
+ * parent → never told to ask a parent · ratings unknown → "couldn't check" ·
+ * some rows unrated → the unrated sentence · otherwise → "nothing to play".
+ */
+function expectedTestId(facts: SearchFacts): string | null {
+  if (facts.visible > 0) return null;
+  if (facts.total === 0) return "music-search-note-empty";
+  if (facts.isParent) return "music-search-note-parent";
+  if (!facts.explicitKnown) return "music-search-note-unknown";
+  if (facts.unrated > 0) return "music-search-note-unrated";
+  return "music-search-note-explicit";
+}
+
+/** Every combination of (explicitKnown, isParent, visible, unrated, total). */
+const ALL_COMBOS: SearchFacts[] = [];
+for (const explicitKnown of [true, false]) {
+  for (const isParent of [true, false]) {
+    for (const visible of [0, 1, 2]) {
+      for (const unrated of [0, 1, 2]) {
+        for (const total of [0, 1, 2, 3]) {
+          ALL_COMBOS.push({ explicitKnown, isParent, visible, unrated, total });
+        }
+      }
+    }
+  }
+}
+
+describe("search note", () => {
+  it("lands in the honest state for every combination of the facts", () => {
+    for (const facts of ALL_COMBOS) {
+      const note = searchNote(facts);
+      expect(note?.testID ?? null).toBe(expectedTestId(facts));
+    }
+  });
+
+  it("shows no note when there is something to play", () => {
+    expect(searchNote({ visible: 2, total: 2, unrated: 0, explicitKnown: true, isParent: false })).toBeNull();
+    expect(searchNote({ visible: 1, total: 3, unrated: 1, explicitKnown: false, isParent: false })).toBeNull();
+  });
+
+  it("never tells a parent to ask a parent", () => {
+    for (const facts of ALL_COMBOS.filter((f) => f.isParent)) {
+      const note = searchNote(facts);
+      if (!note) continue;
+      expect(note.text).not.toContain("ask a parent");
+      expect(note.text).not.toContain("Couldn't check");
+    }
+  });
+
+  it("shows 'no results' only when the engine returned nothing", () => {
+    for (const facts of ALL_COMBOS) {
+      const note = searchNote(facts);
+      if (!note) continue;
+      if (note.text === NOTE_NO_RESULTS) expect(facts.total).toBe(0);
+      else expect(facts.total).toBeGreaterThan(0);
+    }
+  });
+
+  it("always explains an empty list to a kid", () => {
+    for (const facts of ALL_COMBOS) {
+      if (facts.isParent || facts.visible > 0) continue;
+      expect(searchNote(facts)).not.toBeNull();
+    }
+  });
+
+  it("says nothing matched when the search returned zero tracks", () => {
+    const note = searchNote({ visible: 0, total: 0, unrated: 0, explicitKnown: false, isParent: false });
+    expect(note?.testID).toBe("music-search-note-empty");
+    expect(note?.text).toBe(NOTE_NO_RESULTS);
+  });
+
+  it("says the check failed when the ratings were never authoritative", () => {
+    const note = searchNote({ visible: 0, total: 2, unrated: 2, explicitKnown: false, isParent: false });
+    expect(note?.testID).toBe("music-search-note-unknown");
+    expect(note?.text).toBe(NOTE_UNKNOWN_RATINGS);
+  });
+
+  it("says every track is unrated only when every hidden track is unrated", () => {
+    const all = searchNote({ visible: 0, total: 2, unrated: 2, explicitKnown: true, isParent: false });
+    expect(all?.testID).toBe("music-search-note-unrated");
+    expect(all?.text).toBe(NOTE_UNRATED_ALL);
+  });
+
+  it("says SOME tracks are unrated when only some hidden tracks are unrated", () => {
+    const some = searchNote({ visible: 0, total: 3, unrated: 2, explicitKnown: true, isParent: false });
+    expect(some?.testID).toBe("music-search-note-unrated");
+    expect(some?.text).toBe(NOTE_UNRATED_SOME);
+    expect(some?.text).not.toBe(NOTE_UNRATED_ALL);
+  });
+
+  it("says nothing here to play when every hidden track was known-explicit", () => {
+    const note = searchNote({ visible: 0, total: 2, unrated: 0, explicitKnown: true, isParent: false });
+    expect(note?.testID).toBe("music-search-note-explicit");
+    expect(note?.text).toBe(NOTE_NOTHING_HERE);
+  });
+
+  it("gives a parent a parent-safe sentence (never 'ask a parent')", () => {
+    const note = searchNote({ visible: 0, total: 2, unrated: 1, explicitKnown: false, isParent: true });
+    expect(note?.testID).toBe("music-search-note-parent");
+    expect(note?.text).toBe(NOTE_NOTHING_HERE_PARENT);
   });
 });

@@ -8,6 +8,7 @@ import {
   loadHistory,
   loadMusicSettings,
   mergeHistory,
+  mergeMusicSettings,
   removeDownloadEntry,
   saveDownloads,
   totalDownloadBytes,
@@ -60,6 +61,48 @@ describe("music library", () => {
 
   it("returns defaults when settings are absent", async () => {
     expect(await loadMusicSettings()).toEqual({
+      repeat: "off",
+      shuffle: false,
+      explicitFilter: true,
+    });
+  });
+
+  it("merges a persisted payload written before a key existed", async () => {
+    // The payload predates `explicitFilter`: the filter must stay ON (it
+    // fails closed), and the keys it DOES carry are honoured.
+    await AsyncStorage.setItem("music.settings", JSON.stringify({ repeat: "one", shuffle: true }));
+    expect(await loadMusicSettings()).toEqual({
+      repeat: "one",
+      shuffle: true,
+      explicitFilter: true,
+    });
+  });
+
+  it("honours an explicit explicitFilter:false", async () => {
+    await AsyncStorage.setItem("music.settings", JSON.stringify({ explicitFilter: false }));
+    expect(await loadMusicSettings()).toEqual({
+      repeat: "off",
+      shuffle: false,
+      explicitFilter: false,
+    });
+  });
+
+  it("falls back to the defaults when the stored payload is not a settings object", async () => {
+    await AsyncStorage.setItem("music.settings", "[]");
+    expect(await loadMusicSettings()).toEqual({
+      repeat: "off",
+      shuffle: false,
+      explicitFilter: true,
+    });
+  });
+
+  it("mergeMusicSettings keeps every default a payload omits", () => {
+    expect(mergeMusicSettings({ repeat: "all" })).toEqual({
+      repeat: "all",
+      shuffle: false,
+      explicitFilter: true,
+    });
+    expect(mergeMusicSettings(null)).toEqual({
       repeat: "off",
       shuffle: false,
       explicitFilter: true,

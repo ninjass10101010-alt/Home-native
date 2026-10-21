@@ -14,7 +14,28 @@ export interface MusicSettings {
   explicitFilter: boolean;
 }
 
-const DEFAULT_SETTINGS: MusicSettings = { repeat: "off", shuffle: false, explicitFilter: true };
+export const DEFAULT_SETTINGS: MusicSettings = { repeat: "off", shuffle: false, explicitFilter: true };
+
+const REPEAT_MODES: RepeatMode[] = ["off", "all", "one"];
+
+/**
+ * Merge a persisted settings payload OVER the defaults.
+ *
+ * A payload written before a key existed must never DISABLE that key's
+ * default: the explicit filter fails closed, so a payload with no
+ * `explicitFilter` key keeps the filter ON (only an explicit `false` turns
+ * it off). The same merge restores `repeat`/`shuffle` for payloads that
+ * predate them.
+ */
+export function mergeMusicSettings(stored: Partial<MusicSettings> | null | undefined): MusicSettings {
+  const repeat = stored?.repeat;
+  return {
+    repeat: repeat && REPEAT_MODES.includes(repeat) ? repeat : DEFAULT_SETTINGS.repeat,
+    shuffle: typeof stored?.shuffle === "boolean" ? stored.shuffle : DEFAULT_SETTINGS.shuffle,
+    explicitFilter:
+      typeof stored?.explicitFilter === "boolean" ? stored.explicitFilter : DEFAULT_SETTINGS.explicitFilter,
+  };
+}
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -73,7 +94,10 @@ export async function appendHistory(track: MediaTrack): Promise<MediaTrack[]> {
 }
 
 export async function loadMusicSettings(): Promise<MusicSettings> {
-  return readJson<MusicSettings>(SETTINGS_KEY, DEFAULT_SETTINGS);
+  // MERGE, never trust the raw payload: a payload persisted before a key
+  // existed must keep that key's default (the explicit filter fails closed).
+  const stored = await readJson<Partial<MusicSettings> | null>(SETTINGS_KEY, null);
+  return mergeMusicSettings(stored);
 }
 
 export function saveMusicSettings(settings: MusicSettings): Promise<void> {

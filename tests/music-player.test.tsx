@@ -19,7 +19,7 @@ let mockCurrent: any = DEFAULT_CURRENT;
 let mockDownloads: any[] = [];
 let mockHistory: any[] = [];
 /** The family setting: the explicit filter is ON by default. */
-let mockExplicitFilter = true;
+let mockExplicitFilter: boolean | undefined = true;
 /** The signed-in viewer. null = signed-out guest, which also fails closed. */
 let mockMember: any = null;
 
@@ -192,4 +192,88 @@ it("says plainly when the search found nothing at all", async () => {
   fireEvent.changeText(getByTestId("music-search-input"), "zzzz");
   fireEvent.press(getByTestId("music-search-submit"));
   expect(await findByText("No songs matched that search.")).toBeTruthy();
+});
+
+it("fails closed when the persisted setting has no explicitFilter key at all", async () => {
+  mockCurrent = null;
+  mockMember = KID;
+  // A payload written before the key existed: `explicitFilter` is undefined,
+  // so the filter must stay ON (only an explicit `false` turns it off).
+  mockExplicitFilter = undefined;
+  mockSearchOutcome = { tracks: [EXPLICIT_TRACK], explicitKnown: true };
+  const { getByTestId, findByText, queryByText } = render(<MusicPlayer />, { wrapper: wrap });
+  fireEvent.changeText(getByTestId("music-search-input"), "beatles");
+  fireEvent.press(getByTestId("music-search-submit"));
+  expect(await findByText("Nothing here to play — ask a parent to pick something.")).toBeTruthy();
+  expect(queryByText("Bad Song")).toBeNull();
+});
+
+it("marks an unrated row as Unrated for a parent", async () => {
+  mockCurrent = null;
+  mockMember = PARENT;
+  mockSearchOutcome = { tracks: [UNRATED_TRACK, CLEAN_TRACK], explicitKnown: true };
+  const { getByTestId, findByTestId, findByText, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+  fireEvent.changeText(getByTestId("music-search-input"), "beatles");
+  fireEvent.press(getByTestId("music-search-submit"));
+  const marker = await findByTestId(`music-result-unrated-${UNRATED_TRACK.id}`);
+  expect(marker).toBeTruthy();
+  expect(await findByText("Unrated")).toBeTruthy();
+  // A rated-clean row carries no marker.
+  expect(queryByTestId(`music-result-unrated-${CLEAN_TRACK.id}`)).toBeNull();
+});
+
+it("does not mark a rated-clean row", async () => {
+  mockCurrent = null;
+  mockMember = PARENT;
+  mockSearchOutcome = { tracks: [CLEAN_TRACK], explicitKnown: true };
+  const { getByTestId, findByText, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+  fireEvent.changeText(getByTestId("music-search-input"), "beatles");
+  fireEvent.press(getByTestId("music-search-submit"));
+  expect(await findByText("Found")).toBeTruthy();
+  expect(queryByTestId(`music-result-unrated-${CLEAN_TRACK.id}`)).toBeNull();
+});
+
+it("never marks a row for a kid role", async () => {
+  mockCurrent = null;
+  mockMember = KID;
+  mockExplicitFilter = false;
+  mockSearchOutcome = { tracks: [UNRATED_TRACK], explicitKnown: true };
+  const { getByTestId, findByText, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+  fireEvent.changeText(getByTestId("music-search-input"), "beatles");
+  fireEvent.press(getByTestId("music-search-submit"));
+  expect(await findByText("Unknown Song")).toBeTruthy();
+  expect(queryByTestId(`music-result-unrated-${UNRATED_TRACK.id}`)).toBeNull();
+});
+
+it("says nothing matched when the ratings were unknown but no track came back", async () => {
+  mockCurrent = null;
+  mockMember = KID;
+  mockSearchOutcome = { tracks: [], explicitKnown: false };
+  const { getByTestId, findByText, queryByText } = render(<MusicPlayer />, { wrapper: wrap });
+  fireEvent.changeText(getByTestId("music-search-input"), "zzzz");
+  fireEvent.press(getByTestId("music-search-submit"));
+  expect(await findByText("No songs matched that search.")).toBeTruthy();
+  expect(queryByText("Couldn't check these tracks — ask a parent to pick something.")).toBeNull();
+});
+
+it("is accurate when only some of the hidden tracks are unrated", async () => {
+  mockCurrent = null;
+  mockMember = KID;
+  mockSearchOutcome = { tracks: [UNRATED_TRACK, EXPLICIT_TRACK], explicitKnown: true };
+  const { getByTestId, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+  fireEvent.changeText(getByTestId("music-search-input"), "beatles");
+  fireEvent.press(getByTestId("music-search-submit"));
+  expect(await findByText("Some of these tracks aren't rated, so they can't be shown here.")).toBeTruthy();
+});
+
+it("announces the search note to screen readers", async () => {
+  mockCurrent = null;
+  mockMember = KID;
+  mockSearchOutcome = { tracks: [], explicitKnown: true };
+  const { getByTestId, findByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+  fireEvent.changeText(getByTestId("music-search-input"), "zzzz");
+  fireEvent.press(getByTestId("music-search-submit"));
+  const note = await findByTestId("music-search-note-empty");
+  expect(note.props.accessibilityRole).toBe("alert");
+  expect(note.props.accessibilityLiveRegion).toBe("polite");
 });

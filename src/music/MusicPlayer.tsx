@@ -8,50 +8,10 @@ import { mix } from "../theme/mix";
 import { Material } from "../theme/Material";
 import { usePlayback } from "./playback";
 import { currentLineIndex, fetchLyrics, type LyricLine } from "./lyrics";
-import { countUnrated, isExplicitHidden } from "./explicit";
+import { countUnrated, isExplicitHidden, searchNote } from "./explicit";
 import type { MediaTrack } from "./types";
 
 type Tab = "lyrics" | "queue";
-
-/**
- * The honest states of a finished search.
- *
- * A kid must never read an empty list as "nothing found" when the truth is
- * "we hid them" — so every reason gets its own plain sentence, with no
- * jargon and no explanation paragraph.
- */
-const NOTE_UNKNOWN_RATINGS = "Couldn't check these tracks — ask a parent to pick something.";
-const NOTE_UNRATED = "These tracks aren't rated, so they can't be shown here.";
-const NOTE_NOTHING_HERE = "Nothing here to play — ask a parent to pick something.";
-const NOTE_NO_RESULTS = "No songs matched that search.";
-
-interface SearchFacts {
-  /** How many tracks the viewer may see. */
-  visible: number;
-  /** How many tracks the engine returned. */
-  total: number;
-  /** How many of those carry no rating at all. */
-  unrated: number;
-  /** Whether the ratings were authoritative for this search. */
-  explicitKnown: boolean;
-  /** A parent role sees everything; every other role fails closed. */
-  isParent: boolean;
-}
-
-/** Which honest state (if any) a finished search is in. */
-function searchNote(facts: SearchFacts): { testID: string; text: string } | null {
-  if (facts.visible > 0) return null;
-  if (!facts.explicitKnown && !facts.isParent) {
-    return { testID: "music-search-note-unknown", text: NOTE_UNKNOWN_RATINGS };
-  }
-  if (facts.unrated > 0 && !facts.isParent) {
-    return { testID: "music-search-note-unrated", text: NOTE_UNRATED };
-  }
-  if (facts.total > 0) {
-    return { testID: "music-search-note-explicit", text: NOTE_NOTHING_HERE };
-  }
-  return { testID: "music-search-note-empty", text: NOTE_NO_RESULTS };
-}
 
 export function MusicPlayer() {
   const { colors, accentColor } = useTheme();
@@ -78,7 +38,10 @@ export function MusicPlayer() {
   // signed-out guest (member === null) — FAILS CLOSED while the filter is on:
   // only a positively-clean track is visible. See src/music/explicit.ts.
   const isParent = member?.role === "parent";
-  const policy = { isParent, filterOn: settings.explicitFilter };
+  // The filter FAILS CLOSED: only an explicit `false` turns it off. A
+  // persisted payload with no `explicitFilter` key (written before the key
+  // existed) must not silently DISABLE the family filter.
+  const policy = { isParent, filterOn: settings.explicitFilter !== false };
   const visible = tracks.filter((t) => !isExplicitHidden(t, policy));
   const unrated = countUnrated(tracks);
   const note =
@@ -108,7 +71,9 @@ export function MusicPlayer() {
     } catch (e) {
       setSearchError(e instanceof Error ? e.message : "search_failed");
       setTracks([]);
-      setExplicitKnown(true);
+      // The search FAILED: it never established any rating, so the ratings
+      // are NOT authoritative. Never claim authority a failed search lacks.
+      setExplicitKnown(false);
       setHasSearched(true);
     } finally {
       setSearching(false);
@@ -149,30 +114,57 @@ export function MusicPlayer() {
           </View>
           {searching ? <ActivityIndicator /> : null}
           {searchError ? <Text style={{ color: colors["color-accent-rose"] }}>{searchError}</Text> : null}
-          {visible.map((track) => (
-            <Pressable
-              key={track.id}
-              testID={`music-result-${track.id}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Play ${track.title} by ${track.artist}`}
-              onPress={() => void play(track, visible)}
-              style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 64, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}
-            >
-              <Material tier="thin" style={{ width: 48, height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                {track.artworkUrl ? <Image source={{ uri: track.artworkUrl }} style={{ width: 48, height: 48 }} /> : <Text>🎵</Text>}
-              </Material>
-              <View style={{ flex: 1 }}>
-                <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontWeight: "700" }}>{track.title}</Text>
-                <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{track.artist}</Text>
-              </View>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Add ${track.title} to queue`} hitSlop={12} onPress={(e) => { e?.stopPropagation?.(); addToQueue(track); }} style={{ minHeight: 44, paddingHorizontal: 10, justifyContent: "center", borderRadius: 10, backgroundColor: mix(colors["color-text-primary"], "transparent", 6) }}>
-                <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize }}>+ Queue</Text>
+          {visible.map((track) => {
+            // A parent sees every row, so an UNRATED row (no rating at all)
+            // must be marked as such — a quiet label, never a badge that
+            // reads as an error. Kid roles never see these rows while the
+            // filter is on (they fail closed), so the marker is parent-only.
+            const unratedRow = isParent && track.explicit === null;
+            return (
+              <Pressable
+                key={track.id}
+                testID={`music-result-${track.id}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Play ${track.title} by ${track.artist}${unratedRow ? ", unrated" : ""}`}
+                onPress={() => void play(track, visible)}
+                style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 64, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}
+              >
+                <Material tier="thin" style={{ width: 48, height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                  {track.artworkUrl ? <Image source={{ uri: track.artworkUrl }} style={{ width: 48, height: 48 }} /> : <Text>🎵</Text>}
+                </Material>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontWeight: "700", flexShrink: 1 }}>{track.title}</Text>
+                    {unratedRow ? (
+                      <View
+                        testID={`music-result-unrated-${track.id}`}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: mix(colors["color-text-primary"], "transparent", 30),
+                        }}
+                      >
+                        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "600" }}>
+                          Unrated
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{track.artist}</Text>
+                </View>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Add ${track.title} to queue`} hitSlop={12} onPress={(e) => { e?.stopPropagation?.(); addToQueue(track); }} style={{ minHeight: 44, paddingHorizontal: 10, justifyContent: "center", borderRadius: 10, backgroundColor: mix(colors["color-text-primary"], "transparent", 6) }}>
+                  <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize }}>+ Queue</Text>
+                </Pressable>
               </Pressable>
-            </Pressable>
-          ))}
+            );
+          })}
           {note ? (
             <Text
               testID={note.testID}
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
               style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, lineHeight: TYPOGRAPHY.body.lineHeight, paddingVertical: 12 }}
             >
               {note.text}
