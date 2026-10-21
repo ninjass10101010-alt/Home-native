@@ -3,10 +3,22 @@ import type { DownloadEntry, MediaTrack, RepeatMode } from "./types";
 
 const DOWNLOADS_KEY = "music.downloads";
 const HISTORY_KEY = "music.history";
+const HISTORY_VERSION_KEY = "music.history.version";
 const SETTINGS_KEY = "music.settings";
 
 export const HISTORY_LIMIT = 500;
 export const DOWNLOAD_CAP_BYTES = 2 * 1024 * 1024 * 1024;
+
+/**
+ * The history schema version.
+ *
+ * v2 = the TRI-STATE rating (`explicit: boolean | null`). The engine before
+ * that change hardcoded `explicit: false` on EVERY track it produced, so
+ * every history row it wrote claims "not marked explicit" for a track that
+ * may well be badged explicit — a stale claim, not a rating. A payload with
+ * no version marker (or one older than this) comes from that era.
+ */
+export const HISTORY_SCHEMA_VERSION = 2;
 
 export interface MusicSettings {
   repeat: RepeatMode;
@@ -95,13 +107,44 @@ export function saveDownloads(list: DownloadEntry[]): Promise<void> {
   return writeJson(DOWNLOADS_KEY, list);
 }
 
-export function loadHistory(): Promise<MediaTrack[]> {
-  return readJson<MediaTrack[]>(HISTORY_KEY, []);
+/**
+ * The history rows as the viewer must read them.
+ *
+ * A LEGACY payload (no version marker, or one older than the tri-state
+ * change) carries a hardcoded `explicit: false` on every row — a stale
+ * "not marked explicit" claim, never a rating. Such a row is UNKNOWN: the
+ * shelf keeps it (a parent still sees it) but it is never claimed to be
+ * clean, so a kid fails closed on it and a pre-existing explicit track can
+ * no longer reach them through "Recently played".
+ *
+ * A CURRENT payload keeps its real rating; a row that somehow lost its
+ * rating is still UNKNOWN, never a false "not marked explicit".
+ */
+export function normalizeHistory(entries: MediaTrack[], legacy: boolean): MediaTrack[] {
+  return entries.map((entry) => ({
+    ...entry,
+    explicit: legacy || typeof entry.explicit !== "boolean" ? null : entry.explicit,
+  }));
+}
+
+export async function loadHistory(): Promise<MediaTrack[]> {
+  const [rows, version] = await Promise.all([
+    readJson<MediaTrack[]>(HISTORY_KEY, []),
+    readJson<number>(HISTORY_VERSION_KEY, 0),
+  ]);
+  const list = Array.isArray(rows) ? rows : [];
+  // No marker (or an older one) = the legacy era: every row's rating is
+  // UNKNOWN, because the `false` it carries was hardcoded, not measured.
+  const legacy = !(typeof version === "number" && version >= HISTORY_SCHEMA_VERSION);
+  return normalizeHistory(list, legacy);
 }
 
 export async function appendHistory(track: MediaTrack): Promise<MediaTrack[]> {
   const next = mergeHistory(await loadHistory(), track);
   await writeJson(HISTORY_KEY, next);
+  // The marker is written AFTER the rows: a marker that says "current" must
+  // never outlive the rows it describes.
+  await writeJson(HISTORY_VERSION_KEY, HISTORY_SCHEMA_VERSION);
   return next;
 }
 

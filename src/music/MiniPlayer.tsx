@@ -20,7 +20,9 @@ export function MiniPlayer() {
   /**
    * The chrome is a track surface too: a track the viewer may not see is
    * never painted here (no artwork, no title) — the bar keeps its place on
-   * the wall and says the neutral truth instead.
+   * the wall and says the neutral truth instead. Its TRANSPORT is disabled
+   * for such a track, exactly like the wall card's: the viewer may not hear
+   * it either.
    */
   const hidden = isExplicitHidden(current, policy);
   const title = hidden ? "Nothing playing" : current.title;
@@ -39,10 +41,10 @@ export function MiniPlayer() {
               <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{artist}</Text>
             </View>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={playing ? "Pause" : "Play"} hitSlop={10} onPress={toggle} style={{ width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: mix(accentColor, "transparent", 22) }}>
+          <Pressable testID="mini-player-play" accessibilityRole="button" accessibilityLabel={playing ? "Pause" : "Play"} accessibilityState={{ disabled: hidden }} disabled={hidden} hitSlop={10} onPress={toggle} style={{ width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: mix(accentColor, "transparent", hidden ? 8 : 22) }}>
             <Text style={{ color: colors["color-text-primary"], fontSize: 20 }}>{playing ? "❚❚" : "▶"}</Text>
           </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel="Next track" hitSlop={10} onPress={() => void next()} style={{ width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 6) }}>
+            <Pressable testID="mini-player-next" accessibilityRole="button" accessibilityLabel="Next track" accessibilityState={{ disabled: hidden }} disabled={hidden} hitSlop={10} onPress={() => void next()} style={{ width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 6) }}>
             <Text style={{ color: colors["color-text-primary"], fontSize: 18 }}>⏭</Text>
           </Pressable>
         </View>

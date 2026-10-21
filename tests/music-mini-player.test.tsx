@@ -76,3 +76,22 @@ it("a parent still sees the track", () => {
   const { getByText } = render(<MiniPlayer />, { wrapper: wrap });
   expect(getByText("Bad Song")).toBeTruthy();
 });
+
+it("disables the transport for a track the viewer may not see", () => {
+  // Symmetry with the wall card: the bar never PAINTS what the viewer may
+  // not see, and it never PLAYS it either — the transport is disabled.
+  mockState = {
+    current: { id: "exp11111111", title: "Bad Song", artist: "Artist", artworkUrl: null, explicit: true },
+    playing: false,
+  };
+  mockPolicy = { isParent: false, filterOn: true };
+  const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+  expect(getByTestId("mini-player-play").props.accessibilityState?.disabled).toBe(true);
+  expect(getByTestId("mini-player-next").props.accessibilityState?.disabled).toBe(true);
+});
+
+it("keeps the transport live for a track the viewer may see", () => {
+  const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+  expect(getByTestId("mini-player-play").props.accessibilityState?.disabled).toBe(false);
+  expect(getByTestId("mini-player-next").props.accessibilityState?.disabled).toBe(false);
+});

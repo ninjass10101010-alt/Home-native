@@ -5,6 +5,7 @@ jest.mock("@react-native-async-storage/async-storage", () =>
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   appendHistory,
+  HISTORY_SCHEMA_VERSION,
   loadDownloads,
   loadHistory,
   loadMusicSettings,
@@ -123,5 +124,43 @@ describe("music library", () => {
     await AsyncStorage.setItem("music.downloads", JSON.stringify([legacy]));
     const loaded = await loadDownloads();
     expect(loaded[0].explicit).toBeNull();
+  });
+
+  it("a history payload written in the LEGACY shape loads as UNKNOWN, not as clean", async () => {
+    // Before the tri-state change the engine hardcoded `explicit: false` on
+    // EVERY track, so a legacy row's "false" is a stale claim, not a rating:
+    // it must read as UNKNOWN, or a pre-existing explicit track stays
+    // reachable through "Recently played".
+    const legacy = { ...track("a"), explicit: false };
+    await AsyncStorage.setItem("music.history", JSON.stringify([legacy]));
+    const loaded = await loadHistory();
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].id).toBe("a");
+    expect(loaded[0].explicit).toBeNull();
+  });
+
+  it("a history payload written with an OLDER version marker loads as UNKNOWN", async () => {
+    await AsyncStorage.setItem("music.history", JSON.stringify([{ ...track("a"), explicit: false }]));
+    await AsyncStorage.setItem("music.history.version", JSON.stringify(HISTORY_SCHEMA_VERSION - 1));
+    const loaded = await loadHistory();
+    expect(loaded[0].explicit).toBeNull();
+  });
+
+  it("a history payload written in the CURRENT shape keeps its real rating", async () => {
+    await AsyncStorage.setItem(
+      "music.history",
+      JSON.stringify([{ ...track("a"), explicit: true }, { ...track("b"), explicit: false }])
+    );
+    await AsyncStorage.setItem("music.history.version", JSON.stringify(HISTORY_SCHEMA_VERSION));
+    const loaded = await loadHistory();
+    expect(loaded.map((t) => t.explicit)).toEqual([true, false]);
+  });
+
+  it("appending a track marks the history as current, so its real rating survives", async () => {
+    // The marker is written with the rows: a row written after the change
+    // keeps the rating the engine measured.
+    await appendHistory({ ...track("a"), explicit: true });
+    const loaded = await loadHistory();
+    expect(loaded[0].explicit).toBe(true);
   });
 });
