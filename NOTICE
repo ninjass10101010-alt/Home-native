@@ -1,0 +1,15 @@
+Home-native (Consuela) is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program bundles the following third-party components:
+
+- NewPipe Extractor — https://github.com/TeamNewPipe/NewPipeExtractor
+  Copyright the NewPipe team. Licensed under GPL-3.0.
+  Used for on-device YouTube Music stream extraction.
+
+- OkHttp — Copyright Square, Inc. Licensed under Apache-2.0.
+
+Copyright notices placed by upstream authors inside individual files are kept
+unmodified.
