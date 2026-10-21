@@ -9,10 +9,13 @@ import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 
 private val AUDIO_ITAG_PREFERENCE = listOf(140, 251, 139, 249)
@@ -21,11 +24,36 @@ object Engine {
   private const val TAG = "YoutubeEngine"
   private const val ERROR_CODE = "ERR_YOUTUBE_ENGINE"
 
-  /** Connect timeout of the engine's HTTP clients, in seconds. */
-  internal const val CONNECT_TIMEOUT_SECONDS = 5L
+  /**
+   * The badge (innertube) client's timeouts, in seconds.
+   *
+   * The badge path is the only source of explicit ratings, so when YouTube
+   * stops answering it the search degrades to NewPipe — and NewPipe's ratings
+   * are unknown. A slow dead client must not hold the app hostage while it
+   * times out, so these are short.
+   */
+  internal const val BADGE_CONNECT_TIMEOUT_SECONDS = 5L
+  internal const val BADGE_READ_TIMEOUT_SECONDS = 8L
 
-  /** Read timeout of the engine's HTTP clients, in seconds. */
-  internal const val READ_TIMEOUT_SECONDS = 8L
+  /**
+   * The NewPipe transport's timeouts, in seconds.
+   *
+   * This transport also carries the playback resolution (`StreamInfo.getInfo`
+   * makes two to three sequential requests), and a resolution that used to
+   * succeed on a slow link must not start failing: so these stay generous.
+   * The short timeouts above belong to the badge client alone.
+   */
+  internal const val DOWNLOADER_CONNECT_TIMEOUT_SECONDS = 10L
+  internal const val DOWNLOADER_READ_TIMEOUT_SECONDS = 20L
+
+  /**
+   * The fallback search's own deadline, in seconds.
+   *
+   * The transport is generous (playback needs it), so the deadline lives on
+   * the fallback path alone: the degraded search gives up instead of holding
+   * the app hostage.
+   */
+  internal const val FALLBACK_SEARCH_TIMEOUT_SECONDS = 10L
 
   @Volatile private var initialized = false
 
@@ -50,16 +78,29 @@ object Engine {
   }
 
   /**
-   * The innertube client, tuned for a search that must fail fast.
+   * The thread the fallback search runs on.
+   *
+   * The fallback is bounded by a deadline, so it may not sit on an engine
+   * thread that a playback resolution is using — and it may not be able to
+   * block one either.
+   */
+  private val fallbackExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+    Thread(runnable, "youtube-engine-fallback").apply {
+      isDaemon = true
+    }
+  }
+
+  /**
+   * The badge client, tuned for a search that must fail fast.
    *
    * The badge path is the only source of explicit ratings, so when YouTube
    * stops answering it the search degrades to NewPipe — and NewPipe's ratings
    * are unknown. A slow dead client must not hold the app hostage while it
    * times out, so the timeouts are short.
    */
-  private val httpClient: OkHttpClient = OkHttpClient.Builder()
-    .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-    .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+  private val badgeClient: OkHttpClient = OkHttpClient.Builder()
+    .connectTimeout(BADGE_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    .readTimeout(BADGE_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     .build()
 
   private fun ensureInit() {
@@ -110,9 +151,11 @@ object Engine {
    * The promise is settled on the engine thread, so Expo's shared queue is
    * free again the moment this returns — the network call never sits on it.
    *
-   * Only `Exception` is caught: an `Error` is a bug, not a search failure,
-   * and swallowing it would hide it. A cancellation is settled (rejected)
-   * rather than dropped, so the caller is never left waiting forever.
+   * The promise ALWAYS settles. A failure is a rejected promise, a
+   * cancellation is a rejected promise, and so is an `Error`: an `Error` is a
+   * bug, not a search failure, so it is rethrown (the crash semantics stay)
+   * — but only after the rejection, because a promise nobody settles hangs
+   * the caller forever.
    */
   internal fun onEngineThread(promise: Promise, block: () -> Any?) {
     try {
@@ -123,6 +166,9 @@ object Engine {
           promise.reject(ERROR_CODE, "youtube_engine_cancelled", cancellation)
         } catch (error: Exception) {
           promise.reject(ERROR_CODE, "youtube_engine_failed", error)
+        } catch (error: Throwable) {
+          promise.reject(ERROR_CODE, "youtube_engine_failed", error)
+          throw error
         }
       }
     } catch (rejected: RejectedExecutionException) {
@@ -158,7 +204,7 @@ object Engine {
   fun search(query: String, limit: Int): Map<String, Any?> {
     ensureInit()
     val badgeTracks = try {
-      MusicSearch.search(query, limit, httpClient)
+      MusicSearch.search(query, limit, badgeClient)
     } catch (cancellation: CancellationException) {
       // A cancellation is not a search failure — it must not be swallowed.
       throw cancellation
@@ -181,13 +227,45 @@ object Engine {
     return fallbackResult(fallback)
   }
 
+  /**
+   * The degraded search: NewPipe, on a deadline.
+   *
+   * The transport is generous because the playback resolution needs it, so
+   * the deadline lives HERE — on the fallback path alone. The caller waits
+   * at most [FALLBACK_SEARCH_TIMEOUT_SECONDS] for the degraded answer and
+   * gets an empty one after that, instead of waiting out the transport's
+   * own (much longer) timeouts.
+   */
   private fun searchViaNewPipe(query: String, limit: Int): List<StreamInfoItem> {
-    val extractor = ServiceList.YouTube.getSearchExtractor(query)
-    extractor.fetchPage()
-    return extractor.initialPage.items
-      .filterIsInstance<StreamInfoItem>()
-      .filter { it.youtubeId().length == 11 }
-      .take(limit.coerceIn(1, 25))
+    val task = fallbackExecutor.submit(
+      Callable<List<StreamInfoItem>> {
+        // A previous timeout may have left an interrupt behind; drop it, so
+        // it cannot fail this search.
+        Thread.interrupted()
+        val extractor = ServiceList.YouTube.getSearchExtractor(query)
+        extractor.fetchPage()
+        extractor.initialPage.items
+          .filterIsInstance<StreamInfoItem>()
+          .filter { it.youtubeId().length == 11 }
+          .take(limit.coerceIn(1, 25))
+      }
+    )
+    return try {
+      task.get(FALLBACK_SEARCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    } catch (timeout: TimeoutException) {
+      // The degraded search gives up rather than holding the app hostage.
+      task.cancel(true)
+      Log.w(TAG, "newpipe search timed out")
+      emptyList()
+    } catch (interrupted: InterruptedException) {
+      task.cancel(true)
+      Thread.currentThread().interrupt()
+      throw interrupted
+    } catch (failure: ExecutionException) {
+      val cause = failure.cause
+      if (cause is Exception) throw cause
+      throw RuntimeException(cause ?: failure)
+    }
   }
 
   /**

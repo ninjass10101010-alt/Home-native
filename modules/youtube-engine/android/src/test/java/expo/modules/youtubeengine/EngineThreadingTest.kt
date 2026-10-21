@@ -66,4 +66,16 @@ class EngineThreadingTest {
     assertTrue("the promise must settle", promise.latch.await(10, TimeUnit.SECONDS))
     assertTrue("the promise must be rejected: ${promise.value}", promise.failure != null)
   }
+
+  @Test
+  fun `an error inside the task rejects the promise instead of hanging`() {
+    val promise = RecordingPromise()
+    // The error is rethrown (an `Error` is a bug, not a search failure), so
+    // the worker thread dies with it. That is the crash semantics; what this
+    // test pins is that the promise still settles on the way out.
+    Engine.onEngineThread(promise) { throw AssertionError("boom") }
+
+    assertTrue("the promise must settle", promise.latch.await(10, TimeUnit.SECONDS))
+    assertTrue("the promise must be rejected: ${promise.value}", promise.failure != null)
+  }
 }

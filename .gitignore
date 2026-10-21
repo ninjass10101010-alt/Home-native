@@ -40,6 +40,9 @@ yarn-error.*
 /ios
 /android
 
+# generated native folders (modules)
+modules/**/android/build/
+
 # Home-native: NEVER commit these (family data / local env / secrets)
 .env
 .env.*

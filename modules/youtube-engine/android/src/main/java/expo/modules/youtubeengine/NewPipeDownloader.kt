@@ -11,15 +11,19 @@ import java.util.concurrent.TimeUnit
 /**
  * NewPipe's transport.
  *
- * The timeouts are short on purpose: the search degrades to this path when
- * the badge path fails, and a slow dead network must not hold the app
- * hostage while it times out. They are the same ones the innertube client
- * uses.
+ * The timeouts are generous on purpose: this transport also carries the
+ * playback resolution (`StreamInfo.getInfo` makes two to three sequential
+ * requests), and a resolution that used to succeed on a slow link must not
+ * start failing. The short timeouts of the badge client are the badge
+ * client's alone.
+ *
+ * The fallback *search* does not need to be generous: it carries its own
+ * deadline in the engine, so a rotten badge client still degrades fast.
  */
 class NewPipeDownloader(
   private val client: OkHttpClient = OkHttpClient.Builder()
-    .connectTimeout(Engine.CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-    .readTimeout(Engine.READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    .connectTimeout(Engine.DOWNLOADER_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    .readTimeout(Engine.DOWNLOADER_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     .build()
 ) : Downloader() {
   override fun execute(request: Request): Response {

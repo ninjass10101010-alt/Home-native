@@ -198,8 +198,20 @@ class MusicSearchTest {
 
   @Test
   fun `the explicit icon type alone marks a track explicit`() {
+    // The icon type ALONE: no accessibility label in the fixture, so this
+    // cannot be passing because of the label.
     val badge = JsonParser.`object`().from(
-      """{"badges":[{"musicInlineBadgeRenderer":{"icon":{"iconType":"MUSIC_EXPLICIT_BADGE"},
+      """{"badges":[{"musicInlineBadgeRenderer":{"icon":{"iconType":"MUSIC_EXPLICIT_BADGE"}}}]}"""
+    )
+    assertTrue(MusicSearch.hasExplicitBadge(badge))
+  }
+
+  @Test
+  fun `the explicit label alone marks a track explicit`() {
+    // The label alone, on a badge whose icon type says nothing: the other
+    // half of the explicit check.
+    val badge = JsonParser.`object`().from(
+      """{"badges":[{"musicInlineBadgeRenderer":{"icon":{"iconType":"MUSIC_VERIFIED_BADGE"},
           "accessibilityData":{"accessibilityData":{"label":"Explicit"}}}}]}"""
     )
     assertTrue(MusicSearch.hasExplicitBadge(badge))
