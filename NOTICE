@@ -10,6 +10,24 @@ This program bundles the following third-party components:
   Used for on-device YouTube Music stream extraction.
 
 - OkHttp — Copyright Square, Inc. Licensed under Apache-2.0.
+  Used for HTTP requests made by the extraction engine.
+
+- jsoup — https://jsoup.org/
+  Copyright © 2009-2025 Jonathan Hedley. Licensed under MIT.
+  Used by NewPipe Extractor to parse YouTube HTML pages.
+
+- Rhino — https://github.com/mozilla/rhino
+  Copyright the Mozilla Rhino team. Licensed under MPL-2.0.
+  Used by NewPipe Extractor to run YouTube's JavaScript challenges (signature deciphering).
+
+- nanojson (TeamNewPipe fork) — https://github.com/TeamNewPipe/nanojson
+  Fork of https://github.com/mmastrac/nanojson. Copyright Matt Mastracci and contributors.
+  Licensed under Apache-2.0.
+  Used by NewPipe Extractor for minimal JSON parsing.
+
+- kotlin-stdlib — https://github.com/JetBrains/kotlin
+  Copyright JetBrains s.r.o. and contributors. Licensed under Apache-2.0.
+  Kotlin standard library pulled in by the engine module's Kotlin code and NewPipe Extractor.
 
 Copyright notices placed by upstream authors inside individual files are kept
 unmodified.

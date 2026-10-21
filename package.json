@@ -64,6 +64,7 @@
     "paint:audit": "node scripts/assert-painted-discs.mjs"
   },
   "private": true,
+  "license": "GPL-3.0-or-later",
   "jest": {
     "preset": "jest-expo",
     "setupFilesAfterEnv": [
