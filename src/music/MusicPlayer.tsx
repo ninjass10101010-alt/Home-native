@@ -1,26 +1,25 @@
 import React from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { search as engineSearch } from "../../modules/youtube-engine";
-import { useAuth } from "../state/AuthProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { FONTS, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
 import { Material } from "../theme/Material";
 import { usePlayback } from "./playback";
 import { currentLineIndex, fetchLyrics, type LyricLine } from "./lyrics";
-import { countUnrated, isExplicitHidden, searchNote } from "./explicit";
+import { countUnrated, isExplicitHidden, searchNote, visibleTracks } from "./explicit";
+import { totalDownloadBytes } from "./library";
 import type { MediaTrack } from "./types";
 
 type Tab = "lyrics" | "queue";
 
 export function MusicPlayer() {
   const { colors, accentColor } = useTheme();
-  const { member } = useAuth();
   const {
     current, queue, playing, position, duration, error,
     play, toggle, next, previous, seek, repeat, shuffle,
-    cycleRepeatMode, toggleShuffleMode, downloadCurrent, addToQueue, settings,
-    downloads, downloadBytes, removeDownload, history,
+    cycleRepeatMode, toggleShuffleMode, downloadCurrent, addToQueue,
+    downloads, removeDownload, history, policy,
   } = usePlayback();
 
   const [query, setQuery] = React.useState("");
@@ -34,15 +33,21 @@ export function MusicPlayer() {
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [seekWidth, setSeekWidth] = React.useState(0);
 
-  // A parent role sees everything. Every other role — child, pet, and a
-  // signed-out guest (member === null) — FAILS CLOSED while the filter is on:
-  // only a positively-clean track is visible. See src/music/explicit.ts.
-  const isParent = member?.role === "parent";
-  // The filter FAILS CLOSED: only an explicit `false` turns it off. A
-  // persisted payload with no `explicitFilter` key (written before the key
-  // existed) must not silently DISABLE the family filter.
-  const policy = { isParent, filterOn: settings.explicitFilter !== false };
-  const visible = tracks.filter((t) => !isExplicitHidden(t, policy));
+  // The role-aware policy comes from the provider — it knows who is watching
+  // (a parent sees everything; a kid role and a signed-out guest fail
+  // closed). See src/music/explicit.ts.
+  const isParent = policy.isParent;
+  const visible = visibleTracks(tracks, policy);
+  // The queue, the history and the downloads tray are track surfaces too:
+  // the policy covers every place a kid can SEE a track, not just the search
+  // results.
+  const visibleQueue = visibleTracks(queue, policy);
+  const visibleHistory = visibleTracks(history, policy);
+  const visibleDownloads = visibleTracks(downloads, policy);
+  // The Now Playing panel is a surface as well: a track the viewer may not
+  // see is never painted here either (the provider already stops it — this
+  // is the same rule on the same screen).
+  const visibleCurrent = current && !isExplicitHidden(current, policy) ? current : null;
   const unrated = countUnrated(tracks);
   const note =
     hasSearched && !searching && !searchError
@@ -50,13 +55,13 @@ export function MusicPlayer() {
       : null;
 
   React.useEffect(() => {
-    if (!current) return;
+    if (!visibleCurrent) return;
     let alive = true;
-    void fetchLyrics(current).then((lines) => { if (alive) setLyricsFor({ id: current.id, lines }); });
+    void fetchLyrics(visibleCurrent).then((lines) => { if (alive) setLyricsFor({ id: visibleCurrent.id, lines }); });
     return () => { alive = false; };
-  }, [current]);
+  }, [visibleCurrent]);
 
-  const lyrics = current && lyricsFor?.id === current.id ? lyricsFor.lines : null;
+  const lyrics = visibleCurrent && lyricsFor?.id === visibleCurrent.id ? lyricsFor.lines : null;
 
   const search = async () => {
     const term = query.trim();
@@ -82,7 +87,7 @@ export function MusicPlayer() {
 
   const progress = duration > 0 ? Math.min(1, position / duration) : 0;
   const activeLine = lyrics ? currentLineIndex(lyrics, position * 1000) : -1;
-  const downloaded = !!current && downloads.some((d) => d.id === current.id);
+  const downloaded = !!visibleCurrent && downloads.some((d) => d.id === visibleCurrent.id);
 
   return (
     <ScrollView testID="music-player" contentContainerStyle={{ padding: 24, gap: 18, paddingBottom: 200 }} keyboardShouldPersistTaps="handled">
@@ -96,7 +101,7 @@ export function MusicPlayer() {
         </Pressable>
       </View>
 
-      {searchOpen || !current ? (
+      {searchOpen || !visibleCurrent ? (
         <Material tier="thin" style={{ borderRadius: 20, padding: 14, gap: 10 }}>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TextInput
@@ -173,18 +178,18 @@ export function MusicPlayer() {
         </Material>
       ) : null}
 
-      {current ? (
+      {visibleCurrent ? (
         <>
           <View style={{ alignItems: "center", gap: 10 }}>
             <Material tier="regular" style={{ width: 420, height: 420, borderRadius: 36, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              {current.artworkUrl ? (
-                <Image source={{ uri: current.artworkUrl }} style={{ width: 420, height: 420 }} resizeMode="cover" />
+              {visibleCurrent.artworkUrl ? (
+                <Image source={{ uri: visibleCurrent.artworkUrl }} style={{ width: 420, height: 420 }} resizeMode="cover" />
               ) : (
                 <Text style={{ fontSize: 120 }}>🎵</Text>
               )}
             </Material>
-            <Text testID="np-title" numberOfLines={1} style={{ color: colors["color-text-primary"], fontSize: 30, fontWeight: "800", textAlign: "center" }}>{current.title}</Text>
-            <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>{current.artist}</Text>
+            <Text testID="np-title" numberOfLines={1} style={{ color: colors["color-text-primary"], fontSize: 30, fontWeight: "800", textAlign: "center" }}>{visibleCurrent.title}</Text>
+            <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>{visibleCurrent.artist}</Text>
             {error ? <Text style={{ color: colors["color-accent-rose"] }}>{error}</Text> : null}
           </View>
 
@@ -232,12 +237,12 @@ export function MusicPlayer() {
             </Pressable>
           </View>
 
-          {downloads.length > 0 ? (
+          {visibleDownloads.length > 0 ? (
             <Material tier="thin" style={{ borderRadius: 20, padding: 18, gap: 8 }}>
               <Text style={{ color: colors["color-text-primary"], fontWeight: "800", fontSize: TYPOGRAPHY.title.fontSize }}>
-                Downloads · {formatBytes(downloadBytes)}
+                Downloads · {formatBytes(totalDownloadBytes(visibleDownloads))}
               </Text>
-              {downloads.map((item) => (
+              {visibleDownloads.map((item) => (
                 <View key={item.id} testID={`music-download-${item.id}`} style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 56 }}>
                   <View style={{ flex: 1 }}>
                     <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontWeight: "600" }}>{item.title}</Text>
@@ -280,11 +285,11 @@ export function MusicPlayer() {
             </Material>
           ) : (
             <Material tier="thin" style={{ borderRadius: 20, padding: 18, gap: 6 }}>
-              {queue.length === 0 ? (
+              {visibleQueue.length === 0 ? (
                 <Text style={{ color: colors["color-text-secondary"] }}>The queue is empty.</Text>
               ) : (
-                queue.map((track, i) => (
-                  <Pressable key={`${track.id}-${i}`} accessibilityRole="button" accessibilityLabel={`Play ${track.title}`} onPress={() => void play(track, queue)} style={{ minHeight: 52, justifyContent: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}>
+                visibleQueue.map((track, i) => (
+                  <Pressable key={`${track.id}-${i}`} accessibilityRole="button" accessibilityLabel={`Play ${track.title}`} onPress={() => void play(track, visibleQueue)} style={{ minHeight: 52, justifyContent: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}>
                     <Text numberOfLines={1} style={{ color: i === 0 ? accentColor : colors["color-text-primary"], fontWeight: "700" }}>{track.title}</Text>
                     <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{track.artist}</Text>
                   </Pressable>
@@ -301,16 +306,16 @@ export function MusicPlayer() {
         </Material>
       )}
 
-      {!current && history.length > 0 ? (
+      {!visibleCurrent && visibleHistory.length > 0 ? (
         <Material tier="thin" style={{ borderRadius: 20, padding: 18, gap: 6 }}>
           <Text style={{ color: colors["color-text-primary"], fontWeight: "800", fontSize: TYPOGRAPHY.title.fontSize }}>Recently played</Text>
-          {history.slice(0, 8).map((track) => (
+          {visibleHistory.slice(0, 8).map((track) => (
             <Pressable
               key={track.id}
               testID={`music-history-${track.id}`}
               accessibilityRole="button"
               accessibilityLabel={`Play ${track.title} by ${track.artist}`}
-              onPress={() => void play(track, history)}
+              onPress={() => void play(track, visibleHistory)}
               style={{ minHeight: 52, justifyContent: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}
             >
               <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontWeight: "700" }}>{track.title}</Text>

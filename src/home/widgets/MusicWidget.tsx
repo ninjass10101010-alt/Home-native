@@ -9,6 +9,7 @@ import { mix } from "../../theme/mix";
 import { Material } from "../../theme/Material";
 import { WidgetFrame, HEADER_BAND_H } from "./WidgetFrame";
 import { usePlayback } from "../../music/playback";
+import { isExplicitHidden } from "../../music/explicit";
 
 const ART = 56;
 
@@ -101,9 +102,17 @@ export function MusicWidget() {
   const { colors, accentColor } = useTheme();
   const router = useRouter();
   const { member, hydrated } = useAuth();
-  const { current, playing, toggle, next } = usePlayback();
+  const { current, playing, toggle, next, policy } = usePlayback();
   const guest = hydrated && !member;
   const open = () => router.push("/music" as never);
+
+  /**
+   * The wall card is a track surface too: a track the viewer may not see is
+   * never painted here (no artwork, no title). The card keeps its place on
+   * the 12-cell board and says the neutral truth instead.
+   */
+  const hidden = !!current && isExplicitHidden(current, policy);
+  const showTrack = !!current && !hidden;
 
   /**
    * The header band — the frame's default band plus the Music badge. The
@@ -213,14 +222,14 @@ export function MusicWidget() {
           <Pressable
             testID="music-widget-open"
             accessibilityRole="button"
-            accessibilityLabel={current ? `Open music. ${current.title} by ${current.artist}` : "Open music"}
+            accessibilityLabel={showTrack ? `Open music. ${current?.title} by ${current?.artist}` : "Open music"}
             onPress={open}
             style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
           >
 
             <Material tier="thin" style={{ width: ART, height: ART, borderRadius: 16, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              {current?.artworkUrl ? (
-                <Image source={{ uri: current.artworkUrl }} style={{ width: ART, height: ART }} resizeMode="cover" />
+              {showTrack && current?.artworkUrl ? (
+                <Image testID="music-widget-art" source={{ uri: current.artworkUrl }} style={{ width: ART, height: ART }} resizeMode="cover" />
               ) : (
                 <Text style={{ fontSize: 30, lineHeight: 34, color: colors["color-accent-ink-violet"] ?? colors["color-text-primary"] }}>
                   {MUSIC_GLYPH}
@@ -229,10 +238,10 @@ export function MusicWidget() {
             </Material>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text testID="music-widget-title" numberOfLines={1} style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
-                {current ? current.title : "Nothing playing"}
+                {showTrack ? current?.title : "Nothing playing"}
               </Text>
               <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
-                {current ? current.artist : "Search YouTube Music from the player"}
+                {showTrack ? current?.artist : "Search YouTube Music from the player"}
               </Text>
             </View>
           </Pressable>
@@ -242,14 +251,14 @@ export function MusicWidget() {
               testID="music-widget-play"
               accessibilityRole="button"
               accessibilityLabel={playing ? "Pause" : "Play"}
-              accessibilityState={{ disabled: !current }}
-              disabled={!current}
+              accessibilityState={{ disabled: !showTrack }}
+              disabled={!showTrack}
               hitSlop={12}
               onPress={(event) => { event?.stopPropagation?.(); toggle(); }}
               style={{
                 width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center",
-                backgroundColor: mix(accentColor, "transparent", current ? 22 : 8),
-                borderWidth: 1, borderColor: mix(accentColor, "transparent", current ? 45 : 18),
+                backgroundColor: mix(accentColor, "transparent", showTrack ? 22 : 8),
+                borderWidth: 1, borderColor: mix(accentColor, "transparent", showTrack ? 45 : 18),
               }}
             >
               <Text style={{ fontSize: 18, color: colors["color-text-primary"] }}>{playing ? "❚❚" : "▶"}</Text>
@@ -258,8 +267,8 @@ export function MusicWidget() {
               testID="music-widget-next"
               accessibilityRole="button"
               accessibilityLabel="Next track"
-              accessibilityState={{ disabled: !current }}
-              disabled={!current}
+              accessibilityState={{ disabled: !showTrack }}
+              disabled={!showTrack}
               hitSlop={12}
               onPress={(event) => { event?.stopPropagation?.(); void next(); }}
               style={{ width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 6) }}

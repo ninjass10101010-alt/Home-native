@@ -2,6 +2,7 @@ import React from "react";
 import { Directory, File, Paths } from "expo-file-system";
 import { AudioModule, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { resolveAudio } from "../../modules/youtube-engine";
+import { useAuth } from "../state/AuthProvider";
 import {
   appendHistory,
   DOWNLOAD_CAP_BYTES,
@@ -24,6 +25,12 @@ import {
   removeAt,
   toggleShuffle,
 } from "./queue";
+import {
+  findVisibleIndex,
+  isExplicitHidden,
+  visibleTracks,
+  type ExplicitPolicy,
+} from "./explicit";
 import type { DownloadEntry, MediaTrack, QueueState, RepeatMode } from "./types";
 
 /**
@@ -56,6 +63,14 @@ export interface PlaybackValue {
   downloadBytes: number;
   history: MediaTrack[];
   settings: MusicSettings;
+  /**
+   * The role-aware explicit policy the viewer is under RIGHT NOW.
+   *
+   * The provider owns it (it knows who is watching) and every surface reads
+   * it from here, so the rule can never drift between the queue, the
+   * history, the downloads tray and the chrome.
+   */
+  policy: ExplicitPolicy;
   play: (track: MediaTrack, queue?: MediaTrack[]) => Promise<void>;
   playQueueAt: (tracks: MediaTrack[], index: number) => Promise<void>;
   toggle: () => void;
@@ -95,6 +110,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const player = useAudioPlayer();
   const status = useAudioPlayerStatus(player);
 
+  /**
+   * WHO IS WATCHING.
+   *
+   * The viewer comes from the auth layer (the AuthProvider sits ABOVE this
+   * one in `app/_layout.tsx`), so the explicit policy is role-aware: a parent
+   * sees everything, and every other role — a kid, a pet, and a signed-out
+   * guest (whose member is null) — FAILS CLOSED. See `src/music/explicit.ts`.
+   */
+  const { member } = useAuth();
+  const isParent = member?.role === "parent";
+
   const [queue, setQueue] = React.useState<QueueState>(() => createQueue([], -1));
   const [error, setError] = React.useState<string | null>(null);
   const [downloads, setDownloads] = React.useState<DownloadEntry[]>([]);
@@ -106,11 +132,24 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   });
   const finishedRef = React.useRef<string | null>(null);
   const startingRef = React.useRef(false);
+  const playerRef = React.useRef(player);
+  const queueRef = React.useRef(queue);
+
+  // The filter FAILS CLOSED: only an explicit `false` turns it off, so a
+  // persisted payload written before the key existed can never disable the
+  // family filter.
+  const policy = React.useMemo<ExplicitPolicy>(
+    () => ({ isParent, filterOn: settings.explicitFilter !== false }),
+    [isParent, settings.explicitFilter]
+  );
 
   const current = queue.index >= 0 ? queue.tracks[queue.index] ?? null : null;
   const position = status?.currentTime ?? 0;
   const duration = status?.duration ?? current?.durationSeconds ?? 0;
   const playing = !!status?.playing;
+
+  React.useEffect(() => { playerRef.current = player; }, [player]);
+  React.useEffect(() => { queueRef.current = queue; }, [queue]);
 
   React.useEffect(() => {
     void AudioModule.setAudioModeAsync({
@@ -130,6 +169,43 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setSettings(next);
     void saveMusicSettings(next);
   }, []);
+
+  /**
+   * THE VIEWER CHANGED (a parent signed out and a kid signed in, or the
+   * family toggled the filter): the queue the new viewer may not see is
+   * DROPPED, and a current track the new viewer may not see STOPS the
+   * playback.
+   *
+   * This is the reachable hole the search-results filter could not close: a
+   * parent queues an explicit track, the kid signs in, and the track must
+   * not keep playing with its title on the wall, in the MiniPlayer, in the
+   * queue list or in "Recently played".
+   */
+  React.useEffect(() => {
+    const state = queueRef.current;
+    const currentTrack = state.index >= 0 ? state.tracks[state.index] : undefined;
+    const hiddenCurrent = !!currentTrack && isExplicitHidden(currentTrack, policy);
+    const tracks = visibleTracks(state.tracks, policy);
+    const baseTracks = visibleTracks(state.baseTracks, policy);
+    const index = hiddenCurrent
+      ? -1
+      : currentTrack
+        ? tracks.findIndex((track) => track.id === currentTrack.id)
+        : state.index;
+    const changed =
+      hiddenCurrent ||
+      tracks.length !== state.tracks.length ||
+      baseTracks.length !== state.baseTracks.length ||
+      index !== state.index;
+    if (!changed) return;
+    if (hiddenCurrent) {
+      // Stop the sound AND clear the lock screen: the title must not survive
+      // on the panel (or on the lock screen) for a viewer who may not see it.
+      playerRef.current.pause();
+      playerRef.current.setActiveForLockScreen?.(false);
+    }
+    setQueue({ ...state, tracks, baseTracks, index });
+  }, [policy]);
 
   const startTrack = React.useCallback(
     async (track: MediaTrack) => {
@@ -162,52 +238,79 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const play = React.useCallback(
     async (track: MediaTrack, tracks?: MediaTrack[]) => {
-      const list = tracks && tracks.length > 0 ? tracks : [track];
+      // Fail closed: a track the viewer may not see never plays, and it
+      // never joins the queue the transport walks.
+      if (isExplicitHidden(track, policy)) return;
+      const source = tracks && tracks.length > 0 ? tracks : [track];
+      const list = visibleTracks(source, policy);
+      if (list.length === 0) return;
       const index = Math.max(0, list.findIndex((item) => item.id === track.id));
       setQueue(createQueue(list, index, settings.repeat));
       await startTrack(list[index] ?? track);
     },
-    [settings.repeat, startTrack]
+    [policy, settings.repeat, startTrack]
   );
 
   const playQueueAt = React.useCallback(
     async (tracks: MediaTrack[], index: number) => {
-      if (tracks.length === 0) return;
-      const safe = Math.min(Math.max(index, 0), tracks.length - 1);
-      setQueue(createQueue(tracks, safe, settings.repeat));
-      await startTrack(tracks[safe]);
+      const target = tracks[index];
+      if (!target) return;
+      // Fail closed: the row the caller picked is played only when the
+      // viewer may see it.
+      if (isExplicitHidden(target, policy)) return;
+      const list = visibleTracks(tracks, policy);
+      if (list.length === 0) return;
+      const safe = Math.max(0, list.findIndex((track) => track.id === target.id));
+      setQueue(createQueue(list, safe, settings.repeat));
+      await startTrack(list[safe]);
     },
-    [settings.repeat, startTrack]
+    [policy, settings.repeat, startTrack]
   );
 
   const goTo = React.useCallback(
     async (index: number) => {
       if (index < 0) return;
-      const track = queue.tracks[index];
+      // The transport SKIPS what the viewer may not see.
+      const target = findVisibleIndex(queue.tracks, index, policy, 1, false);
+      if (target < 0) return;
+      const track = queue.tracks[target];
       if (!track) return;
-      setQueue((q) => ({ ...q, index }));
+      setQueue((q) => ({ ...q, index: target }));
       await startTrack(track);
     },
-    [queue.tracks, startTrack]
+    [policy, queue.tracks, startTrack]
   );
 
   const next = React.useCallback(async () => {
+    if (queue.tracks.length === 0) return;
     const index = nextIndex(queue);
     if (index === queue.index) {
       await player.seekTo(0);
       player.play();
       return;
     }
-    await goTo(index);
-  }, [goTo, player, queue]);
+    const target = findVisibleIndex(queue.tracks, index, policy, 1, queue.repeat === "all");
+    if (target < 0) {
+      player.pause();
+      return;
+    }
+    await goTo(target);
+  }, [goTo, player, policy, queue]);
 
   const previous = React.useCallback(async () => {
     if (position > 3) {
       await player.seekTo(0);
       return;
     }
-    await goTo(previousIndex(queue));
-  }, [goTo, player, position, queue]);
+    if (queue.tracks.length === 0) return;
+    const index = previousIndex(queue);
+    const target = findVisibleIndex(queue.tracks, index, policy, -1, queue.repeat === "all");
+    if (target < 0) {
+      player.pause();
+      return;
+    }
+    await goTo(target);
+  }, [goTo, player, policy, position, queue]);
 
   React.useEffect(() => {
     if (!status?.didJustFinish) return;
@@ -220,8 +323,16 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       player.pause();
       return;
     }
-    queueMicrotask(() => { void goTo(index); });
-  }, [current?.id, goTo, player, queue, status?.didJustFinish]);
+    // NEVER roll into a track the viewer may not see: the queue the effect
+    // still holds can predate the viewer's change, so the gate is checked
+    // here too, not only where the queue is built.
+    const target = findVisibleIndex(queue.tracks, index, policy, 1, queue.repeat === "all");
+    if (target < 0) {
+      player.pause();
+      return;
+    }
+    queueMicrotask(() => { void goTo(target); });
+  }, [current?.id, goTo, player, policy, queue, status?.didJustFinish]);
 
   const toggle = React.useCallback(() => {
     if (playing) player.pause();
@@ -253,12 +364,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     persistSettings({ ...settings, shuffle: !settings.shuffle });
   }, [persistSettings, settings]);
 
-  const addToQueue = React.useCallback((track: MediaTrack) => {
-    setQueue((q) => {
-      if (q.tracks.length === 0) return createQueue([track], 0, q.repeat);
-      return { ...q, tracks: [...q.tracks, track], baseTracks: [...q.baseTracks, track] };
-    });
-  }, []);
+  const addToQueue = React.useCallback(
+    (track: MediaTrack) => {
+      // Fail closed: a track the viewer may not see never joins the queue.
+      if (isExplicitHidden(track, policy)) return;
+      setQueue((q) => {
+        if (q.tracks.length === 0) return createQueue([track], 0, q.repeat);
+        return { ...q, tracks: [...q.tracks, track], baseTracks: [...q.baseTracks, track] };
+      });
+    },
+    [policy]
+  );
 
   const removeFromQueue = React.useCallback((index: number) => {
     setQueue((q) => removeAt(q, index));
@@ -289,6 +405,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         album: current.album,
         durationSeconds: current.durationSeconds,
         artworkUrl: current.artworkUrl,
+        // The rating travels WITH the download: the tray is a track surface,
+        // so a kid may only see a row that says "not marked explicit".
+        explicit: current.explicit,
         fileUri: dest.uri,
         bytes: dest.size ?? 0,
         savedAt: Date.now(),
@@ -321,6 +440,20 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     [persistSettings, settings]
   );
 
+  /**
+   * What the provider HANDS OUT is what the viewer may see: the downloads
+   * tray and the history are device-global, so they are filtered against
+   * the policy here — a kid never receives a row they may not see.
+   */
+  const visibleDownloads = React.useMemo(
+    () => visibleTracks(downloads, policy),
+    [downloads, policy]
+  );
+  const visibleHistory = React.useMemo(
+    () => visibleTracks(history, policy),
+    [history, policy]
+  );
+
   const value = React.useMemo<PlaybackValue>(
     () => ({
       current,
@@ -333,10 +466,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       repeat: queue.repeat,
       shuffle: queue.shuffle,
       error,
-      downloads,
-      downloadBytes: totalDownloadBytes(downloads),
-      history,
+      downloads: visibleDownloads,
+      downloadBytes: totalDownloadBytes(visibleDownloads),
+      history: visibleHistory,
       settings,
+      policy,
       play,
       playQueueAt,
       toggle,
@@ -354,10 +488,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setExplicitFilter,
     }),
     [
-      addToQueue, current, cycleRepeatMode, downloadCurrent, downloads, duration, error, history,
-      moveQueueItem, next, play, playQueueAt, playing, position, previous, queue.index,
+      addToQueue, current, cycleRepeatMode, downloadCurrent, duration, error,
+      moveQueueItem, next, play, playQueueAt, playing, policy, position, previous, queue.index,
       queue.repeat, queue.shuffle, queue.tracks, removeDownload, removeFromQueue, seek,
       setExplicitFilter, setRepeat, settings, status?.isBuffering, toggle, toggleShuffleMode,
+      visibleDownloads, visibleHistory,
     ]
   );
 

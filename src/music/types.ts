@@ -41,6 +41,14 @@ export interface DownloadEntry {
   album: string;
   durationSeconds: number | null;
   artworkUrl: string | null;
+  /**
+   * The track's rating at the time it was saved, TRI-STATE (the same
+   * contract as `MediaTrack.explicit`): `true` = badged explicit, `false` =
+   * not marked explicit, `null` = unknown. The tray is a track surface, so
+   * a kid may only see a row that says "not marked explicit" — a download
+   * written before this key existed loads as UNKNOWN and stays hidden.
+   */
+  explicit: boolean | null;
   fileUri: string;
   bytes: number;
   savedAt: number;

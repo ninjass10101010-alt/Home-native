@@ -1,7 +1,9 @@
 import {
   countUnrated,
+  findVisibleIndex,
   isExplicitHidden,
   searchNote,
+  visibleTracks,
   NOTE_NO_RESULTS,
   NOTE_NOTHING_HERE,
   NOTE_NOTHING_HERE_PARENT,
@@ -184,5 +186,66 @@ describe("search note", () => {
     const note = searchNote({ visible: 0, total: 2, unrated: 1, explicitKnown: false, isParent: true });
     expect(note?.testID).toBe("music-search-note-parent");
     expect(note?.text).toBe(NOTE_NOTHING_HERE_PARENT);
+  });
+});
+
+/**
+ * The queue's visible scan — how the transport SKIPS what the viewer may not
+ * see. The rule, re-derived here from the contract: the scan returns the
+ * first track the viewer may see at or after the start (forward) or at or
+ * before it (backward), and -1 when there is nothing to see in that
+ * direction — the caller must then STOP, never fall back to a hidden track.
+ */
+describe("the visible scan", () => {
+  const KID = { isParent: false, filterOn: true };
+  const PARENT = { isParent: true, filterOn: true };
+
+  it("finds the first track the viewer may see", () => {
+    expect(findVisibleIndex([track(false), track(true), track(false)], 0, KID)).toBe(0);
+    expect(findVisibleIndex([track(true), track(false)], 0, KID)).toBe(1);
+  });
+
+  it("skips the hidden tracks between the start and the next visible one", () => {
+    expect(findVisibleIndex([track(false), track(true), track(null), track(false)], 1, KID)).toBe(3);
+  });
+
+  it("stops at the end instead of wrapping when the queue does not repeat", () => {
+    expect(findVisibleIndex([track(false), track(true)], 1, KID)).toBe(-1);
+  });
+
+  it("wraps to the far end when the queue repeats all", () => {
+    expect(findVisibleIndex([track(false), track(true)], 1, KID, 1, true)).toBe(0);
+  });
+
+  it("scans backwards for the previous track", () => {
+    expect(findVisibleIndex([track(true), track(false), track(true)], 2, KID, -1)).toBe(1);
+    expect(findVisibleIndex([track(true), track(false), track(true)], 2, KID, -1, true)).toBe(1);
+  });
+
+  it("returns -1 when the viewer may see nothing in that direction", () => {
+    expect(findVisibleIndex([track(true), track(null)], 0, KID)).toBe(-1);
+    expect(findVisibleIndex([track(true), track(null)], 0, KID, -1)).toBe(-1);
+    expect(findVisibleIndex([], 0, KID)).toBe(-1);
+  });
+
+  it("a parent sees every track, so the scan never blocks them", () => {
+    expect(findVisibleIndex([track(true)], 0, PARENT)).toBe(0);
+    expect(findVisibleIndex([track(true), track(null)], 1, PARENT)).toBe(1);
+  });
+
+  it("with the filter off, a kid sees every track too", () => {
+    const off = { isParent: false, filterOn: false };
+    expect(findVisibleIndex([track(true), track(null)], 0, off)).toBe(0);
+  });
+
+  it("filters a list down to what the viewer may see", () => {
+    const list = [track(false), track(true), track(null)];
+    expect(visibleTracks(list, KID).map((t) => t.explicit)).toEqual([false]);
+    expect(visibleTracks(list, PARENT)).toHaveLength(3);
+  });
+
+  it("a list with a missing rating is filtered out for a kid", () => {
+    const missing = { ...track(null), explicit: undefined as unknown as null };
+    expect(visibleTracks([missing], KID)).toHaveLength(0);
   });
 });

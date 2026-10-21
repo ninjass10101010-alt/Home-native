@@ -27,6 +27,47 @@ export function isExplicitHidden(
 }
 
 /**
+ * The tracks the viewer may see, in order.
+ *
+ * The ONE place a list is filtered against the policy — the search results,
+ * the queue, the history, the downloads tray and the chrome all read their
+ * rows through this, so no surface can drift from the rule.
+ */
+export function visibleTracks<T extends Pick<MediaTrack, "explicit">>(
+  tracks: T[],
+  policy: ExplicitPolicy
+): T[] {
+  return tracks.filter((track) => !isExplicitHidden(track, policy));
+}
+
+/**
+ * The first track the viewer may see, scanning from `start`.
+ *
+ * This is how the transport SKIPS what the viewer may not see: `direction` is
+ * 1 (forward) or -1 (backward), and `wrap` lets the scan continue from the
+ * far end (a "repeat all" queue). It returns -1 when the viewer may see
+ * NOTHING in that direction — the caller must then STOP, never fall back to
+ * a hidden track.
+ */
+export function findVisibleIndex(
+  tracks: Pick<MediaTrack, "explicit">[],
+  start: number,
+  policy: ExplicitPolicy,
+  direction: 1 | -1 = 1,
+  wrap = false
+): number {
+  const n = tracks.length;
+  if (n === 0) return -1;
+  const begin = ((start % n) + n) % n;
+  const count = wrap ? n : direction === 1 ? n - begin : begin + 1;
+  for (let step = 0; step < count; step += 1) {
+    const index = ((begin + direction * step) % n + n) % n;
+    if (!isExplicitHidden(tracks[index], policy)) return index;
+  }
+  return -1;
+}
+
+/**
  * How many tracks carry no rating at all.
  *
  * `explicit == null` covers BOTH `null` (the NewPipe fallback path, or a

@@ -5,6 +5,7 @@ jest.mock("@react-native-async-storage/async-storage", () =>
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   appendHistory,
+  loadDownloads,
   loadHistory,
   loadMusicSettings,
   mergeHistory,
@@ -23,7 +24,7 @@ const track = (id: string): MediaTrack => ({
 
 const download = (id: string, bytes = 100): DownloadEntry => ({
   id, title: `T-${id}`, artist: "A", album: "", durationSeconds: 120,
-  artworkUrl: null, fileUri: `file:///music/${id}.m4a`, bytes, savedAt: 1,
+  artworkUrl: null, fileUri: `file:///music/${id}.m4a`, bytes, savedAt: 1, explicit: false,
 });
 
 beforeEach(async () => {
@@ -107,5 +108,20 @@ describe("music library", () => {
       shuffle: false,
       explicitFilter: true,
     });
+  });
+
+  it("carries the track's rating on a download", async () => {
+    await saveDownloads([{ ...download("a"), explicit: true }]);
+    expect((await loadDownloads())[0].explicit).toBe(true);
+  });
+
+  it("a download written before the rating existed loads as UNKNOWN, not as clean", async () => {
+    // The payload predates the `explicit` key: it must not read as "not
+    // marked explicit" (that would let an explicit track reach a kid).
+    const legacy = { ...download("a") } as Partial<DownloadEntry>;
+    delete legacy.explicit;
+    await AsyncStorage.setItem("music.downloads", JSON.stringify([legacy]));
+    const loaded = await loadDownloads();
+    expect(loaded[0].explicit).toBeNull();
   });
 });

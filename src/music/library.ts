@@ -75,8 +75,20 @@ export function totalDownloadBytes(list: DownloadEntry[]): number {
   return list.reduce((sum, item) => sum + (Number.isFinite(item.bytes) ? item.bytes : 0), 0);
 }
 
-export function loadDownloads(): Promise<DownloadEntry[]> {
-  return readJson<DownloadEntry[]>(DOWNLOADS_KEY, []);
+/**
+ * A download written BEFORE the rating existed carries no `explicit` key.
+ *
+ * It must NOT read as "not marked explicit" (that would let an explicit
+ * track reach a kid through the tray): a missing rating is UNKNOWN, and an
+ * unknown rating is hidden from a kid role.
+ */
+export function normalizeDownload(entry: DownloadEntry): DownloadEntry {
+  return { ...entry, explicit: typeof entry.explicit === "boolean" ? entry.explicit : null };
+}
+
+export async function loadDownloads(): Promise<DownloadEntry[]> {
+  const list = await readJson<DownloadEntry[]>(DOWNLOADS_KEY, []);
+  return Array.isArray(list) ? list.map(normalizeDownload) : [];
 }
 
 export function saveDownloads(list: DownloadEntry[]): Promise<void> {

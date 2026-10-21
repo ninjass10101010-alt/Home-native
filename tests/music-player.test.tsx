@@ -16,6 +16,7 @@ const DEFAULT_CURRENT = {
   durationSeconds: 200, artworkUrl: null, explicit: false, source: "youtube_music",
 };
 let mockCurrent: any = DEFAULT_CURRENT;
+let mockQueue: any[] = [];
 let mockDownloads: any[] = [];
 let mockHistory: any[] = [];
 /** The family setting: the explicit filter is ON by default. */
@@ -23,18 +24,17 @@ let mockExplicitFilter: boolean | undefined = true;
 /** The signed-in viewer. null = signed-out guest, which also fails closed. */
 let mockMember: any = null;
 
-jest.mock("../src/state/AuthProvider", () => ({
-  useAuth: () => ({ member: mockMember, hydrated: true, signOut: jest.fn(), poke: jest.fn() }),
-}));
-
 jest.mock("../src/music/playback", () => ({
   usePlayback: () => ({
     current: mockCurrent,
-    queue: [], index: 0, playing: false, position: 10, duration: 200, buffering: false,
+    queue: mockQueue, index: 0, playing: false, position: 10, duration: 200, buffering: false,
     repeat: "off", shuffle: false, error: null,
     downloads: mockDownloads, downloadBytes: mockDownloads.reduce((sum, item) => sum + item.bytes, 0),
     history: mockHistory,
     settings: { repeat: "off", shuffle: false, explicitFilter: mockExplicitFilter },
+    // The provider owns the role-aware policy — the surfaces read it from
+    // there so the rule can never drift between them.
+    policy: { isParent: mockMember?.role === "parent", filterOn: mockExplicitFilter !== false },
     play: mockPlay, playQueueAt: jest.fn(), toggle: mockToggle, next: mockNext, previous: jest.fn(),
     seek: mockSeek, setRepeat: jest.fn(), cycleRepeatMode: jest.fn(), toggleShuffleMode: jest.fn(),
     addToQueue: jest.fn(), removeFromQueue: jest.fn(), moveQueueItem: jest.fn(),
@@ -80,6 +80,7 @@ const PARENT = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱",
 
 beforeEach(() => {
   mockCurrent = DEFAULT_CURRENT;
+  mockQueue = [];
   mockDownloads = [];
   mockHistory = [];
   mockExplicitFilter = true;
@@ -98,9 +99,12 @@ it("renders now playing and drives the transport", async () => {
 });
 
 it("lists downloads and removes one", async () => {
+  // The download carries its rating: a row the viewer may not see is not
+  // listed at all (see "hides an explicit download from a kid" below).
   mockDownloads = [{
     id: "abc12345678", title: "Song", artist: "Artist", album: "",
     durationSeconds: 200, artworkUrl: null, fileUri: "file:///x", bytes: 1000, savedAt: 1,
+    explicit: false,
   }];
   const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
   await waitFor(() => expect(getByTestId("music-download-abc12345678")).toBeTruthy());
@@ -289,4 +293,99 @@ it("announces the search note to screen readers", async () => {
   const note = await findByTestId("music-search-note-empty");
   expect(note.props.accessibilityRole).toBe("alert");
   expect(note.props.accessibilityLiveRegion).toBe("polite");
+});
+
+/**
+ * The queue, the history and the downloads are track surfaces too: the
+ * explicit policy covers every place a kid can SEE a track, not just the
+ * search results.
+ */
+describe("the other track surfaces", () => {
+  it("hides an explicit track from the queue for a kid", async () => {
+    mockMember = KID;
+    mockQueue = [CLEAN_TRACK, EXPLICIT_TRACK];
+    const { getByTestId, queryByText, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.press(getByTestId("np-queue"));
+    expect(await findByText("Found")).toBeTruthy();
+    expect(queryByText("Bad Song")).toBeNull();
+  });
+
+  it("shows an explicit track in the queue to a parent", async () => {
+    mockMember = PARENT;
+    mockQueue = [CLEAN_TRACK, EXPLICIT_TRACK];
+    const { getByTestId, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.press(getByTestId("np-queue"));
+    expect(await findByText("Bad Song")).toBeTruthy();
+  });
+
+  it("hands the player the FILTERED queue, never the raw one", async () => {
+    mockMember = KID;
+    mockQueue = [CLEAN_TRACK, EXPLICIT_TRACK];
+    const { getByTestId, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.press(getByTestId("np-queue"));
+    fireEvent.press(await findByText("Found"));
+    expect(mockPlay).toHaveBeenCalledWith(CLEAN_TRACK, [CLEAN_TRACK]);
+  });
+
+  it("hands a parent the whole queue", async () => {
+    mockMember = PARENT;
+    mockQueue = [CLEAN_TRACK, EXPLICIT_TRACK];
+    const { getByTestId, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.press(getByTestId("np-queue"));
+    fireEvent.press(await findByText("Found"));
+    expect(mockPlay).toHaveBeenCalledWith(CLEAN_TRACK, [CLEAN_TRACK, EXPLICIT_TRACK]);
+  });
+
+  it("hides an explicit track from the recently played shelf for a kid", async () => {
+    mockCurrent = null;
+    mockMember = KID;
+    mockHistory = [CLEAN_TRACK, EXPLICIT_TRACK];
+    const { getByTestId, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    expect(getByTestId(`music-history-${CLEAN_TRACK.id}`)).toBeTruthy();
+    expect(queryByTestId(`music-history-${EXPLICIT_TRACK.id}`)).toBeNull();
+  });
+
+  it("plays the recently played track from the FILTERED shelf", async () => {
+    mockCurrent = null;
+    mockMember = KID;
+    mockHistory = [CLEAN_TRACK, EXPLICIT_TRACK];
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.press(getByTestId(`music-history-${CLEAN_TRACK.id}`));
+    expect(mockPlay).toHaveBeenCalledWith(CLEAN_TRACK, [CLEAN_TRACK]);
+  });
+
+  it("hides an explicit download from a kid", async () => {
+    mockMember = KID;
+    mockDownloads = [
+      { ...CLEAN_TRACK, fileUri: "file:///clean.m4a", bytes: 1000, savedAt: 1 },
+      { ...EXPLICIT_TRACK, fileUri: "file:///bad.m4a", bytes: 2000, savedAt: 1 },
+    ];
+    const { getByTestId, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    expect(getByTestId(`music-download-${CLEAN_TRACK.id}`)).toBeTruthy();
+    expect(queryByTestId(`music-download-${EXPLICIT_TRACK.id}`)).toBeNull();
+  });
+
+  it("shows an explicit download to a parent", async () => {
+    mockMember = PARENT;
+    mockDownloads = [
+      { ...EXPLICIT_TRACK, fileUri: "file:///bad.m4a", bytes: 2000, savedAt: 1 },
+    ];
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    expect(getByTestId(`music-download-${EXPLICIT_TRACK.id}`)).toBeTruthy();
+  });
+
+  it("never paints a now-playing panel for a track the viewer may not see", async () => {
+    mockMember = KID;
+    mockCurrent = EXPLICIT_TRACK;
+    const { queryByTestId, queryByText } = render(<MusicPlayer />, { wrapper: wrap });
+    expect(queryByTestId("np-title")).toBeNull();
+    expect(queryByText("Bad Song")).toBeNull();
+  });
+
+  it("paints the now-playing panel for a track the viewer may see", async () => {
+    mockMember = KID;
+    mockCurrent = CLEAN_TRACK;
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    expect(getByTestId("np-title").props.children).toBe("Found");
+  });
 });

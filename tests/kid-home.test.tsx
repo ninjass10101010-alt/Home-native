@@ -17,6 +17,7 @@ jest.mock("../src/music/playback", () => ({
     buffering: false, repeat: "off", shuffle: false, error: null,
     downloads: [], downloadBytes: 0, history: [],
     settings: { repeat: "off", shuffle: false, explicitFilter: true },
+    policy: { isParent: mockMember?.role === "parent", filterOn: true },
     play: jest.fn(async () => {}), playQueueAt: jest.fn(), toggle: jest.fn(), next: jest.fn(async () => {}),
     previous: jest.fn(async () => {}), seek: jest.fn(async () => {}), setRepeat: jest.fn(),
     cycleRepeatMode: jest.fn(), toggleShuffleMode: jest.fn(), addToQueue: jest.fn(),
