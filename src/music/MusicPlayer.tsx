@@ -8,9 +8,50 @@ import { mix } from "../theme/mix";
 import { Material } from "../theme/Material";
 import { usePlayback } from "./playback";
 import { currentLineIndex, fetchLyrics, type LyricLine } from "./lyrics";
+import { countUnrated, isExplicitHidden } from "./explicit";
 import type { MediaTrack } from "./types";
 
 type Tab = "lyrics" | "queue";
+
+/**
+ * The honest states of a finished search.
+ *
+ * A kid must never read an empty list as "nothing found" when the truth is
+ * "we hid them" — so every reason gets its own plain sentence, with no
+ * jargon and no explanation paragraph.
+ */
+const NOTE_UNKNOWN_RATINGS = "Couldn't check these tracks — ask a parent to pick something.";
+const NOTE_UNRATED = "These tracks aren't rated, so they can't be shown here.";
+const NOTE_NOTHING_HERE = "Nothing here to play — ask a parent to pick something.";
+const NOTE_NO_RESULTS = "No songs matched that search.";
+
+interface SearchFacts {
+  /** How many tracks the viewer may see. */
+  visible: number;
+  /** How many tracks the engine returned. */
+  total: number;
+  /** How many of those carry no rating at all. */
+  unrated: number;
+  /** Whether the ratings were authoritative for this search. */
+  explicitKnown: boolean;
+  /** A parent role sees everything; every other role fails closed. */
+  isParent: boolean;
+}
+
+/** Which honest state (if any) a finished search is in. */
+function searchNote(facts: SearchFacts): { testID: string; text: string } | null {
+  if (facts.visible > 0) return null;
+  if (!facts.explicitKnown && !facts.isParent) {
+    return { testID: "music-search-note-unknown", text: NOTE_UNKNOWN_RATINGS };
+  }
+  if (facts.unrated > 0 && !facts.isParent) {
+    return { testID: "music-search-note-unrated", text: NOTE_UNRATED };
+  }
+  if (facts.total > 0) {
+    return { testID: "music-search-note-explicit", text: NOTE_NOTHING_HERE };
+  }
+  return { testID: "music-search-note-empty", text: NOTE_NO_RESULTS };
+}
 
 export function MusicPlayer() {
   const { colors, accentColor } = useTheme();
@@ -23,7 +64,9 @@ export function MusicPlayer() {
   } = usePlayback();
 
   const [query, setQuery] = React.useState("");
-  const [results, setResults] = React.useState<MediaTrack[]>([]);
+  const [tracks, setTracks] = React.useState<MediaTrack[]>([]);
+  const [explicitKnown, setExplicitKnown] = React.useState(true);
+  const [hasSearched, setHasSearched] = React.useState(false);
   const [searching, setSearching] = React.useState(false);
   const [searchError, setSearchError] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState<Tab>("lyrics");
@@ -31,8 +74,17 @@ export function MusicPlayer() {
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [seekWidth, setSeekWidth] = React.useState(0);
 
-  const allowExplicit = member?.role === "parent" || !settings.explicitFilter;
-  const explicitHidden = (track: MediaTrack) => track.explicit && !allowExplicit;
+  // A parent role sees everything. Every other role — child, pet, and a
+  // signed-out guest (member === null) — FAILS CLOSED while the filter is on:
+  // only a positively-clean track is visible. See src/music/explicit.ts.
+  const isParent = member?.role === "parent";
+  const policy = { isParent, filterOn: settings.explicitFilter };
+  const visible = tracks.filter((t) => !isExplicitHidden(t, policy));
+  const unrated = countUnrated(tracks);
+  const note =
+    hasSearched && !searching && !searchError
+      ? searchNote({ visible: visible.length, total: tracks.length, unrated, explicitKnown, isParent })
+      : null;
 
   React.useEffect(() => {
     if (!current) return;
@@ -49,11 +101,15 @@ export function MusicPlayer() {
     setSearching(true);
     setSearchError(null);
     try {
-      const { tracks } = await engineSearch(term, 20);
-      setResults(tracks.filter((t) => !explicitHidden(t)));
+      const outcome = await engineSearch(term, 20);
+      setTracks(outcome.tracks);
+      setExplicitKnown(outcome.explicitKnown);
+      setHasSearched(true);
     } catch (e) {
       setSearchError(e instanceof Error ? e.message : "search_failed");
-      setResults([]);
+      setTracks([]);
+      setExplicitKnown(true);
+      setHasSearched(true);
     } finally {
       setSearching(false);
     }
@@ -93,13 +149,13 @@ export function MusicPlayer() {
           </View>
           {searching ? <ActivityIndicator /> : null}
           {searchError ? <Text style={{ color: colors["color-accent-rose"] }}>{searchError}</Text> : null}
-          {results.map((track) => (
+          {visible.map((track) => (
             <Pressable
               key={track.id}
               testID={`music-result-${track.id}`}
               accessibilityRole="button"
               accessibilityLabel={`Play ${track.title} by ${track.artist}`}
-              onPress={() => void play(track, results)}
+              onPress={() => void play(track, visible)}
               style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 64, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}
             >
               <Material tier="thin" style={{ width: 48, height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
@@ -114,6 +170,14 @@ export function MusicPlayer() {
               </Pressable>
             </Pressable>
           ))}
+          {note ? (
+            <Text
+              testID={note.testID}
+              style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, lineHeight: TYPOGRAPHY.body.lineHeight, paddingVertical: 12 }}
+            >
+              {note.text}
+            </Text>
+          ) : null}
         </Material>
       ) : null}
 

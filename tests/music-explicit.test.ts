@@ -25,7 +25,18 @@ describe("explicit policy", () => {
     expect(isExplicitHidden(track(true), { isParent: false, filterOn: false })).toBe(false);
     expect(isExplicitHidden(track(null), { isParent: false, filterOn: false })).toBe(false);
   });
+  it("with the filter off, a parent sees everything", () => {
+    expect(isExplicitHidden(track(true), { isParent: true, filterOn: false })).toBe(false);
+  });
+  it("with the filter off, a kid still sees a clean track", () => {
+    expect(isExplicitHidden(track(false), { isParent: false, filterOn: false })).toBe(false);
+  });
   it("counts unrated tracks", () => {
     expect(countUnrated([track(null), track(false), track(true), track(null)])).toBe(2);
+  });
+  it("counts a missing rating as unrated, like the policy hides it", () => {
+    const missing = { ...track(null), explicit: undefined as unknown as null };
+    expect(countUnrated([missing])).toBe(1);
+    expect(isExplicitHidden(missing, { isParent: false, filterOn: true })).toBe(true);
   });
 });

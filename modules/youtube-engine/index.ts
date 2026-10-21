@@ -36,7 +36,12 @@ export async function search(query: string, limit = 20): Promise<SearchOutcome> 
     tracks?: MediaTrack[];
   };
   const tracks = Array.isArray(result?.tracks) ? result.tracks : [];
-  return { tracks, explicitKnown: result?.explicitKnown !== false };
+  // A shape mismatch (a missing or non-boolean flag) means the ratings are NOT
+  // known — never claim authority the native result did not give.
+  return {
+    tracks,
+    explicitKnown: typeof result?.explicitKnown === "boolean" ? result.explicitKnown : false,
+  };
 }
 
 export async function resolveAudio(id: string): Promise<ResolvedAudio> {

@@ -26,7 +26,13 @@ export function isExplicitHidden(
   return true; // explicit === true, or unknown (null) -> hidden for kids
 }
 
-/** How many tracks carry no rating at all (`explicit === null`). */
+/**
+ * How many tracks carry no rating at all.
+ *
+ * `explicit == null` covers BOTH `null` (the NewPipe fallback path, or a
+ * `related()` row) and a missing key — so this agrees with `isExplicitHidden`,
+ * which hides anything that is not positively clean.
+ */
 export function countUnrated(tracks: Pick<MediaTrack, "explicit">[]): number {
-  return tracks.filter((t) => t.explicit === null).length;
+  return tracks.filter((t) => t.explicit == null).length;
 }
