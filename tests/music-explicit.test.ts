@@ -29,7 +29,7 @@ describe("explicit policy", () => {
   it("parents see unrated tracks", () => {
     expect(isExplicitHidden(track(null), { isParent: true, filterOn: true })).toBe(false);
   });
-  it("known-clean tracks are always visible", () => {
+  it("a track that is not marked explicit is always visible", () => {
     expect(isExplicitHidden(track(false), { isParent: false, filterOn: true })).toBe(false);
   });
   it("with the filter off, kids see everything", () => {
@@ -56,13 +56,20 @@ describe("explicit policy", () => {
  * The search-note truth table.
  *
  * The rule, re-derived here from the contract (not from the implementation):
- * something to play → no note · nothing returned → "no songs matched" · a
- * parent → never told to ask a parent · ratings unknown → "couldn't check" ·
+ * something to play → no note · nothing returned → "no songs matched" — but
+ * ONLY when the ratings were authoritative or the viewer is a parent, because
+ * a kid whose search ran on the fallback path must be told the check could
+ * not be made, never shown an empty list that reads as "nothing found" ·
+ * a parent → never told to ask a parent · ratings unknown → "couldn't check" ·
  * some rows unrated → the unrated sentence · otherwise → "nothing to play".
  */
 function expectedTestId(facts: SearchFacts): string | null {
   if (facts.visible > 0) return null;
-  if (facts.total === 0) return "music-search-note-empty";
+  if (facts.total === 0) {
+    return facts.isParent || facts.explicitKnown
+      ? "music-search-note-empty"
+      : "music-search-note-unknown";
+  }
   if (facts.isParent) return "music-search-note-parent";
   if (!facts.explicitKnown) return "music-search-note-unknown";
   if (facts.unrated > 0) return "music-search-note-unrated";
@@ -105,12 +112,20 @@ describe("search note", () => {
     }
   });
 
-  it("shows 'no results' only when the engine returned nothing", () => {
+  it("shows 'no results' only when the engine returned nothing AND the ratings were authoritative", () => {
     for (const facts of ALL_COMBOS) {
       const note = searchNote(facts);
       if (!note) continue;
-      if (note.text === NOTE_NO_RESULTS) expect(facts.total).toBe(0);
-      else expect(facts.total).toBeGreaterThan(0);
+      if (note.text === NOTE_NO_RESULTS) {
+        expect(facts.total).toBe(0);
+        expect(facts.isParent || facts.explicitKnown).toBe(true);
+      } else if (facts.total === 0) {
+        // Zero tracks with no authority over the ratings: the check could not
+        // be made, so the kid is told THAT — never "nothing found".
+        expect(note.text).toBe(NOTE_UNKNOWN_RATINGS);
+      } else {
+        expect(facts.total).toBeGreaterThan(0);
+      }
     }
   });
 
@@ -121,8 +136,21 @@ describe("search note", () => {
     }
   });
 
-  it("says nothing matched when the search returned zero tracks", () => {
+  it("tells a kid the check could not be made when the search returned zero tracks on the fallback path", () => {
     const note = searchNote({ visible: 0, total: 0, unrated: 0, explicitKnown: false, isParent: false });
+    expect(note?.testID).toBe("music-search-note-unknown");
+    expect(note?.text).toBe(NOTE_UNKNOWN_RATINGS);
+    expect(note?.text).not.toBe(NOTE_NO_RESULTS);
+  });
+
+  it("says nothing matched when the search returned zero tracks and the ratings were authoritative", () => {
+    const note = searchNote({ visible: 0, total: 0, unrated: 0, explicitKnown: true, isParent: false });
+    expect(note?.testID).toBe("music-search-note-empty");
+    expect(note?.text).toBe(NOTE_NO_RESULTS);
+  });
+
+  it("says nothing matched to a parent even when the ratings were never authoritative", () => {
+    const note = searchNote({ visible: 0, total: 0, unrated: 0, explicitKnown: false, isParent: true });
     expect(note?.testID).toBe("music-search-note-empty");
     expect(note?.text).toBe(NOTE_NO_RESULTS);
   });

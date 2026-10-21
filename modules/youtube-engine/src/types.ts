@@ -9,8 +9,11 @@ export interface MediaTrack {
   artworkUrl: string | null;
   /**
    * YouTube's explicit rating, TRI-STATE:
-   * - `true` — badged explicit.
-   * - `false` — rated clean.
+   * - `true` — badged explicit (YouTube sent a `MUSIC_EXPLICIT_BADGE`).
+   * - `false` — **not marked explicit**: YouTube's search response carries no
+   *   `MUSIC_EXPLICIT_BADGE` on this row. The badge MARKS the explicit tracks;
+   *   it does not certify the rest, so `false` is "not marked explicit", never
+   *   "rated clean".
    * - `null` — UNKNOWN/unrated (the NewPipe fallback search, or a
    *   `related()` row). Kid roles fail closed on an unknown rating.
    */

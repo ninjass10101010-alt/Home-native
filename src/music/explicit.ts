@@ -11,10 +11,10 @@ export interface ExplicitPolicy {
  * Whether a track must be hidden from the viewer.
  *
  * The policy FAILS CLOSED: while the filter is on, a kid role sees a track
- * only when its rating is KNOWN CLEAN (`explicit === false`). A track that is
- * badged explicit (`true`) and a track whose rating is UNKNOWN (`null` — the
- * NewPipe fallback path, or a `related()` row) are both hidden, because an
- * unknown rating is not a clean rating.
+ * only when its rating is NOT MARKED EXPLICIT (`explicit === false`). A track
+ * that is badged explicit (`true`) and a track whose rating is UNKNOWN (`null`
+ * — the NewPipe fallback path, or a `related()` row) are both hidden, because
+ * an unknown rating is no rating at all.
  */
 export function isExplicitHidden(
   track: Pick<MediaTrack, "explicit">,
@@ -31,7 +31,7 @@ export function isExplicitHidden(
  *
  * `explicit == null` covers BOTH `null` (the NewPipe fallback path, or a
  * `related()` row) and a missing key — so this agrees with `isExplicitHidden`,
- * which hides anything that is not positively clean.
+ * which hides anything that is not positively "not marked explicit".
  */
 export function countUnrated(tracks: Pick<MediaTrack, "explicit">[]): number {
   return tracks.filter((t) => t.explicit == null).length;
@@ -76,7 +76,11 @@ export interface SearchNote {
  * The order IS the truth table:
  *
  * 1. Something to play → no note at all.
- * 2. The engine returned nothing → "no songs matched" (never "we hid them").
+ * 2. The engine returned nothing → "no songs matched", but ONLY when the
+ *    ratings were authoritative (or the viewer is a parent). A kid whose
+ *    search ran on the fallback path is told the check could not be made:
+ *    an empty list must never read as "nothing found" when the truth is
+ *    "we could not check" (spec §6a — the honesty rule).
  * 3. A parent → nothing was hidden from them; never tell a parent to ask a parent.
  * 4. The ratings were never authoritative → the kid is told the check failed.
  * 5. Some rows carry no rating → the kid is told those rows were unrated.
@@ -84,7 +88,11 @@ export interface SearchNote {
  */
 export function searchNote(facts: SearchFacts): SearchNote | null {
   if (facts.visible > 0) return null;
-  if (facts.total === 0) return { testID: "music-search-note-empty", text: NOTE_NO_RESULTS };
+  if (facts.total === 0) {
+    return facts.isParent || facts.explicitKnown
+      ? { testID: "music-search-note-empty", text: NOTE_NO_RESULTS }
+      : { testID: "music-search-note-unknown", text: NOTE_UNKNOWN_RATINGS };
+  }
   if (facts.isParent) return { testID: "music-search-note-parent", text: NOTE_NOTHING_HERE_PARENT };
   if (!facts.explicitKnown) return { testID: "music-search-note-unknown", text: NOTE_UNKNOWN_RATINGS };
   if (facts.unrated > 0) {

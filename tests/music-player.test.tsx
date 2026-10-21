@@ -218,11 +218,11 @@ it("marks an unrated row as Unrated for a parent", async () => {
   const marker = await findByTestId(`music-result-unrated-${UNRATED_TRACK.id}`);
   expect(marker).toBeTruthy();
   expect(await findByText("Unrated")).toBeTruthy();
-  // A rated-clean row carries no marker.
+  // A row that is not marked explicit carries no marker.
   expect(queryByTestId(`music-result-unrated-${CLEAN_TRACK.id}`)).toBeNull();
 });
 
-it("does not mark a rated-clean row", async () => {
+it("does not mark a row that is not marked explicit", async () => {
   mockCurrent = null;
   mockMember = PARENT;
   mockSearchOutcome = { tracks: [CLEAN_TRACK], explicitKnown: true };
@@ -245,9 +245,22 @@ it("never marks a row for a kid role", async () => {
   expect(queryByTestId(`music-result-unrated-${UNRATED_TRACK.id}`)).toBeNull();
 });
 
-it("says nothing matched when the ratings were unknown but no track came back", async () => {
+it("says the check failed when the ratings were unknown and no track came back", async () => {
   mockCurrent = null;
   mockMember = KID;
+  mockSearchOutcome = { tracks: [], explicitKnown: false };
+  const { getByTestId, findByText, queryByText } = render(<MusicPlayer />, { wrapper: wrap });
+  fireEvent.changeText(getByTestId("music-search-input"), "zzzz");
+  fireEvent.press(getByTestId("music-search-submit"));
+  // An empty list must never read as "nothing found" when the truth is
+  // "we could not check the ratings".
+  expect(await findByText("Couldn't check these tracks — ask a parent to pick something.")).toBeTruthy();
+  expect(queryByText("No songs matched that search.")).toBeNull();
+});
+
+it("says nothing matched to a parent when the search found nothing", async () => {
+  mockCurrent = null;
+  mockMember = PARENT;
   mockSearchOutcome = { tracks: [], explicitKnown: false };
   const { getByTestId, findByText, queryByText } = render(<MusicPlayer />, { wrapper: wrap });
   fireEvent.changeText(getByTestId("music-search-input"), "zzzz");
