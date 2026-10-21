@@ -89,15 +89,21 @@ export const WALL_ROWS = 4;
 /**
  * Dense row-major placement — the web's `grid-flow-dense` port. A span-2
  * widget anchors in the first free slot whose next row cell is also free
- * (photos → col-1 rows 1–2); every other widget fills the next free slot.
- * Returns one widget list per column (top→bottom). Exactly WALL_ROWS cells
- * per column when the registry sums to WALL_COLS × WALL_ROWS.
+ * (the photo hero → col-1 rows 1–2); every other widget fills the next free
+ * slot. Returns one widget list per column (top→bottom). Exactly WALL_ROWS
+ * cells per column when the layout sums to WALL_COLS × WALL_ROWS.
+ *
+ * The span map is the USER'S (src/home/wallLayout.ts): the board's sizes are
+ * a per-device preference, not a constant.
  */
-export function wallColumns(defs: WidgetDef[] = visibleOnWall()): WidgetDef[][] {
+export function wallColumns(
+  defs: WidgetDef[] = visibleOnWall(),
+  spans: Partial<Record<WidgetId, number>> = WALL_SPANS
+): WidgetDef[][] {
   const occupied = new Set<string>();
   const cols: WidgetDef[][] = Array.from({ length: WALL_COLS }, () => []);
   for (const def of defs) {
-    const span = WALL_SPANS[def.id] ?? 1;
+    const span = spans[def.id] ?? 1;
     outer: for (let r = 0; r < WALL_ROWS; r++) {
       for (let c = 0; c < WALL_COLS; c++) {
         if (occupied.has(`${r},${c}`)) continue;

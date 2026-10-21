@@ -363,14 +363,19 @@ describe("SettingsPage — Family is real; Home and System stay deferred (parent
     expect(queryByText("Settings for the whole family arrive with the full settings wave.")).toBeNull();
   });
 
-  it("Home and Connections & System render the honest deferral copy", async () => {
+  it("Home is the wall's own layout editor; Connections & System stay deferred", async () => {
     const { getByTestId, findByText, queryByText } = render(<SettingsPage />, { wrapper: wrap });
-    for (const id of ["home", "system"]) {
-      fireEvent.press(getByTestId(`settings-section-${id}`));
-      expect(await findByText("Settings for the whole family arrive with the full settings wave.")).toBeTruthy();
-      fireEvent.press(getByTestId("settings-back"));
-      expect(queryByText("Settings for the whole family arrive with the full settings wave.")).toBeNull();
-    }
+    // Home is real: the family can size the wall's widgets.
+    fireEvent.press(getByTestId("settings-section-home"));
+    expect(await findByText("Widget layout")).toBeTruthy();
+    expect(getByTestId("wall-layout-cells")).toBeTruthy();
+    fireEvent.press(getByTestId("settings-back"));
+    expect(queryByText("Widget layout")).toBeNull();
+    // System is still honest about what it does not have yet.
+    fireEvent.press(getByTestId("settings-section-system"));
+    expect(await findByText("Settings for the whole family arrive with the full settings wave.")).toBeTruthy();
+    fireEvent.press(getByTestId("settings-back"));
+    expect(queryByText("Settings for the whole family arrive with the full settings wave.")).toBeNull();
   });
 });
 

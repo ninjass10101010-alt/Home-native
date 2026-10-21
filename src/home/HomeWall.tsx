@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Platform, Pressable, Text, TextStyle, useWindowDimensions, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../theme/ThemeProvider";
@@ -8,7 +8,8 @@ import { mix } from "../theme/mix";
 import { MemberRail, type RailMember } from "../ui/MemberRail";
 import { useAuth } from "../state/AuthProvider";
 import { EmergencyShield } from "./EmergencyShield";
-import { visibleOnWall, WidgetId, WidgetPlaceholder, WALL_SPANS, WIDGET_TONES, wallColumns } from "./widgets";
+import { visibleOnWall, WidgetId, WidgetPlaceholder, WIDGET_TONES, wallColumns } from "./widgets";
+import { layoutSpan, layoutWidgets, useWallLayout, type WallSpan } from "./wallLayout";
 import { WallStatStrip, ThisWeekCard } from "./WallStatsStrip";
 
 /* ── The wall's frame ──────────────────────────────────────────────────────────
@@ -389,8 +390,16 @@ export function HomeWall({
    */
   const signedOut = hydrated && !member;
 
-  const defs = visibleOnWall();
-  const columns = wallColumns(defs);
+  // The board's sizes and visibility are the family's per-device choice
+  // (src/home/wallLayout.ts) - the wall reads the layout, not a constant.
+  const { layout } = useWallLayout();
+  const defs = visibleOnWall().filter((w) => layoutWidgets(layout).includes(w.id));
+  const spans = useMemo(() => {
+    const out: Partial<Record<WidgetId, number>> = {};
+    for (const id of layoutWidgets(layout)) out[id] = layoutSpan(layout, id);
+    return out;
+  }, [layout]);
+  const columns = wallColumns(defs, spans);
   const { width: winW, height: winH } = useWindowDimensions();
   const effectiveWallH =
     typeof jest === "undefined" && Platform.OS === "android" && winW >= 960 && winH > WALL_HEIGHT
@@ -558,7 +567,7 @@ export function HomeWall({
           {columns.map((col, ci) => (
             <View key={`col-${ci}`} style={{ flex: 1, gap: GRID_GAP }} testID={`wall-col-${ci}`}>
               {col.map((def) => {
-                const span = WALL_SPANS[def.id] ?? 1;
+                const span = (spans[def.id] ?? 1) as WallSpan;
                 const Cell = widgets[def.id];
                 const isFullBleed = def.id === "photos" || def.id === "weather";
                 // Per-widget tone (web WidgetCard parity): a tone wash + tone

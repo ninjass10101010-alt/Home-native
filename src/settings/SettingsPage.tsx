@@ -20,6 +20,7 @@ import { SignedOutBanner } from "../ui/SignedOutBanner";
 import { Toggle } from "../ui/Toggle";
 import { scheduleLocalReminder } from "../native/notifications";
 import { FamilySection } from "./FamilySection";
+import { HomeSection } from "./HomeSection";
 
 /**
  * The wall's Settings surface (WS-10): the launcher by role (web contract —
@@ -200,6 +201,8 @@ export function SettingsPage() {
             <AppearanceSection />
           ) : open.id === "family" ? (
             <FamilySection member={member} />
+          ) : open.id === "home" ? (
+            <HomeSection />
           ) : open.id === "system" ? (
             <View style={{ gap: 16 }}>
               <DeferredSection />
