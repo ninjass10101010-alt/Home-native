@@ -8,10 +8,18 @@ import org.schabi.newpipe.extractor.downloader.Response
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+/**
+ * NewPipe's transport.
+ *
+ * The timeouts are short on purpose: the search degrades to this path when
+ * the badge path fails, and a slow dead network must not hold the app
+ * hostage while it times out. They are the same ones the innertube client
+ * uses.
+ */
 class NewPipeDownloader(
   private val client: OkHttpClient = OkHttpClient.Builder()
-    .connectTimeout(15, TimeUnit.SECONDS)
-    .readTimeout(20, TimeUnit.SECONDS)
+    .connectTimeout(Engine.CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    .readTimeout(Engine.READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     .build()
 ) : Downloader() {
   override fun execute(request: Request): Response {

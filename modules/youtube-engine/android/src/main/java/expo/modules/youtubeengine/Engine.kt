@@ -1,30 +1,65 @@
 package expo.modules.youtubeengine
 
+import android.util.Log
+import expo.modules.kotlin.Promise
+import kotlinx.coroutines.CancellationException
 import okhttp3.OkHttpClient
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 private val AUDIO_ITAG_PREFERENCE = listOf(140, 251, 139, 249)
 
 object Engine {
+  private const val TAG = "YoutubeEngine"
+  private const val ERROR_CODE = "ERR_YOUTUBE_ENGINE"
+
+  /** Connect timeout of the engine's HTTP clients, in seconds. */
+  internal const val CONNECT_TIMEOUT_SECONDS = 5L
+
+  /** Read timeout of the engine's HTTP clients, in seconds. */
+  internal const val READ_TIMEOUT_SECONDS = 8L
+
   @Volatile private var initialized = false
 
-  /**
-   * True when the last search read YouTube's explicit badge.
-   *
-   * NewPipe exposes no badge, so a NewPipe-backed search leaves the ratings
-   * UNKNOWN — the JS side then fails closed and hides the tracks.
-   */
-  @Volatile var explicitRatingsKnown: Boolean = false
-    private set
+  private val threadCounter = AtomicInteger(0)
 
+  /**
+   * The engine's own threads.
+   *
+   * Every `AsyncFunction` body runs on ONE HandlerThread that the whole app
+   * shares ("expo.modules.AsyncFunctionQueue"), so a blocking network call
+   * there stalls every other native call for as long as it takes. The engine
+   * runs its network work on a pool of its own instead: a rotten client
+   * version can then only ever delay the engine itself.
+   *
+   * Two threads, so a stalled search never blocks a playback resolution (and
+   * the other way round).
+   */
+  private val engineExecutor: ExecutorService = Executors.newFixedThreadPool(2) { runnable ->
+    Thread(runnable, "youtube-engine-${threadCounter.incrementAndGet()}").apply {
+      isDaemon = true
+    }
+  }
+
+  /**
+   * The innertube client, tuned for a search that must fail fast.
+   *
+   * The badge path is the only source of explicit ratings, so when YouTube
+   * stops answering it the search degrades to NewPipe — and NewPipe's ratings
+   * are unknown. A slow dead client must not hold the app hostage while it
+   * times out, so the timeouts are short.
+   */
   private val httpClient: OkHttpClient = OkHttpClient.Builder()
-    .connectTimeout(15, TimeUnit.SECONDS)
-    .readTimeout(20, TimeUnit.SECONDS)
+    .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     .build()
 
   private fun ensureInit() {
@@ -37,10 +72,26 @@ object Engine {
     }
   }
 
-  private fun StreamInfoItem.toTrack(): Map<String, Any?> = mapOf(
+  /**
+   * The fail-closed fallback mapping.
+   *
+   * NewPipe exposes no explicit badge, so every track on this path has an
+   * UNKNOWN rating (`explicit = null`) — the family-safe filter then hides
+   * them instead of guessing. Pure, so the contract is unit-testable.
+   */
+  fun mapFallbackTracks(items: List<StreamInfoItem>): List<Map<String, Any?>> =
+    items.map { it.toFallbackTrack() }
+
+  /**
+   * The whole fallback answer: the tracks plus the "ratings unknown" flag.
+   */
+  fun fallbackResult(items: List<StreamInfoItem>): Map<String, Any?> =
+    mapOf("tracks" to mapFallbackTracks(items), "explicitKnown" to false)
+
+  private fun StreamInfoItem.toFallbackTrack(): Map<String, Any?> = mapOf(
     "id" to youtubeId(),
     "title" to name,
-    "artist" to uploaderName,
+    "artist" to (uploaderName ?: ""),
     "album" to "",
     "durationSeconds" to duration.coerceAtLeast(0L),
     "artworkUrl" to thumbnails.firstOrNull()?.url,
@@ -53,6 +104,51 @@ object Engine {
     url.substringAfter("v=", "").substringBefore("&")
 
   /**
+   * Runs a blocking engine call on the engine's own thread and settles the
+   * promise there.
+   *
+   * The promise is settled on the engine thread, so Expo's shared queue is
+   * free again the moment this returns — the network call never sits on it.
+   *
+   * Only `Exception` is caught: an `Error` is a bug, not a search failure,
+   * and swallowing it would hide it. A cancellation is settled (rejected)
+   * rather than dropped, so the caller is never left waiting forever.
+   */
+  internal fun onEngineThread(promise: Promise, block: () -> Any?) {
+    try {
+      engineExecutor.execute {
+        try {
+          promise.resolve(block())
+        } catch (cancellation: CancellationException) {
+          promise.reject(ERROR_CODE, "youtube_engine_cancelled", cancellation)
+        } catch (error: Exception) {
+          promise.reject(ERROR_CODE, "youtube_engine_failed", error)
+        }
+      }
+    } catch (rejected: RejectedExecutionException) {
+      promise.reject(ERROR_CODE, "youtube_engine_rejected", rejected)
+    }
+  }
+
+  /**
+   * Searches YouTube Music for tracks, off Expo's shared async queue.
+   */
+  fun searchAsync(query: String, limit: Int, promise: Promise) =
+    onEngineThread(promise) { search(query, limit) }
+
+  /**
+   * Resolves an audio stream, off Expo's shared async queue.
+   */
+  fun resolveAudioAsync(id: String, promise: Promise) =
+    onEngineThread(promise) { resolveAudio(id) }
+
+  /**
+   * Loads related tracks, off Expo's shared async queue.
+   */
+  fun relatedAsync(id: String, promise: Promise) =
+    onEngineThread(promise) { related(id) }
+
+  /**
    * Searches YouTube Music for tracks.
    *
    * Returns `{ tracks, explicitKnown }`. The badge path (innertube) is
@@ -61,24 +157,50 @@ object Engine {
    */
   fun search(query: String, limit: Int): Map<String, Any?> {
     ensureInit()
-    val badgeTracks = runCatching { MusicSearch.search(query, limit, httpClient) }.getOrNull()
+    val badgeTracks = try {
+      MusicSearch.search(query, limit, httpClient)
+    } catch (cancellation: CancellationException) {
+      // A cancellation is not a search failure — it must not be swallowed.
+      throw cancellation
+    } catch (error: Exception) {
+      // Reason/status only: no body, no URL, no query string, no token.
+      Log.w(TAG, "innertube search failed: ${MusicSearch.reasonFor(error)}")
+      null
+    }
     if (!badgeTracks.isNullOrEmpty()) {
-      explicitRatingsKnown = true
       return mapOf("tracks" to badgeTracks, "explicitKnown" to true)
     }
-    explicitRatingsKnown = false
-    return mapOf("tracks" to searchViaNewPipe(query, limit), "explicitKnown" to false)
+    val fallback = try {
+      searchViaNewPipe(query, limit)
+    } catch (cancellation: CancellationException) {
+      throw cancellation
+    } catch (error: Exception) {
+      Log.w(TAG, "newpipe search failed: ${reasonFor(error)}")
+      emptyList()
+    }
+    return fallbackResult(fallback)
   }
 
-  private fun searchViaNewPipe(query: String, limit: Int): List<Map<String, Any?>> {
+  private fun searchViaNewPipe(query: String, limit: Int): List<StreamInfoItem> {
     val extractor = ServiceList.YouTube.getSearchExtractor(query)
     extractor.fetchPage()
-    val page = extractor.initialPage
-    return page.items
+    return extractor.initialPage.items
       .filterIsInstance<StreamInfoItem>()
-      .map { it.toTrack() }
-      .filter { (it["id"] as? String).orEmpty().length == 11 }
+      .filter { it.youtubeId().length == 11 }
       .take(limit.coerceIn(1, 25))
+  }
+
+  /**
+   * A log-safe reason for a failure.
+   *
+   * Only our own reasons (a status token such as `innertube_search_http_403`)
+   * are echoed; anything else is reduced to the exception's type, so no body,
+   * URL, query string or token can reach logcat.
+   */
+  private fun reasonFor(error: Exception): String {
+    val message = error.message
+    if (message != null && message.startsWith(MusicSearch.REASON_PREFIX)) return message
+    return "search_failed_" + error.javaClass.simpleName.lowercase()
   }
 
   private fun pickAudio(streams: List<AudioStream>): AudioStream? {
@@ -93,7 +215,7 @@ object Engine {
     val info = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=$id")
     return info.relatedStreams
       .filterIsInstance<StreamInfoItem>()
-      .map { it.toTrack() }
+      .map { it.toFallbackTrack() }
       .filter { (it["id"] as? String).orEmpty().length == 11 }
       .take(25)
   }

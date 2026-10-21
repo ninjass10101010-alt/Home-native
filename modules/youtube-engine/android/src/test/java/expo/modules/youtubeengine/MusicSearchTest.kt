@@ -9,6 +9,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 
 /**
  * Pure-parser tests for [MusicSearch].
@@ -90,13 +91,57 @@ class MusicSearchTest {
   }
 
   @Test
-  fun `official songs rank before the top-result card`() {
-    val root = fixture("search_explicit.json")
-    val tracks = MusicSearch.parseTracks(root)
-    // The captured response lists a user upload ("More from YouTube") before the
-    // official song; the parsed order must still surface the official song first.
-    assertEquals("zlJ0Aj9y67c", tracks.first()["id"])
-    assertEquals(true, tracks.first()["explicit"])
+  fun `a top-result card is never parsed as a track`() {
+    val explicitIds = MusicSearch.parseTracks(fixture("search_explicit.json")).map { it["id"] }
+    // The captured response opens with a "More from YouTube" card (a user
+    // upload, no badge). It is not a music track, so it must not be shown —
+    // and above all not shown as "clean".
+    assertFalse("the top-result card is not a track", explicitIds.contains("Cbtgk20s6wA"))
+    assertEquals(
+      listOf("zlJ0Aj9y67c", "BDrG1q-9rTY", "MJNGXnvHYPg", "8ibh8HAq0Mk"),
+      explicitIds
+    )
+
+    val cleanIds = MusicSearch.parseTracks(fixture("search_clean.json")).map { it["id"] }
+    assertFalse("the top-result card is not a track", cleanIds.contains("DfG6VKnjrVw"))
+    assertEquals(listOf("yjo_aXygRDI", "H_LE4Ar83xM"), cleanIds)
+  }
+
+  @Test
+  fun `only song rows become tracks`() {
+    val video = JsonParser.`object`().from(
+      """{"playlistItemData":{"videoId":"Cbtgk20s6wA"},
+          "flexColumns":[
+            {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Lose Yourself"}]}}},
+            {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Video"},{"text":" • "},{"text":"Eminem"}]}}}
+          ]}"""
+    )
+    assertEquals("video", MusicSearch.kindOf(video))
+    assertNull("a video row is not a music track", MusicSearch.trackFrom(video))
+
+    val artist = JsonParser.`object`().from(
+      """{"playlistItemData":{"videoId":"Cbtgk20s6wA"},
+          "flexColumns":[
+            {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Eminem"}]}}},
+            {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Artist"},{"text":" • "},{"text":"264M monthly audience"}]}}}
+          ]}"""
+    )
+    assertEquals("artist", MusicSearch.kindOf(artist))
+    assertNull("an artist row is not a music track", MusicSearch.trackFrom(artist))
+  }
+
+  @Test
+  fun `a row without a readable kind is not a track`() {
+    // The top-result card prints a channel name where the kind would be.
+    val card = JsonParser.`object`().from(
+      """{"playlistItemData":{"videoId":"Cbtgk20s6wA"},
+          "flexColumns":[
+            {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Lose Yourself"}]}}},
+            {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Просто канал"},{"text":" • "},{"text":"72M views"}]}}}
+          ]}"""
+    )
+    assertNull(MusicSearch.kindOf(card))
+    assertNull("a row with no kind says nothing about its rating", MusicSearch.trackFrom(card))
   }
 
   @Test
@@ -120,28 +165,72 @@ class MusicSearchTest {
 
   @Test
   fun `trackFrom rejects items without a playable id`() {
-    val artist = JsonParser.`object`().from(
-      """{"flexColumns":[{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Eminem"}]}}}]}"""
+    // A song row, but YouTube printed no id for it.
+    val song = JsonParser.`object`().from(
+      """{"flexColumns":[
+           {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Eminem"}]}}},
+           {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Song"},{"text":" • "},{"text":"Eminem"}]}}}
+         ]}"""
     )
-    assertNull(MusicSearch.trackFrom(artist))
+    assertEquals("song", MusicSearch.kindOf(song))
+    assertNull(MusicSearch.trackFrom(song))
   }
 
   @Test
   fun `reads the duration when YouTube provides one`() {
-    val root = fixture("search_clean.json")
-    val video = items(root).first { item ->
-      val columns = item["flexColumns"] as? JsonArray ?: return@first false
-      columns.any { column ->
-        val runs = (column as? JsonObject)
-          ?.getObject("musicResponsiveListItemFlexColumnRenderer")
-          ?.getObject("text")
-          ?.getArray("runs")
-        runs?.any { (it as? JsonObject)?.getString("text") == "5:08" } == true
-      }
-    }
-    assertNotNull("expected a captured item carrying a duration", video)
-    val track = MusicSearch.trackFrom(video!!)
+    // The captured song rows carry no duration; YouTube prints one on the
+    // top-result card, which is not a track any more. A song row that does
+    // print one is read from its fixed column.
+    val song = JsonParser.`object`().from(
+      """{"playlistItemData":{"videoId":"yjo_aXygRDI"},
+          "flexColumns":[
+            {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Hello"}]}}},
+            {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Song"},{"text":" • "},{"text":"Adele"}]}}}
+          ],
+          "fixedColumns":[
+            {"musicResponsiveListItemFixedColumnRenderer":{"text":{"runs":[{"text":"5:08"}]}}}
+          ]}"""
+    )
+    val track = MusicSearch.trackFrom(song)
     assertNotNull(track)
     assertEquals(308L, track!!["durationSeconds"])
+  }
+
+  @Test
+  fun `the explicit icon type alone marks a track explicit`() {
+    val badge = JsonParser.`object`().from(
+      """{"badges":[{"musicInlineBadgeRenderer":{"icon":{"iconType":"MUSIC_EXPLICIT_BADGE"},
+          "accessibilityData":{"accessibilityData":{"label":"Explicit"}}}}]}"""
+    )
+    assertTrue(MusicSearch.hasExplicitBadge(badge))
+  }
+
+  @Test
+  fun `a label that only mentions explicit does not mark a track explicit`() {
+    val badge = JsonParser.`object`().from(
+      """{"badges":[{"musicInlineBadgeRenderer":{"icon":{"iconType":"MUSIC_VERIFIED_BADGE"},
+          "accessibilityData":{"accessibilityData":{"label":"Not explicit"}}}}]}"""
+    )
+    assertFalse(MusicSearch.hasExplicitBadge(badge))
+  }
+
+  @Test
+  fun `the failure reason never echoes a body, a url or a query`() {
+    val error = IOException(
+      "GET https://www.youtube.com/youtubei/v1/search?query=eminem -> 403 {\"token\":\"s3cret\"}"
+    )
+    val reason = MusicSearch.reasonFor(error)
+    assertEquals("innertube_search_failed_ioexception", reason)
+    assertFalse("no url in the log line", reason.contains("http"))
+    assertFalse("no body in the log line", reason.contains("s3cret"))
+    assertFalse("no query in the log line", reason.contains("eminem"))
+  }
+
+  @Test
+  fun `our own status token survives the reason`() {
+    assertEquals(
+      "innertube_search_http_403",
+      MusicSearch.reasonFor(IOException("innertube_search_http_403"))
+    )
   }
 }

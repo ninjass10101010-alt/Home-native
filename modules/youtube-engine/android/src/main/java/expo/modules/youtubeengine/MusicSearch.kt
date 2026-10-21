@@ -24,6 +24,17 @@ object MusicSearch {
 
   /** YouTube Music's web client — the one that answers with music results. */
   private const val CLIENT_NAME = "WEB_REMIX"
+
+  /**
+   * The innertube client version this module speaks.
+   *
+   * YouTube only serves the client versions it still honours, and it can stop
+   * honouring this one at any time — that is what "the client rotted" means.
+   * The failure mode is fail-closed: the search then falls back to NewPipe,
+   * where the ratings are UNKNOWN (`explicit = null`, `explicitKnown = false`),
+   * so the family-safe filter hides the tracks instead of showing them
+   * unrated. Re-probe and bump this constant when the search starts failing.
+   */
   private const val CLIENT_VERSION = "1.20241010.01.00"
   private const val CLIENT_ID = "67"
   private const val USER_AGENT =
@@ -34,7 +45,11 @@ object MusicSearch {
   private const val SEARCH_PARAMS = "EgWKAQ"
 
   /** YouTube's marker for an explicit track. */
-  private const val EXPLICIT_MARKER = "EXPLICIT"
+  private const val EXPLICIT_ICON_TYPE = "MUSIC_EXPLICIT_BADGE"
+  private const val EXPLICIT_LABEL = "Explicit"
+
+  /** Every failure of this module carries this prefix — and only this prefix. */
+  const val REASON_PREFIX = "innertube_search_"
 
   private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
@@ -44,10 +59,28 @@ object MusicSearch {
     "profile", "podcast", "audiobook", "station", "movie", "clip", "show"
   )
 
-  /** True when the item's badge subtree carries YouTube's explicit marker. */
+  /**
+   * The kinds we are willing to show.
+   *
+   * A music search must return music. A "Video" row is a user upload, and an
+   * upload carries no badge — treating it as "clean" would be a lie the
+   * family-safe filter cannot see through. A row whose kind we cannot read
+   * says nothing about its rating either, so it is dropped too, never
+   * downgraded to "clean".
+   */
+  private val TRACK_KINDS = setOf("song", "album")
+
+  /**
+   * True when the item's badge subtree carries YouTube's explicit marker.
+   *
+   * The check is deliberately narrow: the badge's `iconType` and the label
+   * inside its `accessibilityData`, both matched exactly. A loose "contains
+   * EXPLICIT" over the whole subtree would fire on a future label like
+   * "Not explicit".
+   */
   fun hasExplicitBadge(item: JsonObject): Boolean {
     val badges = item["badges"] ?: return false
-    return containsExplicitMarker(badges)
+    return hasExplicitMarker(badges)
   }
 
   /** Every music song item in the response, found by shape, not by path. */
@@ -67,8 +100,27 @@ object MusicSearch {
     return out
   }
 
-  /** One track, or null when the item is not a playable song. */
+  /**
+   * The row's kind, as YouTube prints it ("Song", "Video", "Album", …).
+   *
+   * Null when the row carries no readable kind — the top-result card (a user
+   * upload) prints its channel name where the kind would be.
+   */
+  fun kindOf(item: JsonObject): String? {
+    val first = columnRuns(item, 1).firstOrNull()?.getString("text")?.trim()?.lowercase()
+    return first?.takeIf { it in ITEM_KINDS }
+  }
+
+  /**
+   * One track, or null when the row is not a music track we may show.
+   *
+   * Only songs (and albums) become tracks. Videos, user uploads, artist rows
+   * and rows whose kind cannot be read are dropped: none of them carry a
+   * rating, and a row without a rating must never be reported as "clean".
+   */
   fun trackFrom(item: JsonObject): Map<String, Any?>? {
+    val kind = kindOf(item)
+    if (kind == null || kind !in TRACK_KINDS) return null
     val id = videoId(item) ?: return null
     val title = columnText(item, 0) ?: return null
     return mapOf(
@@ -84,17 +136,13 @@ object MusicSearch {
   }
 
   /**
-   * Every playable track in the response, official songs first.
+   * Every playable track in the response, in YouTube's own order.
    *
-   * YouTube answers with a "top result" card (often a user upload) before the
-   * song list; ranking keeps the official tracks — the ones that actually carry
-   * badges — on top. The sort is stable, so YouTube's own order is kept within
-   * a kind.
+   * Non-song rows are dropped rather than ranked lower — a "top result" card
+   * (often a user upload) is not a track, and it never reaches the app.
    */
   fun parseTracks(json: JsonObject): List<Map<String, Any?>> =
-    collectMusicItems(json)
-      .sortedBy { rank(it) }
-      .mapNotNull { trackFrom(it) }
+    collectMusicItems(json).mapNotNull { trackFrom(it) }
 
   /** Searches YouTube Music and returns the tracks it found. */
   fun search(query: String, limit: Int, client: OkHttpClient): List<Map<String, Any?>> {
@@ -113,15 +161,28 @@ object MusicSearch {
       .build()
 
     client.newCall(request).execute().use { response ->
-      if (!response.isSuccessful) throw IOException("innertube_search_http_${response.code}")
-      val payload = response.body?.string() ?: throw IOException("innertube_search_empty_body")
+      if (!response.isSuccessful) throw IOException("${REASON_PREFIX}http_${response.code}")
+      val payload = response.body?.string() ?: throw IOException("${REASON_PREFIX}empty_body")
       val json = try {
         JsonParser.`object`().from(payload)
       } catch (error: Exception) {
-        throw IOException("innertube_search_unreadable_body")
+        throw IOException("${REASON_PREFIX}unreadable_body")
       }
       return parseTracks(json).take(limit.coerceIn(1, 50))
     }
+  }
+
+  /**
+   * A log-safe reason for a failed search.
+   *
+   * Only our own reasons are echoed (a status token such as
+   * `innertube_search_http_403`); anything else is reduced to the exception's
+   * type, so no body, URL, query string or token can reach logcat.
+   */
+  fun reasonFor(error: Exception): String {
+    val message = error.message
+    if (message != null && message.startsWith(REASON_PREFIX)) return message
+    return REASON_PREFIX + "failed_" + error.javaClass.simpleName.lowercase()
   }
 
   private fun requestBody(query: String): String =
@@ -145,33 +206,28 @@ object MusicSearch {
     return out.toString()
   }
 
-  /** Scans a badge subtree for YouTube's explicit marker. */
-  private fun containsExplicitMarker(node: Any?): Boolean = when (node) {
-    is JsonObject -> {
-      val iconType = node["iconType"]
-      if (iconType is String && iconType.contains(EXPLICIT_MARKER, ignoreCase = true)) {
-        true
-      } else {
-        node.values.any { containsExplicitMarker(it) }
+  /**
+   * Scans a badge subtree for YouTube's explicit marker.
+   *
+   * `insideAccessibilityData` keeps the label check where it belongs: only the
+   * label of an accessibility container counts, and it has to match exactly.
+   */
+  private fun hasExplicitMarker(node: Any?, insideAccessibilityData: Boolean = false): Boolean =
+    when (node) {
+      is JsonObject -> {
+        val iconType = node["iconType"]
+        val icon = iconType is String && iconType.equals(EXPLICIT_ICON_TYPE, ignoreCase = true)
+        val label = node["label"]
+        val labelled = insideAccessibilityData &&
+          label is String &&
+          label.equals(EXPLICIT_LABEL, ignoreCase = true)
+        icon || labelled || node.entries.any { (key, value) ->
+          hasExplicitMarker(value, insideAccessibilityData || key == "accessibilityData")
+        }
       }
+      is JsonArray -> node.any { hasExplicitMarker(it, insideAccessibilityData) }
+      else -> false
     }
-    is JsonArray -> node.any { containsExplicitMarker(it) }
-    is String -> node.contains(EXPLICIT_MARKER, ignoreCase = true)
-    else -> false
-  }
-
-  /** Official songs first, then official videos, then everything else. */
-  private fun rank(item: JsonObject): Int = when (itemType(item)) {
-    "song" -> 0
-    "video" -> 1
-    null -> 2
-    else -> 3
-  }
-
-  private fun itemType(item: JsonObject): String? {
-    val first = columnRuns(item, 1).firstOrNull()?.getString("text")?.trim()?.lowercase()
-    return first?.takeIf { it in ITEM_KINDS }
-  }
 
   private fun flexColumns(item: JsonObject): List<JsonObject> =
     (item["flexColumns"] as? JsonArray)?.filterIsInstance<JsonObject>() ?: emptyList()
