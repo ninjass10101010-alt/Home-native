@@ -49,7 +49,7 @@ export function MusicPlayer() {
     setSearching(true);
     setSearchError(null);
     try {
-      const tracks = await engineSearch(term, 20);
+      const { tracks } = await engineSearch(term, 20);
       setResults(tracks.filter((t) => !explicitHidden(t)));
     } catch (e) {
       setSearchError(e instanceof Error ? e.message : "search_failed");

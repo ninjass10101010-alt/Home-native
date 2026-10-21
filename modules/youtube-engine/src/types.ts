@@ -7,7 +7,14 @@ export interface MediaTrack {
   album: string;
   durationSeconds: number | null;
   artworkUrl: string | null;
-  explicit: boolean;
+  /**
+   * YouTube's explicit rating, TRI-STATE:
+   * - `true` — badged explicit.
+   * - `false` — rated clean.
+   * - `null` — UNKNOWN/unrated (the NewPipe fallback search, or a
+   *   `related()` row). Kid roles fail closed on an unknown rating.
+   */
+  explicit: boolean | null;
   source: MediaSource;
 }
 

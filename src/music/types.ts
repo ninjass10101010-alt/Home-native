@@ -7,8 +7,15 @@ export interface MediaTrack {
   album: string;
   durationSeconds: number | null;
   artworkUrl: string | null;
-  /** YouTube explicit flag; the player hides these for child/pet roles. */
-  explicit: boolean;
+  /**
+   * YouTube's explicit rating, TRI-STATE:
+   * - `true` — badged explicit.
+   * - `false` — rated clean.
+   * - `null` — UNKNOWN/unrated (the NewPipe fallback path, or a `related()`
+   *   row). An unknown rating is not a clean rating: kid roles fail closed
+   *   on it (see `src/music/explicit.ts`).
+   */
+  explicit: boolean | null;
   source: MediaSource;
 }
 

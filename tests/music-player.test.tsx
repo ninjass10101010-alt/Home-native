@@ -33,10 +33,13 @@ jest.mock("../src/music/playback", () => ({
 }));
 
 jest.mock("../modules/youtube-engine", () => ({
-  search: jest.fn(async () => [
-    { id: "abc12345678", title: "Found", artist: "A", album: "", durationSeconds: 100,
-      artworkUrl: null, explicit: false, source: "youtube_music" },
-  ]),
+  search: jest.fn(async () => ({
+    tracks: [
+      { id: "abc12345678", title: "Found", artist: "A", album: "", durationSeconds: 100,
+        artworkUrl: null, explicit: false, source: "youtube_music" },
+    ],
+    explicitKnown: true,
+  })),
   related: jest.fn(async () => []),
   resolveAudio: jest.fn(async () => ({ url: "https://x.y/audio.m4a", mimeType: "audio/mp4",
     contentLength: 1, durationSeconds: 1, expiresAt: 0 })),
