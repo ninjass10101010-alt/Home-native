@@ -82,8 +82,9 @@ describe("CapsuleDock", () => {
       <CapsuleDock role="parent" hydrated pathname="/" onNavigate={() => {}} />,
       { wrapper: wrap }
     );
-    // dock-home is the active cap; its child disc is the 48dp circle
-    const disc = getByTestId("dock-home").findAll((n: any) => n.props.style?.width === 48)[0];
+    // dock-home is the active cap; its child disc is the wall cap's 72dp
+    // circle (Home-ai CapsuleNav: h-[72px] w-[72px] at the wall viewport).
+    const disc = getByTestId("dock-home").findAll((n: any) => n.props.style?.width === 72)[0];
     expect(disc).toBeTruthy();
     expect(disc.props.style.borderColor).toBe("transparent");
   });

@@ -11,21 +11,51 @@ import type { ServerMember } from "./types";
  * fallbacks. Fallback rows carry NO credentials (that file's SECURITY note);
  * live rows win, fallbacks fill missing first names.
  */
-// Stand-in roster for the SIGNED-OUT last resort only (no live, no cache).
-// This repo's remote is public-ish — the family's real names live only on the
-// NAS (live rows / device cache), never in committed source. Rows carry NO
-// credentials (that file's SECURITY note) and NO real names/ages.
+// Stand-in roster for the SIGNED-OUT / UNREACHABLE last resort only (no live
+// roster, no device cache). This repo's remote is public-ish — the family's
+// real names live only on the NAS (live rows / device cache), never in
+// committed source. Rows carry NO credentials (that file's SECURITY note) and
+// NO real names/ages.
+//
+// HONESTY CONTRACT (the wall's): a stand-in roster must never READ as the
+// family. Two rules, both learned the hard way:
+//   1. every tile a DIFFERENT word. The rail prints the FIRST name only
+//      (web parity), so "Child 1".."Child 5" all rendered as "Child" — five
+//      identical tiles, and two more reading "Pet". The labels below are
+//      single words, one per role, so no two tiles can ever read the same.
+//   2. every tile its OWN accent. The web paints each member's ring/wash in
+//      the member's colour (Avatar.tsx colorMap/ringMap); a roster with no
+//      colour field collapses the rail to a single hue and reads as one
+//      undifferentiated family. The order below is the web's canonical member
+//      palette (Home-ai/src/db/index.ts:164 `memberColor(i)`):
+//      green, cyan, violet, amber, rose, blue, cyan, green, cyan — the SAME
+//      six accents, in the SAME order, the reference wall renders.
+// The emoji set is the web fallback's own (member-fallback.ts): cat, man,
+// girl ×4, boy, dog, poodle.
 export const FALLBACK_MEMBERS: ServerMember[] = [
-  { id: 1, name: "Mom", role: "parent", emoji: "🐱" } as ServerMember,
-  { id: 2, name: "Dad", role: "parent", emoji: "👨" } as ServerMember,
-  { id: 3, name: "Child 1", role: "child", emoji: "👧" } as ServerMember,
-  { id: 4, name: "Child 2", role: "child", emoji: "👧" } as ServerMember,
-  { id: 5, name: "Child 3", role: "child", emoji: "👧" } as ServerMember,
-  { id: 6, name: "Child 4", role: "child", emoji: "👧" } as ServerMember,
-  { id: 7, name: "Child 5", role: "child", emoji: "🧒" } as ServerMember,
-  { id: 8, name: "Pet 1", role: "pet", emoji: "🐶" } as ServerMember,
-  { id: 9, name: "Pet 2", role: "pet", emoji: "🐩" } as ServerMember,
-].map((m) => m);
+  { id: 1, name: "Mom", role: "parent", emoji: "🐱", color: "green" },
+  { id: 2, name: "Dad", role: "parent", emoji: "👨", color: "cyan" },
+  { id: 3, name: "Teen", role: "child", emoji: "👧", color: "violet" },
+  { id: 4, name: "Tween", role: "child", emoji: "👧", color: "amber" },
+  { id: 5, name: "Preteen", role: "child", emoji: "👧", color: "rose" },
+  { id: 6, name: "Child", role: "child", emoji: "👧", color: "blue" },
+  { id: 7, name: "Sprout", role: "child", emoji: "🧒", color: "cyan" },
+  { id: 8, name: "Pup", role: "pet", emoji: "🐶", color: "green" },
+  { id: 9, name: "Poodle", role: "pet", emoji: "🐩", color: "cyan" },
+];
+
+/**
+ * True when the roster IS the built-in stand-in set (no live roster, no
+ * cache). The rail asks this so a stand-in roster can announce itself as
+ * one — a screen reader must never be told "Family members" while the wall
+ * shows sample tiles.
+ */
+export function isStandInRoster(members: { name: string; emoji: string }[]): boolean {
+  if (!members.length) return false;
+  return members.every((m) =>
+    FALLBACK_MEMBERS.some((f) => f.name === m.name && f.emoji === m.emoji)
+  );
+}
 
 const CACHE_KEY = "consuela-members";
 let memoryCache: ServerMember[] | null = null;

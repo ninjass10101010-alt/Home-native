@@ -6,6 +6,26 @@ import { EmptyState } from "../../ui/EmptyState";
 import { useHAState, entitiesByDomain } from "./ha-state";
 import { WidgetFrame } from "./WidgetFrame";
 
+/**
+ * The reference's empty climate cell: the glyph, then a BOLD headline, and
+ * NOTHING else. The web shows no second helper line under it — the tile's
+ * composition is the emoji + one bold line, with the rest of the card left as
+ * air (reference/home/parent-dark.png, "Home Climate").
+ *
+ * The block is TOP-aligned (not centred): the reference seats the glyph ~22px
+ * under the header rule and leaves the lower half of the card empty.
+ */
+function ClimateEmpty() {
+  return (
+    <EmptyState
+      flat
+      icon="🌡️"
+      title="No climate data"
+      style={{ flex: 1, justifyContent: "flex-start", paddingTop: 0 }}
+    />
+  );
+}
+
 /** Wall climate tile (web HomeClimateWidget.tsx parity, read-only Wave 1). */
 export function HomeClimateWidget() {
   const { colors } = useTheme();
@@ -25,23 +45,11 @@ export function HomeClimateWidget() {
       onRetry={refresh}
     >
       {states.length === 0 && loaded ? (
-        <EmptyState
-          flat
-          icon="🌡️"
-          title="No climate data"
-          body="Connect a thermostat to Home Assistant to see indoor conditions here."
-          style={{ flex: 1 }}
-        />
+        <ClimateEmpty />
       ) : (
         <View style={{ gap: 8, alignItems: "flex-start" }}>
           {climates.length === 0 ? (
-            <EmptyState
-              flat
-              icon="🌡️"
-              title="No climate data"
-              body="Connect a thermostat to Home Assistant to see indoor conditions here."
-              style={{ flex: 1 }}
-            />
+            <ClimateEmpty />
           ) : (
             climates.map((c) => {
               const attrs = c.attributes ?? {};

@@ -1,5 +1,6 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, ViewStyle } from "react-native";
+import { Pressable, StyleSheet, ViewStyle } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import { useRouter } from "expo-router";
 import { useTheme } from "../theme/ThemeProvider";
 import { mix } from "../theme/mix";
@@ -10,6 +11,18 @@ export interface EmergencyShieldProps {
 }
 
 const SHIELD_DP = Math.max(64, MIN_TARGET_DP);
+/**
+ * The alarm glyph — the web's own emergency SVG (Home-ai
+ * src/components/ui/EmergencyButton.tsx:254): a 24×24 shield OUTLINE with an
+ * exclamation mark, stroked in the surface's foreground ink.
+ *
+ * The native used the 🛡️ emoji: a full-colour raster — a silver shield with
+ * a red zigzag and NO exclamation — so the one control that has to read as
+ * EMERGENCY read as "protection", and the raster broke the disc's monochrome
+ * material. The white outline is measured in all four reference PNGs
+ * (rgb 255,255,255 in dark, light and boost alike).
+ */
+const GLYPH_PX = 24;
 
 /**
  * The always-visible emergency affordance (RN port of Home-ai's
@@ -21,6 +34,7 @@ export function EmergencyShield({ style }: EmergencyShieldProps) {
   const { colors } = useTheme();
   const router = useRouter();
   const rose = colors["color-accent-rose"] ?? colors["color-accent-selected"];
+  const ink = colors["color-primary-foreground"];
   return (
     <Pressable
       testID="emergency-shield"
@@ -33,7 +47,14 @@ export function EmergencyShield({ style }: EmergencyShieldProps) {
         style,
       ]}
     >
-      <Text style={styles.glyph}>🛡️</Text>
+      <Svg width={GLYPH_PX} height={GLYPH_PX} viewBox="0 0 24 24" fill="none" stroke={ink} strokeWidth={2}>
+        <Path
+          d="M12 2L4 7v6c0 5 3.5 9.7 8 11 4.5-1.3 8-6 8-11V7l-8-5z"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <Path d="M12 8v4M12 16h.01" strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
     </Pressable>
   );
 }
@@ -58,7 +79,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 24,
   },
-  glyph: { fontSize: 32 },
 });
 
 export default EmergencyShield;

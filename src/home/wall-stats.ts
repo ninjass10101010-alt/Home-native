@@ -10,9 +10,20 @@
  * costs the same fetches it did before.
  *
  * Every value is `null` until its source has actually answered. `null` is
- * NEVER rendered as a number: the Week tile shows the web's "—" placeholder
- * and the other tiles stay blank until truth arrives. A fabricated 0 on a
- * still-loading read is the exact "silent empty" the kit bans.
+ * NEVER rendered as a number: the tile wears the web's "—" placeholder and
+ * the other tiles stay blank until truth arrives. A fabricated 0 on a
+ * still-loading read is the exact "silent empty" the kit bans — and so is a
+ * fabricated 0 on a read that FAILED or was never authorised: a wall that
+ * could not reach the family publishes `publishWallStatsUnknown(...)`, never
+ * a number it did not read.
+ *
+ * A STALE read is neither of those. The card below the band shows the
+ * last-good copy and says so ("Showing your saved copy — couldn't refresh."),
+ * so the band publishes that SAME copy — the band can never disagree with
+ * the card it sits above — and marks it stale (`openTasksStale`), which the
+ * tile renders as a marker. Publishing it as UNKNOWN instead (the previous
+ * round's fix) put "—" in the band while the card asserted 17: the same
+ * frame, two contradictory claims.
  */
 
 import { useEffect, useReducer } from "react";
@@ -31,6 +42,14 @@ export interface WallStats {
   eventsToday: number | null;
   /** Open (not completed) tasks from the shared sync snapshot. */
   openTasks: number | null;
+  /**
+   * TRUE when `openTasks` is the LAST-GOOD copy — the refresh failed and the
+   * number on screen is the copy the card is already showing, badged. The
+   * band publishes the card's own number (never a different one, never an
+   * UNKNOWN while the card asserts a count) and this flag is what makes the
+   * tile carry the staleness: "stale data is badged or hidden, never faked".
+   */
+  openTasksStale: boolean;
   /** Distinct weekdays with at least one planned meal this week. */
   plannedDays: number | null;
   /** The Mon–Sun strip cells for the current week. */
@@ -40,6 +59,7 @@ export interface WallStats {
 const INITIAL: WallStats = {
   eventsToday: null,
   openTasks: null,
+  openTasksStale: false,
   plannedDays: null,
   weekCells: null,
 };
@@ -52,6 +72,27 @@ const listeners = new Set<() => void>();
 export function publishWallStats(next: Partial<WallStats>): void {
   stats = { ...stats, ...next };
   for (const listener of [...listeners]) listener();
+}
+
+/**
+ * Publish the UNKNOWN for one slice — the source could not answer (it is
+ * unreachable, the wall is signed out, or the read failed).
+ *
+ * This exists so that "we do not know" is a first-class, NAMED state: the
+ * band shows its placeholder glyph, and the tile can never claim a count it
+ * did not read. A guest or offline wall once published a hard `0` for the
+ * pending tasks, which contradicted the PIN gate on the card directly below
+ * it — a fabricated count is the exact "silent empty" the kit bans.
+ *
+ * NOTE (critic round 4, HIGH 5): the UNKNOWN is for a read that produced NO
+ * truth. A read that produced a LAST-GOOD copy is not unknown — it is stale,
+ * and it is published as the number the card is already showing, together
+ * with `openTasksStale`. Publishing that copy as UNKNOWN made the band and
+ * the card disagree in the same frame: the band claimed "—" while the card
+ * asserted "17 pending for the family" 380px below it.
+ */
+export function publishWallStatsUnknown(slice: "eventsToday" | "openTasks" | "plannedDays"): void {
+  publishWallStats(slice === "openTasks" ? { openTasks: null, openTasksStale: false } : { [slice]: null });
 }
 
 /** Subscribe to the band. Reading during render is safe: the module state is

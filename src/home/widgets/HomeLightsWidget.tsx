@@ -10,6 +10,26 @@ import { useHAState, entitiesByDomain, applyOptimisticHA, refreshHAState } from 
 import { callHAService, haErrorToastMessage } from "../../ha/actions";
 import { WidgetFrame } from "./WidgetFrame";
 
+/**
+ * The reference's empty lights cell: the glyph, then a BOLD headline, and
+ * NOTHING else. The web shows no second helper line under it — the tile's
+ * composition is the emoji + one bold line, with the rest of the card left as
+ * air (reference/home/parent-dark.png, "Home Lights").
+ *
+ * The block is TOP-aligned (not centred): the reference seats the glyph ~22px
+ * under the header rule and leaves the lower half of the card empty.
+ */
+function LightsEmpty() {
+  return (
+    <EmptyState
+      flat
+      icon="💡"
+      title="No lights found"
+      style={{ flex: 1, justifyContent: "flex-start", paddingTop: 0 }}
+    />
+  );
+}
+
 /** Wall lights tile (web HomeLightsWidget.tsx parity). Parent tap toggles a
  *  light optimistically; guests/kids tap through to /ha. */
 export function HomeLightsWidget() {
@@ -52,23 +72,11 @@ export function HomeLightsWidget() {
       onRetry={refresh}
     >
       {states.length === 0 && loaded ? (
-        <EmptyState
-          flat
-          icon="💡"
-          title="No lights found"
-          body="Connect lights to Home Assistant to control them here."
-          style={{ flex: 1 }}
-        />
+        <LightsEmpty />
       ) : (
         <View style={{ gap: 6, alignItems: "flex-start" }}>
           {lights.length === 0 ? (
-            <EmptyState
-              flat
-              icon="💡"
-              title="No lights found"
-              body="Connect lights to Home Assistant to control them here."
-              style={{ flex: 1 }}
-            />
+            <LightsEmpty />
           ) : (
             <>
               <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>

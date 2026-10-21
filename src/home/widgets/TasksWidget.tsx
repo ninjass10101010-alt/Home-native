@@ -10,7 +10,7 @@ import { ListRow } from "../../ui/ListRow";
 import { Chip } from "../../ui/Chip";
 import { useSync } from "../../state/SyncManager";
 import { WidgetFrame } from "./WidgetFrame";
-import { publishWallStats } from "../wall-stats";
+import { publishWallStats, publishWallStatsUnknown } from "../wall-stats";
 import { DayLine } from "./DayLine";
 
 /** Snapshot task row per Home-ai src/types/tasks.ts (subset read by the wall). */
@@ -26,6 +26,17 @@ interface WallTask {
 }
 
 const WALL_ROW_BUDGET = 2;
+
+/**
+ * The family's own task titles carry the household's shorthand — "Feeding
+ * Rico&Rocco" arrives as one run-on token (critic round 4, L8). The copy is
+ * the family's; only the typography is ours, so the ampersand gets the spaces
+ * a reader expects ("Feeding Rico & Rocco"). Nothing else about the title is
+ * touched.
+ */
+function readableTitle(title: string): string {
+  return title.replace(/\s*&\s*/g, " & ").trim();
+}
 
 /**
  * Tasks cell — the wall's read-only mirror of the Home tasks widget
@@ -82,14 +93,39 @@ export function TasksWidget() {
           : null;
   const status = guest || (syncError !== null && !hasData) ? "error" : hasData ? "ready" : "loading";
 
-  const description = hasData ? `${pending.length} pending for the family` : undefined;
+  // The card's second header line. It is DATA when the snapshot answered
+  // ("3 pending for the family" — the reference's own copy) and a STATIC,
+  // count-free line when it did not: the band under the title band is
+  // bottom-aligned (WidgetFrame's constant header band), so a card with no
+  // second line slides its title below its neighbours' and the row stops
+  // sharing one baseline. The line never claims a count it could not read.
+  const description = hasData
+    ? `${pending.length} pending for the family`
+    : guest
+      ? "Sign in to see the family's tasks"
+      : "Pending for the family";
 
   // The KPI band's "Tasks · Pending" tile reads the same list this card reads
   // (src/home/wall-stats.ts) — one snapshot, two surfaces.
+  //
+  // The band must never disagree with the card it sits above (critic round 4,
+  // HIGH 5). Two rules, both about the SAME number:
+  //
+  //   1. NO read at all → the band is told the count is UNKNOWN: the tile
+  //      wears the same placeholder its siblings wear, so the band cannot
+  //      contradict the PIN gate (or the offline notice) this card is
+  //      showing. Publishing a hard 0 here would assert "nothing is pending"
+  //      on a wall that never read the family's tasks.
+  //   2. A STALE read → the card shows the last-good copy and says so
+  //      ("Showing your saved copy — couldn't refresh."). The band publishes
+  //      that SAME copy, marked stale, so the tile carries the staleness
+  //      itself. The previous round published it as UNKNOWN, which put "—"
+  //      in the band while the card asserted "17 pending for the family" —
+  //      two contradictory claims in the same frame, 380px apart.
   React.useEffect(() => {
-    if (hasData) publishWallStats({ openTasks: pending.length });
-    else if (guest) publishWallStats({ openTasks: 0 });
-  }, [hasData, guest, pending.length]);
+    if (hasData) publishWallStats({ openTasks: pending.length, openTasksStale: syncStale });
+    else publishWallStatsUnknown("openTasks");
+  }, [hasData, syncStale, pending.length]);
 
   return (
     <WidgetFrame
@@ -124,7 +160,7 @@ export function TasksWidget() {
               <ListRow
                 key={String(task.id)}
                 style={{ minHeight: 52, paddingVertical: 8 }}
-                title={task.title}
+                title={readableTitle(task.title)}
                 subtitle={awaiting ? `Waiting for approval${subtitle ? ` · ${subtitle}` : ""}` : subtitle || undefined}
                 leftRailColor={pointsColor}
                 trailing={

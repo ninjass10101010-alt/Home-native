@@ -50,14 +50,15 @@ describe("WidgetFrame default header (U13.7) — left-aligned band + protruding 
     // The disc is decorative (aria-hidden on web): the title carries identity,
     // so the glyph is excluded from the a11y tree — query with hidden elements.
     const disc = getByTestId("wf-icon-disc", { includeHiddenElements: true });
-    // 52dp seated badge with the 3-stop tone wash (task 0.3 geometry).
+    // The web's badge geometry (Home-ai src/components/patterns/WidgetCard.tsx:
+    // `h-14 w-14` at `xl:-top-2 xl:-left-2`), with the clay artwork at the
+    // web's "lg" size (h-16 w-16) breaking the card's corner behind it.
     expect(disc.props.style).toMatchObject({
       position: "absolute",
-      top: -6,
-      left: -6,
-      width: 52,
-      height: 52,
-      borderRadius: 26,
+      top: -10,
+      left: -10,
+      width: 64,
+      height: 64,
     });
     // 3-stop LinearGradient wash inside the disc (tone-on-surface stops).
     const gradient = disc.findAll((n: any) => n.type === "ExpoLinearGradient")[0];
@@ -69,18 +70,18 @@ describe("WidgetFrame default header (U13.7) — left-aligned band + protruding 
     expect(getByText("2 pending for the family")).toBeTruthy();
   });
 
-  it("variant widgets render HomeWidgetIcon at 38dp on the disc", () => {
+  it("variant widgets render HomeWidgetIcon at the web's lg size (64dp) on the disc", () => {
     const { getByTestId } = render(<Frame id="briefing" icon="🌅" title="Briefing" />, { wrapper: wrap });
     const disc = getByTestId("briefing-icon-disc", { includeHiddenElements: true });
     const svg = disc.findAll((n: any) => n.type === "Svg")[0];
     expect(svg).toBeTruthy();
-    expect(svg.props.width).toBe(38);
-    expect(svg.props.height).toBe(38);
+    expect(svg.props.width).toBe(64);
+    expect(svg.props.height).toBe(64);
   });
 
-  it("honors the type floors: title 20sp bold, description 14sp", () => {
+  it("honors the type floors: title 18sp bold, description 14sp", () => {
     const { getByRole, getByText } = render(<Frame />, { wrapper: wrap });
-    expect(getByRole("header").props.style).toMatchObject({ fontSize: 20, fontWeight: "700" });
+    expect(getByRole("header").props.style).toMatchObject({ fontSize: 18, fontWeight: "700" });
     expect(getByText(base.description).props.style).toMatchObject({ fontSize: 14 });
   });
 
@@ -179,19 +180,37 @@ describe("WidgetFrame state machine (U13.8/U13.10) — never a blank cell, never
 });
 
 describe("WidgetFrame semantic failure tones (task 0.3) — rose for errors, amber for gate/offline", () => {
-  const pillInk = (failure: "error" | "offline" | "unauthorised") => {
-    const { getByText } = render(<Frame status="error" failure={failure} hasData={false} />, { wrapper: wrap });
+  // The TONE is the semantic signal (rose = hard error, amber = gate/offline)
+  // and it rides the pill's hairline + wash. The COPY rides the primary ink:
+  // the web's ReadStatePill paints a TONE wash with text-[var(--color-text-primary)]
+  // copy (reference/home/guest-dark.png measures #f0f4ff on the amber pill), so
+  // the native no longer writes amber-on-amber.
+  const pill = (failure: "error" | "offline" | "unauthorised") => {
+    const { getByText, getByLabelText } = render(<Frame status="error" failure={failure} hasData={false} />, { wrapper: wrap });
     const copy = getByText(new RegExp(READ_COPY[failure].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    return copy.props.style.color;
+    const pressable = getByLabelText(new RegExp(READ_COPY[failure].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    const flat = StyleSheet.flatten(pressable.props.style);
+    return { ink: copy.props.style.color, border: flat.borderColor, wash: flat.backgroundColor };
   };
 
-  it("status/error failures use the rose ink token", () => {
-    expect(pillInk("error")).toBe(TOKENS.light["color-accent-ink-rose"]);
+  it("the copy rides the primary ink (the pill is information, not a warning slab)", () => {
+    expect(pill("error").ink).toBe(TOKENS.light["color-text-primary"]);
+    expect(pill("offline").ink).toBe(TOKENS.light["color-text-primary"]);
+    expect(pill("unauthorised").ink).toBe(TOKENS.light["color-text-primary"]);
   });
 
-  it("offline + unauthorised keep the amber ink token", () => {
-    expect(pillInk("offline")).toBe(TOKENS.light["color-accent-ink-amber"]);
-    expect(pillInk("unauthorised")).toBe(TOKENS.light["color-accent-ink-amber"]);
+  it("status/error failures keep the ROSE tone in the hairline + wash", () => {
+    const rose = pill("error");
+    expect(rose.border).not.toBe(pill("offline").border);
+    // the rose tone is redder than the amber one: R > B in the painted colour
+    const chan = (c: string) => (c.match(/[\d.]+/g) || []).map(Number);
+    const [r, , b] = chan(rose.border);
+    expect(r).toBeGreaterThan(b);
+  });
+
+  it("offline + unauthorised keep the AMBER tone in the hairline + wash", () => {
+    expect(pill("offline").border).toBe(pill("unauthorised").border);
+    expect(pill("offline").border).not.toBe(pill("error").border);
   });
 });
 

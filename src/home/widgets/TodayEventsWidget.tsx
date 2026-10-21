@@ -86,6 +86,16 @@ function MemberChip({ label, color }: { label: string; color: string }) {
  * amber wash, the honest copy, and a working "Try again" — the WHOLE pill is
  * the retry target at the wall's 64dp floor (it is the only affordance in an
  * error state, so it must be impossible to miss).
+ *
+ * The web's ReadStatePill paints the TONE into the hairline and the wash and
+ * the COPY always in --color-text-primary (white in dark, near-black in
+ * light): the pill is INFORMATION, not a warning slab. Probed live on the
+ * reference guest capture (the very pill this one copies): border = tone @
+ * 40%, background = tone @ 12%, color = rgb(240,244,255), font-size 14px,
+ * font-weight 500, border-radius 36px (--radius-2xl), and the retry is white
+ * / 600 / underlined. The native painted the copy in the amber ink, so the
+ * gate read as a warning slab — and the wall showed the SAME card wearing two
+ * different pills (the frame's own ReadStatePill already wears the web's).
  */
 function GooglePill({ failure, onRetry }: { failure: ReadFailure; onRetry: () => void }) {
   const { colors } = useTheme();
@@ -98,7 +108,7 @@ function GooglePill({ failure, onRetry }: { failure: ReadFailure; onRetry: () =>
         ? GOOGLE_PILL_CONNECTED
         : GOOGLE_PILL_ERROR;
   const amber = colors["color-accent-amber"];
-  const ink = colors["color-accent-ink-amber"] ?? colors["color-text-secondary"];
+  const ink = colors["color-text-primary"];
   return (
     <Pressable
       testID="todayEvents-google-pill"
@@ -108,10 +118,10 @@ function GooglePill({ failure, onRetry }: { failure: ReadFailure; onRetry: () =>
       accessibilityHint="Re-reads the family and Google calendars"
       style={({ pressed }) => ({
         minHeight: 64,
-        borderRadius: 18,
+        borderRadius: 36, // the web's --radius-2xl
         borderWidth: 1,
-        borderColor: mix(amber, "transparent", 45),
-        backgroundColor: mix(amber, "transparent", 14),
+        borderColor: mix(amber, "transparent", 40),
+        backgroundColor: mix(amber, "transparent", 12),
         paddingHorizontal: 14,
         paddingVertical: 10,
         marginBottom: 10,
@@ -125,7 +135,7 @@ function GooglePill({ failure, onRetry }: { failure: ReadFailure; onRetry: () =>
           color: ink,
           fontSize: TYPOGRAPHY.label.fontSize,
           lineHeight: TYPOGRAPHY.label.lineHeight,
-          fontWeight: "600",
+          fontWeight: "500",
         }}
       >
         {message}
@@ -136,7 +146,7 @@ function GooglePill({ failure, onRetry }: { failure: ReadFailure; onRetry: () =>
           color: ink,
           fontSize: TYPOGRAPHY.label.fontSize,
           lineHeight: TYPOGRAPHY.label.lineHeight,
-          fontWeight: "700",
+          fontWeight: "600",
           textDecorationLine: "underline",
         }}
       >
@@ -149,6 +159,12 @@ function GooglePill({ failure, onRetry }: { failure: ReadFailure; onRetry: () =>
 interface TodayPayload {
   events: WallEvent[];
   googleFailure: ReadFailure | null;
+  /**
+   * The FAMILY read answered (the db gateway, or the signed-out screensaver
+   * fallback). Without it there is no count to report — the card may only
+   * print a number it actually read.
+   */
+  familyAnswered: boolean;
 }
 
 /**
@@ -179,9 +195,11 @@ export function TodayEventsWidget() {
     // signed-out wall (the reference guest capture: "0 events on the family
     // calendar" + rows visible). Its failure is the widget's failure.
     let family: WallEvent[] = [];
+    let familyAnswered = false;
     try {
       const db = await api<DbListEnvelope<DbEventRow>>("/api/db/events");
       family = familyEventsForDay(Array.isArray(db?.items) ? db.items : [], today);
+      familyAnswered = true;
     } catch (e) {
       if (guest && e instanceof ApiError && e.status === 401) {
         family = [];
@@ -200,6 +218,7 @@ export function TodayEventsWidget() {
                 sortMinutes: ev.allDay ? -1 : 540,
                 railToken: FAMILY_RAIL_TOKEN,
               }));
+              familyAnswered = true;
             }
           } catch {
             /* keep empty family list */
@@ -255,7 +274,7 @@ export function TodayEventsWidget() {
     }
 
     const events = [...family, ...google].sort((a, b) => a.sortMinutes - b.sortMinutes);
-    return { events, googleFailure };
+    return { events, googleFailure, familyAnswered };
   }, [guest]);
 
   const { status, data, failure, stale, retry } = useWidgetData<TodayPayload>(load, { guestVisible: true });
@@ -264,7 +283,21 @@ export function TodayEventsWidget() {
   const googleFailure = data?.googleFailure ?? null;
   const visible = events.slice(0, WALL_ROW_BUDGET);
   const hidden = events.length - visible.length;
-  const description = `${events.length} ${events.length === 1 ? "event" : "events"} on the family calendar`;
+  /**
+   * The description may only assert a COUNT the card actually read.
+   *
+   * The wall reads this line at a glance, so a hard "0 events" printed over a
+   * PIN gate or an offline notice is a lie the family can see: the read never
+   * answered, so there is no count to report. Until the data lands the line
+   * stays COUNT-FREE (and says so when the block is the PIN gate); the real
+   * number appears only once the read answered — including a real "0" for a
+   * day the family genuinely has nothing on.
+   */
+  const description = data && data.familyAnswered
+    ? `${data.events.length} ${data.events.length === 1 ? "event" : "events"} on the family calendar`
+    : failure === "unauthorised"
+      ? "Sign in to see the family calendar"
+      : "Events on the family calendar";
   const daylineTone = colors["color-accent-selected"] ?? colors[FAMILY_RAIL_TOKEN];
 
   // The wall's KPI band reads THIS widget's count (src/home/wall-stats.ts) —

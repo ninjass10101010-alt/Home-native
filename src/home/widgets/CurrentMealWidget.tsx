@@ -106,7 +106,7 @@ export interface CurrentMealWidgetProps {
  * same verified db-gateway surface as events.
  */
 export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) {
-  const { colors, accentColor, theme: themeName } = useTheme();
+  const { colors, accentColor } = useTheme();
   const { member, hydrated } = useAuth();
   const guest = hydrated && !member;
   const [tickNow, setTickNow] = React.useState<Date | null>(null);
@@ -140,7 +140,9 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
                 const dayShort = nowDate.toLocaleDateString("en-US", { weekday: "short" });
                 const wkMon = weekStartMondayISO(nowDate);
                 return {
-                  schedules: [{ id: "ss-dinner", title: "Dinner", time: "18:00", mealType: "dinner" }],
+                  // No clock on the synthetic row: a signed-out wall must not
+                  // publish the household's dinner time (see scheduleRows).
+                  schedules: [{ id: "ss-dinner", title: "Dinner", mealType: "dinner" }],
                   meals: [
                     {
                       id: "ss-meal",
@@ -172,14 +174,24 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const timeStr = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
+  // A SIGNED-OUT wall does not read the household's meal rhythm (critic
+  // round 4, L5). The db-gateway's schedule read is public, so a guest used
+  // to get the family's real dinner time — "Scheduled at 6:00 PM" — printed
+  // on the one card in the frame whose neighbours (Tasks, the leaderboard,
+  // Music) are all PIN-gated. The reference's guest capture says "Set a meal
+  // schedule to see times" on this card, so the guest card now answers with
+  // the slot rule's own default and no clock: the wall shows the SHAPE of the
+  // card, never the family's timetable.
+  const scheduleRows = guest ? [] : data?.schedules ?? [];
+
   // The shared slot rule (src/meals/slot.ts) — the wall cell and the page
   // agree because there is ONE implementation (the critic's fork-ban).
   const current: { mealType: string; time?: string; minutes: number | null } = (() => {
-    const slot = currentSlotFor(data?.schedules ?? [], now);
+    const slot = currentSlotFor(scheduleRows, now);
     // The row can carry the slot either explicitly (mealType) or via the
     // title keyword — match both so a title-only "Dinner" schedule keeps its
     // time on the card (the web reads the same schedule object).
-    const rows = data?.schedules ?? [];
+    const rows = scheduleRows;
     const row =
       rows.find((s) => s.mealType === slot) ??
       rows.find((s) => (s.title ?? "").toLowerCase().includes(slot) && parseTimeToMinutes(s.time) !== null) ??
@@ -356,7 +368,14 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
             under a warm ring, never an opaque surface tile — an opaque tile
             turned the white 🍽️ into a white blob on a white card. The web's
             `rounded-2xl` on a 56px box clamps to a circle, and the warm halo
-            around it is the card's one piece of depth. */}
+            around it is the card's one piece of depth.
+            THE FILL IS THE WEB'S: `${atm.accentColor}12` — the accent at
+            7% over the meal card, in BOTH themes (the web has one rule).
+            The light branch used to deepen the accent toward black instead
+            (78%), which painted the light wall's one saturated orange disc
+            (the reference's pale warm well measures 240,226,216). The
+            season's PEACH is in the hairline and the halo; the well itself
+            stays a pale wash. */}
         <View
           style={{
             width: 56,
@@ -364,10 +383,7 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
             borderRadius: 28,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor:
-              themeName === "light"
-                ? mix(season.accent, "black", 78)
-                : mix(season.accent, "transparent", 8),
+            backgroundColor: mix(season.accent, "transparent", 7),
             borderWidth: 1,
             borderColor: mix(season.accent, "transparent", 32),
             shadowColor: mix(season.accent, "transparent", 30),

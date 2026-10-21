@@ -1,9 +1,11 @@
 import React from "react";
-import { StyleSheet, Text, View, type DimensionValue } from "react-native";
+import { StyleSheet, Text, View, type DimensionValue, type ViewStyle } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Ellipse, G, Line, Path, Rect } from "react-native-svg";
 
 import { useTheme } from "../theme/ThemeProvider";
-import { mix } from "../theme/mix";
+import { mix, parseColor, toCss } from "../theme/mix";
+import { RADII } from "../theme/tokens";
 import { moonLitPath } from "./astro";
 import { useMonsterInk, type ConditionCode, type MonsterInkName } from "./language";
 
@@ -549,6 +551,47 @@ export function SceneMoon({ phase, size }: { phase: number; size?: number | stri
   );
 }
 
+// ─── NightMoon — the moon, placed by the CARD's box ────────────────
+//
+// The reference capture (1080×1920, wall mode) pins the disc: its centre sits
+// just OFF the card's right edge (101.8% of the card's width) and 23.9% down
+// the card, with a radius of 12.1% of the card's height. The web derives
+// that from its 320×180 poster plane sliced to the card, so it slides with the
+// card's aspect — on a short, wide wall cell the lit limb landed under the
+// Details chip and painted over it. Placing the disc from the card's own box
+// keeps the reference's geometry at ANY cell height.
+//
+// The scene layer stays UNDER the content layer (the chips paint over the
+// disc, as in the web), so the disc never eats the affordance.
+
+/** The disc's centre, as a fraction of the card's width / height. */
+const MOON_CX = 1.018;
+const MOON_CY = 0.239;
+/** The disc's radius, as a fraction of the card's height. */
+const MOON_R = 0.121;
+/** The disc is 44 of the 48-unit viewBox — the box is a touch bigger. */
+const MOON_BOX = (MOON_R * 2) * (48 / 44);
+
+export function NightMoon({ width, height, phase }: { width: number; height: number; phase: number }) {
+  if (width <= 0 || height <= 0) return null;
+  const box = MOON_BOX * height;
+  return (
+    <View
+      testID="wx-night-moon"
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        left: width * MOON_CX - box / 2,
+        top: height * MOON_CY - box / 2,
+        width: box,
+        height: box,
+      }}
+    >
+      <SceneMoon phase={phase} size={box} />
+    </View>
+  );
+}
+
 // ─── Scene sky — the web's flat SKY washes ─────────────────────────────
 // The wall card paints one FLAT wash per scene (web wx-tokens.ts:25-35): the
 // three stops sit inside a single lightness step, so the card reads as a lit
@@ -584,10 +627,13 @@ export function useSceneSky(scene: SceneKey): [string, string] {
   const clearTop = colors["color-monster-wash-clear-top"] ?? ink.teal;
   const dayTop = colors["color-monster-wash-day-top"] ?? clearTop;
   if (scene === "night") {
-    // the lamplit indigo — purple over blue, warmed a touch off pure blue
+    // The lamplit indigo — the web's SKY.night stops (#8b90c6 → #9196cd),
+    // composed from the monster palette so the field lands on the reference
+    // capture's tone instead of near it.
     const lamplit = mix(ink.purple, ink.blue, 50);
-    const top = mix(mix(ink.starCream, lamplit, 22), ink.knotOrange, 95);
-    return [top, mix("white", top, 3)];
+    const top = mix(mix(ink.starCream, lamplit, 15), ink.knotOrange, 95);
+    const bottom = mix(mix(ink.glint, lamplit, 19), ink.knotOrange, 95);
+    return [top, bottom];
   }
   if (scene === "clear") {
     const top = clearTop;
@@ -699,15 +745,15 @@ function Precipitation({ code, precipPct }: { code: ConditionCode; precipPct: nu
 /**
  * The poster accents (web PosterAccents, WxToys.tsx:200-305): ONE svg on the
  * web's 320×180 poster plane, sliced to cover the card (`xMidYMid slice`).
- * The slice is what puts the night moon half off the card's right edge in the
- * reference — the geometry is the web's, so the native lands in the same place
- * at any card size.
+ *
+ * The night moon is NOT here: it moved to {@link NightMoon}, which places the
+ * disc from the CARD's own box instead of the poster plane. The slice
+ * geometry moves the disc with the card's aspect, and on a wide, short wall
+ * cell that dragged the lit limb straight under the Details chip. The
+ * reference capture pins the disc where it belongs instead.
  */
-export function PosterAccents({ scene, moonPhase }: { scene: SceneKey; moonPhase: number }) {
+export function PosterAccents({ scene }: { scene: SceneKey }) {
   const ink = useMonsterInk();
-  // the web's deep navy disc tone and its cool-grey crater tone
-  const disc = mix(ink.knotPurple, ink.inkBlue, 15);
-  const crater = mix(ink.starCream, ink.inkBlue, 52);
   return (
     <Svg
       testID="wx-poster-accents"
@@ -718,21 +764,6 @@ export function PosterAccents({ scene, moonPhase }: { scene: SceneKey; moonPhase
       style={StyleSheet.absoluteFill}
       pointerEvents="none"
     >
-      {scene === "night" ? (
-        <G testID="wx-poster-moon" transform="translate(253 42)">
-          {/* the dark disc always renders — a new moon leaves no hole in the poster */}
-          <Circle r={22} fill={disc} opacity={0.88} />
-          <Path d={moonLitPath(moonPhase, 21)} fill={ink.starCream} opacity={0.92} />
-          <G opacity={0.35}>
-            <Circle cx={-7} cy={-6} r={3.8} fill={crater} />
-            <Circle cx={5} cy={3} r={5} fill={crater} />
-            <Circle cx={-3} cy={9} r={2.4} fill={crater} />
-            <Circle cx={10} cy={-10} r={2} fill={crater} />
-            <Circle cx={-13} cy={4} r={1.8} fill={crater} />
-          </G>
-          <Circle r={21} fill="none" stroke={mix(ink.glint, "transparent", 25)} strokeWidth={1} />
-        </G>
-      ) : null}
       {scene === "rain" ? (
         <G stroke={mix(ink.blue, ink.inkBlue, 70)} strokeWidth={4} strokeLinecap="round" opacity={0.55}>
           <Path d="M34 18l-8 20" />
@@ -834,6 +865,159 @@ export function ChevronGlyph({ color, size = 14 }: { color: string; size?: numbe
   );
 }
 
+// ─── GlassChip — the ONE glass recipe (web GLASS) ──────────────────
+//
+// Home-ai wx-tokens.ts:57 — "Monster beast-glass": a 135° white gradient
+// (26% → 8%) over a white hairline, PLUS the chip's specular top-half
+// sheen (`before:from-white/40 before:to-transparent before:to-50%`) and
+// the backdrop's saturation (`backdrop-saturate-[1.6]`).
+//
+// The sheen is the half that was missing here: without it the chip is a
+// 17%-white wash that barely lifts the sky (and the corner-to-corner
+// gradient leaves the pill's far corner DARKER than the field), so the
+// chip reads as a hole cut into the poster instead of a pane of glass
+// floating above it. With it the pane measures ≈ +40 dL over the sky —
+// the web's own lift.
+//
+// The saturation is the other half: the reference's pane over the lamplit
+// sky measures +38/+39/+37 — a NEUTRAL lift, which a white overlay alone
+// cannot produce (a white overlay lifts blue far less than red). It is the
+// backdrop's chroma pushed to 1.6×, and the native reproduces it by
+// painting the saturated sky under the pane instead of the raw sky.
+
+/** The web's glass stops (wx-tokens.ts GLASS). */
+const GLASS_TOP = 26;
+const GLASS_BOTTOM = 8;
+const GLASS_SHEEN = 40;
+/** The web's GLASS_NIGHT lift (+0.10 on both stops) — the storm/night skin. */
+const GLASS_NIGHT_TOP = 36;
+const GLASS_NIGHT_BOTTOM = 18;
+/** The web's `backdrop-saturate-[1.6]`. */
+const GLASS_SATURATE = 1.6;
+/**
+ * How much of the saturated backdrop the pane carries (the rest shows through).
+ */
+const GLASS_BACKDROP = 95;
+/**
+ * The backdrop the pane saturates is the sky PLUS the card's own sheen and
+ * scrim bloom (both white); the native approximates that lift with a flat
+ * white wash on the sky before saturating it. 6% is the value that lands the
+ * pane on the reference capture's measured interior.
+ */
+const GLASS_BACKDROP_LIFT = 6;
+
+/**
+ * The CSS `saturate(k)` filter over a backdrop: the chroma around the
+ * luminance is scaled by k.
+ *
+ * The reference's pane measures +38/+39/+37 over the lamplit sky — a NEUTRAL
+ * lift, which a white overlay alone cannot produce (white lifts blue far
+ * less than red). The neutrality IS the saturation: the sky's chroma is
+ * pushed to 1.6×, so the pane over the sky lands on a lavender the native
+ * can reproduce only by painting the saturated sky underneath itself.
+ */
+export function saturateColor(color: string, k: number): string {
+  const c = parseColor(color);
+  if (!c) return color;
+  const lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+  const ch = (v: number) => Math.max(0, Math.min(255, Math.round(lum + k * (v - lum))));
+  return toCss({ r: ch(c.r), g: ch(c.g), b: ch(c.b), a: c.a });
+}
+
+export interface GlassChipProps {
+  children: React.ReactNode;
+  /** The chip's own box: radius, hairline, size. */
+  style?: ViewStyle;
+  /** The chip's CONTENT box: padding, gap, alignment. */
+  contentStyle?: ViewStyle;
+  /** The storm/night skin's stronger lift (web GLASS_NIGHT). */
+  night?: boolean;
+  /** High contrast: the pane lifts a touch further so the hairline survives. */
+  boost?: boolean;
+  /** The sky behind the chip — the pane saturates it (web backdrop-saturate). */
+  backdropTop?: string;
+  backdropBottom?: string;
+  testID?: string;
+}
+
+export function GlassChip({
+  children,
+  style,
+  contentStyle,
+  night = false,
+  boost = false,
+  backdropTop,
+  backdropBottom,
+  testID,
+}: GlassChipProps) {
+  const ink = useMonsterInk();
+  const white = ink.glint;
+  const top = night ? GLASS_NIGHT_TOP : GLASS_TOP + (boost ? 3 : 0);
+  const bottom = night ? GLASS_NIGHT_BOTTOM : GLASS_BOTTOM + (boost ? 1 : 0);
+  const base: [string, string] = [mix(white, "transparent", top), mix(white, "transparent", bottom)];
+  // The sheen fades to (almost) nothing at the chip's half height, exactly
+  // like the web's `to-50%` stop — it never reaches zero alpha, so the
+  // native gradient never fades through a grey.
+  const sheen: [string, string] = [mix(white, "transparent", GLASS_SHEEN), mix(white, "transparent", 0.5)];
+  const backdrop: [string, string] | null =
+    backdropTop && backdropBottom
+      ? [
+          mix(
+            saturateColor(mix(white, backdropTop, GLASS_BACKDROP_LIFT), GLASS_SATURATE),
+            "transparent",
+            GLASS_BACKDROP
+          ),
+          mix(
+            saturateColor(mix(white, backdropBottom, GLASS_BACKDROP_LIFT), GLASS_SATURATE),
+            "transparent",
+            GLASS_BACKDROP
+          ),
+        ]
+      : null;
+  return (
+    <View
+      testID={testID}
+      style={[
+        {
+          borderRadius: RADII.full,
+          borderWidth: 1,
+          borderColor: mix(white, "transparent", night ? 40 : 28),
+          // The web's inset top highlight (`inset 0 1px 0 rgba(255,255,255,.52)`).
+          borderTopColor: mix(white, "transparent", night ? 60 : 52),
+          overflow: "hidden",
+        },
+        style,
+      ]}
+    >
+      {backdrop ? (
+        <LinearGradient
+          colors={backdrop}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      ) : null}
+      <LinearGradient
+        colors={base}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <LinearGradient
+        colors={sheen}
+        locations={[0, 0.5]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={[{ flexDirection: "row", alignItems: "center" }, contentStyle]}>{children}</View>
+    </View>
+  );
+}
+
 export interface WeatherSceneProps {
   /** The condition the scene dresses. */
   code: ConditionCode;
@@ -843,6 +1027,9 @@ export interface WeatherSceneProps {
   precipPct: number | null;
   /** Moon phase 0–1 (0 = new) from the snapshot timestamp. */
   moonPhase: number;
+  /** The card's measured box — the night moon is placed from it. */
+  cardW?: number;
+  cardH?: number;
 }
 
 /**
@@ -850,22 +1037,26 @@ export interface WeatherSceneProps {
  * and the moon character at night, the soft cloud puffs behind the hero, and
  * the precipitation when the sky is actually wet.
  */
-export function WeatherScene({ code, isDay, precipPct, moonPhase }: WeatherSceneProps) {
+export function WeatherScene({ code, isDay, precipPct, moonPhase, cardW = 0, cardH = 0 }: WeatherSceneProps) {
   const ink = useMonsterInk();
   const scene = sceneFor(code, isDay);
   const night = scene === "night";
   const clear = code === "clear" || code === "night";
   const partly = code === "partly" || code === "partly-night";
   const tone: SceneTone = night ? "night" : clear ? "poster" : "day";
-  const puffs = clear ? 0 : partly ? 1 : 2;
+  // The web's scene layers paint a cloud at NIGHT too (the reference's
+  // lamplit card carries one soft puff along its left edge, behind the
+  // digits) — a clear sky only drops the puff by day.
+  const puffs = night ? 1 : clear ? 0 : partly ? 1 : 2;
 
   return (
     <View testID="wx-scene" style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* web order: poster accents → stars → cloud puffs → precipitation */}
-      <PosterAccents scene={scene} moonPhase={moonPhase} />
+      {/* web order: poster accents → stars → night moon → cloud puffs → precipitation */}
+      <PosterAccents scene={scene} />
       {night ? <StarField color={ink.glint} /> : null}
+      {night ? <NightMoon width={cardW} height={cardH} phase={moonPhase} /> : null}
       {puffs > 0 ? (
-        <View style={{ position: "absolute", left: pct(-4), top: pct(13), width: pct(38), height: pct(23), opacity: partly ? 0.34 : 0.44, transform: [{ rotate: "-6deg" }] }}>
+        <View style={{ position: "absolute", left: pct(-4), top: pct(night ? 10 : 13), width: pct(38), height: pct(23), opacity: night ? 0.24 : partly ? 0.34 : 0.44, transform: [{ rotate: "-6deg" }] }}>
           <SceneCloud tone={tone} variant={0} />
         </View>
       ) : null}

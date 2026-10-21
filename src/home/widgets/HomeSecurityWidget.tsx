@@ -2,6 +2,7 @@ import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
+import { accentInk } from "../../theme/mix";
 import { Chip } from "../../ui/Chip";
 import { useRouter } from "expo-router";
 import { resolveRoute } from "../../nav/nav-items";
@@ -95,7 +96,17 @@ export function HomeSecurityWidget({ onOpenHomeControls }: HomeSecurityWidgetPro
           <View style={{ marginTop: 8 }}>
             <SectionLabel label="Sensors" />
             {sensors.length === 0 ? (
-              <Chip as="span" size="sm" tone="success" style={{ minHeight: 36, paddingVertical: 4 }} label="Doors & windows closed" />
+              /* The reference's closed-sensor chip HUGS its label and sits on
+                 the card's left edge (reference/home/parent-dark.png). The
+                 alignSelf keeps it on its content even if the shared Chip
+                 primitive's own inline-flex sizing is refactored. */
+              <Chip
+                as="span"
+                size="sm"
+                tone="success"
+                style={{ minHeight: 36, paddingVertical: 4, alignSelf: "flex-start" }}
+                label="Doors & windows closed"
+              />
             ) : (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                 {sensors.slice(0, 4).map((s) => (
@@ -133,7 +144,16 @@ export function HomeSecurityWidget({ onOpenHomeControls }: HomeSecurityWidgetPro
             onPress={() => (onOpenHomeControls ? onOpenHomeControls() : router.push(resolveRoute("/ha", "House") as never))}
           >
             <Text
-              style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}
+              style={{
+                // The reference paints this link in the SELECTED-ACCENT INK
+                // (rgb 167,199,251 on the plum card — 8.8:1). The raw accent
+                // (rgb 59,130,246) lands at 3.12:1 on the card's own fill —
+                // below the 4.5:1 AA floor for 14sp body text. The accent-ink
+                // token (accent mixed 55% toward the body ink) clears 5.5:1.
+                color: accentInk(accentColor, colors["color-text-primary"]),
+                fontSize: TYPOGRAPHY.label.fontSize,
+                fontWeight: "700",
+              }}
             >
               Open Home controls →
             </Text>

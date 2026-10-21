@@ -67,11 +67,33 @@ export default function HomePlaceholder() {
       ? { members: syncCached, source: "cache", reason: "signed-out" }
       : { members: [], source: "fallback" };
   });
-  /** True while the mount roster read is in flight — the badge must not claim
-   *  a cause (signed-out / offline) before the read has actually answered. */
-  const [rosterLoading, setRosterLoading] = React.useState(
-    () => (typeof getCachedMembersSync === "function" ? getCachedMembersSync().length === 0 : true)
+  /**
+   * True once a roster read has ANSWERED. The badge's disclosure does not
+   * blink out while a LATER read (the session changed, the base URL changed)
+   * is in flight: the roster it describes has not changed, so the truth about
+   * it has not changed either. Before the first answer the badge stays dark —
+   * it must not claim a cause (signed-out / offline) the read has not
+   * confirmed.
+   */
+  const [rosterSettled, setRosterSettled] = React.useState(false);
+  /**
+   * The roster the wall may present AS the family.
+   *
+   * The stand-in roster (src/api/members.ts's FALLBACK_MEMBERS — "Mom", "Dad",
+   * "Child 1…5", "Pet 1…2") is the LAST resort for a device with neither a
+   * live roster nor a cache. Painting it on the wall as if it were the family
+   * is a lie the banner above it ("showing your saved copy") cannot survive,
+   * so the wall shows NO roster in that state and the badge below says why.
+   */
+  const wallRoster = React.useMemo(
+    () => (roster.source === "fallback" ? [] : roster.members),
+    [roster.source, roster.members]
   );
+  /** True when the device really holds a copy of the family (cache or live). */
+  const hasSavedRoster = roster.source === "cache" || roster.source === "live";
+  /** The wall is signed out — the badge then sits BELOW the banner strip. */
+  const signedOut = hydrated && !member;
+
   // The wall registry, with the leaderboard bound to the live roster so its
   // top-3 rows can show member avatars (web HomeLeaderboardWidget parity).
   const wallWidgets = React.useMemo<Partial<Record<WidgetId, React.ComponentType>>>(
@@ -79,7 +101,7 @@ export default function HomePlaceholder() {
       return ({
       ...WALL_WIDGETS,
       leaderboard: () => (
-        <LeaderboardWidget members={roster.members.map((m) => ({ name: m.name, emoji: m.emoji }))} />
+        <LeaderboardWidget members={wallRoster.map((m) => ({ name: m.name, emoji: m.emoji }))} />
       ),
       // House's own footer route: resolveRoute keeps the manifest's honest
       // /soon fallback (dock alive) instead of a toast dead end.
@@ -90,7 +112,7 @@ export default function HomePlaceholder() {
       ),
       });
     },
-    [roster.members, router]
+    [wallRoster, router]
   );
   const [pinTarget, setPinTarget] = React.useState<RailMember | null>(null);
   const [pinError, setPinError] = React.useState<string | null>(null);
@@ -141,11 +163,13 @@ export default function HomePlaceholder() {
     if (!hydrated) return;
     let alive = true;
     const loadRoster = () => {
-      setRosterLoading(true);
       listMembersSmart()
-        .then((r) => alive && setRoster(r))
-        .catch(() => {})
-        .finally(() => alive && setRosterLoading(false));
+        .then((r) => {
+          if (!alive) return;
+          setRoster(r);
+          setRosterSettled(true);
+        })
+        .catch(() => {});
     };
     loadRoster();
     const unsub = onBaseUrlChange(() => {
@@ -197,6 +221,35 @@ export default function HomePlaceholder() {
     }
   };
 
+  /**
+   * The roster badge — the app's own disclosure of WHY the rail is not live,
+   * and the ONLY thing that says so out loud. It has to be TRUE: a badge that
+   * claims "cached" when there is no cache, or that talks about a saved copy
+   * the device never had, is worse than no badge at all.
+   *
+   *   live        → nothing to say (the rail IS live)
+   *   cache       → the device's saved copy; the NAS is down
+   *   fallback    → no live roster AND no cache: nothing to show
+   *
+   * SIGNED OUT it does not render at all. The wall's signed-out strip is the
+   * one notice the band carries — the reference's guest capture leaves y
+   * 78-105 as EMPTY canvas, and a second amber-rimmed pill there (2px above
+   * the rail, repeating the strip's message) crowded the band. The strip
+   * itself says when the copy could not be refreshed (the wall's
+   * `rosterUnreachable` copy), so nothing is lost.
+   */
+  const badgeText = railError
+    ? railError
+    : roster.source === "live"
+      ? null
+      : roster.source === "fallback"
+        ? roster.reason === "unreachable"
+          ? "Couldn't reach Consuela — no saved roster on this device"
+          : "No saved roster on this device — sign in to load your family"
+        : roster.reason === "unreachable"
+          ? "offline roster (cached)"
+          : "saved roster — not the live one";
+
   return (
     <Screen>
       {/* Wall-touch activity resets the screensaver quiet clock. */}
@@ -215,55 +268,58 @@ export default function HomePlaceholder() {
         <KidHome onOpenMore={() => setMoreOpen(true)} />
       ) : (
         <HomeWall
-          members={roster.members}
+          members={wallRoster}
           onSelectMember={(m) => void onSelect(m)}
           onSignOut={member ? () => void signOut() : undefined}
           widgets={wallWidgets}
           onSelectDay={(dayId) => router.push(`/meals?day=${dayId}` as never)}
           onOpenMore={() => setMoreOpen(true)}
+          hasSavedRoster={hasSavedRoster}
+          rosterUnreachable={roster.reason === "unreachable"}
         />
       )}
       {/* The roster badge tells the truth about WHY the rail isn't live, and
           the two causes are not the same failure. A signed-out session reads
           the cache BY DESIGN (the rail is the family wall's sign-in surface) —
           calling that "offline" asserts a network fault that does not exist.
-          A genuinely unreachable NAS is the only offline claim the wall makes. */}
-      {rosterLoading ? null : roster.source !== "live" || railError ? (
+          A genuinely unreachable NAS is the only offline claim the wall makes.
+
+          It is a SIBLING of the wall's frame, and the wall paints its own
+          z-indexed chrome over that same corner — so the badge carries a
+          z-index of its own. SIGNED OUT it does not render at all: the
+          wall's own signed-out strip is the one notice the band carries (the
+          reference leaves that band empty canvas), and the strip says so when
+          the copy could not be refreshed. */}
+      {rosterSettled && badgeText !== null && !signedOut ? (
         <View
+          testID="roster-badge"
           pointerEvents="none"
           style={{
             position: "absolute",
             top: 24,
             right: 104,
+            zIndex: 40,
             borderRadius: 999,
             borderWidth: 1,
             borderColor: mix(colors["color-accent-amber"], "transparent", 40),
             backgroundColor: mix(colors["color-accent-amber"], "transparent", 15),
             paddingHorizontal: 16,
-            paddingVertical: 8,
+            paddingVertical: 3,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          {railError ? (
-            <Text
-              accessibilityLiveRegion="polite"
-              style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, textAlign: "center" }}
-            >
-              {railError}
-            </Text>
-          ) : roster.reason === "unreachable" ? (
-            <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
-              offline roster (cached)
-            </Text>
-          ) : hydrated && roster.source !== "live" ? (
-            <Text
-              testID="rail-signed-out"
-              style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}
-            >
-              Signed out — tap your picture to sign in
-            </Text>
-          ) : null}
+          <Text
+            accessibilityLiveRegion="polite"
+            style={{
+              color: colors["color-text-muted"],
+              fontSize: TYPOGRAPHY.label.fontSize,
+              lineHeight: TYPOGRAPHY.label.lineHeight,
+              textAlign: "center",
+            }}
+          >
+            {badgeText}
+          </Text>
         </View>
       ) : null}
 

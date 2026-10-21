@@ -151,11 +151,24 @@ export function Chip({
     gap: 8,
     borderWidth: 1,
     borderColor: resolvedBorder,
+    // The web's chip is an INLINE-FLEX box (`inline-flex items-center …`,
+    // Home-ai/src/components/ui/Chip.tsx) — it HUGS its content (w-fit). The
+    // native painted it as a block child of a column, so it STRETCHED to the
+    // column's width: the "Doors & windows closed" sensor chip rendered a
+    // 269px slab where the reference has a content-hugging 144px pill.
+    // `alignSelf: flex-start` shrinks the chip to its content in a column and
+    // changes nothing in a row (a flex row child is already content-sized);
+    // a caller can still stretch it by passing alignSelf in `style`.
+    alignSelf: "flex-start",
   };
 
   if (as === "span") {
     return (
-      <View testID={testID} accessibilityLabel={accessibilityLabel}>
+      <View
+        testID={testID}
+        accessibilityLabel={accessibilityLabel}
+        style={{ alignSelf: "flex-start" }}
+      >
         <Material tier="thin" background={solidFill} style={[chrome, style]}>
           {content}
         </Material>
@@ -170,10 +183,12 @@ export function Chip({
       accessibilityState={{ disabled, selected }}
       disabled={disabled}
       onPress={onPress}
-      style={
-        ({ pressed }) =>
-          pressed && !reduceMotion ? { transform: [{ scale: 0.96 }] } : null
-      }
+      style={({ pressed }) => [
+        // The chip hugs its content, and so does its HIT BOX: a full-width
+        // Pressable in a column would swallow taps that belong to the row.
+        { alignSelf: "flex-start" },
+        pressed && !reduceMotion ? { transform: [{ scale: 0.96 }] } : null,
+      ]}
     >
       <Material tier="thin" background={solidFill} style={[chrome, style]}>
         {content}

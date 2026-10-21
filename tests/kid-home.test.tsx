@@ -95,6 +95,13 @@ jest.mock("../src/api/members", () => ({
     ],
     source: "live",
   })),
+  // The rail asks whether it is showing the STAND-IN roster (the wall must
+  // announce itself when the tiles are placeholders, not the family).
+  isStandInRoster: jest.fn(() => false),
+  FALLBACK_MEMBERS: [],
+  getCachedMembersSync: jest.fn(() => []),
+  readCachedMembers: jest.fn(async () => []),
+  writeCachedMembers: jest.fn(async () => {}),
 }));
 
 const wrap = ({ children }: { children: React.ReactNode }) => (

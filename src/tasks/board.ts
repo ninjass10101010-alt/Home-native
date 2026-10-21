@@ -159,8 +159,24 @@ export function filterOptions(
   const myLabel = opts.signedIn ? "My Tasks" : "All";
   const names = new Set<string>();
   if (opts.me) names.add(opts.me);
-  for (const t of tasks) if (t.assignee) names.add(t.assignee);
+  // "Open" is the unassigned board's own filter chip (appended below), NOT a
+  // member - a task assigned to "Open" must not add a SECOND chip with the
+  // same id, or the rail renders two "Open" tiles (React duplicate-key).
   for (const m of opts.roster) if (m.name) names.add(m.name);
+  // A task can be assigned to a LEGACY name ("Aurora Garcia") while the
+  // roster carries the current one ("Aurora"). Adding the raw assignee would
+  // render TWO tiles that both read "Aurora" - one person, two chips. Fold
+  // the legacy name onto the roster member with the same first name.
+  const rosterByFirstName = new Map(
+    opts.roster.filter((m) => m.name).map((m) => [m.name.split(" ")[0].toLowerCase(), m.name])
+  );
+  for (const t of tasks) {
+    const assignee = t.assignee;
+    if (!assignee) continue;
+    if (assignee.toLowerCase() === "open") continue;
+    const folded = rosterByFirstName.get(assignee.split(" ")[0].toLowerCase());
+    names.add(folded ?? assignee);
+  }
   const byName = new Map(opts.roster.map((m) => [m.name, m.emoji]));
   const emojiFor = (name: string) => {
     for (const t of tasks) if (t.assignee === name && t.assigneeEmoji) return t.assigneeEmoji;

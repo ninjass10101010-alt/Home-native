@@ -1,6 +1,6 @@
 // Home-native/src/weather/WidgetHero.tsx
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type TextStyle } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../theme/ThemeProvider";
@@ -16,6 +16,7 @@ import {
   ChevronGlyph,
   ConditionIcon,
   CREATURE_SIZE,
+  GlassChip,
   MapPinGlyph,
   MonsterDigit,
   PosterScrim,
@@ -85,6 +86,69 @@ export interface WeatherPosterProps {
   data: WeatherSnapshot;
 }
 
+// ─── The wall card's type ramp ────────────────────────────────────────
+//
+// Measured off the 1080×1920 reference capture (ink boxes, not guesses):
+//
+//   place chip    "Holland, MI"  ink 83×15  → 16sp / 500
+//   details chip  "Details"      ink 46×11  → 14sp / 600
+//   condition     "Clear sky"    cap ≈12    → 16sp / 500
+//   H/L · outlook · footer        cap ≈11    → 14sp / 500 (the 14sp floor)
+//
+// The web renders these at 14/12/15/12px in Geist; the native's own stack is
+// taller-capped, so the native's sizes land a step lower to land on the
+// reference's measured ink. The gallery poster is the same ramp at 1.6×.
+const CELL_TYPE: Record<"place" | "details" | "condition" | "meta", TextStyle> = {
+  place: { fontSize: 16, fontWeight: "500" },
+  details: { fontSize: 14, fontWeight: "600" },
+  condition: { fontSize: 16, fontWeight: "500" },
+  meta: { fontSize: 14, fontWeight: "500" },
+};
+
+const FULL_TYPE: Record<"place" | "details" | "condition" | "meta", TextStyle> = {
+  place: { fontSize: 26, fontWeight: "500" },
+  details: { fontSize: 22, fontWeight: "600" },
+  condition: { fontSize: 26, fontWeight: "500" },
+  meta: { fontSize: 22, fontWeight: "500" },
+};
+
+/** The chips' row height on the wall card — the Details pill's 44px box. */
+const CELL_CHIPS_H = 44;
+/** The reference card's hero-icon box (the web's wall `124px` container). */
+const CELL_ART_MAX = 124;
+/** The digits' box — the art row never shrinks past the digits. */
+const CELL_ART_MIN = 96;
+/** The air the text block keeps above the footer on a short cell. */
+const CELL_SLACK = 8;
+
+/**
+ * The wall card's vertical rhythm.
+ *
+ * The reference card is 330 tall (pt-4 → pb-4) and its offsets are: chips
+ * +16, art row +68, condition ink +197, outlook +239, footer +291 — the
+ * footer sitting ~30 above the card's bottom edge.
+ *
+ * The CELL's height belongs to the wall shell, not to this widget, so the
+ * content adapts instead of clipping: on a short cell the art row gives up
+ * its slack first (the reference's 124 icon box → the digits' 96 floor) and
+ * the text block keeps the reference's ramp. The footer is always anchored
+ * to the bottom with the reference's air under it, so the card's own edge
+ * can never cut the last line.
+ */
+export function cellRhythm(height: number) {
+  const roomy = height >= 300; // the reference card is 330
+  const top = roomy ? 16 : 14;
+  const bottom = 26; // the reference's ~30 of air under the footer's last line
+  const gapArt = roomy ? 8 : 6;
+  const gapCond = roomy ? 4 : 2;
+  const gapLine = roomy ? 4 : 1;
+  const line = roomy ? 18 : 16;
+  const fixed =
+    top + CELL_CHIPS_H + gapArt + gapCond + line + gapLine + line + gapLine + line + line + bottom;
+  const art = Math.max(CELL_ART_MIN, Math.min(CELL_ART_MAX, height - fixed - CELL_SLACK));
+  return { top, bottom, gapArt, gapCond, gapLine, line, art };
+}
+
 /**
  * The Monster hero poster — a SCENE, not a tint: the sky wash, the night
  * stars and moon, the soft cloud puffs, the precipitation, a radial scrim and
@@ -102,7 +166,7 @@ export interface WeatherPosterProps {
  * Creature size: cell=124dp (the web's wall scale), full=180dp.
  */
 export function WeatherPoster({ size, data }: WeatherPosterProps) {
-  const { colors } = useTheme();
+  const { colors, boost } = useTheme();
   const router = useRouter();
   const code = conditionCode(data.code ?? undefined, data.isDay);
   // The clock picks the sky, the condition picks the glyph (web parity:
@@ -113,27 +177,46 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
   const isPoster = size === "full";
   const skyTop = isPoster ? posterTop : flatTop;
   const skyBottom = isPoster ? posterBottom : flatBottom;
-  // The ink rides the field: the wall card's flat washes carry the warm dark
-  // ink (web INK table — even the lamplit night field is slate-800 ink), the
-  // poster page carries white on its night skin, and the storm field is the
-  // one dark wall wash, so it flips to white too.
+  // The ink rides the field: the wall card's flat washes carry the web's
+  // INK table ink — slate-800, a COOL dark — while the poster page carries
+  // white on its night skin, and the storm field is the one dark wall wash,
+  // so it flips to white too.
   const darkField = isPoster ? !data.isDay : scene === "storm";
+  const glint = colors["color-monster-glint"] ?? colors["color-text-primary"];
+  // The web's slate-800 (#1E293B) ink, composed from the monster palette:
+  // the monster's own ink blue and its warm day ink, lifted a hair. The
+  // reference capture measures exactly this ink on the card's text.
+  const slateInk = mix(
+    glint,
+    mix(colors["color-monster-ink-blue"], colors["color-monster-ink-day"], 60),
+    3
+  );
   const washInk = darkField
     ? colors["color-monster-glint"] ?? colors["color-text-primary"]
-    : colors["color-monster-ink-day"] ?? colors["color-text-primary"];
-  const soft = mix(washInk, "transparent", 66); // AA-safe secondary on the wash
-  const glint = colors["color-monster-glint"] ?? colors["color-text-primary"];
+    : slateInk;
+  // The web's inkSoft: slate-800 at 0.92 (0.9 in boost) — tuned so the H/L,
+  // outlook and footer lines clear 4.5:1 on the worst painted stop of every
+  // light scene family (the web's WeatherWidget.tsx:970).
+  const soft = mix(washInk, "transparent", boost ? 90 : 92);
   const pinInk = colors["color-accent-coral"] ?? colors["color-accent-rose"];
   const digitsHeight = size === "full" ? 220 : 96; // the web's wall hero digits (xl:text-[96px])
   const iconSize = size === "full" ? 180 : CREATURE_SIZE;
-  const pad = size === "full" ? 28 : 14;
-  const gap = size === "full" ? 12 : 6;
   const phase = moonPhase(data.updatedAt).phase;
+  const type = isPoster ? FULL_TYPE : CELL_TYPE;
 
-  // One glass recipe for both pills (web GLASS): a white sheen over a white
-  // hairline — the chip lifts the sky instead of punching a hole in it.
-  const glassFill: [string, string] = [mix(glint, "transparent", 26), mix(glint, "transparent", 8)];
-  const glassBorder = mix(glint, "transparent", 28);
+  // The card's own box — the wall shell owns the cell, so the card measures
+  // itself and the scene (the night moon) is placed from that box.
+  const [cell, setCell] = useState({ w: 0, h: 0 });
+  const onCellLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setCell((c) => (c.w === width && c.h === height ? c : { w: width, h: height }));
+  };
+  const rhythm = cellRhythm(cell.h || 300);
+  const padH = isPoster ? 28 : 20; // the web's px-5
+  const padT = isPoster ? 28 : rhythm.top;
+  const padB = isPoster ? 28 : rhythm.bottom;
+  const gap = isPoster ? 12 : 0;
+  const chipsH = isPoster ? undefined : CELL_CHIPS_H;
   // The glass sheen over the whole card (web WeatherWidget.tsx:1166).
   const sheenFill: [string, string, string] = [
     mix(glint, "transparent", 15),
@@ -166,20 +249,10 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
       ? ` · Feels like ${data.feelsLikeF}°`
       : "";
 
-  const chipStyle = {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-    paddingHorizontal: size === "full" ? 14 : 12,
-    paddingVertical: size === "full" ? 9 : 6,
-    borderRadius: RADII.full,
-    borderWidth: 1,
-    borderColor: glassBorder,
-  };
-
   const poster = (
     <View
       testID="wx-poster-frame"
+      onLayout={isPoster ? undefined : onCellLayout}
       style={{
         flex: 1,
         borderRadius: RADII.xl,
@@ -198,7 +271,14 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
       />
 
       {/* 2 — the scene: stars, moon character, cloud puffs, precipitation */}
-      <WeatherScene code={code} isDay={data.isDay} precipPct={data.precipTodayPct} moonPhase={phase} />
+      <WeatherScene
+        code={code}
+        isDay={data.isDay}
+        precipPct={data.precipTodayPct}
+        moonPhase={phase}
+        cardW={cell.w}
+        cardH={cell.h}
+      />
 
       {/* 3 — the scrim: a soft bloom that lifts the hero off the sky */}
       <PosterScrim scene={scene} />
@@ -215,69 +295,142 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
       {/* 5 — the content. The scene layers are absolutely positioned, so the
           content needs its own stacking rung (the web uses z-20 for exactly
           this: the glass chips sit OVER the moon character, not under it). */}
-      <View style={{ flex: 1, padding: pad, gap, zIndex: 20 }}>
-        {/* Row 1 — place pill (left) + details pill (right) */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <LinearGradient
+      <View style={{ flex: 1, paddingHorizontal: padH, paddingTop: padT, paddingBottom: padB, gap, zIndex: 20 }}>
+        {/* Row 1 — place pill (left) + details pill (right). Both are the web's
+            ONE glass recipe: the 135° white gradient, the specular top-half
+            sheen and the white hairline — so the pane LIFTS the sky instead
+            of cutting a hole in it. */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            height: chipsH,
+          }}
+        >
+          <GlassChip
             testID="wx-place-pill"
-            colors={glassFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={chipStyle}
+            night={scene === "storm"}
+            boost={boost}
+            backdropTop={skyTop}
+            backdropBottom={skyBottom}
+            style={{ borderRadius: RADII.full }}
+            contentStyle={{
+              gap: 6,
+              paddingHorizontal: isPoster ? 14 : 12,
+              paddingVertical: isPoster ? 9 : 4,
+            }}
           >
-            <MapPinGlyph color={pinInk} size={size === "full" ? 20 : 17} />
-            <Text numberOfLines={1} style={{ color: washInk, fontSize: size === "full" ? 26 : 22, fontWeight: "600" }}>
+            <MapPinGlyph color={pinInk} size={isPoster ? 20 : 14} />
+            <Text
+              numberOfLines={1}
+              style={{ color: washInk, ...type.place, lineHeight: isPoster ? 32 : 20 }}
+            >
               {data.place}
             </Text>
-          </LinearGradient>
+          </GlassChip>
           {size === "cell" ? (
-            <LinearGradient
+            <GlassChip
               testID="wx-details-pill"
-              colors={glassFill}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={chipStyle}
+              night={scene === "storm"}
+              boost={boost}
+              backdropTop={skyTop}
+              backdropBottom={skyBottom}
+              style={{ borderRadius: RADII.full }}
+              contentStyle={{
+                gap: 4,
+                justifyContent: "center",
+                minHeight: CELL_CHIPS_H,
+                paddingHorizontal: 12,
+              }}
             >
-              <Text style={{ color: washInk, fontSize: 16, fontWeight: "700" }}>Details</Text>
+              <Text style={{ color: washInk, ...type.details }}>Details</Text>
               <ChevronGlyph color={washInk} size={14} />
-            </LinearGradient>
+            </GlassChip>
           ) : null}
         </View>
 
         {/* Row 2 — side-by-side: Monster digits (left) + the creature (right).
-            The web keeps this row at its natural height (the free space falls
-            to the footer below), so the creature sits just under the chips. */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 2 }}>
+            The web's hero icon lives in a 124px box; the native keeps that box
+            so the digits sit in the same place on the card, and the box gives
+            up its slack first when the cell is short. */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginTop: isPoster ? 2 : rhythm.gapArt,
+            height: isPoster ? undefined : rhythm.art,
+          }}
+        >
           <View style={{ flexShrink: 1 }}>{temperature}</View>
-          <AmbientBob>
-            <ConditionIcon code={code} size={iconSize} />
-          </AmbientBob>
+          <View
+            style={{
+              width: isPoster ? undefined : rhythm.art,
+              height: isPoster ? undefined : rhythm.art,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <AmbientBob>
+              <ConditionIcon code={code} size={iconSize} />
+            </AmbientBob>
+          </View>
         </View>
 
         {/* Row 3 — condition + H/L + feels + outlook (centered) */}
-        <View style={{ alignItems: "center", gap: 2 }}>
+        <View style={{ alignItems: "center", marginTop: isPoster ? 2 : rhythm.gapCond }}>
           <Text
             testID="wx-condition"
-            style={{ color: washInk, fontSize: size === "full" ? 30 : 24, lineHeight: size === "full" ? 38 : 30, fontWeight: "600" }}
+            style={{
+              color: washInk,
+              ...type.condition,
+              lineHeight: isPoster ? 32 : rhythm.line,
+            }}
           >
             {titleCaseCondition(data.condition)}
           </Text>
           {hlLine ? (
-            <Text style={{ color: soft, fontSize: TYPOGRAPHY.body.fontSize, lineHeight: 22, fontWeight: "600" }}>
+            <Text
+              style={{
+                color: soft,
+                ...type.meta,
+                lineHeight: isPoster ? 28 : rhythm.line,
+                marginTop: isPoster ? 2 : rhythm.gapLine,
+              }}
+            >
               {hlLine}{feels}
             </Text>
           ) : null}
           {data.outlook ? (
-            <Text testID="wx-outlook" style={{ color: soft, fontSize: TYPOGRAPHY.body.fontSize, lineHeight: 22, fontWeight: "500", textAlign: "center" }}>
+            <Text
+              testID="wx-outlook"
+              style={{
+                color: soft,
+                ...type.meta,
+                lineHeight: isPoster ? 28 : rhythm.line,
+                marginTop: isPoster ? 2 : rhythm.gapLine,
+                textAlign: "center",
+              }}
+            >
               {data.outlook}
             </Text>
           ) : null}
         </View>
 
         {/* Row 4 — Updated footer (right-aligned, pushed to the card's bottom
-            edge the way the web's `mt-auto` footer sits) */}
+            edge the way the web's `mt-auto` footer sits). The card's own
+            padding keeps the reference's ~30 of air under the last line, so
+            the card's edge can never cut the footer's descenders. */}
         <View style={{ alignItems: "flex-end", marginTop: "auto" }}>
-          <Text style={{ color: soft, fontSize: 16, lineHeight: 20, fontWeight: "500" }}>Updated {relativeUpdated(data.updatedAt)}</Text>
+          <Text
+            testID="wx-updated"
+            style={{ color: soft, ...type.meta, lineHeight: isPoster ? 28 : rhythm.line }}
+          >
+            Updated {relativeUpdated(data.updatedAt)}
+          </Text>
         </View>
       </View>
     </View>

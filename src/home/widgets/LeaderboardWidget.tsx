@@ -23,6 +23,29 @@ const EMPTY_PRIZES = "New week — prizes up for grabs 🥇🥈🥉";
 const GUEST_LEADERBOARD = "Sign in with your PIN";
 const VISIBLE_RANKS = 3;
 
+/**
+ * The leaderboard's header band, measured against the reference card
+ * (reference/home/parent-dark.png, "This Week's Leaderboard").
+ *
+ * The web's leaderboard is the ONE wall card whose heading does NOT run
+ * centred: the trophy disc sits in the card's top-left corner and the title
+ * is a SINGLE line that starts immediately to its right. The frame's default
+ * band centres the title and wraps it onto two lines, so the card read as a
+ * stacked heading instead of the reference's one-liner.
+ *
+ * The band is rebuilt here (the frame has no left-heading variant) at the
+ * reference's geometry:
+ *   - the title's ink lands 26px under the card's top edge (the web's own
+ *     heading offset — the frame's centred band seats it 41px down);
+ *   - the header rule lands 57px under the card's top edge (the web's rule
+ *     for a card with NO description line);
+ *   - the title clears the 64px identity disc that overhangs the corner.
+ */
+const LEADERBOARD_HEADER_H = 46; // card_top → the header rule
+const LEADERBOARD_TITLE_PAD_TOP = 7; // the ink lands 12px under the band's top
+const LEADERBOARD_TITLE_PAD_LEFT = 54; // clears the 64px identity disc
+const CARD_TITLE_SIZE = 18; // the web's wall card heading (globals.css wall rule)
+
 interface Ranked {
   name: string;
   points: number;
@@ -110,11 +133,48 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
         ? "ready"
         : "loading";
 
+  /**
+   * The reference's heading: ONE line, LEFT-aligned, starting immediately to
+   * the right of the identity disc (the web's leaderboard card is the one
+   * wall card with a left heading). The frame's default band centres the
+   * title and wrapped it onto two centred lines, which is not what the
+   * reference shows.
+   */
+  const header = (
+    <View
+      style={{
+        height: LEADERBOARD_HEADER_H,
+        paddingTop: LEADERBOARD_TITLE_PAD_TOP,
+        paddingLeft: LEADERBOARD_TITLE_PAD_LEFT,
+        paddingRight: 16,
+        justifyContent: "flex-start",
+        borderBottomWidth: 1,
+        borderBottomColor: colors["color-border"],
+      }}
+    >
+      <Text
+        numberOfLines={1}
+        accessibilityRole="header"
+        style={{
+          color: colors["color-text-primary"],
+          fontSize: CARD_TITLE_SIZE,
+          fontWeight: "700",
+          lineHeight: 28,
+          textAlign: "left",
+        }}
+      >
+        This Week&apos;s Leaderboard
+      </Text>
+    </View>
+  );
+
   return (
     <WidgetFrame
       id="leaderboard"
       icon="🏆"
       title="This Week's Leaderboard"
+      header={header}
+      showDisc
       status={status}
       failure={failure}
       hasData={hasData}

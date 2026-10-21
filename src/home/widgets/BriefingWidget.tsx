@@ -7,7 +7,7 @@ import { EmptyState } from "../../ui/EmptyState";
 import { ListRow } from "../../ui/ListRow";
 import { Chip } from "../../ui/Chip";
 import { mixAlpha } from "../../ui/SoftButton";
-import { WidgetFrame } from "./WidgetFrame";
+import { WidgetFrame, HEADER_BAND_H } from "./WidgetFrame";
 import { localTodayISO, useWidgetData } from "./data";
 
 /** Briefing shape per docs/wave1-endpoints.md: { ok: true, briefing } with
@@ -125,8 +125,16 @@ export function BriefingWidget() {
     }
   }
 
-  // Right-of-header slot: expand toggle badge (web badge parity)
-  const headerRight = showToggle ? (
+  // The count badge (web badge parity).
+  //
+  // THE BADGE IS THE WEB'S (critic round 4, HIGH 3): a NEUTRAL translucent
+  // glass pill — `bg-[--color-surface-0]/20` with a `--color-accent-selected/25`
+  // hairline — whose copy is a MUTED ink, never the saturated accent. It used
+  // to be accent-blue on both the hairline and the copy, which made it read
+  // as a selected pill and left the only saturated blue on the wall's header.
+  // Measured on the reference (parent-dark): the pill interior is (50,38,47) —
+  // a neutral plum glass, not a blue wash.
+  const pill = (
     <Pressable
       testID="briefing-toggle"
       accessibilityRole="button"
@@ -138,22 +146,92 @@ export function BriefingWidget() {
         alignItems: "center",
         justifyContent: "center",
         flexDirection: "row",
-        gap: 6,
+        gap: 5,
         borderRadius: 9999,
         borderWidth: 1,
-        borderColor: mixAlpha(accentColor, 0.3),
-        backgroundColor: mixAlpha(accentColor, 0.18),
-        paddingHorizontal: 10,
+        borderColor: mixAlpha(accentColor, 0.25),
+        backgroundColor: mixAlpha(colors["color-surface-0"] ?? accentColor, 0.2),
+        paddingHorizontal: 9,
         paddingVertical: 4,
-        zIndex: 3,
       }}
     >
-      <Text style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+      <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
         {total} item{total === 1 ? "" : "s"}
       </Text>
-      <Text style={{ color: accentColor, fontSize: 14 }}>{expanded ? "▲" : "▼"}</Text>
+      <Text style={{ color: colors["color-text-secondary"], fontSize: 14 }}>{expanded ? "▲" : "▼"}</Text>
     </Pressable>
-  ) : null;
+  );
+
+  const titleText = (
+    <Text
+      style={{
+        color: colors["color-text-primary"],
+        fontSize: 18,
+        lineHeight: 26,
+        fontWeight: "700",
+      }}
+      accessibilityRole="header"
+    >
+      Morning Briefing
+    </Text>
+  );
+
+  // The header band (critic round 4, HIGH 3).
+  //
+  // The count badge is IN the title row, not floating over it: the shared
+  // band's `headerRight` slot paints the pill at the band's top-right corner
+  // ABSOLUTELY, so on the native's wider title face the pill's fill started
+  // BEFORE the title's last glyph and painted it (the reference leaves a
+  // clear gap between "Morning Briefing" and the pill). In flow, the title
+  // stops at the pill's edge and the gap is structural, whatever the face.
+  //
+  // The band's own geometry is the shared one (paddingTop 6 / paddingBottom 8
+  // / minHeight HEADER_BAND_H / the 1px rule), so the rule still lands on the
+  // same y as every sibling cell — but the horizontal padding is the WEB's
+  // `p-4` (16), not the shared band's 48. The 48 is the identity disc's
+  // gutter, and the disc sits at the card's top-LEFT corner while the title
+  // and the description are centred — so the gutter only ever cost this card
+  // its subtitle: at 48 the description truncated to "What Consuela lined up
+  // for tod…" while the reference prints it in full.
+  const header = (
+    <View
+      testID="morningBriefing-header"
+      style={{
+        paddingTop: 6,
+        paddingBottom: 8,
+        minHeight: HEADER_BAND_H,
+        justifyContent: "flex-start",
+        borderBottomWidth: 1,
+        borderBottomColor: colors["color-border"],
+      }}
+    >
+      {showToggle ? (
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={{ flex: 1, alignItems: "flex-end" }}>{titleText}</View>
+          {/* The clear gap between the title and the pill (the reference's 7px). */}
+          <View style={{ width: 10 }} />
+          {pill}
+        </View>
+      ) : (
+        <Text style={{ textAlign: "center" }}>{titleText}</Text>
+      )}
+      {description ? (
+        <Text
+          numberOfLines={1}
+          style={{
+            color: colors["color-text-secondary"],
+            fontSize: TYPOGRAPHY.label.fontSize,
+            lineHeight: 16,
+            marginTop: 2,
+            textAlign: "center",
+            paddingHorizontal: 16,
+          }}
+        >
+          {description}
+        </Text>
+      ) : null}
+    </View>
+  );
 
   return (
     <WidgetFrame
@@ -166,7 +244,7 @@ export function BriefingWidget() {
       hasData={briefing != null}
       stale={stale}
       onRetry={retry}
-      headerRight={headerRight}
+      header={header}
       showDisc
     >
       {briefing === null ? (

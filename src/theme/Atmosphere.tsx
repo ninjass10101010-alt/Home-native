@@ -76,6 +76,54 @@ export const ATMOSPHERE_BUDGET = {
   light: { gradient: 0.45, accent: 0, violet: 0 },
 } as const;
 
+/**
+ * THE LIGHT WARM WASH (critic round 4 — HIGH 1).
+ *
+ * The web's light wall is NOT the neutral canvas the token implies. The web
+ * paints a seasonal fog OVER the canvas (globals.css:753-796: the
+ * `FogBackground` canvas at `opacity: .1` with `filter: saturate(2.2)`), and
+ * that fog is a WARM champagne cast — the reference's light canvas measures
+ * (239,225,217) / (242,231,225), i.e. R>G>B at hue ≈21-25, while the bare
+ * `--gradient-canvas-day` stack composites to a cool blue-white
+ * (236,242,250) / (240,245,251) (B>G>R, hue ≈213).
+ *
+ * The two frames read as different products side by side, so the native
+ * reproduces the wash: a warm overlay over the light canvas. It is LIGHT
+ * ONLY — the dark canvas's luminance delta is a recorded, accepted artefact
+ * (see the budget note above), and the fog's dark leg is a near-black sky
+ * that the dark canvas already is.
+ *
+ * The wash's colour is the app's own warm accent (amber + apricot) pulled
+ * 65% toward the page white, so it is a warm SAND rather than a saturated
+ * orange — a saturated disc on the light wall is exactly the defect this
+ * fixes (the burnt-orange meal well).
+ *
+ * MEASURED on the captures after this change (canvas pixels):
+ *   native light (239,228,221) / (241,230,221) / (240,229,221) / (242,231,221)
+ *   reference   (239,225,217) / (242,231,225) / (242,231,225) / (242,228,223)
+ * i.e. within 4/255 per channel of the reference, R>G>B, hue ≈25.
+ *
+ * The wash is NOT part of `canvasComposite` below: that helper models the
+ * atmosphere BUDGET (the gradient stack), and the budget's own contract —
+ * canvas L*, chroma and the glass delta — is pinned by tests/atmosphere.test.tsx
+ * against the gradient stack alone. The wash is a separate layer over it, and
+ * the light canvas it produces is measured here.
+ */
+export const LIGHT_WARM_WASH_ALPHA = 36;
+
+/**
+ * The light wash's colour: the warm accent (amber 60% / apricot 40%) washed
+ * 65% toward the page white. Returns null when the ramp does not carry the
+ * tokens (a wash is atmosphere, never a requirement).
+ */
+export function lightWarmWashColor(colors: Record<string, string | undefined>): string | null {
+  const amber = colors["color-accent-amber"];
+  const apricot = colors["color-accent-apricot"];
+  const page = colors["color-surface-0"];
+  if (!amber || !apricot || !page) return null;
+  return mix(mix(amber, apricot, 60), page, 35);
+}
+
 /** Layer footprints (normalized). The canvas gradient, then the two blooms. */
 const GRADIENT_AXIS: [[number, number], [number, number]] = [
   [0.15, 0],
@@ -263,6 +311,12 @@ export function Atmosphere() {
       ? null
       : [mix(colors["color-accent-violet"] ?? accentColor, "transparent", budget.violet), "transparent"];
 
+  // The LIGHT warm wash (see LIGHT_WARM_WASH_ALPHA): the web's seasonal fog
+  // cast, reproduced as a warm overlay over the light canvas. Dark never
+  // paints it — its canvas delta is a recorded, accepted artefact.
+  const warmWash =
+    theme === "light" ? lightWarmWashColor(colors) : null;
+
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill} testID="atmosphere">
       {prevStops ? <GradientLayer stops={prevStops} /> : null}
@@ -283,6 +337,15 @@ export function Atmosphere() {
           start={{ x: 0.85, y: 0 }}
           end={{ x: 0.25, y: 0.5 }}
           style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+      {warmWash ? (
+        <View
+          testID="atmosphere-warm-wash"
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: mix(warmWash, "transparent", LIGHT_WARM_WASH_ALPHA) },
+          ]}
         />
       ) : null}
     </View>

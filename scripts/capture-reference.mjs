@@ -119,8 +119,23 @@ async function main() {
           const page = await ctx.newPage();
           await page.addInitScript((t) => {
             const themeName = t === "dark-boost" ? "dark" : t;
-            document.documentElement.dataset.theme = themeName;
-            if (t === "dark-boost") document.documentElement.dataset.contrast = "boost";
+            // The web's inline anti-FOUC script (Home-ai src/app/layout.tsx)
+            // OVERWRITES data-theme from localStorage['home-ai-theme-config']
+            // on every load, and the ThemeProvider then PERSISTS whatever it
+            // resolved. Seeding data-theme alone therefore produced a dark
+            // render for the whole light/boost matrix. Seed the key both read,
+            // with a VALID accentColor (useTheme rejects the whole config when
+            // accentColor is not in its allow-list, and silently falls back to
+            // the default dark theme).
+            window.localStorage.setItem(
+              "home-ai-theme-config",
+              JSON.stringify({
+                mode: themeName,
+                contrastBoost: t === "dark-boost",
+                accentColor: "nori",
+                reduceMotion: false,
+              })
+            );
           }, theme);
 
           const url = `${BASE}${route}${route.includes("?") ? "&" : "?"}wall=1`;

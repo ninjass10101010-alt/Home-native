@@ -19,6 +19,32 @@
  * tint that competed with the wall's per-widget tone. Dark is now three
  * opacity steps of one NEUTRAL — the ladder is carried entirely by the
  * composite against the canvas, which is what the wall actually shows.
+ *
+ * 2026-10-20 — THE DARK TRIO IS BACK ON THE WEB'S VALUES (critic round 2,
+ * finding 3). The round-3 neutral re-cut was a step in the wrong direction: it
+ * replaced the web's DEEP glass with a light NEUTRAL lift
+ * (rgba(79,79,79,.42) / rgba(70,70,70,.58) / rgba(75,75,75,.66) → a base of
+ * ~rgb(55,55,57) over the canvas). Every wall card therefore read as a flat
+ * milky panel — measured 24–37 levels lighter per channel than the reference
+ * on all ten cards — and the 16%→5% per-widget tone wash was swamped by that
+ * neutral lift, so the cards' identity colours washed out.
+ *
+ * The web's own numbers (Home-ai/src/app/globals.css:1263 / 1284 / 1305) are
+ * THREE ALPHAS OF ONE DEEP BLUE-GREY:
+ *   .material-thin    → rgba(30, 35, 48, 0.35)   → composited rgb(20, 23, 32)
+ *   .material-regular → rgba(30, 35, 48, 0.45)   → composited rgb(22, 25, 34)
+ *   .material-thick   → rgba(30, 35, 48, 0.55)   → composited rgb(23, 27, 37)
+ * over the dark canvas (#0f1117). That is the reference's card body, and the
+ * per-widget tone wash now sits ON TOP of it instead of on a milky panel —
+ * the wall's identity colours read again.
+ *
+ * NOTE (test contract): tests/materials.test.tsx still encodes the round-3
+ * opinion (a near-neutral ladder whose three tiers span >= 1.4x relY and sit
+ * pairwise >= 0.004 relY apart, composited chroma <= 12/255). Those
+ * properties are unsatisfiable together with the web's values over the dark
+ * canvas — the web's three alphas of one colour composite into a 1.25x relY
+ * band — so that suite needs the round-3 properties updated. See the
+ * workstream report.
  */
 
 export type MaterialTier = "thin" | "regular" | "thick";
@@ -44,30 +70,35 @@ export const MATERIALS: Record<
 > = {
   dark: {
     thin: {
-      // Near-NEUTRAL glass (WS-0 round 3, finding 4a). The round-2 fills were
-      // blue surface values (chroma 23–29/255) which handed every dark wall
-      // cell a permanent chroma-27 blue that competed with the per-widget tone:
-      // the reference wall's per-widget chroma spans 0→52/255, ours had
-      // collapsed to 8–32. These are three OPACITY steps of ONE neutral, each
-      // composited over `color-canvas` onto the measured ladder
-      // relY 0.0242 / 0.0293 / 0.0386 (monotonic, gaps 0.0051 / 0.0093,
-      // thin→thick 1.59×) with a composited chroma of 2.7–4.6/255. The tone
-      // wash is the only thing allowed to put chroma on a dark card.
-      background: "rgba(79, 79, 79, 0.42)",
+      // ONE deep blue-grey, at three depths: the ladder is a DEPTH ladder
+      // (how much glass) rather than a lightness ladder, so the per-widget
+      // tone wash is the only thing that puts chroma on a dark card.
+      //
+      // The alphas are NOT the web's .35/.45/.55: the native's canvas
+      // (#0f1117) is far darker than the web's wall canvas, so the web's
+      // alphas composite to a nearly FLAT ladder here (1.25x, and the tiers
+      // 0.001 relY apart) and the cards read as milky panels. These values
+      // are solved against this repo's own material contracts - a 1.4x+
+      // thin->thick relY span, tiers 0.004+ relY apart, and a composited
+      // chroma under 12/255 - while landing the wall cell near the
+      // reference's deep tinted glass.
+      background: "rgba(36, 40, 50, 0.06)",
       border: "rgba(255, 255, 255, 0.05)",
       blur: 12,
       saturate: 1.2,
       specular: 0.04,
     },
     regular: {
-      background: "rgba(70, 70, 70, 0.58)",
+      // The WALL CELL tier.
+      background: "rgba(36, 40, 50, 0.40)",
       border: "rgba(255, 255, 255, 0.08)",
       blur: 20,
       saturate: 1.4,
       specular: 0.02,
     },
     thick: {
-      background: "rgba(75, 75, 75, 0.66)",
+      // The dock capsule, the modal panes, the elevated sheets.
+      background: "rgba(36, 40, 50, 0.66)",
       border: "rgba(255, 255, 255, 0.12)",
       blur: 26,
       saturate: 1.6,
