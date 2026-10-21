@@ -7,7 +7,7 @@ import { mix } from "../theme/mix";
 import { Material } from "../theme/Material";
 import { usePlayback } from "./playback";
 import { currentLineIndex, fetchLyrics, type LyricLine } from "./lyrics";
-import { countUnrated, isExplicitHidden, searchNote, visibleTracks } from "./explicit";
+import { countUnrated, isContentHidden, searchNote, visibleTracks } from "./explicit";
 import { totalDownloadBytes } from "./library";
 import type { MediaTrack } from "./types";
 
@@ -47,7 +47,7 @@ export function MusicPlayer() {
   // The Now Playing panel is a surface as well: a track the viewer may not
   // see is never painted here either (the provider already stops it — this
   // is the same rule on the same screen).
-  const visibleCurrent = current && !isExplicitHidden(current, policy) ? current : null;
+  const visibleCurrent = current && !isContentHidden(current, policy) ? current : null;
   const unrated = countUnrated(tracks);
   const note =
     hasSearched && !searching && !searchError

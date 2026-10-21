@@ -9,7 +9,7 @@ import { mix } from "../../theme/mix";
 import { Material } from "../../theme/Material";
 import { WidgetFrame, HEADER_BAND_H } from "./WidgetFrame";
 import { usePlayback } from "../../music/playback";
-import { isExplicitHidden } from "../../music/explicit";
+import { isContentHidden } from "../../music/explicit";
 
 const ART = 56;
 
@@ -111,7 +111,7 @@ export function MusicWidget() {
    * never painted here (no artwork, no title). The card keeps its place on
    * the 12-cell board and says the neutral truth instead.
    */
-  const hidden = !!current && isExplicitHidden(current, policy);
+  const hidden = !!current && isContentHidden(current, policy);
   const showTrack = !!current && !hidden;
 
   /**

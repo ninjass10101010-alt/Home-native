@@ -87,7 +87,9 @@ export function isContentHidden(
   policy: ContentPolicy
 ): boolean {
   if (policy.isParent) return false;
-  if (isDeniedTerm(track, policy.denied)) return true;
+  // A policy built before the deny-list existed carries no terms — that is an
+  // empty list, never a crash on the surface that reads it.
+  if (isDeniedTerm(track, policy.denied ?? [])) return true;
   return isExplicitHidden(track, policy);
 }
 
@@ -97,12 +99,15 @@ export function isContentHidden(
  * The ONE place a list is filtered against the policy — the search results,
  * the queue, the history, the downloads tray and the chrome all read their
  * rows through this, so no surface can drift from the rule.
+ *
+ * It filters against the WHOLE content policy: the badge AND the family's
+ * own deny-list.
  */
-export function visibleTracks<T extends Pick<MediaTrack, "explicit">>(
+export function visibleTracks<T extends Pick<MediaTrack, "explicit" | "artist" | "title">>(
   tracks: T[],
-  policy: ExplicitPolicy
+  policy: ContentPolicy
 ): T[] {
-  return tracks.filter((track) => !isExplicitHidden(track, policy));
+  return tracks.filter((track) => !isContentHidden(track, policy));
 }
 
 /**
@@ -115,9 +120,9 @@ export function visibleTracks<T extends Pick<MediaTrack, "explicit">>(
  * a hidden track.
  */
 export function findVisibleIndex(
-  tracks: Pick<MediaTrack, "explicit">[],
+  tracks: Pick<MediaTrack, "explicit" | "artist" | "title">[],
   start: number,
-  policy: ExplicitPolicy,
+  policy: ContentPolicy,
   direction: 1 | -1 = 1,
   wrap = false
 ): number {
@@ -127,7 +132,7 @@ export function findVisibleIndex(
   const count = wrap ? n : direction === 1 ? n - begin : begin + 1;
   for (let step = 0; step < count; step += 1) {
     const index = ((begin + direction * step) % n + n) % n;
-    if (!isExplicitHidden(tracks[index], policy)) return index;
+    if (!isContentHidden(tracks[index], policy)) return index;
   }
   return -1;
 }

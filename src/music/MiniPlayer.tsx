@@ -6,7 +6,7 @@ import { TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
 import { Material } from "../theme/Material";
 import { usePlayback } from "./playback";
-import { isExplicitHidden } from "./explicit";
+import { isContentHidden } from "./explicit";
 
 export function MiniPlayer() {
   const { colors, accentColor } = useTheme();
@@ -24,7 +24,7 @@ export function MiniPlayer() {
    * for such a track, exactly like the wall card's: the viewer may not hear
    * it either.
    */
-  const hidden = isExplicitHidden(current, policy);
+  const hidden = isContentHidden(current, policy);
   const title = hidden ? "Nothing playing" : current.title;
   const artist = hidden ? "Search YouTube Music from the player" : current.artist;
 

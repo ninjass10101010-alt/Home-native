@@ -23,6 +23,8 @@ let mockHistory: any[] = [];
 let mockExplicitFilter: boolean | undefined = true;
 /** The signed-in viewer. null = signed-out guest, which also fails closed. */
 let mockMember: any = null;
+/** The family's own deny-list, as the provider hands it to the surfaces. */
+let mockDenied: string[] = [];
 
 jest.mock("../src/music/playback", () => ({
   usePlayback: () => ({
@@ -34,7 +36,7 @@ jest.mock("../src/music/playback", () => ({
     settings: { repeat: "off", shuffle: false, explicitFilter: mockExplicitFilter },
     // The provider owns the role-aware policy — the surfaces read it from
     // there so the rule can never drift between them.
-    policy: { isParent: mockMember?.role === "parent", filterOn: mockExplicitFilter !== false },
+    policy: { isParent: mockMember?.role === "parent", filterOn: mockExplicitFilter !== false, denied: mockDenied },
     play: mockPlay, playQueueAt: jest.fn(), toggle: mockToggle, next: mockNext, previous: jest.fn(),
     seek: mockSeek, setRepeat: jest.fn(), cycleRepeatMode: jest.fn(), toggleShuffleMode: jest.fn(),
     addToQueue: jest.fn(), removeFromQueue: jest.fn(), moveQueueItem: jest.fn(),
@@ -49,6 +51,11 @@ const CLEAN_TRACK = {
 const EXPLICIT_TRACK = {
   id: "exp11111111", title: "Bad Song", artist: "B", album: "", durationSeconds: 100,
   artworkUrl: null, explicit: true, source: "youtube_music",
+};
+/** A track the badge did not catch — only the family's own list hides it. */
+const DENIED_TRACK = {
+  id: "den11111111", title: "Till I Collapse", artist: "Eminem", album: "", durationSeconds: 100,
+  artworkUrl: null, explicit: false, source: "youtube_music",
 };
 const UNRATED_TRACK = {
   id: "unr111111111", title: "Unknown Song", artist: "C", album: "", durationSeconds: 100,
@@ -85,6 +92,7 @@ beforeEach(() => {
   mockHistory = [];
   mockExplicitFilter = true;
   mockMember = null;
+  mockDenied = [];
   mockSearchOutcome = { tracks: [CLEAN_TRACK], explicitKnown: true };
   jest.clearAllMocks();
 });
@@ -224,6 +232,46 @@ it("marks an unrated row as Unrated for a parent", async () => {
   expect(await findByText("Unrated")).toBeTruthy();
   // A row that is not marked explicit carries no marker.
   expect(queryByTestId(`music-result-unrated-${CLEAN_TRACK.id}`)).toBeNull();
+});
+
+it("a kid never sees a denied row in the search results", async () => {
+  // The badge did not catch this one: it says "not marked explicit", so only
+  // the family's own deny-list keeps it away from a kid.
+  mockCurrent = null;
+  mockMember = KID;
+  mockDenied = ["eminem"];
+  mockSearchOutcome = { tracks: [DENIED_TRACK, CLEAN_TRACK], explicitKnown: true };
+  const { getByTestId, findByText, queryByText } = render(<MusicPlayer />, { wrapper: wrap });
+  fireEvent.changeText(getByTestId("music-search-input"), "eminem");
+  fireEvent.press(getByTestId("music-search-submit"));
+  expect(await findByText("Found")).toBeTruthy();
+  expect(queryByText("Till I Collapse")).toBeNull();
+});
+
+it("a parent still sees a denied row in the search results", async () => {
+  mockCurrent = null;
+  mockMember = PARENT;
+  mockDenied = ["eminem"];
+  mockSearchOutcome = { tracks: [DENIED_TRACK, CLEAN_TRACK], explicitKnown: true };
+  const { getByTestId, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+  fireEvent.changeText(getByTestId("music-search-input"), "eminem");
+  fireEvent.press(getByTestId("music-search-submit"));
+  expect(await findByText("Till I Collapse")).toBeTruthy();
+});
+
+it("a kid never sees a denied row with the explicit filter OFF", async () => {
+  // The filter setting governs the BADGE only: the family's own list holds
+  // either way.
+  mockCurrent = null;
+  mockMember = KID;
+  mockExplicitFilter = false;
+  mockDenied = ["eminem"];
+  mockSearchOutcome = { tracks: [DENIED_TRACK, CLEAN_TRACK], explicitKnown: true };
+  const { getByTestId, findByText, queryByText } = render(<MusicPlayer />, { wrapper: wrap });
+  fireEvent.changeText(getByTestId("music-search-input"), "eminem");
+  fireEvent.press(getByTestId("music-search-submit"));
+  expect(await findByText("Found")).toBeTruthy();
+  expect(queryByText("Till I Collapse")).toBeNull();
 });
 
 it("does not mark a row that is not marked explicit", async () => {

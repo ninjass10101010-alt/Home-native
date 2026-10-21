@@ -199,8 +199,10 @@ describe("search note", () => {
  * direction — the caller must then STOP, never fall back to a hidden track.
  */
 describe("the visible scan", () => {
-  const KID = { isParent: false, filterOn: true };
-  const PARENT = { isParent: true, filterOn: true };
+  // The content policy carries the family's own deny-list too — an empty
+  // one here, so these cases exercise the BADGE rule alone.
+  const KID = { isParent: false, filterOn: true, denied: [] };
+  const PARENT = { isParent: true, filterOn: true, denied: [] };
 
   it("finds the first track the viewer may see", () => {
     expect(findVisibleIndex([track(false), track(true), track(false)], 0, KID)).toBe(0);
@@ -236,7 +238,7 @@ describe("the visible scan", () => {
   });
 
   it("with the filter off, a kid sees every track too", () => {
-    const off = { isParent: false, filterOn: false };
+    const off = { isParent: false, filterOn: false, denied: [] };
     expect(findVisibleIndex([track(true), track(null)], 0, off)).toBe(0);
   });
 

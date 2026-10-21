@@ -6,10 +6,12 @@ import { useAuth } from "../state/AuthProvider";
 import {
   appendHistory,
   DOWNLOAD_CAP_BYTES,
+  loadDenylist,
   loadDownloads,
   loadHistory,
   loadMusicSettings,
   removeDownloadEntry,
+  saveDenylist,
   saveDownloads,
   saveMusicSettings,
   totalDownloadBytes,
@@ -27,11 +29,12 @@ import {
 } from "./queue";
 import {
   findVisibleIndex,
-  isExplicitHidden,
+  isContentHidden,
+  normalizeTerm,
   visibleTracks,
-  type ExplicitPolicy,
+  type ContentPolicy,
 } from "./explicit";
-import type { DownloadEntry, MediaTrack, QueueState, RepeatMode } from "./types";
+import type { DenyEntry, DownloadEntry, MediaTrack, QueueState, RepeatMode } from "./types";
 
 /**
  * The downloads directory — resolved LAZILY, not at module load.
@@ -64,13 +67,21 @@ export interface PlaybackValue {
   history: MediaTrack[];
   settings: MusicSettings;
   /**
-   * The role-aware explicit policy the viewer is under RIGHT NOW.
+   * The family's own deny-list, as stored.
    *
-   * The provider owns it (it knows who is watching) and every surface reads
-   * it from here, so the rule can never drift between the queue, the
-   * history, the downloads tray and the chrome.
+   * The terms are kept AS TYPED (for display); the POLICY below carries them
+   * normalized, so the rule matches the way the family expects.
    */
-  policy: ExplicitPolicy;
+  denylist: DenyEntry[];
+  /**
+   * The role-aware CONTENT policy the viewer is under RIGHT NOW.
+   *
+   * The provider owns it (it knows who is watching, what the family setting
+   * says and what the family has blocked) and every surface reads it from
+   * here, so the rule can never drift between the queue, the history, the
+   * downloads tray and the chrome.
+   */
+  policy: ContentPolicy;
   play: (track: MediaTrack, queue?: MediaTrack[]) => Promise<void>;
   playQueueAt: (tracks: MediaTrack[], index: number) => Promise<void>;
   toggle: () => void;
@@ -86,6 +97,10 @@ export interface PlaybackValue {
   downloadCurrent: () => Promise<void>;
   removeDownload: (id: string) => Promise<void>;
   setExplicitFilter: (enabled: boolean) => void;
+  /** Adds a term to the family's deny-list (persisted; live at once). */
+  addDenied: (term: string) => Promise<void>;
+  /** Removes every entry whose term matches (persisted; live at once). */
+  removeDenied: (term: string) => Promise<void>;
 }
 
 const Ctx = React.createContext<PlaybackValue | null>(null);
@@ -125,6 +140,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = React.useState<string | null>(null);
   const [downloads, setDownloads] = React.useState<DownloadEntry[]>([]);
   const [history, setHistory] = React.useState<MediaTrack[]>([]);
+  const [denylist, setDenylist] = React.useState<DenyEntry[]>([]);
   const [settings, setSettings] = React.useState<MusicSettings>({
     repeat: "off",
     shuffle: false,
@@ -134,13 +150,24 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const startingRef = React.useRef(false);
   const playerRef = React.useRef(player);
   const queueRef = React.useRef(queue);
+  /** The list as it stands RIGHT NOW — the add/remove callbacks read it. */
+  const denylistRef = React.useRef<DenyEntry[]>([]);
+  /** Resolves with the list once the store has been read. */
+  const denylistReadyRef = React.useRef<Promise<DenyEntry[]>>(Promise.resolve([]));
 
   // The filter FAILS CLOSED: only an explicit `false` turns it off, so a
   // persisted payload written before the key existed can never disable the
   // family filter.
-  const policy = React.useMemo<ExplicitPolicy>(
-    () => ({ isParent, filterOn: settings.explicitFilter !== false }),
-    [isParent, settings.explicitFilter]
+  //
+  // The policy carries the family's own list NORMALIZED, so a term added a
+  // moment ago applies at once — no restart, no reload.
+  const policy = React.useMemo<ContentPolicy>(
+    () => ({
+      isParent,
+      filterOn: settings.explicitFilter !== false,
+      denied: denylist.map((entry) => normalizeTerm(entry.term)),
+    }),
+    [isParent, settings.explicitFilter, denylist]
   );
 
   const current = queue.index >= 0 ? queue.tracks[queue.index] ?? null : null;
@@ -150,6 +177,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => { playerRef.current = player; }, [player]);
   React.useEffect(() => { queueRef.current = queue; }, [queue]);
+  React.useEffect(() => { denylistRef.current = denylist; }, [denylist]);
 
   React.useEffect(() => {
     void AudioModule.setAudioModeAsync({
@@ -157,6 +185,18 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       interruptionMode: "doNotMix",
       playsInSilentMode: true,
     }).catch(() => {});
+    // The family's own list is read with the other stores. It resolves into
+    // the list as it stands: a term added in the meantime is APPENDED to what
+    // the family already blocked — never lost, never written twice.
+    denylistReadyRef.current = loadDenylist().then((blocked) => {
+      const early = denylistRef.current.filter(
+        (entry) => !blocked.some((b) => normalizeTerm(b.term) === normalizeTerm(entry.term))
+      );
+      const merged = [...blocked, ...early];
+      denylistRef.current = merged;
+      setDenylist(merged);
+      return merged;
+    });
     void Promise.all([loadDownloads(), loadMusicSettings(), loadHistory()]).then(([list, saved, recent]) => {
       setDownloads(list);
       setSettings(saved);
@@ -171,20 +211,23 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
-   * THE VIEWER CHANGED (a parent signed out and a kid signed in, or the
-   * family toggled the filter): the queue the new viewer may not see is
-   * DROPPED, and a current track the new viewer may not see STOPS the
-   * playback.
+   * THE VIEWER CHANGED (a parent signed out and a kid signed in, the family
+   * toggled the filter, or a term was blocked): the queue the new viewer may
+   * not see is DROPPED, and a current track the new viewer may not see STOPS
+   * the playback.
    *
    * This is the reachable hole the search-results filter could not close: a
    * parent queues an explicit track, the kid signs in, and the track must
    * not keep playing with its title on the wall, in the MiniPlayer, in the
    * queue list or in "Recently played".
+   *
+   * The SAME policy object carries both rules, so a track the family blocked
+   * is dropped and stopped exactly like a badged one.
    */
   React.useEffect(() => {
     const state = queueRef.current;
     const currentTrack = state.index >= 0 ? state.tracks[state.index] : undefined;
-    const hiddenCurrent = !!currentTrack && isExplicitHidden(currentTrack, policy);
+    const hiddenCurrent = !!currentTrack && isContentHidden(currentTrack, policy);
     const tracks = visibleTracks(state.tracks, policy);
     const baseTracks = visibleTracks(state.baseTracks, policy);
     const index = hiddenCurrent
@@ -240,7 +283,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     async (track: MediaTrack, tracks?: MediaTrack[]) => {
       // Fail closed: a track the viewer may not see never plays, and it
       // never joins the queue the transport walks.
-      if (isExplicitHidden(track, policy)) return;
+      if (isContentHidden(track, policy)) return;
       const source = tracks && tracks.length > 0 ? tracks : [track];
       const list = visibleTracks(source, policy);
       if (list.length === 0) return;
@@ -257,7 +300,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       if (!target) return;
       // Fail closed: the row the caller picked is played only when the
       // viewer may see it.
-      if (isExplicitHidden(target, policy)) return;
+      if (isContentHidden(target, policy)) return;
       const list = visibleTracks(tracks, policy);
       if (list.length === 0) return;
       const safe = Math.max(0, list.findIndex((track) => track.id === target.id));
@@ -367,7 +410,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const addToQueue = React.useCallback(
     (track: MediaTrack) => {
       // Fail closed: a track the viewer may not see never joins the queue.
-      if (isExplicitHidden(track, policy)) return;
+      if (isContentHidden(track, policy)) return;
       setQueue((q) => {
         if (q.tracks.length === 0) return createQueue([track], 0, q.repeat);
         return { ...q, tracks: [...q.tracks, track], baseTracks: [...q.baseTracks, track] };
@@ -441,6 +484,49 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   );
 
   /**
+   * The family's own list — the SECOND signal beside the badge.
+   *
+   * A term the parent types is kept AS TYPED (so the editor can show it
+   * back), and the POLICY carries it normalized, so the rule applies at once:
+   * a term added a moment ago blocks the next track the kid asks for, with
+   * no restart and no reload.
+   *
+   * A blank term is ignored (an empty term must never match anything) and a
+   * duplicate is ignored too — the same term twice is still one rule, so the
+   * list stays the family's, not the app's.
+   */
+  const addDenied = React.useCallback(async (term: string) => {
+    const trimmed = term.trim();
+    if (!trimmed) return;
+    const normalized = normalizeTerm(trimmed);
+    // Wait for the store to be read, so a term added in the first moments
+    // never overwrites what the family already blocked.
+    await denylistReadyRef.current;
+    const current = denylistRef.current;
+    if (current.some((entry) => normalizeTerm(entry.term) === normalized)) return;
+    const next = [...current, { term: trimmed, addedAt: Date.now() }];
+    denylistRef.current = next;
+    setDenylist(next);
+    await saveDenylist(next);
+  }, []);
+
+  /**
+   * Removes EVERY entry whose term matches — the family may have added the
+   * same word twice, and unblocking must unblock it completely.
+   */
+  const removeDenied = React.useCallback(async (term: string) => {
+    const normalized = normalizeTerm(term);
+    if (!normalized) return;
+    await denylistReadyRef.current;
+    const current = denylistRef.current;
+    const next = current.filter((entry) => normalizeTerm(entry.term) !== normalized);
+    if (next.length === current.length) return;
+    denylistRef.current = next;
+    setDenylist(next);
+    await saveDenylist(next);
+  }, []);
+
+  /**
    * What the provider HANDS OUT is what the viewer may see: the downloads
    * tray and the history are device-global, so they are filtered against
    * the policy here — a kid never receives a row they may not see.
@@ -470,6 +556,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       downloadBytes: totalDownloadBytes(visibleDownloads),
       history: visibleHistory,
       settings,
+      denylist,
       policy,
       play,
       playQueueAt,
@@ -486,11 +573,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       downloadCurrent,
       removeDownload,
       setExplicitFilter,
+      addDenied,
+      removeDenied,
     }),
     [
-      addToQueue, current, cycleRepeatMode, downloadCurrent, duration, error,
+      addDenied, addToQueue, current, cycleRepeatMode, downloadCurrent, duration, error, denylist,
       moveQueueItem, next, play, playQueueAt, playing, policy, position, previous, queue.index,
-      queue.repeat, queue.shuffle, queue.tracks, removeDownload, removeFromQueue, seek,
+      queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,
       setExplicitFilter, setRepeat, settings, status?.isBuffering, toggle, toggleShuffleMode,
       visibleDownloads, visibleHistory,
     ]
