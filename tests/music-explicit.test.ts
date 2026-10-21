@@ -1,6 +1,8 @@
 import {
   countUnrated,
   findVisibleIndex,
+  isContentHidden,
+  isDeniedTerm,
   isExplicitHidden,
   searchNote,
   visibleTracks,
@@ -247,5 +249,57 @@ describe("the visible scan", () => {
   it("a list with a missing rating is filtered out for a kid", () => {
     const missing = { ...track(null), explicit: undefined as unknown as null };
     expect(visibleTracks([missing], KID)).toHaveLength(0);
+  });
+});
+
+/**
+ * The family's own deny-list — a SECOND signal beside the one-sided YouTube
+ * badge. The badge MARKS the explicit tracks; it does not certify the rest,
+ * so an unbadged explicit song can still reach a kid. The deny-list is the
+ * family's own answer to that gap.
+ *
+ * The rule, re-derived here from the contract (not from the implementation):
+ * ONE list, matched case-insensitively as a SUBSTRING against BOTH the artist
+ * and the title, whitespace-normalized on both sides; an EMPTY term never
+ * matches; a PARENT is never blocked; and the deny rule holds even while the
+ * explicit filter is OFF — the filter setting governs the badge, never the
+ * family's own list.
+ */
+describe("deny-list policy", () => {
+  const track = (explicit: boolean | null, artist: string, title: string) => ({
+    explicit, artist, title,
+  });
+
+  it("matches a term against the artist, case-insensitively", () => {
+    expect(isDeniedTerm(track(false, "Eminem", "Till I Collapse"), ["eminem"])).toBe(true);
+  });
+  it("matches a term against the title", () => {
+    expect(isDeniedTerm(track(false, "Someone", "Lose Yourself"), ["lose yourself"])).toBe(true);
+  });
+  it("normalizes whitespace and case on both sides", () => {
+    expect(isDeniedTerm(track(false, "  Eminem  ", "x"), ["EMINEM"])).toBe(true);
+  });
+  it("does not match an unrelated term", () => {
+    expect(isDeniedTerm(track(false, "Adele", "Hello"), ["eminem"])).toBe(false);
+  });
+  it("an empty term never matches", () => {
+    expect(isDeniedTerm(track(false, "Eminem", "x"), ["", "   "])).toBe(false);
+  });
+  it("hides a denied track from a kid", () => {
+    expect(isContentHidden(track(false, "Eminem", "x"), { isParent: false, filterOn: true, denied: ["eminem"] })).toBe(true);
+  });
+  it("never hides a track from a parent", () => {
+    expect(isContentHidden(track(true, "Eminem", "x"), { isParent: true, filterOn: true, denied: ["eminem"] })).toBe(false);
+  });
+  it("applies the deny rule even with the explicit filter OFF", () => {
+    expect(isContentHidden(track(false, "Eminem", "x"), { isParent: false, filterOn: false, denied: ["eminem"] })).toBe(true);
+  });
+  it("keeps the explicit rule: a kid sees only not-marked-explicit tracks while the filter is on", () => {
+    expect(isContentHidden(track(false, "Adele", "Hello"), { isParent: false, filterOn: true, denied: [] })).toBe(false);
+    expect(isContentHidden(track(true, "Adele", "Hello"), { isParent: false, filterOn: true, denied: [] })).toBe(true);
+    expect(isContentHidden(track(null, "Adele", "Hello"), { isParent: false, filterOn: true, denied: [] })).toBe(true);
+  });
+  it("keeps the explicit rule switch: with the filter off, a kid sees an explicit track", () => {
+    expect(isContentHidden(track(true, "Adele", "Hello"), { isParent: false, filterOn: false, denied: [] })).toBe(false);
   });
 });

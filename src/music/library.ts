@@ -1,10 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { DownloadEntry, MediaTrack, RepeatMode } from "./types";
+import type { DenyEntry, DownloadEntry, MediaTrack, RepeatMode } from "./types";
 
 const DOWNLOADS_KEY = "music.downloads";
 const HISTORY_KEY = "music.history";
 const HISTORY_VERSION_KEY = "music.history.version";
 const SETTINGS_KEY = "music.settings";
+const DENYLIST_KEY = "music.denylist";
 
 export const HISTORY_LIMIT = 500;
 export const DOWNLOAD_CAP_BYTES = 2 * 1024 * 1024 * 1024;
@@ -157,4 +158,23 @@ export async function loadMusicSettings(): Promise<MusicSettings> {
 
 export function saveMusicSettings(settings: MusicSettings): Promise<void> {
   return writeJson(SETTINGS_KEY, settings);
+}
+
+/**
+ * The family's deny-list, as stored.
+ *
+ * The store NEVER throws: a corrupt (or half-written) payload reads as an
+ * EMPTY list, because a broken store must not take the music surface down
+ * with it. `readJson` already swallows a parse error and returns the
+ * fallback, and a payload that is not an array (or that holds a row with no
+ * string term) is filtered out here — the policy treats an unusable term as
+ * no term at all.
+ */
+export async function loadDenylist(): Promise<DenyEntry[]> {
+  const list = await readJson<DenyEntry[]>(DENYLIST_KEY, []);
+  return Array.isArray(list) ? list.filter((e) => typeof e?.term === "string") : [];
+}
+
+export function saveDenylist(list: DenyEntry[]): Promise<void> {
+  return writeJson(DENYLIST_KEY, list);
 }

@@ -24,6 +24,21 @@ export interface MediaTrack {
 
 export type RepeatMode = "off" | "all" | "one";
 
+/**
+ * One entry of the family's own deny-list.
+ *
+ * This is NOT a content rating: the family decides what stays away from the
+ * kids. It is the SECOND signal beside the one-sided YouTube badge — the
+ * badge MARKS the explicit tracks but does not certify the rest, so an
+ * unbadged explicit song can still reach a kid. A denied term hides the
+ * matching tracks from the kid roles (child/pet/guest), never from a parent.
+ */
+export interface DenyEntry {
+  /** The parent's typed term, kept as typed for display. */
+  term: string;
+  addedAt: number;
+}
+
 export interface QueueState {
   /** Playback order (shuffled or original). */
   tracks: MediaTrack[];

@@ -27,6 +27,71 @@ export function isExplicitHidden(
 }
 
 /**
+ * The family's own deny-list — the SECOND signal beside the badge.
+ *
+ * YouTube's `MUSIC_EXPLICIT_BADGE` is ONE-SIDED: it MARKS the explicit
+ * tracks, it does not certify the rest, so a song YouTube does not badge can
+ * still reach a kid. The deny-list is the family's own answer — NOT a content
+ * rating, a list THEY decide. One list, matched case-insensitively as a
+ * substring against BOTH the artist and the title.
+ */
+export interface ContentPolicy {
+  isParent: boolean;
+  filterOn: boolean;
+  /** Normalized deny-list terms. */
+  denied: string[];
+}
+
+/** Lowercase, trimmed, internal whitespace collapsed. */
+export function normalizeTerm(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Whether the track matches the family's deny-list.
+ *
+ * Both sides are normalized the same way (lowercase, trimmed, internal
+ * whitespace collapsed), so "  Eminem  " and "EMINEM" are the same term. An
+ * EMPTY term never matches — an empty list (or a blank row) must not hide
+ * the whole catalogue.
+ */
+export function isDeniedTerm(
+  track: { artist: string; title: string },
+  denied: string[]
+): boolean {
+  const artist = normalizeTerm(track.artist ?? "");
+  const title = normalizeTerm(track.title ?? "");
+  return denied.some((raw) => {
+    const term = normalizeTerm(raw ?? "");
+    if (!term) return false;
+    return artist.includes(term) || title.includes(term);
+  });
+}
+
+/**
+ * Whether the track must be hidden from the viewer — the ONE rule every
+ * surface reads.
+ *
+ * It composes the two signals, and it composes them in the family's favour:
+ *
+ * 1. A PARENT is never blocked — the deny-list is a kids' rule.
+ * 2. The DENY rule holds INDEPENDENTLY of the explicit filter: turning the
+ *    filter off governs the BADGE, never the family's own list, so a denied
+ *    artist stays away from the kids either way.
+ * 3. Otherwise the EXPLICIT rule applies unchanged: while the filter is on, a
+ *    kid role sees a track only when it says "not marked explicit" — an
+ *    unknown rating (`null`) is hidden too, because the policy fails closed.
+ */
+export function isContentHidden(
+  track: Pick<MediaTrack, "explicit" | "artist" | "title">,
+  policy: ContentPolicy
+): boolean {
+  if (policy.isParent) return false;
+  if (isDeniedTerm(track, policy.denied)) return true;
+  return isExplicitHidden(track, policy);
+}
+
+/**
  * The tracks the viewer may see, in order.
  *
  * The ONE place a list is filtered against the policy — the search results,

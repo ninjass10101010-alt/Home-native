@@ -6,12 +6,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   appendHistory,
   HISTORY_SCHEMA_VERSION,
+  loadDenylist,
   loadDownloads,
   loadHistory,
   loadMusicSettings,
   mergeHistory,
   mergeMusicSettings,
   removeDownloadEntry,
+  saveDenylist,
   saveDownloads,
   totalDownloadBytes,
   upsertDownload,
@@ -162,5 +164,15 @@ describe("music library", () => {
     await appendHistory({ ...track("a"), explicit: true });
     const loaded = await loadHistory();
     expect(loaded[0].explicit).toBe(true);
+  });
+
+  it("round-trips the deny-list", async () => {
+    await saveDenylist([{ term: "eminem", addedAt: 1 }, { term: "lose yourself", addedAt: 2 }]);
+    expect(await loadDenylist()).toEqual([{ term: "eminem", addedAt: 1 }, { term: "lose yourself", addedAt: 2 }]);
+  });
+
+  it("reads a corrupt deny-list as empty instead of throwing", async () => {
+    await AsyncStorage.setItem("music.denylist", "{not json");
+    expect(await loadDenylist()).toEqual([]);
   });
 });
