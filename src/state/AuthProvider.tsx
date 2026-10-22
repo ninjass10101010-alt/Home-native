@@ -17,9 +17,35 @@ import { clearSessionCookie, loadSessionCookie } from "../api/session";
  * parent → adult, child/pet → kid, signed out → family.
  */
 export type Mode = "family" | "adult" | "kid";
+
+/**
+ * The CAPABILITY role — what the viewer may DO. `null` means "no live
+ * session", so no capability at all. It is NEVER read off the cached
+ * display profile (see the SP1.7 contract below).
+ */
+export type CapabilityRole = "parent" | "child" | "pet" | null;
+
+/** The wall's layout follows the CAPABILITY, never the cached display profile. */
+export function modeForRole(role: CapabilityRole): Mode {
+  if (!role) return "family";
+  return role === "parent" ? "adult" : "kid";
+}
+
+/**
+ * Display-profile mode derivation — kept for callers that describe WHO the
+ * panel last showed. The layout must follow `modeForRole(role)`: a cached
+ * profile is a fallback display, never a capability.
+ */
 export function modeForMember(m: ServerMember | null): Mode {
   if (!m) return "family";
   return m.role === "parent" ? "adult" : "kid";
+}
+
+/** Server roles are a loose string; only the three known roles are a
+ *  capability. An unknown role fails closed (no capability, no layout). */
+function capabilityRoleOf(role: string | undefined | null): CapabilityRole {
+  if (role === "parent" || role === "child" || role === "pet") return role;
+  return null;
 }
 
 /** Web-parity constants (src/hooks/useAuth.tsx:12-18). */
@@ -50,6 +76,13 @@ function timeoutsFor(m: ServerMember | null) {
 
 export interface AuthValue {
   member: ServerMember | null;
+  /**
+   * The CAPABILITY role — non-null ONLY when a live whoami / sign-in
+   * confirmed the session. `null` = no live session = no capability.
+   */
+  role: CapabilityRole;
+  /** True when the live server confirmed the session (whoami / sign-in). */
+  sessionVerified: boolean;
   mode: Mode;
   hydrated: boolean;
   /** True inside the warning window before idle expiry. */
@@ -66,6 +99,8 @@ const Ctx = createContext<AuthValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [member, setMember] = useState<ServerMember | null>(null);
+  /** True ONLY when the server confirmed the session live (whoami / sign-in). */
+  const [sessionVerified, setSessionVerified] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [sessionWarn, setSessionWarn] = useState(false);
 
@@ -88,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     clearTimers();
     setSessionWarn(false);
+    setSessionVerified(false);
     setMember(null);
     await persist(null);
     await authApi.logout().catch(() => {});
@@ -111,7 +147,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // whoami. When whoami answers null (401) or throws (offline), the cached
   // consuela-auth-user paints the rail instead of being wiped (capture
   // harness + offline cold start); a cookie-less start paints it too. The
-  // cache is a display fallback, never a credential.
+  // cache is a DISPLAY fallback, never a credential: only a live whoami
+  // sets `sessionVerified`, and `role` (the capability) follows it — so a
+  // cached profile can never grant a capability or a personal layout.
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -129,6 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               // ignore malformed profile
             }
           }
+          if (alive) setSessionVerified(false);
           if (alive) setHydrated(true);
           return;
         }
@@ -136,9 +175,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!alive) return;
         if (who) {
           setMember(who);
+          setSessionVerified(true);
           armTimers(who);
           await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(who));
         } else {
+          setSessionVerified(false);
           const cachedRaw = await AsyncStorage.getItem(PROFILE_KEY);
           let restored: ServerMember | null = null;
           if (cachedRaw) {
@@ -159,7 +200,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch {
-        // Offline at cold start: fall back to cached profile if available.
+        // Offline at cold start: fall back to cached profile if available —
+        // display only, so the session stays UNVERIFIED.
+        if (alive) setSessionVerified(false);
         try {
           const cachedRaw = await AsyncStorage.getItem(PROFILE_KEY);
           if (alive && cachedRaw) {
@@ -192,6 +235,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (name: string, pin?: string) => {
       const m = pin ? await authApi.login(name, pin) : await authApi.quickLogin(name);
       setMember(m);
+      // A completed sign-in IS a live session — the capability is granted.
+      setSessionVerified(true);
       await persist(m);
       armTimers(m);
       return m;
@@ -206,16 +251,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setMember(m);
+    setSessionVerified(true);
     await persist(m);
     // A fresh identity read is itself activity (hydration parity) — re-arm
     // the idle clock so an actively-used panel never times out mid-session.
     armTimers(m);
   }, [armTimers, persist, signOut]);
 
+  // The CAPABILITY: non-null only when the server confirmed the session.
+  // A cached profile (member) is display-only and grants nothing.
+  const role: CapabilityRole = sessionVerified ? capabilityRoleOf(member?.role) : null;
+
   const value = useMemo<AuthValue>(
     () => ({
       member,
-      mode: modeForMember(member),
+      role,
+      sessionVerified,
+      mode: modeForRole(role),
       hydrated,
       sessionWarn,
       pinRequiredFor,
@@ -224,7 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshIdentity,
       poke,
     }),
-    [member, hydrated, sessionWarn, signIn, signOut, refreshIdentity, poke]
+    [member, role, sessionVerified, hydrated, sessionWarn, signIn, signOut, refreshIdentity, poke]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -238,6 +290,8 @@ export function useAuth(): AuthValue {
   // callers gate on hydrated/!member without crashing in unit tests.
   return {
     member: null,
+    role: null,
+    sessionVerified: false,
     mode: "family",
     hydrated: false,
     sessionWarn: false,

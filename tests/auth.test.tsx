@@ -6,6 +6,7 @@ import {
   AuthProvider,
   useAuth,
   modeForMember,
+  modeForRole,
   pinRequiredFor,
   INACTIVITY_TIMEOUT_MS,
   KID_INACTIVITY_TIMEOUT_MS,
@@ -85,6 +86,12 @@ describe("mode derivation + PIN rules (web parity)", () => {
     expect(modeForMember(parent)).toBe("adult");
     expect(modeForMember(kid)).toBe("kid");
   });
+  it("modeForRole: the CAPABILITY decides the layout (null → family)", () => {
+    expect(modeForRole(null)).toBe("family");
+    expect(modeForRole("parent")).toBe("adult");
+    expect(modeForRole("child")).toBe("kid");
+    expect(modeForRole("pet")).toBe("kid");
+  });
   it("pinRequiredFor: under-10 child PIN-free; 10+ and missing age → PIN", () => {
     expect(pinRequiredFor(kid)).toBe(false);
     expect(pinRequiredFor(parent)).toBe(true);
@@ -150,7 +157,10 @@ describe("AuthProvider", () => {
     await settleFor(result);
     expect(result.current.hydrated).toBe(true);
     expect(result.current.member?.name).toBe("Rebecca (Mom)");
-    expect(result.current.mode).toBe("adult");
+    // NEW CONTRACT (SP1.7): the cached profile DISPLAYS, it does not CAPABILITIZE.
+    expect(result.current.role).toBeNull();
+    expect(result.current.sessionVerified).toBe(false);
+    expect(result.current.mode).toBe("family");
   });
 
   it("offline cold start (whoami rejects) + cached profile → cached profile paints", async () => {
@@ -161,7 +171,10 @@ describe("AuthProvider", () => {
     await settleFor(result);
     expect(result.current.hydrated).toBe(true);
     expect(result.current.member?.name).toBe("Aurora");
-    expect(result.current.mode).toBe("kid");
+    // NEW CONTRACT (SP1.7): offline = no live session = no capability.
+    expect(result.current.role).toBeNull();
+    expect(result.current.sessionVerified).toBe(false);
+    expect(result.current.mode).toBe("family");
   });
 
   it("no session cookie + cached profile → cached profile paints", async () => {
@@ -170,7 +183,10 @@ describe("AuthProvider", () => {
     await settleFor(result);
     expect(result.current.hydrated).toBe(true);
     expect(result.current.member?.name).toBe("Rebecca (Mom)");
-    expect(result.current.mode).toBe("adult");
+    // NEW CONTRACT (SP1.7): a cookie-less start = no live session = no capability.
+    expect(result.current.role).toBeNull();
+    expect(result.current.sessionVerified).toBe(false);
+    expect(result.current.mode).toBe("family");
   });
 
   it("signIn with PIN → member + adult mode + profile persisted", async () => {
@@ -286,5 +302,73 @@ describe("AuthProvider", () => {
     expect(result.current.member).toBeNull();
     expect(authApi.logout).toHaveBeenCalled();
     expect(await AsyncStorage.getItem("consuela-auth-user")).toBeNull();
+  });
+});
+
+/**
+ * SP1.7 — a role is a CAPABILITY, not a cached label. `member` is who the
+ * panel last showed (display); `role` is what the viewer may do, and it is
+ * non-null ONLY when a live whoami / sign-in confirmed the session.
+ */
+describe("capability role (a role is a capability, not a cached label)", () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    await AsyncStorage.clear();
+    _resetSessionCookieCache();
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it("a cached profile grants NO capability: role is null and the mode is family", async () => {
+    // A PARENT profile cached, but no session cookie → no live session.
+    await AsyncStorage.setItem("consuela-auth-user", JSON.stringify(parent));
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await settleFor(result);
+    expect(result.current.hydrated).toBe(true);
+    expect(result.current.member?.name).toBe("Rebecca (Mom)"); // display survives
+    expect(result.current.role).toBeNull();
+    expect(result.current.sessionVerified).toBe(false);
+    expect(result.current.mode).toBe("family");
+  });
+
+  it("a live whoami grants the capability: role is the live role and the mode follows it", async () => {
+    mockSecureStore.getItemAsync.mockResolvedValueOnce("cookie");
+    authApi.whoami.mockResolvedValueOnce(parent);
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await settleFor(result);
+    expect(result.current.member?.name).toBe("Rebecca (Mom)");
+    expect(result.current.role).toBe("parent");
+    expect(result.current.sessionVerified).toBe(true);
+    expect(result.current.mode).toBe("adult");
+  });
+
+  it("a 401 from whoami drops the capability even when a profile is cached", async () => {
+    mockSecureStore.getItemAsync.mockResolvedValueOnce("cookie");
+    authApi.whoami.mockResolvedValueOnce(null); // 401 → the server says "no"
+    await AsyncStorage.setItem("consuela-auth-user", JSON.stringify(parent));
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await settleFor(result);
+    expect(result.current.member?.name).toBe("Rebecca (Mom)"); // display still paints
+    expect(result.current.role).toBeNull();
+    expect(result.current.sessionVerified).toBe(false);
+    expect(result.current.mode).toBe("family");
+  });
+
+  it("signing out clears the capability", async () => {
+    authApi.login.mockResolvedValueOnce(parent);
+    const { result } = renderHook(() => useAuth(), { wrapper: wrap });
+    await settleFor(result);
+    await act(async () => {
+      await result.current.signIn("Rebecca (Mom)", "1234");
+    });
+    expect(result.current.role).toBe("parent");
+    expect(result.current.sessionVerified).toBe(true);
+    expect(result.current.mode).toBe("adult");
+    await act(async () => {
+      await result.current.signOut();
+    });
+    expect(result.current.role).toBeNull();
+    expect(result.current.sessionVerified).toBe(false);
+    expect(result.current.mode).toBe("family");
   });
 });
