@@ -1,5 +1,5 @@
 import { requireNativeModule } from "expo-modules-core";
-import type { MediaTrack, ResolvedAudio } from "./src/types";
+import type { ArtworkColors, MediaTrack, ResolvedAudio } from "./src/types";
 
 /**
  * The native module is resolved LAZILY, at call time.
@@ -60,4 +60,64 @@ export async function related(id: string): Promise<MediaTrack[]> {
   return Array.isArray(tracks) ? tracks : [];
 }
 
-export type { MediaTrack, ResolvedAudio } from "./src/types";
+/**
+ * The cache's ceiling.
+ *
+ * A cover is read once and then remembered for the session; the ceiling
+ * keeps a long listening session from growing the cache without end. The
+ * oldest entry is dropped first.
+ */
+const ARTWORK_CACHE_LIMIT = 100;
+
+/**
+ * The colours already read, by artwork URL.
+ *
+ * A module-level cache, not a state one: the colours are a property of the
+ * cover, not of the screen, and the stage asks for the same cover again
+ * every time the track comes back around.
+ */
+const artworkCache = new Map<string, ArtworkColors>();
+
+/**
+ * The artwork's own colour, read on-device.
+ *
+ * The extraction happens in the native module (AndroidX Palette), off Expo's
+ * shared async queue, and it never throws there. This wrapper adds the two
+ * things JS is good at: a shape that cannot lie (a missing or wrongly typed
+ * field becomes null, never a made-up colour) and a small cache so a cover
+ * is read once.
+ *
+ * A failure — a dead network, a 404, a build without the native module —
+ * answers with two nulls, and the stage falls back to the accent token.
+ */
+export async function artworkColors(url: string): Promise<ArtworkColors> {
+  const key = url.trim();
+  if (!key) return { dominant: null, vibrant: null };
+  const cached = artworkCache.get(key);
+  if (cached) return cached;
+
+  let answer: ArtworkColors = { dominant: null, vibrant: null };
+  try {
+    const raw = (await native().artworkColors(key)) as
+      | Partial<ArtworkColors>
+      | null
+      | undefined;
+    answer = {
+      dominant: typeof raw?.dominant === "string" ? raw.dominant : null,
+      vibrant: typeof raw?.vibrant === "string" ? raw.vibrant : null,
+    };
+  } catch {
+    // The native side never throws, but a build without the module (the web
+    // preview) does — and the answer is the same either way: no colour.
+    answer = { dominant: null, vibrant: null };
+  }
+
+  if (artworkCache.size >= ARTWORK_CACHE_LIMIT) {
+    const oldest = artworkCache.keys().next().value;
+    if (oldest !== undefined) artworkCache.delete(oldest);
+  }
+  artworkCache.set(key, answer);
+  return answer;
+}
+
+export type { ArtworkColors, MediaTrack, ResolvedAudio } from "./src/types";

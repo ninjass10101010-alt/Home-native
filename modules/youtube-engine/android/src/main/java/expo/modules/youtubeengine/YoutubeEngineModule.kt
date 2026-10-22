@@ -20,5 +20,11 @@ class YoutubeEngineModule : Module() {
     AsyncFunction("related") { id: String, promise: Promise ->
       Engine.relatedAsync(id, promise)
     }
+    // The stage's tint: the artwork's own colour, read on-device. It runs on
+    // the engine's executor for the same reason `search` does — a blocking
+    // fetch on Expo's shared queue would stall every other native call.
+    AsyncFunction("artworkColors") { url: String, promise: Promise ->
+      Engine.artworkColorsAsync(url, promise)
+    }
   }
 }

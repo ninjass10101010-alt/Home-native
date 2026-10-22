@@ -160,4 +160,6 @@ jest.mock("./modules/youtube-engine", () => ({
     durationSeconds: 120,
     expiresAt: 0,
   })),
+  // The stage's tint: the artwork's own colour, read on-device.
+  artworkColors: jest.fn(async () => ({ dominant: "#3B82F6", vibrant: null })),
 }));
