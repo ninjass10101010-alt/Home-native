@@ -137,11 +137,17 @@ describe("TasksWidget (shared snapshot — no widget fetch)", () => {
     expect(queryByText(/Offline/)).toBeNull();
   });
 
-  it("guest gate: PIN copy, zero doomed fetches (the server requires a session)", async () => {
+  it("guest lane: the PUBLIC chores route is read once — never the session-gated snapshot", async () => {
+    // SP1.7: the wall is a family display, so a signed-out card reads the
+    // chores-only PUBLIC route (Home-ai /api/tasks/family) instead of the
+    // session-gated snapshot. The read here answers nothing usable, so the
+    // card keeps its honest gate copy.
     mockMember = null;
     const { findByText } = render(<TasksWidget />, { wrapper: wrap });
     await findByText(/Sign in with your PIN to see the family's data/);
-    expect(api).not.toHaveBeenCalled(); // reads the shared snapshot — never its own fetch
+    expect(api).toHaveBeenCalledTimes(1);
+    expect(api).toHaveBeenCalledWith("/api/tasks/family");
+    expect(api).not.toHaveBeenCalledWith("/api/tasks/sync"); // never the session lane
   });
 
   it("badges staleness when the sync layer reports a failed refresh", async () => {
