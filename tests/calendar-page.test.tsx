@@ -146,7 +146,7 @@ describe("CalendarPage — week strip", () => {
       expect(getByTestId(`cal-day-${iso}`)).toBeTruthy();
     }
     const today = getByTestId(`cal-day-${TODAY}`);
-    expect(today.props.accessibilityLabel).toBe("Today, Saturday, October 10");
+    expect(today.props.accessibilityLabel).toBe("Saturday, October 10, selected");
     expect(today.props.accessibilityState?.selected).toBe(true);
     expect(getByTestId("cal-day-2026-10-05").props.accessibilityState?.selected).toBe(false);
   });
