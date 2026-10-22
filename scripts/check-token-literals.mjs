@@ -22,6 +22,9 @@ const ALLOW = new Set([
   "src/theme/materials.ts",
   // Token math (zero-alpha sentinel string is a helper, not a design color).
   "src/theme/mix.ts",
+  // Music-surface palette (SP2): Shiny's Liquid palette as a token module —
+  // the colour SOURCE for /music, so the ban applies downstream of it.
+  "src/theme/music-tokens.ts",
 ]);
 const PATTERN = /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+/g;
 const COMMENT_LINE = /^\s*(\/\/|\/\*|\*)/;
