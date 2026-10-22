@@ -632,7 +632,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const value = React.useMemo<PlaybackValue>(
     () => ({
       current,
-      queue: queue.tracks,
+      queue: visibleTracks(queue.tracks, policy),
       index: queue.index,
       playing,
       position,
