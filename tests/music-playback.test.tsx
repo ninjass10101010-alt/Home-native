@@ -29,8 +29,20 @@ jest.mock("expo-audio", () => ({
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
+/**
+ * When set, the NEXT stream resolve waits for it — so the start stays IN
+ * FLIGHT (the stream is still being resolved) while the queue has already
+ * moved on. One shot: the gate is consumed by the first resolve that meets it.
+ */
+let mockResolveGate: Promise<void> | null = null;
+
 jest.mock("../modules/youtube-engine", () => ({
-  resolveAudio: (id: string) => mockResolve(id),
+  resolveAudio: async (id: string) => {
+    const gate = mockResolveGate;
+    mockResolveGate = null;
+    if (gate) await gate;
+    return mockResolve(id);
+  },
   search: jest.fn(async () => []),
   related: jest.fn(async () => []),
 }));
@@ -70,6 +82,11 @@ const denied: MediaTrack = {
   id: "den11111111", title: "Till I Collapse", artist: "Eminem", album: "Album",
   durationSeconds: 120, artworkUrl: null, explicit: false, source: "youtube_music",
 };
+/** A third row, so the auto-advance has somewhere it must NOT roll into. */
+const third: MediaTrack = {
+  id: "thr11111111", title: "Third Song", artist: "Artist", album: "Album",
+  durationSeconds: 120, artworkUrl: null, explicit: false, source: "youtube_music",
+};
 
 const KID = { id: "c1", name: "Kid", role: "child", emoji: "🐯", color: "green" };
 const PARENT = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" };
@@ -81,6 +98,7 @@ function Probe() {
       <Text testID="title">{current?.title ?? "none"}</Text>
       <Text testID="queue">{queue.map((t) => t.id).join(",") || "empty"}</Text>
       <Text testID="play-pair" onPress={() => void play(clean, [clean, explicit])}>play pair</Text>
+      <Text testID="play-triple" onPress={() => void play(clean, [clean, explicit, third])}>play triple</Text>
       <Text testID="play-bad" onPress={() => void play(explicit)}>play bad</Text>
       <Text testID="add-bad" onPress={() => addToQueue(explicit)}>add bad</Text>
       <Text testID="play-queue-at-bad" onPress={() => void playQueueAt([clean, explicit], 1)}>play queue at bad</Text>
@@ -116,6 +134,7 @@ beforeEach(async () => {
   await AsyncStorage.clear();
   mockMember = null;
   mockStatus = { isLoaded: true, playing: false, currentTime: 4, duration: 120, didJustFinish: false };
+  mockResolveGate = null;
   jest.clearAllMocks();
 });
 
@@ -226,6 +245,28 @@ it("a parent's auto-advance still rolls into an explicit track", async () => {
   await act(async () => { rerender(tree()); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Bad Song"));
   expect(mockResolve).toHaveBeenCalledWith("exp11111111");
+});
+
+it("the auto-advance does not roll forward while a start is in flight", async () => {
+  mockMember = PARENT;
+  const { getByTestId, rerender } = render(tree());
+  await act(async () => { getByTestId("play-triple").props.onPress(); });
+  await waitFor(() => expect(getByTestId("title").props.children).toBe("Clean Song"));
+  // The NEXT stream takes a moment: the start is IN FLIGHT while the queue
+  // has already moved on, and the finish flag that is still on screen belongs
+  // to the PREVIOUS track.
+  let release: () => void = () => {};
+  mockResolveGate = new Promise<void>((resolve) => { release = resolve; });
+  mockStatus = { ...mockStatus, didJustFinish: true };
+  await act(async () => { rerender(tree()); });
+  await waitFor(() => expect(getByTestId("title").props.children).toBe("Bad Song"));
+  // The queue moved on, but the transport must NOT roll a second time while
+  // the start is still in flight: the finish flag belongs to the track that
+  // just ended, not to the one that is starting.
+  await act(async () => { rerender(tree()); });
+  expect(mockResolve).not.toHaveBeenCalledWith("thr11111111");
+  expect(getByTestId("title").props.children).toBe("Bad Song");
+  await act(async () => { release(); });
 });
 
 it("a download carries the track's rating into the tray", async () => {
@@ -352,5 +393,39 @@ it("a term added later drops the now-denied track from a kid's queue and stops i
   expect(mockPause).toHaveBeenCalled();
   // The lock screen must not keep the title either.
   expect(mockLock).toHaveBeenCalledWith(false);
+});
+
+/* ------------------------------------------------------------------ *
+ * THE RACE — the parent types a term before the store has answered.
+ * ------------------------------------------------------------------ */
+
+it("a term added BEFORE the store answered is never lost", async () => {
+  mockMember = KID;
+  await seedDenylist(["eminem"]);
+  const { getByTestId } = render(tree());
+  // The store has NOT answered yet — the parent types a term right away.
+  await act(async () => { getByTestId("add-artist").props.onPress(); });
+  // The store answers: the family's stored term AND the early add must both
+  // be in the list — the load must never swallow the early add.
+  await waitFor(() => expect(getByTestId("denylist").props.children).toBe("eminem|artist"));
+  await waitFor(async () => {
+    const raw = await AsyncStorage.getItem("music.denylist");
+    expect(JSON.parse(raw as string).map((e: { term: string }) => e.term)).toEqual(["eminem", "artist"]);
+  });
+});
+
+it("an early add wins over the stored copy of the SAME term", async () => {
+  mockMember = KID;
+  await seedDenylist(["eminem"]);
+  const { getByTestId } = render(tree());
+  // The parent types the term the family already blocked, before the store
+  // answered: their own spelling is the one that stays.
+  await act(async () => { getByTestId("add-denied").props.onPress(); });
+  await waitFor(() => expect(getByTestId("denylist").props.children).toBe("Eminem"));
+  // One rule, not two: the same term twice is still one rule.
+  await waitFor(async () => {
+    const raw = await AsyncStorage.getItem("music.denylist");
+    expect(JSON.parse(raw as string)).toHaveLength(1);
+  });
 });
 

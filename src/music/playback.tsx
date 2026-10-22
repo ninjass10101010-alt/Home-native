@@ -146,14 +146,55 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     shuffle: false,
     explicitFilter: true,
   });
-  const finishedRef = React.useRef<string | null>(null);
-  const startingRef = React.useRef(false);
   const playerRef = React.useRef(player);
+  /**
+   * The queue as it stands RIGHT NOW.
+   *
+   * The viewer-change effect below runs when the POLICY changes, which may
+   * be long after the queue was last written — so it reads the queue from
+   * here instead of from the render that changed the policy. It is read
+   * inside that effect, never during render.
+   */
   const queueRef = React.useRef(queue);
-  /** The list as it stands RIGHT NOW — the add/remove callbacks read it. */
-  const denylistRef = React.useRef<DenyEntry[]>([]);
-  /** Resolves with the list once the store has been read. */
-  const denylistReadyRef = React.useRef<Promise<DenyEntry[]>>(Promise.resolve([]));
+  /**
+   * The auto-advance effect's view of "a start is in flight".
+   *
+   * An effect must read the LATEST committed value at the moment it runs, so
+   * this is a REF — but it is written from an EFFECT (never during render)
+   * and it is never touched by the callbacks the provider hands out.
+   */
+  const startingRef = React.useRef(false);
+  /**
+   * The track whose finish the auto-advance has already handled.
+   *
+   * The auto-advance effect owns it: it writes it there and in the start
+   * bookkeeping below — never in a callback the provider hands out.
+   */
+  const finishedRef = React.useRef<string | null>(null);
+  /**
+   * The START bookkeeping, in state.
+   *
+   * Two facts the auto-advance needs, and neither of them may live in a ref
+   * the render-visible callbacks touch:
+   *
+   * - `inFlight`: a track start is running (the stream is being resolved).
+   *   The finish flag that is still on screen then belongs to the PREVIOUS
+   *   track, so the transport must not roll forward while a start is in
+   *   flight.
+   * - `seq`: every start bumps it, so the "this finish was already handled"
+   *   memory can be cleared on EVERY start — the same track may finish
+   *   again (repeat one), and the next track's finish must not be swallowed
+   *   by the previous one's key.
+   */
+  const [start, setStart] = React.useState({ seq: 0, inFlight: false });
+  /**
+   * Whether the family's own list has been READ from the store yet.
+   *
+   * The persist effect is gated on it: until the store has answered, the
+   * list in state may still be empty, and writing that back would wipe what
+   * the family already blocked.
+   */
+  const [denylistLoaded, setDenylistLoaded] = React.useState(false);
 
   // The filter FAILS CLOSED: only an explicit `false` turns it off, so a
   // persisted payload written before the key existed can never disable the
@@ -177,7 +218,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => { playerRef.current = player; }, [player]);
   React.useEffect(() => { queueRef.current = queue; }, [queue]);
-  React.useEffect(() => { denylistRef.current = denylist; }, [denylist]);
 
   React.useEffect(() => {
     void AudioModule.setAudioModeAsync({
@@ -185,17 +225,19 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       interruptionMode: "doNotMix",
       playsInSilentMode: true,
     }).catch(() => {});
-    // The family's own list is read with the other stores. It resolves into
-    // the list as it stands: a term added in the meantime is APPENDED to what
-    // the family already blocked — never lost, never written twice.
-    denylistReadyRef.current = loadDenylist().then((blocked) => {
-      const early = denylistRef.current.filter(
-        (entry) => !blocked.some((b) => normalizeTerm(b.term) === normalizeTerm(entry.term))
-      );
-      const merged = [...blocked, ...early];
-      denylistRef.current = merged;
-      setDenylist(merged);
-      return merged;
+    // The family's own list is read with the other stores. It MERGES into the
+    // list as it stands: a term the parent added before the store answered
+    // is kept — and it wins over the stored copy of the SAME term, because
+    // the parent typed it a moment ago — so it is never lost and never
+    // written twice.
+    void loadDenylist().then((blocked) => {
+      setDenylist((prev) => {
+        const kept = blocked.filter(
+          (entry) => !prev.some((early) => normalizeTerm(early.term) === normalizeTerm(entry.term))
+        );
+        return [...kept, ...prev];
+      });
+      setDenylistLoaded(true);
     });
     void Promise.all([loadDownloads(), loadMusicSettings(), loadHistory()]).then(([list, saved, recent]) => {
       setDownloads(list);
@@ -204,6 +246,19 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setQueue((q) => ({ ...q, repeat: saved.repeat, shuffle: saved.shuffle }));
     });
   }, []);
+
+  /**
+   * The family's own list is PERSISTED from here, not from the callbacks.
+   *
+   * The callbacks only change the state; the write happens in an effect, so
+   * it is gated on `denylistLoaded` — the initial empty state can never wipe
+   * what the family already blocked, and a term added before the store
+   * answered is written out together with the stored terms.
+   */
+  React.useEffect(() => {
+    if (!denylistLoaded) return;
+    void saveDenylist(denylist);
+  }, [denylist, denylistLoaded]);
 
   const persistSettings = React.useCallback((next: MusicSettings) => {
     setSettings(next);
@@ -223,6 +278,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
    *
    * The SAME policy object carries both rules, so a track the family blocked
    * is dropped and stopped exactly like a badged one.
+   *
+   * The queue is read from a REF — the effect runs when the POLICY changes,
+   * which may be long after the queue itself was last written, so it needs
+   * the queue as it stands RIGHT NOW, not the one the render that changed
+   * the policy happened to hold. The ref is read here, inside an effect, and
+   * never during render.
    */
   React.useEffect(() => {
     const state = queueRef.current;
@@ -252,8 +313,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const startTrack = React.useCallback(
     async (track: MediaTrack) => {
-      startingRef.current = true;
-      finishedRef.current = null;
+      // A start is IN FLIGHT from here on: the finish flag that is still on
+      // the screen belongs to the PREVIOUS track, so the transport must not
+      // roll forward while the stream is being resolved.
+      //
+      // The bookkeeping is STATE, not a ref — the callbacks the provider
+      // hands out never touch a ref, and the auto-advance effect reads the
+      // committed value through its own ref view (see below).
+      setStart((s) => ({ seq: s.seq + 1, inFlight: true }));
       setError(null);
       try {
         const local = localFileFor(track.id);
@@ -273,7 +340,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         setError(e instanceof Error ? e.message : "play_failed");
       } finally {
-        startingRef.current = false;
+        setStart((s) => (s.inFlight ? { ...s, inFlight: false } : s));
       }
     },
     [player]
@@ -354,6 +421,29 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     }
     await goTo(target);
   }, [goTo, player, policy, position, queue]);
+
+  /**
+   * The auto-advance effect's REF VIEW of "a start is in flight".
+   *
+   * The state is the truth; the ref is what the effect reads, because an
+   * effect must read the LATEST committed value at the moment it runs — a
+   * state captured in the render scope can be one commit behind. It is
+   * written HERE, from an effect, and never during render.
+   */
+  React.useEffect(() => {
+    startingRef.current = start.inFlight;
+  }, [start.inFlight]);
+
+  /**
+   * Every start clears the "this finish was already handled" memory.
+   *
+   * The same track may finish again (repeat one), and the next track's
+   * finish must not be swallowed by the previous one's key — so the memory
+   * is cleared on EVERY start, not only when the track changes.
+   */
+  React.useEffect(() => {
+    finishedRef.current = null;
+  }, [start.seq]);
 
   React.useEffect(() => {
     if (!status?.didJustFinish) return;
@@ -494,20 +584,22 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
    * A blank term is ignored (an empty term must never match anything) and a
    * duplicate is ignored too — the same term twice is still one rule, so the
    * list stays the family's, not the app's.
+   *
+   * The list is changed with a FUNCTIONAL update, so the callback always
+   * works on the list as it stands — the state may still be filling up from
+   * the store when the parent types the first term. The write itself is the
+   * persist effect's job (see above): it waits for the store, so a term
+   * added in the first moments can never overwrite what the family already
+   * blocked.
    */
   const addDenied = React.useCallback(async (term: string) => {
     const trimmed = term.trim();
     if (!trimmed) return;
     const normalized = normalizeTerm(trimmed);
-    // Wait for the store to be read, so a term added in the first moments
-    // never overwrites what the family already blocked.
-    await denylistReadyRef.current;
-    const current = denylistRef.current;
-    if (current.some((entry) => normalizeTerm(entry.term) === normalized)) return;
-    const next = [...current, { term: trimmed, addedAt: Date.now() }];
-    denylistRef.current = next;
-    setDenylist(next);
-    await saveDenylist(next);
+    setDenylist((prev) => {
+      if (prev.some((entry) => normalizeTerm(entry.term) === normalized)) return prev;
+      return [...prev, { term: trimmed, addedAt: Date.now() }];
+    });
   }, []);
 
   /**
@@ -517,13 +609,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const removeDenied = React.useCallback(async (term: string) => {
     const normalized = normalizeTerm(term);
     if (!normalized) return;
-    await denylistReadyRef.current;
-    const current = denylistRef.current;
-    const next = current.filter((entry) => normalizeTerm(entry.term) !== normalized);
-    if (next.length === current.length) return;
-    denylistRef.current = next;
-    setDenylist(next);
-    await saveDenylist(next);
+    setDenylist((prev) => {
+      const next = prev.filter((entry) => normalizeTerm(entry.term) !== normalized);
+      return next.length === prev.length ? prev : next;
+    });
   }, []);
 
   /**
