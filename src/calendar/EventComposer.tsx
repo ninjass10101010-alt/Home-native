@@ -123,6 +123,7 @@ export function EventComposer({
 
   useEffect(() => {
     if (!visible) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset draft when opening
     setDraft({
       title: "",
       date: defaultDate,
