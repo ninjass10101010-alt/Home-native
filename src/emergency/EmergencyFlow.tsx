@@ -177,7 +177,7 @@ function formatPhoneForDisplay(phone: string): string {
 export function EmergencyFlow() {
   const { colors, theme, setTheme } = useTheme();
   const toast = useToast();
-  const { member, hydrated } = useAuth();
+  const { member, role, hydrated } = useAuth();
   const router = useRouter();
 
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
@@ -341,7 +341,9 @@ export function EmergencyFlow() {
   };
   const amberInk = accentInk(amber, colors["color-text-primary"]);
 
-  const isParent = hydrated && member?.role === "parent";
+  // The CAPABILITY role — managing the family's contacts is a parent-only
+  // action, so a cached parent profile must not offer it.
+  const isParent = hydrated && role === "parent";
   const emptyContactsDescription = isParent
     ? "Add or manage emergency contacts to get started."
     : "Ask a parent to add or manage emergency contacts.";

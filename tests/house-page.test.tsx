@@ -18,7 +18,7 @@ jest.mock("expo-secure-store", () => ({
 
 const mockRoleState = { role: "parent" };
 jest.mock("../src/state/AuthProvider", () => ({
-  useAuth: () => ({ member: { id: "p1", role: mockRoleState.role }, hydrated: true, signOut: jest.fn(), poke: jest.fn() }),
+  useAuth: () => ({ member: { id: "p1", role: mockRoleState.role }, role: mockRoleState.role === "parent" ? "parent" : null, hydrated: true, signOut: jest.fn(), poke: jest.fn() }),
 }));
 
 jest.mock("../src/api/client", () => ({

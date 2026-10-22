@@ -5,6 +5,7 @@ import { ApiError } from "../api/client";
 import { addMember, listMembersLive, removeMember, updateMember, writeCachedMembers } from "../api/members";
 import type { MemberAvatarSize, MemberRole } from "../api/members";
 import type { ServerMember } from "../api/types";
+import type { CapabilityRole } from "../state/AuthProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
 import { TYPOGRAPHY } from "../theme/tokens";
@@ -137,7 +138,16 @@ function memberRowId(m: ServerMember): string {
 
 type RosterState = "loading" | "ready" | "unavailable";
 
-export function FamilySection({ member }: { member: ServerMember | null }) {
+export function FamilySection({
+  role,
+}: {
+  /**
+   * The CAPABILITY role — what the viewer may DO. `null` means "no live
+   * session", so the roster is never read and never shown: a cached parent
+   * profile is a display fallback, not a capability.
+   */
+  role: CapabilityRole;
+}) {
   const { colors } = useTheme();
   const [roster, setRoster] = useState<ServerMember[]>([]);
   const [state, setState] = useState<RosterState>("loading");
@@ -189,10 +199,10 @@ export function FamilySection({ member }: { member: ServerMember | null }) {
   // Session-gated read: kids/guests never mount this section's fetch.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- "loading" is the declared initial state; the honest refetch is async (Modal.tsx uses the same idiom)
-    if (member && member.role === "parent") void loadRoster();
-  }, [member, loadRoster]);
+    if (role === "parent") void loadRoster();
+  }, [role, loadRoster]);
 
-  if (!member || member.role !== "parent") return null;
+  if (role !== "parent") return null;
 
   return (
     <View style={{ gap: 16 }} testID="family-section">

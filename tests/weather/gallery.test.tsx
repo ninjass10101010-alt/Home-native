@@ -16,7 +16,7 @@ jest.mock("expo-secure-store", () => ({
   deleteItemAsync: jest.fn(async () => {}),
 }));
 jest.mock("../../src/state/AuthProvider", () => ({
-  useAuth: () => ({ member: null, hydrated: true, signIn: jest.fn(), signOut: jest.fn(), poke: jest.fn() }),
+  useAuth: () => ({ member: null, role: null, hydrated: true, signIn: jest.fn(), signOut: jest.fn(), poke: jest.fn() }),
 }));
 const mockRefreshNow = jest.fn(async () => {});
 jest.mock("../../src/state/SyncManager", () => ({

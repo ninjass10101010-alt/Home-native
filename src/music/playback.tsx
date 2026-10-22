@@ -131,10 +131,15 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
    * The viewer comes from the auth layer (the AuthProvider sits ABOVE this
    * one in `app/_layout.tsx`), so the explicit policy is role-aware: a parent
    * sees everything, and every other role — a kid, a pet, and a signed-out
-   * guest (whose member is null) — FAILS CLOSED. See `src/music/explicit.ts`.
+   * guest — FAILS CLOSED. See `src/music/explicit.ts`.
+   *
+   * The parent's flag comes from the CAPABILITY role (`role`), never from the
+   * cached display profile (`member`): the device may remember a parent while
+   * no live session confirmed it, and a stale cached parent must not unlock
+   * explicit content or the family's blocked artists.
    */
-  const { member } = useAuth();
-  const isParent = member?.role === "parent";
+  const { role } = useAuth();
+  const isParent = role === "parent";
 
   const [queue, setQueue] = React.useState<QueueState>(() => createQueue([], -1));
   const [error, setError] = React.useState<string | null>(null);

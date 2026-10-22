@@ -6,7 +6,7 @@ import type { ServerMember } from "../api/types";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
 import { ACCENTS, TYPOGRAPHY } from "../theme/tokens";
-import { useAuth } from "../state/AuthProvider";
+import { useAuth, type CapabilityRole } from "../state/AuthProvider";
 import { useLocalSearchParams } from "expo-router";
 import { useSync } from "../state/SyncManager";
 import { READ_COPY_STALE } from "../home/widgets/data";
@@ -65,9 +65,12 @@ const SIGNED_IN_SECTIONS: readonly SettingsSectionId[] = ["me", "safety", "appea
  *  (Home-ai contract) — the Me panel shows the sign-in rail pointer. */
 const GUEST_SECTIONS: readonly SettingsSectionId[] = ["me", "safety", "appearance"];
 
-function sectionsFor(member: ServerMember | null): SectionDef[] {
-  if (!member) return SECTIONS.filter((s) => GUEST_SECTIONS.includes(s.id));
-  if (member.role === "parent") return SECTIONS.filter(() => true);
+function sectionsFor(role: CapabilityRole): SectionDef[] {
+  // The CAPABILITY role decides what the viewer may OPEN — the cached display
+  // profile grants nothing, so a cached parent does not get the parent-only
+  // sections (Family, Home, Connections & System).
+  if (role === "parent") return SECTIONS.filter(() => true);
+  if (role === null) return SECTIONS.filter((s) => GUEST_SECTIONS.includes(s.id));
   return SECTIONS.filter((s) => SIGNED_IN_SECTIONS.includes(s.id));
 }
 
@@ -115,7 +118,7 @@ function formatPhoneForDisplay(phone: string): string {
 
 export function SettingsPage() {
   const { colors, accentColor } = useTheme();
-  const { member, hydrated } = useAuth();
+  const { member, role, hydrated } = useAuth();
   const { stale } = useSync();
   const params = useLocalSearchParams<{ section?: string }>();
   const initialSection = (["me", "family", "safety", "appearance", "home", "system"] as const).includes(
@@ -125,7 +128,7 @@ export function SettingsPage() {
     : null;
   const [openId, setOpenId] = useState<SettingsSectionId | null>(initialSection);
 
-  const sections = sectionsFor(member);
+  const sections = sectionsFor(role);
   // If the signed-in member signs out mid-visit, their Me panel is gone — the
   // open section follows the launcher instead of ghosting a dead panel.
   const open = sections.find((s) => s.id === openId) ?? null;
@@ -200,7 +203,7 @@ export function SettingsPage() {
           ) : open.id === "appearance" ? (
             <AppearanceSection />
           ) : open.id === "family" ? (
-            <FamilySection member={member} />
+            <FamilySection role={role} />
           ) : open.id === "home" ? (
             <HomeSection />
           ) : open.id === "system" ? (

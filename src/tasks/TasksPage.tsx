@@ -566,7 +566,7 @@ export function TasksPage() {
   const router = useRouter();
   const { colors, accentColor, theme } = useTheme();
   const toast = useToast();
-  const { member, pinRequiredFor } = useAuth();
+  const { member, role, pinRequiredFor } = useAuth();
   const { snapshot, stale, lastSyncAt, syncError, refreshNow, onPulse } = useSync();
 
   const tasks = useMemo(() => normalizeSnapshotTasks(snapshot?.tasks), [snapshot]);
@@ -601,7 +601,9 @@ export function TasksPage() {
   const [bonusPin, setBonusPin] = useState("");
   const [queueRows, setQueueRows] = useState<any[]>([]);
 
-  const isParent = !!member && member.role === "parent";
+  // The CAPABILITY role — the approvals queue is a parent-only surface, so a
+  // cached parent profile must not unlock it.
+  const isParent = role === "parent";
   const me = member?.name ?? "";
   // The filter's roster comes from the DEVICE CACHE (never a fetch: a guest
   // read would only 401, and the snapshot poll already owns the signed-in

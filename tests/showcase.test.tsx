@@ -25,6 +25,7 @@ let mockAuthMember: unknown = null;
 jest.mock("../src/state/AuthProvider", () => ({
   useAuth: () => ({
     member: mockAuthMember,
+    role: (mockAuthMember as any)?.role ?? null,
     hydrated: true,
     signOut: jest.fn(async () => {}),
   }),

@@ -21,7 +21,7 @@ jest.mock("expo-secure-store", () => ({
 const parent = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" };
 let mockMember: any = parent;
 jest.mock("../src/state/AuthProvider", () => ({
-  useAuth: () => ({ member: mockMember, hydrated: true, signOut: jest.fn(), poke: jest.fn() }),
+  useAuth: () => ({ member: mockMember, role: mockMember ? mockMember.role : null, hydrated: true, signOut: jest.fn(), poke: jest.fn() }),
 }));
 
 const mockRefreshNow = jest.fn(async () => {});

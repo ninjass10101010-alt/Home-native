@@ -80,7 +80,7 @@ beforeEach(async () => {
 describe("FamilySection — roster read", () => {
   it("renders the live roster with role · joined subtitles and mirrors the cache", async () => {
     memberRoute();
-    const { getByTestId, findByText, getByText } = render(<FamilySection member={parent} />, { wrapper: wrap });
+    const { getByTestId, findByText, getByText } = render(<FamilySection role="parent" />, { wrapper: wrap });
     expect(await findByText("Rebecca (Mom)")).toBeTruthy();
     expect(getByTestId("family-member-p1")).toBeTruthy();
     expect(getByText("Parent · May 2024")).toBeTruthy();
@@ -93,7 +93,7 @@ describe("FamilySection — roster read", () => {
 
   it("loading → unavailable → Retry honesty", async () => {
     api.mockRejectedValue(new ApiError({ message: "unreachable", status: 0, code: "unreachable" }));
-    const { getByTestId, findByTestId, queryByTestId } = render(<FamilySection member={parent} />, { wrapper: wrap });
+    const { getByTestId, findByTestId, queryByTestId } = render(<FamilySection role="parent" />, { wrapper: wrap });
     expect(getByTestId("family-roster-loading")).toBeTruthy();
     expect(await findByTestId("family-roster-unavailable")).toBeTruthy();
     expect(queryByTestId("family-member-p1")).toBeNull();
@@ -104,18 +104,18 @@ describe("FamilySection — roster read", () => {
 
   it("empty roster → honest empty state", async () => {
     memberRoute({ get: { members: [], source: "live" } });
-    const { findByTestId } = render(<FamilySection member={parent} />, { wrapper: wrap });
+    const { findByTestId } = render(<FamilySection role="parent" />, { wrapper: wrap });
     expect(await findByTestId("family-roster-empty")).toBeTruthy();
   });
 
-  it("renders nothing without a parent member (kid + guest) and never fires the doomed GET", async () => {
+  it("renders nothing without a parent capability (kid + no live session) and never fires the doomed GET", async () => {
     api.mockImplementation(() => {
       throw new Error("must not be called");
     });
-    const { queryByTestId } = render(<FamilySection member={child} />, { wrapper: wrap });
+    const { queryByTestId } = render(<FamilySection role="child" />, { wrapper: wrap });
     await flush();
     expect(queryByTestId("family-section")).toBeNull();
-    const { queryByTestId: q } = render(<FamilySection member={null} />, { wrapper: wrap });
+    const { queryByTestId: q } = render(<FamilySection role={null} />, { wrapper: wrap });
     await flush();
     expect(q("family-section")).toBeNull();
     expect(api).not.toHaveBeenCalled();
@@ -123,7 +123,7 @@ describe("FamilySection — roster read", () => {
 
   it("photo roster rows render without crashing the emoji branch", async () => {
     memberRoute({ get: { members: [{ ...child, emoji: "http://nas.local:3000/api/photos/file?r=1&f=a.jpg" }], source: "live" } });
-    const { findByTestId } = render(<FamilySection member={parent} />, { wrapper: wrap });
+    const { findByTestId } = render(<FamilySection role="parent" />, { wrapper: wrap });
     expect(await findByTestId("family-member-c1")).toBeTruthy();
   });
 });
@@ -131,7 +131,7 @@ describe("FamilySection — roster read", () => {
 describe("FamilySection — add member flow", () => {
   const openAddDialog = async () => {
     memberRoute();
-    const r = render(<FamilySection member={parent} />, { wrapper: wrap });
+    const r = render(<FamilySection role="parent" />, { wrapper: wrap });
     await r.findByTestId("family-member-p1");
     fireEvent.press(r.getByTestId("family-add-member"));
     await r.findByTestId("family-field-name");
@@ -212,7 +212,7 @@ describe("FamilySection — add member flow", () => {
 describe("FamilySection — edit member flow", () => {
   const openEdit = async (id = "p1") => {
     memberRoute();
-    const r = render(<FamilySection member={parent} />, { wrapper: wrap });
+    const r = render(<FamilySection role="parent" />, { wrapper: wrap });
     await r.findByTestId(`family-member-${id}`);
     fireEvent.press(r.getByTestId(`family-edit-${id}`));
     await r.findByTestId("family-field-name");
@@ -273,7 +273,7 @@ describe("FamilySection — edit member flow", () => {
 describe("FamilySection — remove member flow", () => {
   const openRemove = async (id = "c1") => {
     memberRoute();
-    const r = render(<FamilySection member={parent} />, { wrapper: wrap });
+    const r = render(<FamilySection role="parent" />, { wrapper: wrap });
     await r.findByTestId(`family-member-${id}`);
     fireEvent.press(r.getByTestId(`family-remove-${id}`));
     await r.findByTestId("family-delete-confirm");

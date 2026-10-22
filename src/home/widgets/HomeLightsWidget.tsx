@@ -34,12 +34,13 @@ function LightsEmpty() {
  *  light optimistically; guests/kids tap through to /ha. */
 export function HomeLightsWidget() {
   const { colors } = useTheme();
-  const { member } = useAuth();
+  const { role } = useAuth();
   const router = useRouter();
   const toast = useToast();
   const { states, loaded, error, refresh } = useHAState();
 
-  const isParent = member?.role === "parent";
+  // The CAPABILITY role — a cached parent profile grants no control.
+  const isParent = role === "parent";
 
   const lightEntities = entitiesByDomain(states, "light");
   const lights = lightEntities.length > 0 ? lightEntities : entitiesByDomain(states, "switch");

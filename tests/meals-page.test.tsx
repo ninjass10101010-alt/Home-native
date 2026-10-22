@@ -31,6 +31,7 @@ let mockMember: any = parent;
 jest.mock("../src/state/AuthProvider", () => ({
   useAuth: () => ({
     member: mockMember,
+    role: mockMember ? mockMember.role : null,
     hydrated: true,
     signOut: jest.fn(),
     poke: jest.fn(),

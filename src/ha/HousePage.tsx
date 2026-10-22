@@ -29,10 +29,12 @@ function friendlyName(s: { entity_id: string; attributes: Record<string, unknown
 
 export function HousePage() {
   const { colors, accentColor } = useTheme();
-  const { member } = useAuth();
+  const { role } = useAuth();
   const toast = useToast();
   const { states, error } = useHAState();
-  const isParent = member?.role === "parent";
+  // The CAPABILITY role — the house controls are parent-only, so a cached
+  // parent profile must not unlock them.
+  const isParent = role === "parent";
 
   const [health, setHealth] = useState<{ ok?: boolean; wsConnected?: boolean; configured?: boolean } | null>(null);
   const [healthLoading, setHealthLoading] = useState(true);

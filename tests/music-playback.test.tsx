@@ -50,11 +50,22 @@ jest.mock("../modules/youtube-engine", () => ({
 /**
  * The signed-in viewer. `null` = signed out, which fails closed exactly like
  * a kid role. The provider reads it through `useAuth()`.
+ *
+ * `mockRole` is the CAPABILITY and it is deliberately SEPARATE from the
+ * member: a CACHED profile (the device remembers the member, but no live
+ * session confirmed it) has `role: null` and grants NOTHING. `undefined`
+ * means "follow the member" — the ordinary LIVE session the rest of this
+ * suite simulates; a test that needs the cached case sets it to `null`.
  */
 let mockMember: any = null;
+let mockRole: any = undefined;
 jest.mock("../src/state/AuthProvider", () => ({
   useAuth: () => ({
-    member: mockMember, hydrated: true, mode: "family",
+    member: mockMember,
+    role: mockRole !== undefined ? mockRole : (mockMember ? mockMember.role : null),
+    sessionVerified: mockRole !== undefined ? mockRole !== null : mockMember !== null,
+    hydrated: true,
+    mode: "family",
     signOut: jest.fn(async () => {}), poke: jest.fn(),
   }),
 }));
@@ -133,6 +144,7 @@ const settle = async () => {
 beforeEach(async () => {
   await AsyncStorage.clear();
   mockMember = null;
+  mockRole = undefined;
   mockStatus = { isLoaded: true, playing: false, currentTime: 4, duration: 120, didJustFinish: false };
   mockResolveGate = null;
   jest.clearAllMocks();
@@ -150,6 +162,31 @@ it("resolves the stream on-device and plays the native URL", async () => {
 
 it("a parent may queue and play an explicit track", async () => {
   mockMember = PARENT;
+  const { getByTestId } = render(tree());
+  await act(async () => { getByTestId("play-pair").props.onPress(); });
+  await waitFor(() => expect(getByTestId("title").props.children).toBe("Clean Song"));
+  expect(getByTestId("queue").props.children).toBe("clean11111,exp11111111");
+});
+
+/* ------------------------------------------------------------------ *
+ * THE CAPABILITY — the policy follows the LIVE-VERIFIED role, never
+ * the cached profile the device happens to remember.
+ * ------------------------------------------------------------------ */
+
+it("a cached parent profile grants no music capability: the policy is parent-scoped until a live session", async () => {
+  // The device remembers a parent — but NO live whoami/sign-in confirmed it.
+  mockMember = PARENT;
+  mockRole = null;
+  const { getByTestId } = render(tree());
+  await act(async () => { getByTestId("play-pair").props.onPress(); });
+  await waitFor(() => expect(getByTestId("title").props.children).toBe("Clean Song"));
+  // The kid policy applies: the explicit track is NOT visible to the viewer.
+  expect(getByTestId("queue").props.children).toBe("clean11111");
+});
+
+it("a live parent session keeps the parent policy (the explicit track is visible)", async () => {
+  mockMember = PARENT;
+  mockRole = "parent";
   const { getByTestId } = render(tree());
   await act(async () => { getByTestId("play-pair").props.onPress(); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Clean Song"));

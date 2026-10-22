@@ -20,7 +20,7 @@ jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }) }));
 
 let mockMember: any = null;
 jest.mock("../../src/state/AuthProvider", () => ({
-  useAuth: () => ({ member: mockMember, hydrated: true, signIn: jest.fn(), signOut: jest.fn(), poke: jest.fn() }),
+  useAuth: () => ({ member: mockMember, role: mockMember ? mockMember.role : null, hydrated: true, signIn: jest.fn(), signOut: jest.fn(), poke: jest.fn() }),
 }));
 const mockRefreshNow = jest.fn(async () => {});
 const mockPulseListeners = new Set<() => void>();

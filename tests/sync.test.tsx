@@ -20,6 +20,7 @@ const mockSignOut = jest.fn(async () => {});
 jest.mock("../src/state/AuthProvider", () => ({
   useAuth: () => ({
     member: mockMember,
+    role: mockMember ? mockMember.role : null,
     hydrated: mockHydrated,
     signOut: mockSignOut,
   }),

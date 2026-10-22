@@ -26,7 +26,7 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("../src/state/AuthProvider", () => ({
-  useAuth: () => ({ member: { id: "p1", role: "parent" }, hydrated: true, signOut: jest.fn(), poke: jest.fn() }),
+  useAuth: () => ({ member: { id: "p1", role: "parent" }, role: "parent", hydrated: true, signOut: jest.fn(), poke: jest.fn() }),
 }));
 
 jest.mock("../src/api/client", () => ({

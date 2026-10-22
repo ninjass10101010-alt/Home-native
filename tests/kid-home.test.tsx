@@ -43,12 +43,21 @@ const pet = { id: "p2", name: "Drogon", role: "pet", emoji: "🐕", color: "gree
 const adult = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" };
 
 let mockMember: any = adult;
+/**
+ * The CAPABILITY — deliberately SEPARATE from the member: a CACHED profile
+ * (the device remembers the kid, but no live session confirmed it) has
+ * `role: null` and grants NOTHING. `undefined` = "follow the member" — the
+ * ordinary LIVE session the rest of this suite simulates.
+ */
+let mockRole: any = undefined;
 const mockSignOut = jest.fn(async () => {});
 jest.mock("../src/state/AuthProvider", () => {
   const real = jest.requireActual("../src/state/AuthProvider");
   return {
     useAuth: () => ({
       member: mockMember,
+      role: mockRole !== undefined ? mockRole : (mockMember ? mockMember.role : null),
+      sessionVerified: mockRole !== undefined ? mockRole !== null : mockMember !== null,
       hydrated: true,
       signOut: mockSignOut,
       poke: jest.fn(),
@@ -180,6 +189,7 @@ const claimCalls = () => api.mock.calls.filter((c: any[]) => c[0] === "/api/task
 beforeEach(() => {
   jest.clearAllMocks();
   mockMember = adult;
+  mockRole = undefined;
   mockSnapshot = null;
   mockStale = false;
   mockLastSyncAt = null;
@@ -509,6 +519,17 @@ describe("app/index — home mode switch", () => {
 
   it("guest (signed out) keeps the family bento — kid mode never gates a guest", async () => {
     mockMember = null;
+    const screen = render(<HomeRoute />, { wrapper: wrap });
+    expect(await screen.findByTestId("wall-grid")).toBeTruthy();
+    expect(screen.queryByTestId("kid-home")).toBeNull();
+  });
+
+  it("a CACHED kid profile keeps the family bento — a cached profile grants no kid layout", async () => {
+    // The device remembers the kid, but NO live whoami/sign-in confirmed it:
+    // the panel must not drop into a kid's personal layout on a cached label.
+    mockMember = kidUnder10;
+    mockRole = null;
+    mockSnapshot = { tasks: [], weekData: WEEK_DATA };
     const screen = render(<HomeRoute />, { wrapper: wrap });
     expect(await screen.findByTestId("wall-grid")).toBeTruthy();
     expect(screen.queryByTestId("kid-home")).toBeNull();

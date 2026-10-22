@@ -28,7 +28,7 @@ export function PhotosPage() {
   const { colors, accentColor } = useTheme();
   const toast = useToast();
   const router = useRouter();
-  const { member } = useAuth();
+  const { member, role } = useAuth();
   const { stale: syncStale } = useSync();
 
   const { status, data, failure, stale: dataStale, retry } = useWidgetData<{ photos: WallPhoto[] }>(async () => {
@@ -43,7 +43,9 @@ export function PhotosPage() {
     setOverrides({});
   }, [data]);
 
-  const isParent = !!member && member.role === "parent";
+  // The CAPABILITY role — moderating what the wall shows is parent-only, so
+  // a cached parent profile must not unlock it.
+  const isParent = role === "parent";
   const photos = data?.photos ?? [];
   const stale = dataStale || syncStale;
   const shownOf = (p: WallPhoto) => overrides[p.id] ?? p.showOnWall !== false;

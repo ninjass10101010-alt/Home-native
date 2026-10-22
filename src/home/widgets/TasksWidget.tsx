@@ -49,8 +49,11 @@ function readableTitle(title: string): string {
 export function TasksWidget() {
   const { colors, accentColor } = useTheme();
   const router = useRouter();
-  const { member, hydrated } = useAuth();
-  const isParent = member?.role === "parent";
+  const { role, hydrated } = useAuth();
+  // The CAPABILITY role, never the cached display profile: a stale cached
+  // parent must not unlock the approval footer, and a cached profile has no
+  // live session to read the family's tasks with.
+  const isParent = role === "parent";
   const { snapshot, stale: syncStale, syncError, refreshNow } = useSync();
 
   const tasks = React.useMemo(
@@ -76,8 +79,9 @@ export function TasksWidget() {
 
   // Guest model: /api/tasks/sync requires a live session (server-auth), so a
   // signed-out fetch can only 401 — guests get the PIN gate WITHOUT a doomed
-  // poll (the web keeps the same rule: no signed-out gateway polling).
-  const guest = hydrated && !member;
+  // poll (the web keeps the same rule: no signed-out gateway polling). The
+  // CAPABILITY role decides: a cached profile has no live session either.
+  const guest = hydrated && role === null;
   const hasData = !guest && snapshot !== null;
   // U5.1 taxonomy: transport down is OFFLINE ("unreachable"); a NAS that
   // answered and failed ("server") is an ERROR — never blame the family's

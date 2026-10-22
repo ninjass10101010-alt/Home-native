@@ -21,10 +21,13 @@ export default function Soon() {
   const params = useLocalSearchParams<{ label?: string }>();
   const pathname = usePathname();
   const router = useRouter();
-  const { member, hydrated, poke } = useAuth();
+  const { role: capabilityRole, hydrated, poke } = useAuth();
   const [moreOpen, setMoreOpen] = React.useState(false);
 
-  const role = member ? (member.role === "parent" ? "parent" : "child") : "guest";
+  // The nav role follows the CAPABILITY (a live-verified session), never the
+  // cached display profile: the manifest's signed-in-only and parent-only
+  // destinations stay closed to a cached profile.
+  const role = capabilityRole === "parent" ? "parent" : capabilityRole ? "child" : "guest";
   const label = typeof params.label === "string" && params.label ? params.label : "This surface";
 
   return (

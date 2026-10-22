@@ -8,11 +8,14 @@ import { MoreSheet } from "../src/nav/MoreSheet";
 import { useAuth } from "../src/state/AuthProvider";
 
 export default function MusicRoute() {
-  const { member, hydrated, poke } = useAuth();
+  const { role: capabilityRole, hydrated, poke } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = React.useState(false);
-  const role = member ? (member.role === "parent" ? "parent" : "child") : "guest";
+  // The nav role follows the CAPABILITY (a live-verified session), never the
+  // cached display profile: the manifest's signed-in-only and parent-only
+  // destinations stay closed to a cached profile.
+  const role = capabilityRole === "parent" ? "parent" : capabilityRole ? "child" : "guest";
 
   return (
     <Screen testID="music-route">

@@ -57,7 +57,13 @@ const UNREACHABLE_COPY = "Couldn't reach Consuela — check the connection and t
  */
 export default function HomePlaceholder() {
   const { colors } = useTheme();
-  const { member, hydrated, signIn, signOut, poke } = useAuth();
+  const { member, role, hydrated, signIn, signOut, poke } = useAuth();
+  /**
+   * The navigation role — it follows the CAPABILITY, never the cached
+   * profile: the manifest's signed-in-only and parent-only destinations
+   * (Music, Photos, Family Memory) must stay closed to a cached profile.
+   */
+  const navRole = role === "parent" ? "parent" : role ? "child" : "guest";
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = React.useState(false);
@@ -263,8 +269,12 @@ export default function HomePlaceholder() {
         }}
       >
       {/* Mode switch (WS-4): a signed-in child/pet gets the gamified kid wall
-          INSTEAD of the family bento; family (guest) and adult keep HomeWall. */}
-      {member && member.role !== "parent" ? (
+          INSTEAD of the family bento; family (guest) and adult keep HomeWall.
+
+          The LAYOUT follows the CAPABILITY role, never the cached display
+          profile: a remembered kid (with no live session) must not drop the
+          panel into a kid's personal layout. */}
+      {role !== null && role !== "parent" ? (
         <KidHome onOpenMore={() => setMoreOpen(true)} />
       ) : (
         <HomeWall
@@ -324,7 +334,7 @@ export default function HomePlaceholder() {
       ) : null}
 
       <CapsuleDock
-        role={member ? (member.role === "parent" ? "parent" : "child") : "guest"}
+        role={navRole}
         hydrated={hydrated}
         pathname={pathname}
         onNavigate={(p) => router.push(p as never)}
@@ -332,7 +342,7 @@ export default function HomePlaceholder() {
       <MoreSheet
         visible={moreOpen}
         onClose={() => setMoreOpen(false)}
-        role={member ? (member.role === "parent" ? "parent" : "child") : "guest"}
+        role={navRole}
         onNavigate={(p) => router.push(p as never)}
       />
 
