@@ -1,4 +1,4 @@
-import { formatTime12h, localTodayISO } from "../home/widgets/data";
+import { localTodayISO } from "../home/widgets/data";
 
 /**
  * The calendar's shared merge vocabulary (WS-5). The Google/day math is the
@@ -14,10 +14,19 @@ export interface DbEventRow {
   title?: string;
   date?: string; // "YYYY-MM-DD"
   time?: string; // "HH:MM"
+  endTime?: string;
+  allDay?: boolean;
   member?: string;
   icon?: string;
   /** Member/routine color name (db-gateway row) — the web's member color. */
   color?: string;
+  location?: string;
+  notes?: string;
+  source?: string;
+  googleEventId?: string;
+  googleCalendarId?: string;
+  googleSyncStatus?: string;
+  googleSyncError?: string;
 }
 
 /** Google row per docs/wave1-endpoints.md + lib/calendar/google-mapping.ts. */
@@ -55,6 +64,11 @@ export interface WallEvent {
   railToken?: string;
   /** "s_"-prefixed ids are routines (schedules) — counts must not call them events. */
   isRoutine?: boolean;
+  source?: "family" | "google" | "routine";
+  sourceId?: string;
+  googleId?: string;
+  googleSyncStatus?: string;
+  googleSyncError?: string;
 }
 
 export const ALL_DAY_TIME = "All day";
@@ -73,12 +87,14 @@ function isDateOnly(iso: string): boolean {
 /** Port of google-mapping.parseGoogleStart: date-only is LOCAL midnight (never UTC). */
 function parseStart(startIso: string, allDay: boolean): Date | null {
   if (!startIso) return null;
-  if (allDay && isDateOnly(startIso)) {
-    const [y, m, d] = startIso.split("-").map(Number);
+  if (allDay) {
+    const datePart = startIso.slice(0, 10);
+    if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(datePart)) return null;
+    const [y, m, d] = datePart.split("-").map(Number);
     return new Date(y, m - 1, d);
   }
-  const d = new Date(startIso);
-  return Number.isNaN(d.getTime()) ? null : d;
+  const parsed = new Date(startIso);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 const localMidnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -86,18 +102,18 @@ const localMidnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.get
 /** Port of googleEventCoveredDays (all-day end is EXCLUSIVE; capped at 366). */
 export function googleCoversDay(row: GoogleEventRow, dayISO: string): boolean {
   const startIso = row.start_iso || "";
-  const dateOnly = isDateOnly(startIso);
-  const start = parseStart(startIso, dateOnly);
+  const allDay = Boolean(row.all_day) || isDateOnly(startIso);
+  const start = parseStart(startIso, allDay);
   if (!start) return false;
   const first = localMidnight(start);
 
   let last: Date;
-  if (dateOnly) {
-    const end = isDateOnly(row.end_iso || "") ? parseStart(row.end_iso as string, true) : null;
-    last =
-      !end || localMidnight(end) <= first
-        ? first
-        : new Date(end.getFullYear(), end.getMonth(), end.getDate() - 1);
+  if (allDay) {
+    const endDate = /^[0-9]{4}-[0-9]{2}-[0-9]{2}/.test(row.end_iso || "")      ? parseStart(String(row.end_iso).slice(0, 10), true)
+      : null;
+    last = !endDate || localMidnight(endDate) <= first
+      ? first
+      : new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() - 1);
   } else {
     const end = row.end_iso ? new Date(row.end_iso) : null;
     if (!end || Number.isNaN(end.getTime()) || end <= start) {
@@ -142,18 +158,23 @@ export function hhmmToMinutes(time?: string): number {
 export function familyEventsForDay(rows: DbEventRow[], dayISO: string): WallEvent[] {
   return rows
     .filter((e) => e?.date === dayISO)
-    .map((e, i) => ({
-      id: `db_${String(e.id ?? i)}`,
-      title: e.title || "Untitled event",
-      time: formatTime12h(e.time),
-      sortMinutes: hhmmToMinutes(e.time),
-      icon: e.icon || "📅",
-      member: e.member || undefined,
-      // Web parity (db/index.ts:122): the row's own member color paints the
-      // rail (green→mint, amber→amber…); amber is the web's no-color fallback
-      // — never a blanket blue.
-      railToken: (e.color && SCHEDULE_RAIL_TOKENS[e.color.toLowerCase()]) || "color-accent-amber",
-    }));
+    .map((e, i) => {
+      const minutes = e.allDay ? ALL_DAY_SORT_MINUTES : scheduleTimeMinutes(e.time);
+      return {
+        id: `db_${String(e.id ?? i)}`,
+        title: e.title || "Untitled event",
+        time: e.allDay ? ALL_DAY_TIME : minutes === null ? undefined : formatScheduleTime12h(e.time),
+        sortMinutes: e.allDay ? ALL_DAY_SORT_MINUTES : minutes ?? UNKNOWN_SORT_MINUTES,
+        icon: e.icon || "📅",
+        member: e.member || undefined,
+        railToken: (e.color && SCHEDULE_RAIL_TOKENS[e.color.toLowerCase()]) || "color-accent-amber",
+        source: "family",
+        sourceId: e.id == null ? undefined : String(e.id),
+        googleId: e.googleEventId || undefined,
+        googleSyncStatus: e.googleSyncStatus || undefined,
+        googleSyncError: e.googleSyncError || undefined,
+      };
+    });
 }
 
 /** Google events covering one day (all-day spans included via googleCoversDay). */
@@ -170,6 +191,8 @@ export function googleEventsForDay(rows: GoogleEventRow[], dayISO: string): Wall
         icon: "📅",
         member: "Google",
         railToken: GOOGLE_RAIL_TOKEN,
+        source: "google",
+        googleId: row.google_id || undefined,
       };
     });
 }
@@ -264,7 +287,15 @@ export function schedulesForDay(rows: ScheduleRow[], date: Date): WallEvent[] {
 
 /** One day's merged timeline: all-day first (−1), then by clock, unknown last. */
 export function mergeDayRows(...groups: WallEvent[][]): WallEvent[] {
-  return groups.flat().sort((a, b) => a.sortMinutes - b.sortMinutes);
+  const rows = groups.flat();
+  const mirroredGoogleIds = new Set(
+    rows
+      .filter((row) => row.source !== "google" && row.googleId)
+      .map((row) => String(row.googleId)),
+  );
+  return rows
+    .filter((row) => row.source !== "google" || !row.googleId || !mirroredGoogleIds.has(String(row.googleId)))
+    .sort((a, b) => a.sortMinutes - b.sortMinutes);
 }
 
 /** Merged events + routines for a specific day string (YYYY-MM-DD). */

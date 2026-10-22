@@ -118,7 +118,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     void readCachedMembers().then((cached) => {
       if (!alive) return;
       const rows = cached.length > 0 ? cached : FALLBACK_MEMBERS;
-      setRoster(rows.filter((r) => (r.name || "").trim() && String(r.role ?? "").toLowerCase() !== "pet"));
+      setRoster(rows.filter((r) => (r.name || "").trim()));
     });
     return () => {
       alive = false;
@@ -160,7 +160,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
   });
 
   const stale = dataStale || syncStale;
-
+  const pageFailed = !!member && status === "error" && data === null;
   const dbEvents = useMemo(() => {
     const server = Array.isArray(data?.dbEvents) ? data.dbEvents : [];
     if (optimisticRows.length === 0) return server;
@@ -185,12 +185,8 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
 
   const rowsForDay = useCallback((iso: string): WallEvent[] => {
     const rows = rawRowsForDay(iso);
-    if (!selectedMember) return rows;
-    const target = selectedMember.toLowerCase();
-    return rows.filter((r) => {
-      if (!r.member) return true;
-      return r.member.toLowerCase().includes(target);
-    });
+    if (!selectedMember || selectedMember === "All") return rows;
+    return rows.filter((row) => !row.member || row.member === selectedMember);
   }, [rawRowsForDay, selectedMember]);
 
   const calendarEventsForDay = useCallback((iso: string): WallEvent[] => {
@@ -199,12 +195,8 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
       familyEventsForDay(dbEvents, iso),
       googleEventsForDay(data.googleRows, iso)
     );
-    if (!selectedMember) return rows;
-    const target = selectedMember.toLowerCase();
-    return rows.filter((r) => {
-      if (!r.member) return true;
-      return r.member.toLowerCase().includes(target);
-    });
+    if (!selectedMember || selectedMember === "All") return rows;
+    return rows.filter((row) => !row.member || row.member === selectedMember);
   }, [dbEvents, data, selectedMember]);
 
   const pillInk = colors["color-accent-amber"] ?? colors["color-text-secondary"];
@@ -374,7 +366,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
         />
         <View style={{ gap: 2, flex: 1 }}>
           <Text style={{ color: colors["color-text-secondary"], fontSize: 14, fontWeight: "600" }}>
-            {row.time ?? "All day"}
+            {row.time ?? "Time TBD"}
           </Text>
           <Text
             numberOfLines={1}
@@ -393,23 +385,34 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
             tone={row.member === "Google" ? "cyan" : "accent"}
           />
         ) : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Edit ${row.title}`}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: colors["color-surface-3"],
-          }}
-        >
-          <Text style={{ color: colors["color-text-secondary"], fontSize: 14 }}>✎</Text>
-        </Pressable>
+        {row.source === "family" && row.sourceId && (
+          row.googleSyncStatus === "pending" || row.googleSyncStatus === "failed"
+        ) ? (
+          <Chip
+            label={row.googleSyncStatus === "failed" ? "Google failed · Retry" : "Google pending · Retry"}
+            tone={row.googleSyncStatus === "failed" ? "danger" : "warning"}
+            onPress={() => void retryGoogle(row.sourceId)}
+            accessibilityLabel={`Retry Google sync for ${row.title}`}
+          />
+        ) : null}
       </View>
     </View>
   );
+
+  if (pageFailed) {
+    return (
+      <View testID="calendar-page" style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
+        <EmptyState
+          testID="calendar-page-error"
+          icon="📡"
+          title="Calendar unreachable"
+          body="Consuela couldn't reach the family calendar. Your saved copy will return when the connection does."
+          actionLabel="Try again"
+          onAction={retry}
+        />
+      </View>
+    );
+  }
 
   return (
     <View testID="calendar-page" style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
@@ -460,21 +463,14 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
           </View>
            <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
             {isParent ? (
-            <Pressable
-              testID="add-event"
-              accessibilityRole="button"
-              accessibilityLabel="Add event"
-              onPress={() => setComposerOpen(true)}
-              style={({ pressed }) => ({
-                ...iconTargetStyle,
-                borderRadius: 32,
-                backgroundColor: colors["color-surface-2"],
-                opacity: pressed ? 0.7 : 1,
-              })}
-            >
-              <Text style={{ color: colors["color-text-primary"], fontSize: 22, fontWeight: "600" }}>+</Text>
-            </Pressable>
-            ) : null}
+              <SoftButton testID="add-event" accessibilityLabel="Add event" onPress={() => setComposerOpen(true)} size="sm">
+                Add event
+              </SoftButton>
+            ) : (
+              <Text style={{ color: colors["color-text-muted"], fontSize: 14 }}>
+                Ask a parent to add or change events.
+              </Text>
+            )}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Toggle theme"
@@ -486,7 +482,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                 opacity: pressed ? 0.7 : 1,
               })}
             >
-              <Text style={{ fontSize: 18 }}>{theme === "dark" ? "🌙" : "☀️"}</Text>
+               <Text style={{ fontSize: 18 }}>{theme === "dark" ? "☀️" : "🌙"}</Text>
             </Pressable>
           </View>
         </Material>
@@ -1027,7 +1023,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                                     fontWeight: "600",
                                   }}
                                 >
-                                  {r.time ? `${r.time} · ` : "All day · "}
+                                   {r.time ? `${r.time} · ` : "Time TBD · "}
                                   <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>
                                     {r.title}
                                   </Text>
