@@ -1,21 +1,51 @@
 import React from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { search as engineSearch } from "../../modules/youtube-engine";
+import {
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { artworkColors, search as engineSearch } from "../../modules/youtube-engine";
 import { useTheme } from "../theme/ThemeProvider";
 import { FONTS, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
 import { Material } from "../theme/Material";
+import { musicTokensFor, type MusicTokens } from "../theme/music-tokens";
 import { Modal } from "../ui/Modal";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { usePlayback } from "./playback";
 import { currentLineIndex, fetchLyrics, type LyricLine } from "./lyrics";
 import { countUnrated, isContentHidden, isDeniedTerm, searchNote, visibleTracks } from "./explicit";
 import { totalDownloadBytes } from "./library";
-import type { MediaTrack } from "./types";
+import { bandStageTint } from "./tint";
+import { STAGE_TYPE } from "./stage-type";
+import type { MediaTrack, RepeatMode } from "./types";
 
-type Tab = "lyrics" | "queue";
+/** The Now Playing screen's three modes. Stage is the artwork-led one. */
+type Mode = "stage" | "lyrics" | "queue";
+
+/** The artwork's crossfade, in ms. */
+const STAGE_FADE_MS = 250;
+
+/** The artwork never grows past this edge (the wall's width is the real limit). */
+const STAGE_MAX_ARTWORK_EDGE = 560;
 
 export function MusicPlayer() {
-  const { colors, accentColor } = useTheme();
+  const { colors, accentColor, theme, boost, reduceMotion } = useTheme();
+  // The music surface's OWN palette (Shiny's Liquid), gated in
+  // src/theme/music-tokens.ts — every colour below comes from here or from
+  // the app's existing theme tokens. Never a literal.
+  const tokens = React.useMemo(() => musicTokensFor(theme, boost), [theme, boost]);
   const {
     current, queue, playing, position, duration, error,
     play, toggle, next, previous, seek, repeat, shuffle,
@@ -30,10 +60,9 @@ export function MusicPlayer() {
   const [hasSearched, setHasSearched] = React.useState(false);
   const [searching, setSearching] = React.useState(false);
   const [searchError, setSearchError] = React.useState<string | null>(null);
-  const [tab, setTab] = React.useState<Tab>("lyrics");
+  const [mode, setMode] = React.useState<Mode>("stage");
   const [lyricsFor, setLyricsFor] = React.useState<{ id: string; lines: LyricLine[] | null } | null>(null);
   const [searchOpen, setSearchOpen] = React.useState(false);
-  const [seekWidth, setSeekWidth] = React.useState(0);
   /**
    * The parent-only deny-list editor.
    *
@@ -96,9 +125,47 @@ export function MusicPlayer() {
     }
   };
 
-  const progress = duration > 0 ? Math.min(1, position / duration) : 0;
   const activeLine = lyrics ? currentLineIndex(lyrics, position * 1000) : -1;
   const downloaded = !!visibleCurrent && downloads.some((d) => d.id === visibleCurrent.id);
+
+  /**
+   * The stage's tint — the artwork's OWN colour, banded so body text stays AA.
+   *
+   * The colour is read on-device (AndroidX Palette, in the engine module) and
+   * banded by the pure `bandStageTint`. The result is cached BY TRACK (and by
+   * theme — the band differs) so a re-render never re-reads the cover.
+   *
+   * NO FAKE COLOUR: a track with no artwork, or an extraction that failed,
+   * falls back to the ACCENT banded — never to a random or invented hue.
+   */
+  const [tintCache, setTintCache] = React.useState<Record<string, string>>({});
+  const trackId = visibleCurrent?.id ?? null;
+  const artworkUrl = visibleCurrent?.artworkUrl ?? null;
+  const tintKey = trackId ? `${theme}:${trackId}` : null;
+
+  React.useEffect(() => {
+    // No track, or no artwork at all: the banded accent is the honest ground
+    // and the engine is never asked.
+    if (!trackId || !artworkUrl || !tintKey) return;
+    // Already resolved for this cover — never read it twice.
+    if (tintCache[tintKey]) return;
+    let alive = true;
+    const settle = (value: string) => {
+      if (!alive) return;
+      setTintCache((prev) => ({ ...prev, [tintKey]: value }));
+    };
+    const fallback = bandStageTint(tokens.accent, theme);
+    void artworkColors(artworkUrl)
+      .then((extracted) =>
+        settle(extracted.dominant ? bandStageTint(extracted.dominant, theme) : fallback)
+      )
+      .catch(() => settle(fallback));
+    return () => { alive = false; };
+  }, [trackId, artworkUrl, tintKey, tintCache, theme, tokens.accent]);
+
+  // Until the cover's colour lands, the stage wears the banded accent — the
+  // field is NEVER unpainted.
+  const stageTint = (tintKey ? tintCache[tintKey] : undefined) ?? bandStageTint(tokens.accent, theme);
 
   /**
    * Adds a term to the family's own list and clears the input.
@@ -115,7 +182,7 @@ export function MusicPlayer() {
 
   return (
     <>
-      <ScrollView testID="music-player" contentContainerStyle={{ padding: 24, gap: 18, paddingBottom: 200 }} keyboardShouldPersistTaps="handled">
+      <ScrollView testID="music-player" contentContainerStyle={{ padding: tokens.pageMargin, gap: tokens.shelfGap, paddingBottom: 200 }} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Text style={{ color: colors["color-text-primary"], fontFamily: FONTS.display, fontSize: 44 }}>Music</Text>
           <View style={{ paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, backgroundColor: mix(accentColor, "transparent", 18), borderWidth: 1, borderColor: mix(accentColor, "transparent", 40) }}>
@@ -244,62 +311,82 @@ export function MusicPlayer() {
 
         {visibleCurrent ? (
           <>
-            <View style={{ alignItems: "center", gap: 10 }}>
-              <Material tier="regular" style={{ width: 420, height: 420, borderRadius: 36, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                {visibleCurrent.artworkUrl ? (
-                  <Image source={{ uri: visibleCurrent.artworkUrl }} style={{ width: 420, height: 420 }} resizeMode="cover" />
+            {/*
+              The Now Playing screen's three modes. Stage is the artwork-led
+              one; Lyrics and Queue are behind the switcher until T4 restyles
+              them.
+            */}
+            <SegmentedControl
+              testID="music-mode"
+              accessibilityLabel="Now Playing view"
+              options={[
+                { id: "stage", label: "Now Playing" },
+                { id: "lyrics", label: "Lyrics" },
+                { id: "queue", label: "Queue" },
+              ]}
+              value={mode}
+              onChange={(id) => setMode(id as Mode)}
+            />
+
+            {mode === "stage" ? (
+              <NowPlayingStage
+                track={visibleCurrent}
+                tint={stageTint}
+                tokens={tokens}
+                reduceMotion={reduceMotion}
+                playing={playing}
+                position={position}
+                duration={duration}
+                repeat={repeat}
+                shuffle={shuffle}
+                downloaded={downloaded}
+                onToggle={toggle}
+                onNext={() => void next()}
+                onPrevious={() => void previous()}
+                onSeek={(seconds) => void seek(seconds)}
+                onToggleShuffle={toggleShuffleMode}
+                onCycleRepeat={cycleRepeatMode}
+                onDownload={() => void downloadCurrent()}
+              />
+            ) : null}
+
+            {mode === "lyrics" ? (
+              <Material tier="thin" style={{ borderRadius: 20, padding: 18, minHeight: 180 }}>
+                {lyrics && lyrics.length > 0 ? (
+                  lyrics.map((line, i) => (
+                    <Text key={`${line.timeMs}-${i}`} style={{ color: i === activeLine ? colors["color-text-primary"] : colors["color-text-secondary"], fontSize: i === activeLine ? 24 : TYPOGRAPHY.body.fontSize, lineHeight: 34, fontWeight: i === activeLine ? "800" : "500", marginBottom: 6 }}>
+                      {line.text || "♪"}
+                    </Text>
+                  ))
                 ) : (
-                  <Text style={{ fontSize: 120 }}>🎵</Text>
+                  <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>No lyrics for this track.</Text>
                 )}
               </Material>
-              <Text testID="np-title" numberOfLines={1} style={{ color: colors["color-text-primary"], fontSize: 30, fontWeight: "800", textAlign: "center" }}>{visibleCurrent.title}</Text>
-              <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>{visibleCurrent.artist}</Text>
-              {error ? <Text style={{ color: colors["color-accent-rose"] }}>{error}</Text> : null}
-            </View>
+            ) : null}
 
-            <Pressable
-              testID="np-seek"
-              accessibilityRole="adjustable"
-              accessibilityLabel="Seek"
-              onLayout={(e) => setSeekWidth(e.nativeEvent.layout.width)}
-              onPress={(e) => { if (seekWidth > 0 && duration > 0) void seek((e.nativeEvent.locationX / seekWidth) * duration); }}
-              style={{ height: 44, justifyContent: "center" }}
-            >
-              <View style={{ height: 6, borderRadius: 3, backgroundColor: mix(colors["color-text-primary"], "transparent", 12), overflow: "hidden" }}>
-                <View style={{ width: `${Math.round(progress * 100)}%`, height: 6, backgroundColor: accentColor }} />
-              </View>
-            </Pressable>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{clock(position)}</Text>
-              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{clock(duration)}</Text>
-            </View>
+            {mode === "queue" ? (
+              <Material tier="thin" style={{ borderRadius: 20, padding: 18, gap: 6 }}>
+                {visibleQueue.length === 0 ? (
+                  <Text style={{ color: colors["color-text-secondary"] }}>The queue is empty.</Text>
+                ) : (
+                  visibleQueue.map((track, i) => (
+                    <Pressable key={`${track.id}-${i}`} accessibilityRole="button" accessibilityLabel={`Play ${track.title}`} onPress={() => void play(track, visibleQueue)} style={{ minHeight: 52, justifyContent: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}>
+                      <Text numberOfLines={1} style={{ color: i === 0 ? accentColor : colors["color-text-primary"], fontWeight: "700" }}>{track.title}</Text>
+                      <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{track.artist}</Text>
+                    </Pressable>
+                  ))
+                )}
+              </Material>
+            ) : null}
 
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 18 }}>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Shuffle ${shuffle ? "on" : "off"}`} onPress={toggleShuffleMode} style={iconButton(colors, shuffle ? accentColor : undefined)}>
-                <Text style={{ color: colors["color-text-primary"], fontSize: 20 }}>🔀</Text>
-              </Pressable>
-              <Pressable testID="np-prev" accessibilityRole="button" accessibilityLabel="Previous track" onPress={() => void previous()} style={iconButton(colors)}>
-                <Text style={{ color: colors["color-text-primary"], fontSize: 26 }}>⏮</Text>
-              </Pressable>
-              <Pressable testID="np-play" accessibilityRole="button" accessibilityLabel={playing ? "Pause" : "Play"} onPress={toggle} style={{ width: 84, height: 84, borderRadius: 42, alignItems: "center", justifyContent: "center", backgroundColor: accentColor }}>
-                <Text style={{ color: colors["color-text-on-accent"], fontSize: 32 }}>{playing ? "❚❚" : "▶"}</Text>
-              </Pressable>
-              <Pressable testID="np-next" accessibilityRole="button" accessibilityLabel="Next track" onPress={() => void next()} style={iconButton(colors)}>
-                <Text style={{ color: colors["color-text-primary"], fontSize: 26 }}>⏭</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Repeat ${repeat}`} onPress={cycleRepeatMode} style={iconButton(colors, repeat !== "off" ? accentColor : undefined)}>
-                <Text style={{ color: colors["color-text-primary"], fontSize: 20 }}>{repeat === "one" ? "🔂" : "🔁"}</Text>
-              </Pressable>
-            </View>
-
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <Pressable accessibilityRole="button" accessibilityLabel={downloaded ? "Downloaded" : "Download this track"} disabled={downloaded} onPress={() => void downloadCurrent()} style={{ flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", borderRadius: 16, backgroundColor: mix(colors["color-text-primary"], "transparent", downloaded ? 3 : 8) }}>
-                <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>{downloaded ? "Downloaded ✓" : "Download"}</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Open search" onPress={() => setSearchOpen(true)} style={{ flex: 1, minHeight: 56, alignItems: "center", justifyContent: "center", borderRadius: 16, backgroundColor: mix(colors["color-text-primary"], "transparent", 8) }}>
-                <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>Search more</Text>
-              </Pressable>
-            </View>
+            {/*
+              The error line sits NEXT to the stage, never on its tint: the
+              rose is a page-level colour and it needs the page's ground to
+              stay readable. Its copy is untouched.
+            */}
+            {error ? (
+              <Text style={{ color: colors["color-accent-rose"], fontSize: TYPOGRAPHY.body.fontSize, lineHeight: TYPOGRAPHY.body.lineHeight }}>{error}</Text>
+            ) : null}
 
             {visibleDownloads.length > 0 ? (
               <Material tier="thin" style={{ borderRadius: 20, padding: 18, gap: 8 }}>
@@ -326,41 +413,6 @@ export function MusicPlayer() {
                 ))}
               </Material>
             ) : null}
-
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              {(["lyrics", "queue"] as const).map((key) => (
-                <Pressable key={key} testID={key === "lyrics" ? "np-lyrics" : "np-queue"} accessibilityRole="tab" accessibilityState={{ selected: tab === key }} onPress={() => setTab(key)} style={{ flex: 1, minHeight: 52, alignItems: "center", justifyContent: "center", borderRadius: 14, backgroundColor: mix(colors["color-text-primary"], "transparent", tab === key ? 12 : 5) }}>
-                  <Text style={{ color: colors["color-text-primary"], fontWeight: "700", textTransform: "capitalize" }}>{key}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {tab === "lyrics" ? (
-              <Material tier="thin" style={{ borderRadius: 20, padding: 18, minHeight: 180 }}>
-                {lyrics && lyrics.length > 0 ? (
-                  lyrics.map((line, i) => (
-                    <Text key={`${line.timeMs}-${i}`} style={{ color: i === activeLine ? colors["color-text-primary"] : colors["color-text-secondary"], fontSize: i === activeLine ? 24 : TYPOGRAPHY.body.fontSize, lineHeight: 34, fontWeight: i === activeLine ? "800" : "500", marginBottom: 6 }}>
-                      {line.text || "♪"}
-                    </Text>
-                  ))
-                ) : (
-                  <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>No lyrics for this track.</Text>
-                )}
-              </Material>
-            ) : (
-              <Material tier="thin" style={{ borderRadius: 20, padding: 18, gap: 6 }}>
-                {visibleQueue.length === 0 ? (
-                  <Text style={{ color: colors["color-text-secondary"] }}>The queue is empty.</Text>
-                ) : (
-                  visibleQueue.map((track, i) => (
-                    <Pressable key={`${track.id}-${i}`} accessibilityRole="button" accessibilityLabel={`Play ${track.title}`} onPress={() => void play(track, visibleQueue)} style={{ minHeight: 52, justifyContent: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}>
-                      <Text numberOfLines={1} style={{ color: i === 0 ? accentColor : colors["color-text-primary"], fontWeight: "700" }}>{track.title}</Text>
-                      <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{track.artist}</Text>
-                    </Pressable>
-                  ))
-                )}
-              </Material>
-            )}
           </>
         ) : (
           <Material tier="thin" style={{ borderRadius: 20, padding: 24, alignItems: "center", gap: 8 }}>
@@ -461,6 +513,194 @@ export function MusicPlayer() {
   );
 }
 
+interface StageProps {
+  track: MediaTrack;
+  /** The banded tint — the artwork's own colour (or the banded accent). */
+  tint: string;
+  tokens: MusicTokens;
+  reduceMotion: boolean;
+  playing: boolean;
+  position: number;
+  duration: number;
+  repeat: RepeatMode;
+  shuffle: boolean;
+  downloaded: boolean;
+  onToggle: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  onSeek: (seconds: number) => void;
+  onToggleShuffle: () => void;
+  onCycleRepeat: () => void;
+  onDownload: () => void;
+}
+
+/**
+ * The Now Playing STAGE — the artwork-led, cover-tinted surface.
+ *
+ * The stage is a full-width tinted field: the artwork leads, the field wears
+ * the cover's own banded colour, and the chrome (scrubber, transport) recedes
+ * under it. Every colour comes from the music tokens; the artwork's colour
+ * arrives already banded (see bandStageTint).
+ */
+function NowPlayingStage({
+  track, tint, tokens, reduceMotion,
+  playing, position, duration, repeat, shuffle, downloaded,
+  onToggle, onNext, onPrevious, onSeek, onToggleShuffle, onCycleRepeat, onDownload,
+}: StageProps) {
+  // The artwork's crossfade: on a track change it comes up from 0.96 with a
+  // fade, so the cover never SNAPS between tracks. Reduced motion kills it
+  // (the app's authority: AccessibilityInfo.isReduceMotionEnabled, read by
+  // the ThemeProvider).
+  const opacity = useSharedValue(1);
+  const scale = useSharedValue(1);
+
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(opacity);
+      cancelAnimation(scale);
+      opacity.value = 1;
+      scale.value = 1;
+      return;
+    }
+    cancelAnimation(opacity);
+    cancelAnimation(scale);
+    opacity.value = 0;
+    scale.value = 0.96;
+    opacity.value = withTiming(1, { duration: STAGE_FADE_MS });
+    scale.value = withTiming(1, { duration: STAGE_FADE_MS });
+  }, [track.id, reduceMotion, opacity, scale]);
+
+  const artworkStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+
+  // The artwork's edge: the full width minus the page margins, capped so a
+  // wide wall never grows a giant cover.
+  const windowWidth = Dimensions.get("window").width;
+  const artworkEdge = Math.min(windowWidth - 2 * tokens.pageMargin, STAGE_MAX_ARTWORK_EDGE);
+
+  const [seekWidth, setSeekWidth] = React.useState(0);
+  const progress = duration > 0 ? Math.min(1, position / duration) : 0;
+
+  return (
+    <View
+      testID="np-stage"
+      style={{
+        backgroundColor: tint,
+        borderRadius: tokens.panelRadius,
+        padding: tokens.pageMargin,
+        gap: tokens.shelfGap,
+      }}
+    >
+      {/* The artwork: a soft shadow under a rounded cover. */}
+      <Animated.View
+        style={[
+          {
+            width: artworkEdge,
+            height: artworkEdge,
+            borderRadius: tokens.artworkRadius,
+            shadowColor: mix(tokens.label, "transparent", 84),
+            shadowOpacity: 1,
+            shadowRadius: 24,
+            shadowOffset: { width: 0, height: 12 },
+            elevation: 6,
+          },
+          artworkStyle,
+        ]}
+      >
+        <View
+          testID="np-artwork"
+          style={{
+            width: artworkEdge,
+            height: artworkEdge,
+            borderRadius: tokens.artworkRadius,
+            overflow: "hidden",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: mix(tokens.label, "transparent", 8),
+          }}
+        >
+          {track.artworkUrl ? (
+            <Image source={{ uri: track.artworkUrl }} style={{ width: artworkEdge, height: artworkEdge }} resizeMode="cover" />
+          ) : (
+            <Text style={{ fontSize: 96 }}>🎵</Text>
+          )}
+        </View>
+      </Animated.View>
+
+      <View style={{ alignItems: "center", gap: 4 }}>
+        <Text testID="np-title" numberOfLines={2} style={{ color: tokens.label, ...STAGE_TYPE.title, textAlign: "center" }}>
+          {track.title}
+        </Text>
+        <Text numberOfLines={1} style={{ color: tokens.label2, ...STAGE_TYPE.artist, textAlign: "center" }}>
+          {track.artist}
+        </Text>
+      </View>
+
+      {/* The scrubber: a 6px track over the tint, a 64dp hit area. */}
+      <Pressable
+        testID="np-seek"
+        accessibilityRole="adjustable"
+        accessibilityLabel="Seek"
+        onLayout={(e) => setSeekWidth(e.nativeEvent.layout.width)}
+        onPress={(e) => { if (seekWidth > 0 && duration > 0) onSeek((e.nativeEvent.locationX / seekWidth) * duration); }}
+        style={{ height: 64, justifyContent: "center" }}
+      >
+        <View style={{ height: 6, borderRadius: 3, backgroundColor: tokens.panel, overflow: "hidden" }}>
+          <View style={{ width: `${Math.round(progress * 100)}%`, height: 6, backgroundColor: tokens.accent }} />
+        </View>
+      </Pressable>
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <Text style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight }}>{clock(position)}</Text>
+        <Text style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight }}>{clock(duration)}</Text>
+      </View>
+
+      {/* The transport: an 88dp play disc, 72dp skips — all thumb-sized. */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 24 }}>
+        <Pressable testID="np-prev" accessibilityRole="button" accessibilityLabel="Previous track" onPress={onPrevious} style={stageDisc(tokens, 72)}>
+          <Text style={{ color: tokens.label, fontSize: 26 }}>⏮</Text>
+        </Pressable>
+        <Pressable testID="np-play" accessibilityRole="button" accessibilityLabel={playing ? "Pause" : "Play"} onPress={onToggle} style={{ width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center", backgroundColor: tokens.accent }}>
+          <Text style={{ color: tokens.onAccent, fontSize: 32 }}>{playing ? "❚❚" : "▶"}</Text>
+        </Pressable>
+        <Pressable testID="np-next" accessibilityRole="button" accessibilityLabel="Next track" onPress={onNext} style={stageDisc(tokens, 72)}>
+          <Text style={{ color: tokens.label, fontSize: 26 }}>⏭</Text>
+        </Pressable>
+      </View>
+
+      {/* The secondary row: shuffle, repeat, download. */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 }}>
+        <Pressable testID="np-shuffle" accessibilityRole="button" accessibilityLabel={`Shuffle ${shuffle ? "on" : "off"}`} onPress={onToggleShuffle} style={stageDisc(tokens, 64, shuffle ? tokens.accent : undefined)}>
+          <Text style={{ color: tokens.label, fontSize: 20 }}>🔀</Text>
+        </Pressable>
+        <Pressable testID="np-repeat" accessibilityRole="button" accessibilityLabel={`Repeat ${repeat}`} onPress={onCycleRepeat} style={stageDisc(tokens, 64, repeat !== "off" ? tokens.accent : undefined)}>
+          <Text style={{ color: tokens.label, fontSize: 20 }}>{repeat === "one" ? "🔂" : "🔁"}</Text>
+        </Pressable>
+        <Pressable
+          testID="np-download"
+          accessibilityRole="button"
+          accessibilityLabel={downloaded ? "Downloaded" : "Download this track"}
+          disabled={downloaded}
+          onPress={onDownload}
+          style={{
+            flex: 1,
+            minHeight: 64,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: tokens.panelRadius,
+            backgroundColor: mix(tokens.label, "transparent", downloaded ? 6 : 12),
+          }}
+        >
+          <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+            {downloaded ? "Downloaded ✓" : "Download"}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function clock(seconds: number): string {
   const safe = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
   const m = Math.floor(safe / 60);
@@ -470,18 +710,22 @@ function clock(seconds: number): string {
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 MB";
-  const mb = bytes / (1024 * 1024);
+  const mb = (bytes / (1024 * 1024));
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
 }
 
-function iconButton(colors: Record<string, string | undefined>, tint?: string) {
+/**
+ * A round stage control: the disc's fill is the tint's own light, and an
+ * active control (shuffle on, repeat on) wears the accent.
+ */
+function stageDisc(tokens: MusicTokens, size: number, tint?: string) {
   return {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: size,
+    height: size,
+    borderRadius: size / 2,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: tint ? mix(tint, "transparent", 18) : mix(colors["color-text-primary"] ?? "transparent", "transparent", 6),
+    backgroundColor: tint ? mix(tint, "transparent", 18) : mix(tokens.label, "transparent", 10),
   };
 }
 

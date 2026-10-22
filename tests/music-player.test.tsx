@@ -111,17 +111,32 @@ let mockSearchOutcome: { tracks: any[]; explicitKnown: boolean } = {
   explicitKnown: true,
 };
 
+/**
+ * What the on-device palette read off the cover.
+ *
+ * `null` means the extraction found no colour (or failed) — the stage must
+ * then fall back to the banded accent, never to a made-up hue.
+ */
+let mockArtworkColors: { dominant: string | null; vibrant: string | null } = {
+  dominant: null,
+  vibrant: null,
+};
+
 jest.mock("../modules/youtube-engine", () => ({
   search: jest.fn(async () => mockSearchOutcome),
   related: jest.fn(async () => []),
   resolveAudio: jest.fn(async () => ({ url: "https://x.y/audio.m4a", mimeType: "audio/mp4",
     contentLength: 1, durationSeconds: 1, expiresAt: 0 })),
+  artworkColors: jest.fn(async () => mockArtworkColors),
 }));
 
 import React from "react";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Dimensions, StyleSheet } from "react-native";
+import { fireEvent, render, renderHook, waitFor } from "@testing-library/react-native";
 import { MusicPlayer } from "../src/music/MusicPlayer";
-import { ThemeProvider } from "../src/theme/ThemeProvider";
+import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
+import { musicTokensFor } from "../src/theme/music-tokens";
+import { bandStageTint } from "../src/music/tint";
 
 const wrap = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 
@@ -137,6 +152,7 @@ beforeEach(() => {
   mockMember = null;
   mockDenied = [];
   mockSearchOutcome = { tracks: [CLEAN_TRACK], explicitKnown: true };
+  mockArtworkColors = { dominant: null, vibrant: null };
   jest.clearAllMocks();
 });
 
@@ -147,6 +163,121 @@ it("renders now playing and drives the transport", async () => {
   expect(mockToggle).toHaveBeenCalled();
   fireEvent.press(getByTestId("np-next"));
   expect(mockNext).toHaveBeenCalled();
+});
+
+/**
+ * The Now Playing STAGE — the artwork-led, cover-tinted surface (SP2 Task 3).
+ *
+ * The stage is a full-width tinted field: it wears the COVER's own colour,
+ * read on-device and banded so body text stays readable. Every colour comes
+ * from the music tokens; the tint is the one colour the artwork supplies.
+ */
+describe("the Now Playing stage", () => {
+  /** The theme the app resolved — the tint's band depends on it. */
+  const resolved = () => renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+
+  it("offers the three modes — Now Playing, Lyrics and Queue", () => {
+    const { getByTestId, getByText } = render(<MusicPlayer />, { wrapper: wrap });
+    expect(getByTestId("music-mode")).toBeTruthy();
+    expect(getByText("Now Playing")).toBeTruthy();
+    expect(getByText("Lyrics")).toBeTruthy();
+    expect(getByText("Queue")).toBeTruthy();
+  });
+
+  it("opens on the stage — the lyrics and the queue sit behind the switcher", () => {
+    const { getByTestId, getByText, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    expect(getByTestId("np-stage")).toBeTruthy();
+    fireEvent.press(getByText("Lyrics"));
+    expect(queryByTestId("np-stage")).toBeNull();
+    fireEvent.press(getByText("Now Playing"));
+    expect(getByTestId("np-stage")).toBeTruthy();
+  });
+
+  it("tints itself from the artwork's own colour", async () => {
+    mockCurrent = { ...DEFAULT_CURRENT, artworkUrl: "https://img.example/cover.jpg" };
+    mockArtworkColors = { dominant: "#3B82F6", vibrant: null };
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    const { theme } = resolved();
+    await waitFor(() => {
+      const stage = getByTestId("np-stage");
+      expect(StyleSheet.flatten(stage.props.style).backgroundColor).toBe(
+        bandStageTint("#3B82F6", theme)
+      );
+    });
+  });
+
+  it("falls back to the banded accent when the cover carries no colour", async () => {
+    mockCurrent = { ...DEFAULT_CURRENT, artworkUrl: "https://img.example/cover.jpg" };
+    mockArtworkColors = { dominant: null, vibrant: null };
+    const { artworkColors } = require("../modules/youtube-engine");
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    const { theme, boost } = resolved();
+    const expected = bandStageTint(musicTokensFor(theme, boost).accent, theme);
+    // the engine WAS asked — and its empty answer is what falls back.
+    await waitFor(() =>
+      expect(artworkColors).toHaveBeenCalledWith("https://img.example/cover.jpg")
+    );
+    const stage = getByTestId("np-stage");
+    expect(StyleSheet.flatten(stage.props.style).backgroundColor).toBe(expected);
+  });
+
+  it("never asks the engine for a colour when the track has no artwork", async () => {
+    const { artworkColors } = require("../modules/youtube-engine");
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(getByTestId("np-stage")).toBeTruthy());
+    expect(artworkColors).not.toHaveBeenCalled();
+  });
+
+  it("reads the cover's colour once per track", async () => {
+    mockCurrent = { ...DEFAULT_CURRENT, artworkUrl: "https://img.example/cover.jpg" };
+    mockArtworkColors = { dominant: "#3B82F6", vibrant: null };
+    const { artworkColors } = require("../modules/youtube-engine");
+    const { getByTestId, rerender } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(artworkColors).toHaveBeenCalledTimes(1));
+    // a re-render must not read the cover again — the tint is cached
+    rerender(<MusicPlayer />);
+    await waitFor(() => expect(getByTestId("np-stage")).toBeTruthy());
+    expect(artworkColors).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a full-width tinted field on the Liquid radius", () => {
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    const { theme, boost } = resolved();
+    const style = StyleSheet.flatten(getByTestId("np-stage").props.style);
+    expect(style.borderRadius).toBe(musicTokensFor(theme, boost).panelRadius);
+  });
+
+  it("the artwork leads, at the Liquid edge", () => {
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    const { theme, boost } = resolved();
+    const tokens = musicTokensFor(theme, boost);
+    const windowWidth = Dimensions.get("window").width;
+    const style = StyleSheet.flatten(getByTestId("np-artwork").props.style);
+    expect(style.width).toBe(Math.min(windowWidth - 2 * tokens.pageMargin, 560));
+    expect(style.height).toBe(style.width);
+    expect(style.borderRadius).toBe(tokens.artworkRadius);
+  });
+
+  it("the transport is thumb-sized: an 88dp play disc, 72dp skips", () => {
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    const styleOf = (id: string) => StyleSheet.flatten(getByTestId(id).props.style);
+    expect(styleOf("np-play").width).toBe(88);
+    expect(styleOf("np-prev").width).toBe(72);
+    expect(styleOf("np-next").width).toBe(72);
+  });
+
+  it("the scrubber keeps a 64dp hit area", () => {
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    const style = StyleSheet.flatten(getByTestId("np-seek").props.style);
+    expect(style.height).toBeGreaterThanOrEqual(64);
+  });
+
+  it("the secondary row holds shuffle, repeat and download", () => {
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    for (const id of ["np-shuffle", "np-repeat", "np-download"]) {
+      expect(getByTestId(id)).toBeTruthy();
+    }
+  });
 });
 
 it("lists downloads and removes one", async () => {
@@ -395,8 +526,8 @@ describe("the other track surfaces", () => {
   it("hides an explicit track from the queue for a kid", async () => {
     mockMember = KID;
     mockQueue = [CLEAN_TRACK, EXPLICIT_TRACK];
-    const { getByTestId, queryByText, findByText } = render(<MusicPlayer />, { wrapper: wrap });
-    fireEvent.press(getByTestId("np-queue"));
+    const { getByText, queryByText, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.press(getByText("Queue"));
     expect(await findByText("Found")).toBeTruthy();
     expect(queryByText("Bad Song")).toBeNull();
   });
@@ -404,16 +535,16 @@ describe("the other track surfaces", () => {
   it("shows an explicit track in the queue to a parent", async () => {
     mockMember = PARENT;
     mockQueue = [CLEAN_TRACK, EXPLICIT_TRACK];
-    const { getByTestId, findByText } = render(<MusicPlayer />, { wrapper: wrap });
-    fireEvent.press(getByTestId("np-queue"));
+    const { getByText, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.press(getByText("Queue"));
     expect(await findByText("Bad Song")).toBeTruthy();
   });
 
   it("hands the player the FILTERED queue, never the raw one", async () => {
     mockMember = KID;
     mockQueue = [CLEAN_TRACK, EXPLICIT_TRACK];
-    const { getByTestId, findByText } = render(<MusicPlayer />, { wrapper: wrap });
-    fireEvent.press(getByTestId("np-queue"));
+    const { getByText, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.press(getByText("Queue"));
     fireEvent.press(await findByText("Found"));
     expect(mockPlay).toHaveBeenCalledWith(CLEAN_TRACK, [CLEAN_TRACK]);
   });
@@ -421,8 +552,8 @@ describe("the other track surfaces", () => {
   it("hands a parent the whole queue", async () => {
     mockMember = PARENT;
     mockQueue = [CLEAN_TRACK, EXPLICIT_TRACK];
-    const { getByTestId, findByText } = render(<MusicPlayer />, { wrapper: wrap });
-    fireEvent.press(getByTestId("np-queue"));
+    const { getByText, findByText } = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.press(getByText("Queue"));
     fireEvent.press(await findByText("Found"));
     expect(mockPlay).toHaveBeenCalledWith(CLEAN_TRACK, [CLEAN_TRACK, EXPLICIT_TRACK]);
   });
