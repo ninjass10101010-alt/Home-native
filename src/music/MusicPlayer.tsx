@@ -633,7 +633,13 @@ function NowPlayingStage({
         <Text testID="np-title" numberOfLines={2} style={{ color: tokens.label, ...STAGE_TYPE.title, textAlign: "center" }}>
           {track.title}
         </Text>
-        <Text numberOfLines={1} style={{ color: tokens.label2, ...STAGE_TYPE.artist, textAlign: "center" }}>
+        {/*
+          THE ARTIST reads the FULL label token, never a dim tier: the ground
+          here is the tinted field, not the page ground, and the dim tier
+          measures ~3.4:1 on it. The hierarchy is carried by the type step and
+          the weight — never by colour (see tests/music-stage-contrast.test.ts).
+        */}
+        <Text numberOfLines={1} style={{ color: tokens.label, ...STAGE_TYPE.artist, textAlign: "center" }}>
           {track.artist}
         </Text>
       </View>
@@ -651,9 +657,14 @@ function NowPlayingStage({
           <View style={{ width: `${Math.round(progress * 100)}%`, height: 6, backgroundColor: tokens.accent }} />
         </View>
       </Pressable>
+      {/*
+        THE TIMES read the full label token too — the smallest step on the
+        tinted field, where the dim tier measured ~2.6:1. Size and weight
+        carry the hierarchy; colour never does.
+      */}
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight }}>{clock(position)}</Text>
-        <Text style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight }}>{clock(duration)}</Text>
+        <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}>{clock(position)}</Text>
+        <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}>{clock(duration)}</Text>
       </View>
 
       {/* The transport: an 88dp play disc, 72dp skips — all thumb-sized. */}

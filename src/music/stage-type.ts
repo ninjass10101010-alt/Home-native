@@ -10,6 +10,12 @@
  * call site (or, worse, borrowed from the masthead and making the stage
  * shout).
  *
+ * WHY THE ARTIST CARRIES A WEIGHT: every tier on the stage's tinted field
+ * reads the SAME full label token — the dim tiers cannot clear 4.5:1 on a
+ * tinted ground (tests/music-stage-contrast.test.ts) — so the hierarchy is
+ * carried by SIZE and WEIGHT, never by colour. The artist is one step under
+ * the title in size and a step heavier, so it still reads as secondary.
+ *
  * The contract that binds every step is the 14sp floor (TYPE_FLOOR_SP) and
  * the app's type system (Instrument Serif display) — both honoured here.
  */
@@ -24,9 +30,10 @@ export const STAGE_TYPE = {
     fontWeight: "400",
     letterSpacing: -0.8,
   },
-  /** The artist — one step under the title. */
+  /** The artist — one step under the title, one step heavier. */
   artist: {
     fontSize: 17,
     lineHeight: 24,
+    fontWeight: "600",
   },
 } as const;

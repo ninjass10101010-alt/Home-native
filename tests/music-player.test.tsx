@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
-jest.mock("@react-native-async-storage/async-storage", () =>
-  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
-);
+jest.mock("@react-native-async-storage/async-storage", () => {
+  const store = require("@react-native-async-storage/async-storage/jest/async-storage-mock");
+  // Writes are dropped on purpose: the dark-theme stage test below switches
+  // the theme in memory, and a PERSISTED theme would leak into the next
+  // test's provider (its hydration re-render would land mid-assertion).
+  return { ...store, setItem: jest.fn(async () => {}) };
+});
 jest.mock("expo-secure-store", () => ({
   getItemAsync: jest.fn(async () => null),
   setItemAsync: jest.fn(async () => {}),
@@ -140,6 +144,27 @@ import { bandStageTint } from "../src/music/tint";
 
 const wrap = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 
+/**
+ * Forces the provider into the DARK theme.
+ *
+ * The stage's ground is the tinted field and its band depends on the theme,
+ * so the contrast contract has to be checked where the field is DARK — the
+ * case the review measured (white on the dark band).
+ */
+function ThemeGate({ children }: { children: React.ReactNode }) {
+  const { setTheme } = useTheme();
+  React.useEffect(() => {
+    setTheme("dark");
+  }, [setTheme]);
+  return <>{children}</>;
+}
+
+const darkWrap = ({ children }: { children: React.ReactNode }) => (
+  <ThemeProvider>
+    <ThemeGate>{children}</ThemeGate>
+  </ThemeProvider>
+);
+
 const KID = { id: "c1", name: "Kid", role: "child", emoji: "🐯", color: "green" };
 const PARENT = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" };
 
@@ -277,6 +302,50 @@ describe("the Now Playing stage", () => {
     for (const id of ["np-shuffle", "np-repeat", "np-download"]) {
       expect(getByTestId(id)).toBeTruthy();
     }
+  });
+
+  it("paints every stage text tier in the FULL label token — no dim tier on the tint", async () => {
+    // The stage's ground is the tinted field, NOT the page ground the tiers
+    // were checked against: on the tint the dim tiers read ~3.4:1 (label2) and
+    // ~2.6:1 (label3). So the stage dims nothing — every tier on the tint
+    // reads the full, opaque `label` token, and the hierarchy comes from the
+    // type steps and weight (see tests/music-stage-contrast.test.ts).
+    const { getByTestId, getByText } = render(<MusicPlayer />, { wrapper: darkWrap });
+    const tokens = musicTokensFor("dark", false);
+    const colorOf = (node: any) => StyleSheet.flatten(node.props.style)?.color;
+
+    // the tree really is in the dark theme: the stage wears the DARK band
+    await waitFor(() =>
+      expect(StyleSheet.flatten(getByTestId("np-stage").props.style).backgroundColor).toBe(
+        bandStageTint(tokens.accent, "dark")
+      )
+    );
+
+    // the title — the display serif at the stage's big size
+    expect(colorOf(getByTestId("np-title"))).toBe(tokens.label);
+    // the artist — one step under the title
+    expect(colorOf(getByText("Artist"))).toBe(tokens.label);
+    // the time labels — the smallest step on the tint
+    expect(colorOf(getByText("0:10"))).toBe(tokens.label);
+    expect(colorOf(getByText("3:20"))).toBe(tokens.label);
+  });
+
+  it("keeps the stage's hierarchy in SIZE and WEIGHT, never in colour", () => {
+    const { getByTestId, getByText } = render(<MusicPlayer />, { wrapper: wrap });
+    const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
+
+    const title = styleOf(getByTestId("np-title"));
+    const artist = styleOf(getByText("Artist"));
+    const time = styleOf(getByText("0:10"));
+
+    expect(title.fontSize).toBeGreaterThan(artist.fontSize);
+    expect(artist.fontSize).toBeGreaterThan(time.fontSize);
+    // the type floor: nothing on the stage drops below 14sp
+    expect(time.fontSize).toBeGreaterThanOrEqual(14);
+    // the weight carries what the colour used to: the artist reads a step
+    // heavier than the times, and the title leads on size.
+    expect(artist.fontWeight).toBe("600");
+    expect(time.fontWeight).toBe("500");
   });
 });
 

@@ -10,8 +10,16 @@
  * measures its WCAG relative luminance, and moves it into the band where body
  * text is still AA:
  *
- *   dark  [0.06, 0.17]  — white body text stays >= 4.5:1 (worst case 4.77:1)
+ *   dark  [0.06, 0.15]  — white body text stays >= 4.5:1 (worst case 5.25:1)
  *   light [0.75, 0.92]  — black body text stays >= 4.5:1 (worst case 16:1)
+ *
+ * WHY THE DARK BAND STOPS AT 0.15 (not 0.17): the stage paints translucent
+ * chrome over its ground (the chips, the discs), so the ground under the text
+ * is never exactly the band — it is a little lighter. The band leaves
+ * HEADROOM above the bare AA floor so the text still clears 4.5:1 where that
+ * chrome sits. The stage's text is the FULL label token: dim tiers cannot
+ * clear 4.5:1 on ANY tinted field (see tests/music-stage-contrast.test.ts),
+ * so the tint is banded for the real tier instead.
  *
  * PURE by contract: no theme import, no I/O, no clock, no randomness. The
  * same input always gives the same tint — that is what makes it testable,
@@ -23,7 +31,7 @@
  */
 
 /** The luminance window a dark-theme stage tint may sit in. */
-const DARK_BAND = { min: 0.06, max: 0.17 };
+const DARK_BAND = { min: 0.06, max: 0.15 };
 
 /** The luminance window a light-theme stage tint may sit in. */
 const LIGHT_BAND = { min: 0.75, max: 0.92 };
@@ -124,13 +132,19 @@ function toHex(rgb: Rgb): string {
  * Used for the neutral fallback: a stage that has no colour to band still
  * needs a readable ground, and a computed grey keeps this module free of
  * colour literals.
+ *
+ * The inverse of the sRGB linearisation: `L = ((c + 0.055) / 1.055) ^ 2.4`
+ * inverts to `c = L ^ (1 / 2.4) * 1.055 - 0.055` — the linearisation's
+ * constant belongs on the CHANNEL, not on the luminance. Getting this wrong
+ * put the fallback OUTSIDE the band (L=0.17 in a band that stops at 0.15),
+ * so the ground it promised could hold lost its headroom.
  */
 function greyFor(target: number): Rgb {
   const c =
     target <= 0.03928
       ? target * 12.92
-      : Math.pow((target + 0.055) / 1.055, 1 / 2.4);
-  const value = Math.round(c * 255);
+      : Math.pow(target, 1 / 2.4) * 1.055 - 0.055;
+  const value = Math.round(Math.min(255, Math.max(0, c * 255)));
   return { r: value, g: value, b: value };
 }
 
@@ -165,6 +179,11 @@ function solve(rgb: Rgb, anchor: Rgb, band: Band): Rgb {
  * theme's anchor — black for a dark stage, white for a light one — until it
  * lands inside the band's luminance window. The first landing wins, so the
  * tint keeps as much of the artwork's own colour as the band allows.
+ *
+ * The band is tuned for the stage's FULL text tier (opaque white in dark,
+ * opaque black in light): the dim tiers cannot clear 4.5:1 on any tinted
+ * field, so the stage does not dim its text — see
+ * tests/music-stage-contrast.test.ts.
  *
  * A colour that is already inside the band is returned untouched.
  */

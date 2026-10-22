@@ -7,8 +7,12 @@
  * has to stay AA on whatever lands on the stage.
  *
  * The bands (WCAG relative luminance):
- *   dark  [0.06, 0.17]  — white body text stays >= 4.5:1 (worst case 4.77:1)
+ *   dark  [0.06, 0.15]  — white body text stays >= 4.5:1 (worst case 5.25:1)
  *   light [0.75, 0.92]  — black body text stays >= 4.5:1 (worst case 16:1)
+ *
+ * The dark band stops at 0.15 so it leaves HEADROOM: the stage paints
+ * translucent chrome over its ground, and the text has to clear 4.5:1 where
+ * that chrome sits (see tests/music-stage-contrast.test.ts).
  *
  * `bandStageTint` is PURE: no theme import, no I/O, no clock. It is the one
  * piece of the tint pipeline that can be machine-checked, so it is checked
@@ -110,7 +114,7 @@ const ADVERSARIAL = [
 ];
 
 /** The dark band's luminance window. */
-const DARK_BAND = { min: 0.06, max: 0.17 };
+const DARK_BAND = { min: 0.06, max: 0.15 };
 /** The light band's luminance window. */
 const LIGHT_BAND = { min: 0.75, max: 0.92 };
 
@@ -165,6 +169,22 @@ describe("bandStageTint", () => {
   it("leaves an in-band colour alone", () => {
     expect(bandStageTint(DARK_IN_BAND, "dark")).toBe(DARK_IN_BAND);
     expect(bandStageTint(LIGHT_IN_BAND, "light")).toBe(LIGHT_IN_BAND);
+  });
+
+  it("the neutral fallback lands INSIDE the band — it is a ground, not a guess", () => {
+    // A colour that is not a colour at all still gets a readable ground: the
+    // banded grey. It has to land INSIDE the band, or the ground it hands
+    // back is exactly the ground the band exists to avoid.
+    const dark = bandStageTint("not-a-colour", "dark");
+    const light = bandStageTint("not-a-colour", "light");
+    const darkLum = luminance(dark);
+    const lightLum = luminance(light);
+    expect(darkLum).toBeGreaterThanOrEqual(DARK_BAND.min);
+    expect(darkLum).toBeLessThanOrEqual(DARK_BAND.max);
+    expect(lightLum).toBeGreaterThanOrEqual(LIGHT_BAND.min);
+    expect(lightLum).toBeLessThanOrEqual(LIGHT_BAND.max);
+    // and it is a neutral, not a colour pretending to be the artwork's
+    expect(dark).toMatch(/^#([0-9a-f]{2})\1\1$/);
   });
 
   it("answers with an opaque six-digit hex", () => {
