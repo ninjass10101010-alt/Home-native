@@ -10,6 +10,7 @@ import { MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { useAuth } from "../state/AuthProvider";
 import { useSync } from "../state/SyncManager";
 import { Chip } from "../ui/Chip";
+import { SoftButton } from "../ui/SoftButton";
 import { EmptyState } from "../ui/EmptyState";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { SignedOutBanner } from "../ui/SignedOutBanner";
@@ -34,6 +35,8 @@ import {
   type ScheduleRow,
   type WallEvent,
 } from "./events-merge";
+import { EventComposer, type EventDraft } from "./EventComposer";
+import { addDaysISO, localDateISO, monthGridCells, selectedWeekISO } from "./date-utils";
 
 /**
  * The wall's Calendar surface (WS-7): Triple-A Visual & Architectural Parity.
@@ -70,11 +73,6 @@ function isoToDate(iso: string): Date {
   return new Date(y, m - 1, d);
 }
 
-function addDaysISO(iso: string, days: number): string {
-  const d = isoToDate(iso);
-  d.setDate(d.getDate() + days);
-  return localTodayISO(d);
-}
 
 function longDate(d: Date): string {
   return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
@@ -91,15 +89,31 @@ interface CalendarLoad {
 export function CalendarPage({ now = new Date() }: { now?: Date }) {
   const { colors, theme, accentColor, setTheme } = useTheme();
   const { member } = useAuth();
+  const isParent = String(member?.role ?? "").toLowerCase() === "parent";
   const { stale: syncStale } = useSync();
   const router = useRouter();
 
   const [view, setView] = useState<"week" | "agenda">("week");
-  const todayISO = localTodayISO(now);
-  const [selectedISO, setSelectedISO] = useState(todayISO);
+  const [selectedISO, setSelectedISO] = useState(localDateISO(now));
   const [viewMonthDate, setViewMonthDate] = useState<Date>(new Date(now.getFullYear(), now.getMonth(), 1));
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
   const [roster, setRoster] = useState<ServerMember[]>([]);
+
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerSaving, setComposerSaving] = useState(false);
+  const [composerError, setComposerError] = useState<string | null>(null);
+  const [optimisticRows, setOptimisticRows] = useState<DbEventRow[]>([]);
+  const [pendingNotice, setPendingNotice] = useState<string | null>(null);
+  const [pendingSourceId, setPendingSourceId] = useState<string | null>(null);
+  const [liveNow, setLiveNow] = useState<Date | null>(null);
+
+  useEffect(() => {
+    const id = setInterval(() => setLiveNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const clock = liveNow ?? now;
+  const todayISO = localDateISO(clock);
 
   useEffect(() => {
     let alive = true;
@@ -113,7 +127,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     };
   }, []);
 
-  const { status, data, failure, stale: dataStale } = useWidgetData<CalendarLoad>(async () => {
+  const { status, data, failure, stale: dataStale, retry } = useWidgetData<CalendarLoad>(async () => {
     const db = await api<DbListEnvelope<DbEventRow>>("/api/db/events");
     const dbEvents = Array.isArray(db?.items) ? db.items : [];
 
@@ -149,6 +163,13 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
 
   const stale = dataStale || syncStale;
 
+  const dbEvents = useMemo(() => {
+    const server = Array.isArray(data?.dbEvents) ? data.dbEvents : [];
+    if (optimisticRows.length === 0) return server;
+    const ids = new Set(server.map((e) => String(e.id)));
+    return [...server, ...optimisticRows.filter((e) => !ids.has(String(e.id)))];
+  }, [data, optimisticRows]);
+
   const weekStart = weekStartMondayISO(now);
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i)), [weekStart]);
   const agendaDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysISO(todayISO, i)), [todayISO]);
@@ -156,11 +177,11 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
   const rawRowsForDay = useCallback((iso: string): WallEvent[] => {
     if (!data) return [];
     return mergeDayRows(
-      familyEventsForDay(data.dbEvents, iso),
+      familyEventsForDay(dbEvents, iso),
       googleEventsForDay(data.googleRows, iso),
       schedulesForDay(data.schedules, isoToDate(iso))
     );
-  }, [data]);
+  }, [data, dbEvents]);
 
   const rowsForDay = useCallback((iso: string): WallEvent[] => {
     const rows = rawRowsForDay(iso);
@@ -175,7 +196,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
   const calendarEventsForDay = useCallback((iso: string): WallEvent[] => {
     if (!data) return [];
     const rows = mergeDayRows(
-      familyEventsForDay(data.dbEvents, iso),
+      familyEventsForDay(dbEvents, iso),
       googleEventsForDay(data.googleRows, iso)
     );
     if (!selectedMember) return rows;
@@ -184,7 +205,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
       if (!r.member) return true;
       return r.member.toLowerCase().includes(target);
     });
-  }, [data, selectedMember]);
+  }, [dbEvents, data, selectedMember]);
 
   const pillInk = colors["color-accent-amber"] ?? colors["color-text-secondary"];
   const pills = (
@@ -266,6 +287,49 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     return list;
   }, [now, calendarEventsForDay]);
 
+  const saveEvent = async (draft: EventDraft) => {
+    setComposerSaving(true);
+    setComposerError(null);
+    try {
+      const res = await api<{ ok?: boolean; event?: DbEventRow; google?: { status?: string } }>(
+        "/api/calendar/events",
+        { method: "POST", body: draft },
+      );
+      if (!res?.ok || !res.event) throw new Error("save_failed");
+      setOptimisticRows((prev) => [...prev, res.event!]);
+      setComposerOpen(false);
+      retry();
+      if (res.google?.status && res.google.status !== "synced") {
+        setPendingNotice("Saved here — Google not updated. Retry when Google is connected.");
+        setPendingSourceId(String(res.event.id));
+      } else {
+        setPendingNotice(null);
+        setPendingSourceId(null);
+      }
+    } catch (error) {
+      const status = error instanceof ApiError ? error.status : undefined;
+      setComposerError(
+        status === 403
+          ? "Only a parent can add events."
+          : "Event wasn't saved — check the connection.",
+      );
+    } finally {
+      setComposerSaving(false);
+    }
+  };
+
+  const retryGoogle = async (sourceId?: string) => {
+    if (!sourceId) return;
+    try {
+      await api(`/api/calendar/events/${encodeURIComponent(sourceId)}/retry-google`, { method: "POST" });
+      retry();
+      setPendingNotice(null);
+      setPendingSourceId(null);
+    } catch {
+      setPendingNotice("Google Calendar couldn't save this event. Try again later.");
+    }
+  };
+
   const readonlyNote = (
     <Text
       testID="calendar-readonly-note"
@@ -276,7 +340,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
         marginTop: 8,
       }}
     >
-      {READONLY_COPY}
+      {isParent ? READONLY_COPY : "Ask a parent to add or change events."}
     </Text>
   );
 
@@ -391,10 +455,13 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
               Garcia Family
             </Text>
           </View>
-          <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+           <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+            {isParent ? (
             <Pressable
+              testID="add-event"
               accessibilityRole="button"
               accessibilityLabel="Add event"
+              onPress={() => setComposerOpen(true)}
               style={({ pressed }) => ({
                 width: 44,
                 height: 44,
@@ -407,6 +474,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
             >
               <Text style={{ color: colors["color-text-primary"], fontSize: 22, fontWeight: "600" }}>+</Text>
             </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Toggle theme"
@@ -917,10 +985,12 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                       </Text>
                     </View>
                   </View>
+                  {isParent ? (
                   <Pressable
                     testID="cal-add-event"
                     accessibilityRole="button"
                     accessibilityLabel="Add event"
+                    onPress={() => setComposerOpen(true)}
                     style={{
                       paddingHorizontal: 14,
                       paddingVertical: 8,
@@ -934,9 +1004,22 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                       + Add
                     </Text>
                   </Pressable>
+                  ) : null}
                 </View>
 
                 {pills}
+
+                {pendingNotice ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingVertical: 8 }}>
+                    <Text style={{ color: colors["color-text-secondary"], fontSize: 14, flex: 1 }}>{pendingNotice}</Text>
+                    <SoftButton
+                      variant="secondary"
+                      onPress={() => void retryGoogle(pendingSourceId ?? undefined)}
+                    >
+                      Retry
+                    </SoftButton>
+                  </View>
+                ) : null}
 
                 {/* Selected Day's Event cards */}
                 {selectedRows.length === 0 ? (
@@ -1188,6 +1271,17 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
           </View>
         )}
       </ScrollView>
+      {composerOpen ? (
+        <EventComposer
+          visible={composerOpen}
+          defaultDate={selectedISO}
+          members={roster.map((m) => m.name)}
+          saving={composerSaving}
+          error={composerError}
+          onClose={() => { setComposerOpen(false); setComposerError(null); }}
+          onSave={saveEvent}
+        />
+      ) : null}
     </View>
   );
 }

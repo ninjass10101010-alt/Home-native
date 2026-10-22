@@ -397,3 +397,119 @@ describe("CalendarPage — month-boundary week", () => {
     expect(getByTestId("cal-day-2026-11-01")).toBeTruthy(); // rollover chip
   });
 });
+
+describe("CalendarPage — parent event creation", () => {
+  it("opens the composer only for a parent", async () => {
+    fullRoute();
+    const { findByText, getByTestId } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
+    await findByText("Piano lesson");
+    expect(getByTestId("add-event")).toBeTruthy();
+
+    mockMember = { id: "c1", name: "Aurora", role: "child", emoji: "🧒", color: "violet" };
+    const child = render(<CalendarPage now={NOW} />, { wrapper: wrap });
+    expect(await child.findByText("Ask a parent to add or change events.")).toBeTruthy();
+    expect(child.queryByTestId("add-event")).toBeNull();
+  });
+
+  it("saves through the parent route and shows the pending banner", async () => {
+    route({
+      "/api/db/events": { items: DB_EVENTS },
+      "/api/google-calendar": GOOGLE_OK([]),
+      "/api/db/schedules": { items: SCHEDULES },
+      "/api/calendar/events": {
+        ok: true,
+        event: {
+          id: "e_new", title: "Recital", date: TODAY, time: "12:00", endTime: "13:00",
+          allDay: false, member: "All", source: "family", googleSyncStatus: "pending",
+        },
+        google: { status: "pending" },
+      },
+    });
+
+    const { findByText, getByTestId, getByLabelText, queryByTestId } = render(
+      <CalendarPage now={NOW} />,
+      { wrapper: wrap },
+    );
+    await findByText("Piano lesson");
+    fireEvent.press(getByTestId("add-event"));
+    fireEvent.changeText(getByLabelText("Event title"), "Recital");
+    fireEvent.press(getByTestId("composer-save"));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(api).toHaveBeenCalledWith("/api/calendar/events", expect.objectContaining({
+      method: "POST",
+      body: expect.objectContaining({ title: "Recital", date: TODAY }),
+    }));
+    expect(await findByText("Saved here — Google not updated. Retry when Google is connected.")).toBeTruthy();
+    expect(queryByTestId("event-composer")).toBeNull();
+  });
+
+  it("retries a pending mirror from the banner", async () => {
+    route({
+      "/api/db/events": { items: DB_EVENTS },
+      "/api/google-calendar": GOOGLE_OK([]),
+      "/api/db/schedules": { items: SCHEDULES },
+      "/api/calendar/events": {
+        ok: true,
+        event: {
+          id: "e_new", title: "Recital", date: TODAY, time: "12:00", endTime: "13:00",
+          allDay: false, member: "All", source: "family", googleSyncStatus: "pending",
+        },
+        google: { status: "pending" },
+      },
+      "/api/calendar/events/e_new/retry-google": {
+        ok: true,
+        event: {
+          id: "e_new", title: "Recital", date: TODAY, time: "12:00", endTime: "13:00",
+          allDay: false, member: "All", source: "family", googleSyncStatus: "synced",
+        },
+        google: { status: "synced" },
+      },
+    });
+
+    const { findByText, getByTestId, getByLabelText, getByText, queryByText } = render(
+      <CalendarPage now={NOW} />,
+      { wrapper: wrap },
+    );
+    await findByText("Piano lesson");
+    fireEvent.press(getByTestId("add-event"));
+    fireEvent.changeText(getByLabelText("Event title"), "Recital");
+    fireEvent.press(getByTestId("composer-save"));
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.press(getByText("Retry"));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(api).toHaveBeenCalledWith(
+      "/api/calendar/events/e_new/retry-google",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(queryByText("Saved here — Google not updated. Retry when Google is connected.")).toBeNull();
+  });
+
+  it("keeps the composer open and shows safe copy when the save fails", async () => {
+    route({
+      "/api/db/events": { items: DB_EVENTS },
+      "/api/google-calendar": GOOGLE_OK([]),
+      "/api/db/schedules": { items: SCHEDULES },
+      "/api/calendar/events": new ApiError({
+        message: "PocketBase down",
+        status: 503,
+        code: "http_503",
+      }),
+    });
+
+    const { findByText, getByTestId, getByLabelText } = render(
+      <CalendarPage now={NOW} />,
+      { wrapper: wrap },
+    );
+    await findByText("Piano lesson");
+    fireEvent.press(getByTestId("add-event"));
+    fireEvent.changeText(getByLabelText("Event title"), "Recital");
+    fireEvent.press(getByTestId("composer-save"));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(getByTestId("event-composer")).toBeTruthy();
+    expect(getByLabelText("Event title")).toBeTruthy();
+    expect(getByTestId("composer-error")).toBeTruthy();
+  });
+});
