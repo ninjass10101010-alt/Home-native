@@ -92,6 +92,7 @@ const API_BASE = String(flag("api", process.env.CONSUELA_CAPTURE_API || "http://
 );
 /** Capture the honest UNREACHABLE state (the proxy drops every connection). */
 const OFFLINE = args.includes("--offline");
+const TAP = flag("tap", "");
 
 /**
  * A React/DOM warning is a defect in the shipped surface (a LogBox toast over
@@ -561,6 +562,11 @@ async function main() {
     const urlPath = ROUTE.startsWith("/") ? ROUTE : `/${ROUTE}`;
     await page.goto(`${BASE}${urlPath}`, { waitUntil: "networkidle", timeout: 30_000 }).catch(() => {});
     await page.waitForTimeout(WAIT_MS || 9000);
+
+    if (TAP) {
+      await page.click(TAP, { timeout: 5_000 });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
 
     await page.screenshot({ path: outFile, fullPage: false });
     console.log(`capture-native: ${outFile}`);
