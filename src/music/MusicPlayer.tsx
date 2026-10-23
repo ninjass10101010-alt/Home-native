@@ -5,9 +5,11 @@ import {
   Image,
   Pressable,
   ScrollView,
+  StyleProp,
   Text,
   TextInput,
   View,
+  ViewStyle,
 } from "react-native";
 import Animated, {
   cancelAnimation,
@@ -19,7 +21,6 @@ import { artworkColors, search as engineSearch } from "../../modules/youtube-eng
 import { useTheme } from "../theme/ThemeProvider";
 import { FONTS, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
-import { Material } from "../theme/Material";
 import { musicTokensFor, type MusicTokens } from "../theme/music-tokens";
 import { Modal } from "../ui/Modal";
 import { SegmentedControl } from "../ui/SegmentedControl";
@@ -29,7 +30,7 @@ import { countUnrated, isContentHidden, isDeniedTerm, searchNote, visibleTracks 
 import { totalDownloadBytes } from "./library";
 import { bandStageTint } from "./tint";
 import { LYRIC_CURRENT_SCALE, LYRIC_TYPE, STAGE_TYPE } from "./stage-type";
-import type { MediaTrack, RepeatMode } from "./types";
+import type { DownloadEntry, MediaTrack, RepeatMode } from "./types";
 
 /** The Now Playing screen's three modes. Stage is the artwork-led one. */
 type Mode = "stage" | "lyrics" | "queue";
@@ -222,101 +223,86 @@ export function MusicPlayer() {
         </View>
 
         {searchOpen || !visibleCurrent ? (
-          <Material tier="thin" style={{ borderRadius: 20, padding: 14, gap: 10 }}>
-            <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ gap: tokens.shelfGap }}>
+            {/*
+              THE SEARCH FIELD — a sheet-ground box on the Liquid radius, with
+              the input and the submit on the 64dp wall floor. The testIDs are
+              the surface's contract and they do not move.
+            */}
+            <View style={{ flexDirection: "row", gap: 10 }}>
               <TextInput
                 testID="music-search-input"
                 value={query}
                 onChangeText={setQuery}
                 onSubmitEditing={() => void search()}
                 placeholder="Search YouTube Music…"
-                placeholderTextColor={colors["color-text-secondary"]}
-                style={{ flex: 1, minHeight: 52, borderWidth: 1, borderColor: colors["color-border"], borderRadius: 14, paddingHorizontal: 14, color: colors["color-text-primary"] }}
+                placeholderTextColor={tokens.label2}
+                style={{
+                  flex: 1,
+                  minHeight: 64,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: tokens.panelRim,
+                  backgroundColor: tokens.sheet,
+                  paddingHorizontal: 16,
+                  color: tokens.label,
+                  fontSize: TYPOGRAPHY.body.fontSize,
+                }}
               />
-              <Pressable testID="music-search-submit" accessibilityRole="button" accessibilityLabel="Search" onPress={() => void search()} style={{ minHeight: 52, paddingHorizontal: 18, justifyContent: "center", borderRadius: 14, backgroundColor: accentColor }}>
-                <Text style={{ color: colors["color-text-on-accent"], fontWeight: "800" }}>Go</Text>
+              <Pressable
+                testID="music-search-submit"
+                accessibilityRole="button"
+                accessibilityLabel="Search"
+                onPress={() => void search()}
+                style={{
+                  minHeight: 64,
+                  minWidth: 64,
+                  paddingHorizontal: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 14,
+                  backgroundColor: tokens.accent,
+                }}
+              >
+                {/*
+                  The accent fill carries LARGE text only: `onAccent` on
+                  `accent` measures 3.52:1 (dark) / 3.65:1 (light), so the
+                  label sits at the `title` step (20sp, bold) — large text
+                  under WCAG, whose floor is 3:1. Never body copy on the fill.
+                */}
+                <Text style={{ color: tokens.onAccent, fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "800" }}>Go</Text>
               </Pressable>
             </View>
-            {searching ? <ActivityIndicator /> : null}
-            {searchError ? <Text style={{ color: colors["color-accent-rose"] }}>{searchError}</Text> : null}
-            {visible.map((track) => {
-              // A parent sees every row, so an UNRATED row (no rating at all)
-              // must be marked as such — a quiet label, never a badge that
-              // reads as an error. Kid roles never see these rows while the
-              // filter is on (they fail closed), so the marker is parent-only.
-              const unratedRow = isParent && track.explicit === null;
-              // The family's OWN list: a parent sees the row AND the fact that
-              // the kids do not — the rule is visible and verifiable. A kid never
-              // sees this row at all (the policy hides it), so the marker is
-              // parent-only too.
-              const blockedRow = isParent && isDeniedTerm(track, policy.denied ?? []);
-              return (
-                <Pressable
-                  key={track.id}
-                  testID={`music-result-${track.id}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Play ${track.title} by ${track.artist}${unratedRow ? ", unrated" : ""}${blockedRow ? ", blocked for kids" : ""}`}
-                  onPress={() => void play(track, visible)}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 64, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}
-                >
-                  <Material tier="thin" style={{ width: 48, height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                    {track.artworkUrl ? <Image source={{ uri: track.artworkUrl }} style={{ width: 48, height: 48 }} /> : <Text>🎵</Text>}
-                  </Material>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontWeight: "700", flexShrink: 1 }}>{track.title}</Text>
-                      {unratedRow ? (
-                        <View
-                          testID={`music-result-unrated-${track.id}`}
-                          style={{
-                            paddingHorizontal: 8,
-                            paddingVertical: 2,
-                            borderRadius: 999,
-                            borderWidth: 1,
-                            borderColor: mix(colors["color-text-primary"], "transparent", 30),
-                          }}
-                        >
-                          <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "600" }}>
-                            Unrated
-                          </Text>
-                        </View>
-                      ) : null}
-                      {blockedRow ? (
-                        <View
-                          testID={`music-result-blocked-${track.id}`}
-                          style={{
-                            paddingHorizontal: 8,
-                            paddingVertical: 2,
-                            borderRadius: 999,
-                            borderWidth: 1,
-                            borderColor: mix(accentColor, "transparent", 40),
-                          }}
-                        >
-                          <Text style={{ color: colors["color-accent-ink"] ?? colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "600" }}>
-                            Blocked for kids
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{track.artist}</Text>
-                  </View>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`Add ${track.title} to queue`} hitSlop={12} onPress={(e) => { e?.stopPropagation?.(); addToQueue(track); }} style={{ minHeight: 44, paddingHorizontal: 10, justifyContent: "center", borderRadius: 10, backgroundColor: mix(colors["color-text-primary"], "transparent", 6) }}>
-                    <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize }}>+ Queue</Text>
-                  </Pressable>
-                </Pressable>
-              );
-            })}
+            {searching ? <ActivityIndicator color={tokens.label2} /> : null}
+            {searchError ? (
+              <Text style={{ color: colors["color-accent-rose"], ...TYPOGRAPHY.body }}>{searchError}</Text>
+            ) : null}
+            {/*
+              The RESULTS: a Top Result card (the first track the viewer may
+              see) and the remaining rows on a panel. Only VISIBLE tracks ever
+              reach this list — the policy has already filtered them.
+            */}
+            {visible.length > 0 ? (
+              <SearchResults
+                tracks={visible}
+                tokens={tokens}
+                isParent={isParent}
+                denied={policy.denied ?? []}
+                onPlay={(track, list) => void play(track, list)}
+                onQueue={(track) => addToQueue(track)}
+              />
+            ) : null}
             {note ? (
               <Text
                 testID={note.testID}
                 accessibilityRole="alert"
                 accessibilityLiveRegion="polite"
-                style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, lineHeight: TYPOGRAPHY.body.lineHeight, paddingVertical: 12 }}
+                style={{ color: tokens.label2, ...TYPOGRAPHY.body, paddingVertical: 12 }}
               >
                 {note.text}
               </Text>
             ) : null}
-          </Material>
+          </View>
         ) : null}
 
         {visibleCurrent ? (
@@ -395,56 +381,31 @@ export function MusicPlayer() {
             ) : null}
 
             {visibleDownloads.length > 0 ? (
-              <Material tier="thin" style={{ borderRadius: 20, padding: 18, gap: 8 }}>
-                <Text style={{ color: colors["color-text-primary"], fontWeight: "800", fontSize: TYPOGRAPHY.title.fontSize }}>
-                  Downloads · {formatBytes(totalDownloadBytes(visibleDownloads))}
-                </Text>
-                {visibleDownloads.map((item) => (
-                  <View key={item.id} testID={`music-download-${item.id}`} style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 56 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontWeight: "600" }}>{item.title}</Text>
-                      <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{item.artist}</Text>
-                    </View>
-                    <Pressable
-                      testID={`music-download-remove-${item.id}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Delete download ${item.title}`}
-                      hitSlop={10}
-                      onPress={() => void removeDownload(item.id)}
-                      style={{ minHeight: 48, paddingHorizontal: 14, justifyContent: "center", borderRadius: 12, backgroundColor: mix(colors["color-accent-rose"] ?? accentColor, "transparent", 14) }}
-                    >
-                      <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>Delete</Text>
-                    </Pressable>
-                  </View>
-                ))}
-              </Material>
+              <DownloadsTray
+                downloads={visibleDownloads}
+                tokens={tokens}
+                onRemove={(id) => void removeDownload(id)}
+              />
             ) : null}
           </>
         ) : (
-          <Material tier="thin" style={{ borderRadius: 20, padding: 24, alignItems: "center", gap: 8 }}>
+          <View style={{ backgroundColor: tokens.panel, borderRadius: tokens.panelRadius, borderWidth: 1, borderColor: tokens.panelRim, padding: 24, alignItems: "center", gap: 8 }}>
             <Text style={{ fontSize: 56 }}>🎵</Text>
-            <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "800" }}>Search YouTube Music</Text>
-            <Text style={{ color: colors["color-text-secondary"], textAlign: "center" }}>Millions of songs, no ads. Sign in to play.</Text>
-          </Material>
+            <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "800" }}>Search YouTube Music</Text>
+            <Text style={{ color: tokens.label2, ...TYPOGRAPHY.body, textAlign: "center" }}>Millions of songs, no ads. Sign in to play.</Text>
+          </View>
         )}
 
+        {/*
+          The RECENTLY PLAYED shelf — the visible history, on the grouped
+          ground. It plays through the visible list, exactly as it always did.
+        */}
         {!visibleCurrent && visibleHistory.length > 0 ? (
-          <Material tier="thin" style={{ borderRadius: 20, padding: 18, gap: 6 }}>
-            <Text style={{ color: colors["color-text-primary"], fontWeight: "800", fontSize: TYPOGRAPHY.title.fontSize }}>Recently played</Text>
-            {visibleHistory.slice(0, 8).map((track) => (
-              <Pressable
-                key={track.id}
-                testID={`music-history-${track.id}`}
-                accessibilityRole="button"
-                accessibilityLabel={`Play ${track.title} by ${track.artist}`}
-                onPress={() => void play(track, visibleHistory)}
-                style={{ minHeight: 52, justifyContent: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}
-              >
-                <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontWeight: "700" }}>{track.title}</Text>
-                <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{track.artist}</Text>
-              </Pressable>
-            ))}
-          </Material>
+          <HistoryShelf
+            history={visibleHistory}
+            tokens={tokens}
+            onPlay={(track, list) => void play(track, list)}
+          />
         ) : null}
       </ScrollView>
 
@@ -516,6 +477,489 @@ export function MusicPlayer() {
         </Modal>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The search RESULTS — a Top Result card and the rows below it.
+ *
+ * The first track the viewer may see leads: it gets its own card, with the
+ * artwork at 120 and a Play button of its own. The rest are rows on a panel,
+ * separated by hairlines.
+ *
+ * EVERY row here came from the provider's VISIBLE list (`visibleTracks`), so
+ * a track this viewer may not see is never painted — for a kid and for a
+ * guest alike.
+ */
+function SearchResults({
+  tracks, tokens, isParent, denied, onPlay, onQueue,
+}: {
+  tracks: MediaTrack[];
+  tokens: MusicTokens;
+  isParent: boolean;
+  denied: string[];
+  onPlay: (track: MediaTrack, list: MediaTrack[]) => void;
+  onQueue: (track: MediaTrack) => void;
+}) {
+  const [top, ...rest] = tracks;
+  return (
+    <View style={{ gap: tokens.shelfGap }}>
+      <TopResultCard
+        track={top}
+        list={tracks}
+        tokens={tokens}
+        isParent={isParent}
+        denied={denied}
+        onPlay={onPlay}
+        onQueue={onQueue}
+      />
+      {rest.length > 0 ? (
+        <PanelCard testID="music-results" tokens={tokens}>
+          {rest.map((track, index) => (
+            <ResultRow
+              key={track.id}
+              track={track}
+              list={tracks}
+              index={index}
+              tokens={tokens}
+              isParent={isParent}
+              denied={denied}
+              onPlay={onPlay}
+              onQueue={onQueue}
+            />
+          ))}
+        </PanelCard>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * The TOP RESULT card — the first visible result, artwork-led.
+ *
+ * It is the surface's headline: the cover leads at 120, the words sit beside
+ * it, and the actions (Play, + Queue) are thumb-sized on their own row.
+ *
+ * The markers ("Unrated", "Blocked for kids") ride along here exactly as they
+ * ride on a row: same copy, same parent-only visibility.
+ */
+function TopResultCard({
+  track, list, tokens, isParent, denied, onPlay, onQueue,
+}: {
+  track: MediaTrack;
+  list: MediaTrack[];
+  tokens: MusicTokens;
+  isParent: boolean;
+  denied: string[];
+  onPlay: (track: MediaTrack, list: MediaTrack[]) => void;
+  onQueue: (track: MediaTrack) => void;
+}) {
+  // A parent sees every row, so an UNRATED row (no rating at all) must be
+  // marked as such — a quiet label, never a badge that reads as an error.
+  // Kid roles never see these rows while the filter is on (they fail
+  // closed), so the marker is parent-only.
+  const unratedRow = isParent && track.explicit === null;
+  // The family's OWN list: a parent sees the row AND the fact that the kids
+  // do not — the rule is visible and verifiable. A kid never sees this row at
+  // all (the policy hides it), so the marker is parent-only too.
+  const blockedRow = isParent && isDeniedTerm(track, denied);
+  return (
+    <View
+      testID="music-top-result"
+      style={{
+        backgroundColor: tokens.panel,
+        borderRadius: tokens.panelRadius,
+        borderWidth: 1,
+        borderColor: tokens.panelRim,
+        padding: 16,
+        gap: 14,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+        <ArtworkLead testID="music-top-result-artwork" track={track} tokens={tokens} />
+        <Pressable
+          testID={`music-result-${track.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Play ${track.title} by ${track.artist}${unratedRow ? ", unrated" : ""}${blockedRow ? ", blocked for kids" : ""}`}
+          onPress={() => onPlay(track, list)}
+          style={{ flex: 1, minHeight: 64, justifyContent: "center" }}
+        >
+          <Text numberOfLines={2} style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "700" }}>
+            {track.title}
+          </Text>
+          <Text numberOfLines={1} style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>
+            {track.artist}
+          </Text>
+          {unratedRow || blockedRow ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
+              {unratedRow ? (
+                <Marker testID={`music-result-unrated-${track.id}`} label="Unrated" tokens={tokens} />
+              ) : null}
+              {blockedRow ? (
+                <Marker testID={`music-result-blocked-${track.id}`} label="Blocked for kids" tokens={tokens} accent />
+              ) : null}
+            </View>
+          ) : null}
+        </Pressable>
+      </View>
+
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Pressable
+          testID="music-top-result-play"
+          accessibilityRole="button"
+          accessibilityLabel={`Play ${track.title}`}
+          onPress={() => onPlay(track, list)}
+          style={{
+            minHeight: 64,
+            paddingHorizontal: 24,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: tokens.panelRadius,
+            backgroundColor: tokens.accent,
+          }}
+        >
+          {/* LARGE text on the accent fill — see the search submit. */}
+          <Text style={{ color: tokens.onAccent, fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "800" }}>
+            Play
+          </Text>
+        </Pressable>
+        <Pressable
+          testID="music-top-result-queue"
+          accessibilityRole="button"
+          accessibilityLabel={`Add ${track.title} to queue`}
+          onPress={() => onQueue(track)}
+          style={{
+            minHeight: 64,
+            paddingHorizontal: 20,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: tokens.panelRadius,
+            borderWidth: 1,
+            borderColor: tokens.panelRim,
+          }}
+        >
+          <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+            + Queue
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * One result ROW — the panel rows below the Top Result.
+ *
+ * The artwork is a 48dp thumb, the title reads the label tier and the artist
+ * the third, and the row is a thumb-sized target that plays the track.
+ */
+function ResultRow({
+  track, list, index, tokens, isParent, denied, onPlay, onQueue,
+}: {
+  track: MediaTrack;
+  list: MediaTrack[];
+  index: number;
+  tokens: MusicTokens;
+  isParent: boolean;
+  denied: string[];
+  onPlay: (track: MediaTrack, list: MediaTrack[]) => void;
+  onQueue: (track: MediaTrack) => void;
+}) {
+  const unratedRow = isParent && track.explicit === null;
+  const blockedRow = isParent && isDeniedTerm(track, denied);
+  return (
+    <Pressable
+      testID={`music-result-${track.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={`Play ${track.title} by ${track.artist}${unratedRow ? ", unrated" : ""}${blockedRow ? ", blocked for kids" : ""}`}
+      onPress={() => onPlay(track, list)}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        minHeight: 64,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderTopWidth: index === 0 ? 0 : 1,
+        borderTopColor: tokens.panelSeparator,
+      }}
+    >
+      <ArtworkThumb testID={`music-result-thumb-${track.id}`} track={track} tokens={tokens} />
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text numberOfLines={1} style={{ color: tokens.label, ...TYPOGRAPHY.body, fontWeight: "700", flexShrink: 1 }}>
+            {track.title}
+          </Text>
+          {unratedRow ? (
+            <Marker testID={`music-result-unrated-${track.id}`} label="Unrated" tokens={tokens} />
+          ) : null}
+          {blockedRow ? (
+            <Marker testID={`music-result-blocked-${track.id}`} label="Blocked for kids" tokens={tokens} accent />
+          ) : null}
+        </View>
+        <Text numberOfLines={1} style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>
+          {track.artist}
+        </Text>
+      </View>
+      <Pressable
+        testID={`music-result-queue-${track.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Add ${track.title} to queue`}
+        hitSlop={8}
+        onPress={(e) => { e?.stopPropagation?.(); onQueue(track); }}
+        style={{
+          minHeight: 64,
+          minWidth: 64,
+          paddingHorizontal: 12,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: tokens.artworkRadius,
+        }}
+      >
+        <Text style={{ color: tokens.label2, ...TYPOGRAPHY.label, fontWeight: "700" }}>+ Queue</Text>
+      </Pressable>
+    </Pressable>
+  );
+}
+
+/**
+ * A track's MARKER — "Unrated" or "Blocked for kids".
+ *
+ * WHY THE TEXT IS NOT THE ACCENT: the Liquid accent is a LARGE-text colour
+ * (3.65:1 on the light ground — see music-tokens.ts), and a marker is a
+ * 14sp label. So the words read the second tier and only the RIM takes the
+ * accent — a rule the eye can see, a word it can read.
+ */
+function Marker({
+  testID, label, tokens, accent,
+}: {
+  testID: string;
+  label: string;
+  tokens: MusicTokens;
+  accent?: boolean;
+}) {
+  return (
+    <View
+      testID={testID}
+      style={{
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: accent ? tokens.accent : tokens.panelRim,
+      }}
+    >
+      <Text style={{ color: tokens.label2, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "600" }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * The DOWNLOADS tray — the offline shelf.
+ *
+ * The header keeps its honest cap copy ("Downloads · 12 MB"): the total of
+ * the tracks THIS viewer may see. The rows are panel rows, and the delete is
+ * a thumb-sized control of its own.
+ */
+function DownloadsTray({
+  downloads, tokens, onRemove,
+}: {
+  downloads: DownloadEntry[];
+  tokens: MusicTokens;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <View testID="music-downloads" style={{ gap: tokens.shelfGap }}>
+      <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "700" }}>
+        Downloads · {formatBytes(totalDownloadBytes(downloads))}
+      </Text>
+      <PanelCard tokens={tokens}>
+        {downloads.map((item, index) => (
+          <View
+            key={item.id}
+            testID={`music-download-${item.id}`}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              minHeight: 64,
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderTopWidth: index === 0 ? 0 : 1,
+              borderTopColor: tokens.panelSeparator,
+            }}
+          >
+            <ArtworkThumb testID={`music-download-thumb-${item.id}`} track={item} tokens={tokens} />
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={1} style={{ color: tokens.label, ...TYPOGRAPHY.body, fontWeight: "700" }}>
+                {item.title}
+              </Text>
+              <Text numberOfLines={1} style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>
+                {item.artist}
+              </Text>
+            </View>
+            <Text style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>{formatBytes(item.bytes)}</Text>
+            <Pressable
+              testID={`music-download-remove-${item.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Delete download ${item.title}`}
+              onPress={() => onRemove(item.id)}
+              style={{
+                minHeight: 64,
+                minWidth: 64,
+                paddingHorizontal: 12,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: tokens.artworkRadius,
+                borderWidth: 1,
+                borderColor: tokens.panelRim,
+              }}
+            >
+              <Text style={{ color: tokens.label, ...TYPOGRAPHY.label, fontWeight: "700" }}>Delete</Text>
+            </Pressable>
+          </View>
+        ))}
+      </PanelCard>
+    </View>
+  );
+}
+
+/**
+ * The RECENTLY PLAYED shelf — the visible history, on the grouped ground.
+ *
+ * The section ground is `grouped` and the rows sit on a panel inside it, so
+ * the shelf reads as a raised section of the page. The play behaviour is the
+ * one it always had: the row plays the track through the VISIBLE history.
+ */
+function HistoryShelf({
+  history, tokens, onPlay,
+}: {
+  history: MediaTrack[];
+  tokens: MusicTokens;
+  onPlay: (track: MediaTrack, list: MediaTrack[]) => void;
+}) {
+  return (
+    <View
+      testID="music-history-shelf"
+      style={{
+        backgroundColor: tokens.grouped,
+        borderRadius: tokens.panelRadius,
+        borderWidth: 1,
+        borderColor: tokens.panelRim,
+        overflow: "hidden",
+      }}
+    >
+      <View style={{ paddingHorizontal: 16, paddingVertical: 8, minHeight: 64, justifyContent: "center" }}>
+        <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "700" }}>Recently played</Text>
+      </View>
+      {history.length === 0 ? (
+        <Text
+          testID="music-history-empty"
+          style={{
+            color: tokens.label2,
+            ...TYPOGRAPHY.body,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            borderTopWidth: 1,
+            borderTopColor: tokens.panelSeparator,
+          }}
+        >
+          Nothing played yet.
+        </Text>
+      ) : (
+        <View
+          style={{
+            backgroundColor: tokens.panel,
+            margin: 10,
+            borderRadius: tokens.artworkRadius,
+            borderWidth: 1,
+            borderColor: tokens.panelRim,
+            overflow: "hidden",
+          }}
+        >
+          {history.slice(0, 8).map((track, index) => (
+            <HistoryRow
+              key={track.id}
+              track={track}
+              history={history}
+              index={index}
+              tokens={tokens}
+              onPlay={onPlay}
+            />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/**
+ * A PANEL — the Liquid card the rows live in.
+ *
+ * One card per list: the fill, the hairline rim, the Liquid radius, and the
+ * rows inside it separated by `panelSeparator` hairlines.
+ */
+function PanelCard({
+  testID, children, tokens, style,
+}: {
+  testID?: string;
+  children: React.ReactNode;
+  tokens: MusicTokens;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View
+      testID={testID}
+      style={[
+        {
+          backgroundColor: tokens.panel,
+          borderRadius: tokens.panelRadius,
+          borderWidth: 1,
+          borderColor: tokens.panelRim,
+          overflow: "hidden",
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+/**
+ * The artwork at 120 — the Top Result's lead.
+ *
+ * The Liquid radius, the grouped ground behind the cover, and never a
+ * stretched picture: the image is cropped to its square.
+ */
+function ArtworkLead({
+  testID, track, tokens,
+}: {
+  testID: string;
+  track: { artworkUrl: string | null };
+  tokens: MusicTokens;
+}) {
+  return (
+    <View
+      testID={testID}
+      style={{
+        width: 120,
+        height: 120,
+        borderRadius: tokens.artworkRadius,
+        overflow: "hidden",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: tokens.grouped,
+      }}
+    >
+      {track.artworkUrl ? (
+        <Image source={{ uri: track.artworkUrl }} style={{ width: 120, height: 120 }} resizeMode="cover" />
+      ) : (
+        <Text style={{ fontSize: 40 }}>🎵</Text>
+      )}
+    </View>
   );
 }
 
@@ -999,53 +1443,11 @@ function QueuePane({
         )}
       </View>
 
-      <View
-        style={{
-          backgroundColor: tokens.panel,
-          borderRadius: tokens.panelRadius,
-          borderWidth: 1,
-          borderColor: tokens.panelRim,
-          overflow: "hidden",
-        }}
-      >
-        <View
-          style={{
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            minHeight: 64,
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "700" }}>
-            Recently played
-          </Text>
-        </View>
-        {history.length === 0 ? (
-          <Text
-            testID="music-history-empty"
-            style={{
-              color: tokens.label2,
-              ...TYPOGRAPHY.body,
-              paddingHorizontal: 16,
-              paddingVertical: 14,
-              borderTopWidth: 1,
-              borderTopColor: tokens.panelSeparator,
-            }}
-          >
-            Nothing played yet.
-          </Text>
-        ) : (
-          history.slice(0, 8).map((track) => (
-            <HistoryRow
-              key={track.id}
-              track={track}
-              history={history}
-              tokens={tokens}
-              onPlay={onPlay}
-            />
-          ))
-        )}
-      </View>
+      {/*
+        The RECENTLY PLAYED shelf — the SAME shelf the page shows when
+        nothing is playing, so the two never drift apart.
+      */}
+      <HistoryShelf history={history} tokens={tokens} onPlay={onPlay} />
     </View>
   );
 }
@@ -1120,10 +1522,12 @@ function QueueRow({
 
 /** One row of the recently played shelf — it plays, exactly as it always did. */
 function HistoryRow({
-  track, history, tokens, onPlay,
+  track, history, index, tokens, onPlay,
 }: {
   track: MediaTrack;
   history: MediaTrack[];
+  /** Its place in the list — the first row carries no hairline above it. */
+  index: number;
   tokens: MusicTokens;
   onPlay: (track: MediaTrack, list: MediaTrack[]) => void;
 }) {
@@ -1136,7 +1540,7 @@ function HistoryRow({
         minHeight: 64,
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderTopWidth: 1,
+        borderTopWidth: index === 0 ? 0 : 1,
         borderTopColor: tokens.panelSeparator,
       }}
     >
@@ -1164,7 +1568,8 @@ function ArtworkThumb({
   testID, track, tokens,
 }: {
   testID: string;
-  track: MediaTrack;
+  /** Anything with a cover — a search result, a download, a history row. */
+  track: { artworkUrl: string | null };
   tokens: MusicTokens;
 }) {
   return (

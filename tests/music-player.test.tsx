@@ -635,6 +635,211 @@ describe("the Now Playing queue mode", () => {
   });
 });
 
+/**
+ * The SEARCH surface (SP2 Task 5) — the field, the Top Result and the rows.
+ *
+ * The search results are rebuilt on the Liquid palette: a sheet-ground field,
+ * a TOP RESULT card (the artwork leads at 120) and the remaining results as
+ * rows on a panel with hairline separators. The honest states and the
+ * markers keep their copy — and the markers stay parent-only.
+ */
+describe("the search surface on the Liquid panels", () => {
+  const SECOND = {
+    id: "second1111", title: "Second Song", artist: "D", album: "", durationSeconds: 100,
+    artworkUrl: null, explicit: false, source: "youtube_music",
+  };
+  const THIRD = {
+    id: "third11111", title: "Third Song", artist: "E", album: "", durationSeconds: 100,
+    artworkUrl: null, explicit: false, source: "youtube_music",
+  };
+
+  /** The tokens the surface is painted with. */
+  const tokens = () => {
+    const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+    return musicTokensFor(theme, boost);
+  };
+
+  /** Runs a search and lets the answer settle INSIDE act(). */
+  const search = async (term: string) => {
+    const utils = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.changeText(utils.getByTestId("music-search-input"), term);
+    await act(async () => {
+      fireEvent.press(utils.getByTestId("music-search-submit"));
+    });
+    return utils;
+  };
+
+  it("the field is a sheet-ground box on the Liquid radius", () => {
+    mockCurrent = null;
+    const t = tokens();
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    const field = StyleSheet.flatten(getByTestId("music-search-input").props.style);
+    expect(field.backgroundColor).toBe(t.sheet);
+    expect(field.borderRadius).toBe(14);
+    // the field is thumb-sized
+    expect(field.minHeight).toBeGreaterThanOrEqual(64);
+    const submit = StyleSheet.flatten(getByTestId("music-search-submit").props.style);
+    expect(submit.minHeight).toBeGreaterThanOrEqual(64);
+  });
+
+  it("leads with a TOP RESULT card — the artwork leads at 120", async () => {
+    mockCurrent = null;
+    mockSearchOutcome = { tracks: [CLEAN_TRACK, SECOND], explicitKnown: true };
+    const t = tokens();
+    const { getByTestId, findByTestId } = await search("beatles");
+    const card = await findByTestId("music-top-result");
+    expect(StyleSheet.flatten(card.props.style).backgroundColor).toBe(t.panel);
+    const artwork = StyleSheet.flatten(getByTestId("music-top-result-artwork").props.style);
+    expect(artwork.width).toBe(120);
+    expect(artwork.height).toBe(120);
+    expect(artwork.borderRadius).toBe(t.artworkRadius);
+  });
+
+  it("the Top Result plays from its own Play button", async () => {
+    mockCurrent = null;
+    mockSearchOutcome = { tracks: [CLEAN_TRACK, SECOND], explicitKnown: true };
+    const { findByTestId } = await search("beatles");
+    const play = await findByTestId("music-top-result-play");
+    expect(StyleSheet.flatten(play.props.style).minHeight).toBeGreaterThanOrEqual(64);
+    fireEvent.press(play);
+    expect(mockPlay).toHaveBeenCalledWith(CLEAN_TRACK, [CLEAN_TRACK, SECOND]);
+  });
+
+  it("keeps the remaining results as rows on a panel, with hairline separators", async () => {
+    mockCurrent = null;
+    mockSearchOutcome = { tracks: [CLEAN_TRACK, SECOND, THIRD], explicitKnown: true };
+    const t = tokens();
+    const { getByTestId, findByTestId, getByText } = await search("beatles");
+    const panel = await findByTestId("music-results");
+    expect(StyleSheet.flatten(panel.props.style).backgroundColor).toBe(t.panel);
+    const row = StyleSheet.flatten(getByTestId(`music-result-${SECOND.id}`).props.style);
+    expect(row.minHeight).toBeGreaterThanOrEqual(64);
+    // the row below it carries the hairline
+    const next = StyleSheet.flatten(getByTestId(`music-result-${THIRD.id}`).props.style);
+    expect(next.borderTopWidth).toBe(1);
+    expect(next.borderTopColor).toBe(t.panelSeparator);
+    const thumb = StyleSheet.flatten(getByTestId(`music-result-thumb-${SECOND.id}`).props.style);
+    expect(thumb.width).toBe(48);
+    expect(thumb.height).toBe(48);
+    // the words read the right tiers: the title is the label, the artist the third
+    const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
+    expect(styleOf(getByText("Second Song")).color).toBe(t.label);
+    expect(styleOf(getByText("D")).color).toBe(t.label3);
+  });
+
+  it("gives the Top Result its own + Queue control", async () => {
+    mockCurrent = null;
+    mockSearchOutcome = { tracks: [CLEAN_TRACK, SECOND], explicitKnown: true };
+    const { findByTestId, getAllByText } = await search("beatles");
+    const queue = await findByTestId("music-top-result-queue");
+    expect(StyleSheet.flatten(queue.props.style).minHeight).toBeGreaterThanOrEqual(64);
+    // the copy is unchanged — on the card and on the row below it
+    expect(getAllByText("+ Queue").length).toBe(2);
+  });
+
+  it("keeps the markers' copy — on the Top Result and on a row alike", async () => {
+    mockCurrent = null;
+    mockMember = PARENT;
+    mockDenied = ["eminem"];
+    mockSearchOutcome = { tracks: [UNRATED_TRACK, DENIED_TRACK], explicitKnown: true };
+    const { findByText, findByTestId } = await search("beatles");
+    // the copy is byte-identical
+    expect(await findByText("Unrated")).toBeTruthy();
+    expect(await findByText("Blocked for kids")).toBeTruthy();
+    expect(await findByTestId(`music-result-unrated-${UNRATED_TRACK.id}`)).toBeTruthy();
+    expect(await findByTestId(`music-result-blocked-${DENIED_TRACK.id}`)).toBeTruthy();
+  });
+
+  it("never marks the Top Result for a kid role", async () => {
+    mockCurrent = null;
+    mockMember = KID;
+    mockExplicitFilter = false;
+    mockSearchOutcome = { tracks: [UNRATED_TRACK], explicitKnown: true };
+    const { findByTestId, queryByTestId } = await search("beatles");
+    expect(await findByTestId("music-top-result")).toBeTruthy();
+    expect(queryByTestId(`music-result-unrated-${UNRATED_TRACK.id}`)).toBeNull();
+  });
+
+  it("never paints a track the viewer may not see — not on the card, not on a row", async () => {
+    mockCurrent = null;
+    mockMember = KID;
+    mockDenied = ["eminem"];
+    mockSearchOutcome = { tracks: [DENIED_TRACK, CLEAN_TRACK], explicitKnown: true };
+    const { findByText, queryByText } = await search("eminem");
+    expect(await findByText("Found")).toBeTruthy();
+    expect(queryByText("Till I Collapse")).toBeNull();
+    expect(queryByText("Blocked for kids")).toBeNull();
+  });
+
+  it("keeps the honest states byte-for-byte, on the token grounds", async () => {
+    mockCurrent = null;
+    mockMember = KID;
+    mockSearchOutcome = { tracks: [], explicitKnown: true };
+    const t = tokens();
+    const { getByTestId, findByText } = await search("zzzz");
+    const note = await findByText("No songs matched that search.");
+    expect(note).toBeTruthy();
+    expect(StyleSheet.flatten(note.props.style).color).toBe(t.label2);
+    expect(getByTestId("music-search-note-empty")).toBeTruthy();
+  });
+});
+
+/**
+ * The DOWNLOADS tray (SP2 Task 5) — panel rows, the byte count, the delete.
+ */
+describe("the downloads tray on the Liquid panels", () => {
+  const SAVED = {
+    id: "dl11111111", title: "Saved Song", artist: "A", album: "", durationSeconds: 100,
+    artworkUrl: null, fileUri: "file:///x.m4a", bytes: 5 * 1024 * 1024, savedAt: 1,
+    explicit: false,
+  };
+
+  it("lists the downloads as panel rows, with the byte count and a thumb-sized delete", async () => {
+    mockDownloads = [SAVED];
+    const t = (() => {
+      const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+      return musicTokensFor(theme, boost);
+    })();
+    const { getByTestId, getByText } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(getByTestId("music-download-dl11111111")).toBeTruthy());
+    const row = StyleSheet.flatten(getByTestId("music-download-dl11111111").props.style);
+    expect(row.minHeight).toBeGreaterThanOrEqual(64);
+    // the byte count reads the third tier
+    expect(StyleSheet.flatten(getByText("5 MB").props.style).color).toBe(t.label3);
+    // the delete control is thumb-sized
+    const remove = StyleSheet.flatten(getByTestId("music-download-remove-dl11111111").props.style);
+    expect(remove.minHeight).toBeGreaterThanOrEqual(64);
+  });
+
+  it("keeps the header's honest cap copy", async () => {
+    mockDownloads = [SAVED];
+    const { getByText } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(getByText("Downloads · 5 MB")).toBeTruthy());
+  });
+});
+
+/**
+ * The RECENTLY PLAYED shelf (SP2 Task 5) — panel rows on the grouped ground.
+ */
+describe("the recently played shelf on the Liquid panels", () => {
+  it("sits on the grouped ground, and plays through the visible history", async () => {
+    mockCurrent = null;
+    mockHistory = [CLEAN_TRACK];
+    const t = (() => {
+      const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+      return musicTokensFor(theme, boost);
+    })();
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(getByTestId("music-history-shelf")).toBeTruthy());
+    expect(StyleSheet.flatten(getByTestId("music-history-shelf").props.style).backgroundColor).toBe(t.grouped);
+    const row = StyleSheet.flatten(getByTestId(`music-history-${CLEAN_TRACK.id}`).props.style);
+    expect(row.minHeight).toBeGreaterThanOrEqual(64);
+    // the play behaviour is unchanged: it plays through the VISIBLE history
+    fireEvent.press(getByTestId(`music-history-${CLEAN_TRACK.id}`));
+    expect(mockPlay).toHaveBeenCalledWith(CLEAN_TRACK, [CLEAN_TRACK]);
+  });
+});
+
 it("lists downloads and removes one", async () => {
   // The download carries its rating: a row the viewer may not see is not
   // listed at all (see "hides an explicit download from a kid" below).

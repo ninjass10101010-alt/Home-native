@@ -133,11 +133,21 @@ const GEOMETRY = {
 function measure(t: MusicTokens) {
   const bg = t.bg;
   const panelOverBg = composite(t.panel, bg);
+  // The rows of the recently played shelf sit on a panel INSIDE the grouped
+  // ground — the shelf's own section ground.
+  const panelOverGrouped = composite(t.panel, t.grouped);
   return {
     label: contrast(composite(t.label, bg), bg),
     label2: contrast(composite(t.label2, bg), bg),
     label3: contrast(composite(t.label3, bg), bg),
     labelOnPanel: contrast(composite(t.label, panelOverBg), panelOverBg),
+    label2OnPanel: contrast(composite(t.label2, panelOverBg), panelOverBg),
+    label3OnPanel: contrast(composite(t.label3, panelOverBg), panelOverBg),
+    labelOnShelf: contrast(composite(t.label, panelOverGrouped), panelOverGrouped),
+    label2OnShelf: contrast(composite(t.label2, panelOverGrouped), panelOverGrouped),
+    label3OnShelf: contrast(composite(t.label3, panelOverGrouped), panelOverGrouped),
+    labelOnSheet: contrast(composite(t.label, t.sheet), t.sheet),
+    label2OnSheet: contrast(composite(t.label2, t.sheet), t.sheet),
     accent: contrast(composite(t.accent, bg), bg),
     onAccent: contrast(composite(t.onAccent, t.accent), t.accent),
   };
@@ -161,6 +171,25 @@ describe.each(VARIANTS)("the Liquid palette — $name", (v) => {
 
   it("label on the panel (composited over bg) clears AA (4.5:1)", () => {
     expect(m.labelOnPanel).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("the second tier on the panel clears AA (4.5:1)", () => {
+    expect(m.label2OnPanel).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("the third tier on the panel clears AA (4.5:1)", () => {
+    expect(m.label3OnPanel).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("every tier on the shelf (panel over the grouped ground) clears AA (4.5:1)", () => {
+    expect(m.labelOnShelf).toBeGreaterThanOrEqual(4.5);
+    expect(m.label2OnShelf).toBeGreaterThanOrEqual(4.5);
+    expect(m.label3OnShelf).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("the search field's sheet ground carries the tiers at AA (4.5:1)", () => {
+    expect(m.labelOnSheet).toBeGreaterThanOrEqual(4.5);
+    expect(m.label2OnSheet).toBeGreaterThanOrEqual(4.5);
   });
 
   it("accent on bg clears its floor", () => {
