@@ -122,6 +122,24 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     playbackCurrentRef.current = playbackCurrent;
   }, [playbackCurrent]);
 
+  /**
+   * The track the last teardown already parked.
+   *
+   * A normal Stop is seen twice — once by `disconnect` and once by the
+   * session-end effect — and both would resolve/replace the same track. The
+   * guard collapses them into one park; every new cast load clears it.
+   */
+  const lastParkedRef = React.useRef<string | null>(null);
+
+  const parkOnce = React.useCallback(
+    async (next: MediaTrack) => {
+      if (lastParkedRef.current === next.id) return;
+      lastParkedRef.current = next.id;
+      await parkLocal(next);
+    },
+    [parkLocal]
+  );
+
   React.useEffect(() => {
     if (session) {
       hadSessionRef.current = true;
@@ -130,20 +148,25 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     }
     clientRef.current = null;
     targetRef.current = null;
-    const ended = hadSessionRef.current ? trackRef.current : null;
+    // A session can end before its last load ever reached the surface (the
+    // receiver rejected it), so the local `track` is not the only thing worth
+    // parking: `playback.current` is where the family's chosen track lives.
+    const ended = hadSessionRef.current
+      ? playbackCurrentRef.current ?? trackRef.current
+      : null;
     hadSessionRef.current = false;
     if (!ended) {
       setTarget(null);
       setTrack(null);
       return;
     }
-    // A cast session ended with a track on the surface: park the local player
-    // on that track BEFORE the surface clears, so pressing Play after Stop
-    // resumes the track the family was casting, not whatever the tablet held
-    // before the cast began. Unmount cleanup never reaches here.
+    // A cast session ended with a track chosen: park the local player on that
+    // track BEFORE the surface clears, so pressing Play after Stop resumes
+    // the track the family was casting, not whatever the tablet held before
+    // the cast began. Unmount cleanup never reaches here.
     let cancelled = false;
     void (async () => {
-      await parkLocal(playbackCurrentRef.current ?? ended);
+      await parkOnce(ended);
       if (cancelled) return;
       setTarget(null);
       setTrack(null);
@@ -151,7 +174,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [parkLocal, session]);
+  }, [parkOnce, session]);
 
   const connect = React.useCallback(
     async (id: string): Promise<boolean> => {
@@ -159,9 +182,10 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       if (!chosen) return false;
       setBusy(true);
       setError(null);
+      let opened = false;
       try {
-        const started = await CastContext.sessionManager.startSession(id);
-        if (!started) throw new Error("session not started");
+        opened = await CastContext.sessionManager.startSession(id);
+        if (!opened) throw new Error("session not started");
         const current = await CastContext.sessionManager.getCurrentCastSession();
         if (!current?.client) throw new Error("session unavailable");
         // The receiver owns the sound from here: silence the tablet at once,
@@ -175,9 +199,11 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         if (switched) setTrack(null);
         return true;
       } catch {
-        // A failed SWITCH must not leave the previous receiver live: end it
-        // before clearing, so it cannot keep playing while local audio starts.
-        if (targetRef.current) {
+        // A failed SWITCH must not leave the previous receiver live, and a
+        // FIRST connect that opened a session but could not reach its client
+        // is just as live: end it before clearing, so it cannot keep playing
+        // while local audio starts.
+        if (opened || targetRef.current) {
           await CastContext.sessionManager.endCurrentSession(true).catch(() => {});
         }
         clientRef.current = null;
@@ -204,6 +230,9 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         setError("This track isn't available to cast.");
         return;
       }
+      // A new cast load arms the park guard again: a later Stop must park
+      // even when it lands on the same track id as the previous one.
+      lastParkedRef.current = null;
       setBusy(true);
       setError(null);
       try {
@@ -284,10 +313,11 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       await CastContext.sessionManager.endCurrentSession(true);
-      // A cast track was on the surface: park the local player on the track
-      // the family was casting, so Stop then Play never resumes the track the
-      // tablet held before the cast. No cast track means nothing to park.
-      if (track) await parkLocal(playbackCurrent ?? track);
+      // Park on the track the family chose even when the receiver load FAILED
+      // and never reached the surface: `playback.current` is what the local
+      // transport would resume, and it is B, not the pre-cast local track.
+      const toPark = playbackCurrent ?? track;
+      if (toPark) await parkOnce(toPark);
       clientRef.current = null;
       targetRef.current = null;
       setTarget(null);
@@ -297,7 +327,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setBusy(false);
     }
-  }, [parkLocal, playbackCurrent, track]);
+  }, [parkOnce, playbackCurrent, track]);
 
   const play = React.useCallback(
     () => guarded(async () => { await clientRef.current?.play(); }),

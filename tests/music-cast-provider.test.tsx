@@ -187,7 +187,7 @@ test("a live session installs the cast sink and clears it on stop", async () => 
   expect(mockSetCastSink).toHaveBeenLastCalledWith(null);
 });
 
-test("a failed load names the target and never pauses local audio", async () => {
+test("a failed load names the target, pauses local audio and never re-enters the sink", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
   mockLoadMedia.mockRejectedValueOnce(new Error("load failed"));
@@ -200,10 +200,64 @@ test("a failed load names the target and never pauses local audio", async () => 
   );
   await act(async () => {});
   await act(async () => { await api.connect("tv"); await api.startCast(track); });
-  expect(mockLoadMedia).toHaveBeenCalled();
+  // Connect always pauses the tablet directly; the failed load is reported
+  // once and never routed back through the sink or `toggle`.
+  expect(mockLoadMedia).toHaveBeenCalledTimes(1);
+  expect(mockPauseLocal).toHaveBeenCalledTimes(1);
   expect(mockToggle).not.toHaveBeenCalled();
   expect(api.casting).toBe(false);
   expect(api.error).toBe("Couldn't cast to Living Room.");
+});
+
+test("a first connect that opens a session but cannot reach it ends it", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(null);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  let connected = true;
+  await act(async () => { connected = await api.connect("tv"); });
+  expect(connected).toBe(false);
+  // `startSession` returned true, so a live session may exist even though the
+  // client lookup failed: end it instead of leaving the receiver running.
+  expect(mockEndCurrentSession).toHaveBeenCalledWith(true);
+  expect(api.target).toBeNull();
+  expect(api.error).toBe("Couldn't cast to Living Room.");
+});
+
+test("a live session parks once across disconnect and the session-end effect", async () => {
+  const sessionClient = client();
+  mockSession = { client: sessionClient };
+  mockStartSession.mockResolvedValue(true);
+  mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
+  mockGetCurrentCastSession.mockResolvedValue({ client: sessionClient });
+  mockPlayback = { ...mockPlayback, current: track };
+  let api!: ReturnType<typeof useCast>;
+  const tree = () => (
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  const view = render(tree());
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); await api.startCast(track); });
+  expect(api.casting).toBe(true);
+
+  // A normal Stop parks once...
+  await act(async () => { await api.disconnect(); });
+  expect(mockParkLocal).toHaveBeenCalledTimes(1);
+  expect(mockParkLocal).toHaveBeenCalledWith(track);
+
+  // ...and the live session disappearing afterwards must not park again for
+  // the same track.
+  mockSession = null;
+  await act(async () => { view.rerender(tree()); });
+  await act(async () => {});
+  expect(mockParkLocal).toHaveBeenCalledTimes(1);
 });
 
 test("a hidden track is refused before it is resolved or loaded", async () => {

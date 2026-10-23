@@ -13,6 +13,13 @@ const mockPlay = jest.fn();
 const mockPause = jest.fn();
 const mockSeek = jest.fn(async () => {});
 const mockLock = jest.fn();
+const mockStartSession = jest.fn();
+const mockEndCurrentSession = jest.fn();
+const mockGetCurrentCastSession = jest.fn();
+const mockLoadMedia = jest.fn();
+const mockClientPlay = jest.fn();
+const mockClientPause = jest.fn();
+const mockClientSeek = jest.fn();
 const mockResolve = jest.fn(async (_id: string) => ({
   url: "https://rr1---sn-test.googlevideo.com/videoplayback?x=1",
   mimeType: "audio/mp4",
@@ -24,6 +31,10 @@ const mockResolve = jest.fn(async (_id: string) => ({
 let mockStatus: any = {
   isLoaded: true, playing: false, currentTime: 4, duration: 120, didJustFinish: false,
 };
+/** The real CastProvider is mounted by ONE integration test below. */
+let mockCastSession: any = null;
+let mockCastStatus: any = null;
+let mockCastPosition = 0;
 
 jest.mock("expo-audio", () => ({
   useAudioPlayer: () => ({
@@ -38,6 +49,37 @@ jest.mock("expo-audio", () => ({
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
+/**
+ * The real CastProvider (loaded with `jest.requireActual` in one integration
+ * test) talks to the Cast SDK through these; the rest of this file keeps the
+ * module-level CastProvider mock.
+ */
+jest.mock("react-native-google-cast", () => ({
+  __esModule: true,
+  default: {},
+  CastContext: {
+    sessionManager: {
+      startSession: (id: string) => mockStartSession(id),
+      endCurrentSession: (stopCasting: boolean) => mockEndCurrentSession(stopCasting),
+      getCurrentCastSession: () => mockGetCurrentCastSession(),
+    },
+  },
+  useCastState: () => "notConnected",
+  useDevices: () => [
+    {
+      deviceId: "tv",
+      friendlyName: "Living Room",
+      capabilities: [],
+      deviceVersion: "1",
+      icons: [],
+      ipAddress: "192.168.5.220",
+      modelName: "TV",
+    },
+  ],
+  useCastSession: () => mockCastSession,
+  useStreamPosition: () => mockCastPosition,
+  useMediaStatus: () => mockCastStatus,
+}));
 jest.mock("../modules/youtube-engine", () => ({
   resolveAudio: (id: string) => mockResolve(id),
   search: jest.fn(async () => []),
@@ -80,6 +122,17 @@ import { PlaybackProvider, usePlayback, type PlaybackValue } from "../src/music/
 import { MusicWidget } from "../src/home/widgets/MusicWidget";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import type { MediaTrack } from "../src/music/types";
+
+/** The REAL cast provider, bypassing this file's module-level mock. */
+const realCast = jest.requireActual<typeof import("../src/music/CastProvider")>(
+  "../src/music/CastProvider"
+);
+let realCastApi: ReturnType<typeof realCast.useCast> | null = null;
+function RealCastProbe() {
+  const cast = realCast.useCast();
+  React.useEffect(() => { realCastApi = cast; });
+  return null;
+}
 
 const first: MediaTrack = {
   id: "visible-1", title: "First", artist: "Artist", album: "Album",
@@ -152,6 +205,17 @@ beforeEach(async () => {
   await AsyncStorage.clear();
   mockMember = KID;
   mockStatus = { isLoaded: true, playing: false, currentTime: 4, duration: 120, didJustFinish: false };
+  mockCastSession = null;
+  mockCastStatus = null;
+  mockCastPosition = 0;
+  realCastApi = null;
+  mockStartSession.mockResolvedValue(true);
+  mockEndCurrentSession.mockResolvedValue(undefined);
+  mockGetCurrentCastSession.mockResolvedValue(null);
+  mockLoadMedia.mockResolvedValue(undefined);
+  mockClientPlay.mockResolvedValue(undefined);
+  mockClientPause.mockResolvedValue(undefined);
+  mockClientSeek.mockResolvedValue(undefined);
   middle.explicit = false;
   jest.clearAllMocks();
 });
@@ -364,6 +428,91 @@ it("parkLocal surfaces a resolve failure through the existing error", async () =
   expect(api.error).toBe("resolve_failed");
 });
 
+it("parkLocal never loads a track the viewer may not see", async () => {
+  render(tree());
+  middle.explicit = true;
+  clearPlayer();
+
+  await act(async () => { await api.parkLocal(middle); });
+
+  // Pause and drop the lock screen, but never resolve or replace with a track
+  // this viewer may not see.
+  expect(mockPause).toHaveBeenCalled();
+  expect(mockLock).toHaveBeenCalledWith(false);
+  expect(mockResolve).not.toHaveBeenCalled();
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockSeek).not.toHaveBeenCalled();
+});
+
+it("parkLocal swallows native replace and lock-screen throws", async () => {
+  render(tree());
+  clearPlayer();
+
+  mockReplace.mockImplementationOnce(() => { throw new Error("native replace"); });
+  await act(async () => { await api.parkLocal(first); });
+  mockLock.mockImplementationOnce(() => { throw new Error("native lock"); });
+  await act(async () => { await api.parkLocal(last); });
+
+  // A native throw must not escape the fire-and-forget cast teardown or read
+  // as a playback error.
+  expect(api.error).toBeNull();
+  expect(mockPlay).not.toHaveBeenCalled();
+});
+
+it("a sink installed while the local stream is resolving takes the track before local audio starts", async () => {
+  type Resolved = {
+    url: string;
+    mimeType: string;
+    contentLength: number;
+    durationSeconds: number;
+    expiresAt: number;
+  };
+  let release!: (value: Resolved | PromiseLike<Resolved>) => void;
+  mockResolve.mockReturnValueOnce(new Promise((resolve) => { release = resolve; }));
+  render(tree());
+  clearPlayer();
+
+  let playing: Promise<void> = Promise.resolve();
+  await act(async () => { playing = api.play(first); });
+
+  const sink = jest.fn(async (_track: MediaTrack) => {});
+  await act(async () => { api.setCastSink(sink); });
+  clearPlayer();
+
+  await act(async () => {
+    release({
+      url: "https://rr1---sn-test.googlevideo.com/videoplayback?x=late",
+      mimeType: "audio/mp4",
+      contentLength: 1024,
+      durationSeconds: 120,
+      expiresAt: 0,
+    });
+    await playing;
+  });
+
+  // The cast session went live while the local resolve was in flight: the
+  // receiver owns the sound, so the resolved URL is never handed to the
+  // tablet's player.
+  expect(sink).toHaveBeenCalledWith(first);
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockLock).not.toHaveBeenCalled();
+});
+
+it("a parked track is what the local toggle resumes", async () => {
+  render(tree());
+  clearPlayer();
+
+  await act(async () => { await api.parkLocal(last); });
+  expect(mockReplace).toHaveBeenCalledTimes(1);
+  expect(mockPlay).not.toHaveBeenCalled();
+
+  await act(async () => { api.toggle(); });
+
+  expect(mockPlay).toHaveBeenCalledTimes(1);
+});
+
 it("the wall Music widget's next starts the receiver, not local audio", async () => {
   const { getByTestId } = render(
     <PlaybackProvider>
@@ -398,6 +547,66 @@ it("clears the cast sink and resumes local playback", async () => {
   expect(mockReplace).toHaveBeenCalledTimes(1);
   expect(mockPlay).toHaveBeenCalledTimes(1);
   expect(mockLock).toHaveBeenCalled();
+});
+
+/**
+ * THE STOP REPRO (SP4 task 5 final review).
+ *
+ * A → connect → search row B (the sink moves the queue to B) → the receiver
+ * load fails. The cast surface never gets a track, but the LOCAL transport is
+ * already pointing at B. Stop must park B — never the pre-cast local A — or
+ * Play resumes A under B's title.
+ */
+it("a failed cast load still parks the chosen track, and the local toggle resumes it", async () => {
+  const sessionClient = {
+    loadMedia: mockLoadMedia,
+    play: mockClientPlay,
+    pause: mockClientPause,
+    seek: mockClientSeek,
+  };
+  mockCastSession = { client: sessionClient };
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue({ client: sessionClient });
+  mockLoadMedia.mockRejectedValueOnce(new Error("load failed"));
+
+  render(
+    <PlaybackProvider>
+      <realCast.CastProvider>
+        <Probe />
+        <RealCastProbe />
+      </realCast.CastProvider>
+    </PlaybackProvider>
+  );
+
+  await act(async () => {});
+  // Local A is playing before the family connects the TV.
+  await act(async () => { await api.play(first); });
+  expect(mockPlay).toHaveBeenCalledTimes(1);
+
+  await act(async () => { await realCastApi!.connect("tv"); });
+  await act(async () => {});
+  expect(realCastApi!.target?.id).toBe("tv");
+  clearPlayer();
+
+  // Search row B goes to the receiver through the sink. The load FAILS, so
+  // `cast.track` stays null while `playback.current` is B.
+  await act(async () => { await api.play(last); });
+  expect(api.current?.id).toBe("visible-2");
+  expect(mockLoadMedia).toHaveBeenCalledTimes(1);
+  expect(realCastApi!.casting).toBe(false);
+  clearPlayer();
+
+  // Stop parks B, the track the family chose — not the pre-cast local A.
+  const resolvesBeforeStop = mockResolve.mock.calls.length;
+  await act(async () => { await realCastApi!.disconnect(); });
+  expect(mockResolve.mock.calls.slice(resolvesBeforeStop)).toEqual([["visible-2"]]);
+  expect(mockReplace).toHaveBeenCalledTimes(1);
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockLock).toHaveBeenCalledWith(false);
+
+  // A local Play after Stop resumes B (the parked track), never A.
+  await act(async () => { api.toggle(); });
+  expect(mockPlay).toHaveBeenCalledTimes(1);
 });
 
 it("previousForCast clamps to the current track at the start of a repeat-off queue", async () => {

@@ -389,26 +389,46 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     playerRef.current.pause();
   }, []);
 
-  const parkLocal = React.useCallback(async (track: MediaTrack) => {
-    let source: { uri: string };
-    try {
-      const local = localFileFor(track.id);
-      source = local.exists
-        ? { uri: local.uri }
-        : { uri: await resolveStreamUrl(track.id) };
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "play_failed");
-      return;
-    }
-    playerRef.current.replace(source);
-    playerRef.current.setActiveForLockScreen?.(false);
-    try {
-      await playerRef.current.seekTo(0);
-    } catch {
-      // The replace already reset the playhead; a seek failure must not fake
-      // a playback error on a player that is deliberately silent.
-    }
-  }, []);
+  const parkLocal = React.useCallback(
+    async (track: MediaTrack) => {
+      // Fail closed on the way OUT too: a track the viewer may not see is
+      // never loaded, even paused. Silence the tablet and drop the lock
+      // screen instead.
+      if (isContentHidden(track, policy)) {
+        try {
+          playerRef.current.pause();
+          playerRef.current.setActiveForLockScreen?.(false);
+        } catch {
+          // A native throw must not escape into the cast teardown path.
+        }
+        return;
+      }
+      let source: { uri: string };
+      try {
+        const local = localFileFor(track.id);
+        source = local.exists
+          ? { uri: local.uri }
+          : { uri: await resolveStreamUrl(track.id) };
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "play_failed");
+        return;
+      }
+      try {
+        playerRef.current.replace(source);
+        playerRef.current.setActiveForLockScreen?.(false);
+      } catch {
+        // The cast teardown that parks is fire-and-forget: a native player
+        // throw must neither reject it nor read as "Couldn't stop casting."
+      }
+      try {
+        await playerRef.current.seekTo(0);
+      } catch {
+        // The replace already reset the playhead; a seek failure must not fake
+        // a playback error on a player that is deliberately silent.
+      }
+    },
+    [policy]
+  );
 
   const startTrack = React.useCallback(
     async (track: MediaTrack) => {
@@ -434,14 +454,23 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             ? { uri: local.uri }
             : { uri: await resolveStreamUrl(track.id) };
 
-          player.replace(source);
-          player.play();
-          player.setActiveForLockScreen?.(true, {
-            title: track.title,
-            artist: track.artist,
-            albumTitle: track.album,
-            artworkUrl: track.artworkUrl ?? undefined,
-          });
+          // A cast session may have gone live while the stream was resolving
+          // (the resolve is the only await on this path). The receiver owns
+          // the sound now, so hand it the track and never start the tablet's
+          // player under the new session.
+          const lateSink = castSinkRef.current;
+          if (lateSink) {
+            await lateSink(track);
+          } else {
+            player.replace(source);
+            player.play();
+            player.setActiveForLockScreen?.(true, {
+              title: track.title,
+              artist: track.artist,
+              albumTitle: track.album,
+              artworkUrl: track.artworkUrl ?? undefined,
+            });
+          }
         }
         void appendHistory(track).then(setHistory).catch(() => {});
       } catch (e) {
