@@ -157,6 +157,43 @@ describe("TasksWidget (shared snapshot — no widget fetch)", () => {
     await findByText("All caught up");
     expect(getByText(/saved copy/i)).toBeTruthy();
   });
+
+  it("shows four rows in a double cell and keeps the overflow honest", async () => {
+    mockSnapshot = syncSnapshot([
+      { id: 1, title: "Task 1", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 2, title: "Task 2", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 3, title: "Task 3", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 4, title: "Task 4", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 5, title: "Task 5", assignee: "Aurora", due: "Today", points: 1, completed: false },
+    ]);
+    const { findByText, getByText, queryByText } = render(
+      <TasksWidget span={2} />,
+      { wrapper: wrap },
+    );
+    await findByText("5 pending for the family");
+    expect(getByText("Task 1")).toBeTruthy();
+    expect(getByText("Task 2")).toBeTruthy();
+    expect(getByText("Task 3")).toBeTruthy();
+    expect(getByText("Task 4")).toBeTruthy();
+    expect(queryByText("Task 5")).toBeNull();
+    expect(getByText("+1 more · See all →")).toBeTruthy();
+  });
+
+  it("keeps the two-row budget in a compact cell", async () => {
+    mockSnapshot = syncSnapshot([
+      { id: 1, title: "Task 1", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 2, title: "Task 2", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 3, title: "Task 3", assignee: "Aurora", due: "Today", points: 1, completed: false },
+    ]);
+    const { findByText, getByText, queryByText } = render(
+      <TasksWidget span={1} />,
+      { wrapper: wrap },
+    );
+    await findByText("3 pending for the family");
+    expect(getByText("Task 1")).toBeTruthy();
+    expect(getByText("Task 2")).toBeTruthy();
+    expect(queryByText("Task 3")).toBeNull();
+  });
 });
 
 describe("TodayEventsWidget", () => {

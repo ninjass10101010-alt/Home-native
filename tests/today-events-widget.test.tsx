@@ -287,6 +287,54 @@ describe("TodayEventsWidget — Google failure is admitted, retryable, and keeps
   });
 });
 
+describe("TodayEventsWidget — the visible-row budget follows the wall span", () => {
+  const fiveEvents = {
+    items: [
+      { id: "e1", title: "Event 1", date: today, time: "08:00", member: "Aurora", icon: "1️⃣" },
+      { id: "e2", title: "Event 2", date: today, time: "09:00", member: "Aurora", icon: "2️⃣" },
+      { id: "e3", title: "Event 3", date: today, time: "10:00", member: "Aurora", icon: "3️⃣" },
+      { id: "e4", title: "Event 4", date: today, time: "11:00", member: "Aurora", icon: "4️⃣" },
+      { id: "e5", title: "Event 5", date: today, time: "12:00", member: "Aurora", icon: "5️⃣" },
+    ],
+  };
+
+  it("shows four rows and an honest overflow footer in a double cell", async () => {
+    route({
+      "/api/db/events": fiveEvents,
+      "/api/google-calendar": googleOk([]),
+    });
+    const { findByText, getByTestId, queryByTestId } = render(
+      <TodayEventsWidget span={2} />,
+      { wrapper: wrap },
+    );
+    await findByText("5 events on the family calendar");
+    expect(getByTestId("todayEvents-row-db_e1")).toBeTruthy();
+    expect(getByTestId("todayEvents-row-db_e2")).toBeTruthy();
+    expect(getByTestId("todayEvents-row-db_e3")).toBeTruthy();
+    expect(getByTestId("todayEvents-row-db_e4")).toBeTruthy();
+    expect(queryByTestId("todayEvents-row-db_e5")).toBeNull();
+    expect(getByTestId("todayEvents-more-footer")).toBeTruthy();
+    expect(getByTestId("todayEvents-more-footer").props.accessibilityLabel).toBe(
+      "1 more events. Open calendar",
+    );
+  });
+
+  it("keeps the two-row budget in a compact cell", async () => {
+    route({
+      "/api/db/events": fiveEvents,
+      "/api/google-calendar": googleOk([]),
+    });
+    const { findByText, getByTestId, queryByTestId } = render(
+      <TodayEventsWidget span={1} />,
+      { wrapper: wrap },
+    );
+    await findByText("5 events on the family calendar");
+    expect(getByTestId("todayEvents-row-db_e1")).toBeTruthy();
+    expect(getByTestId("todayEvents-row-db_e2")).toBeTruthy();
+    expect(queryByTestId("todayEvents-row-db_e3")).toBeNull();
+  });
+});
+
 describe("TodayEventsWidget — guest split (reference capture: family live, Google gated)", () => {
   it("a signed-out wall reads FAMILY events live and gates ONLY the Google pill", async () => {
     mockMember = null;

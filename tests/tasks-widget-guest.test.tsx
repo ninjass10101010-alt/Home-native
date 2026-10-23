@@ -231,4 +231,31 @@ describe("TasksWidget — the signed-out wall reads the family's chores", () => 
     await findByText(/Sign in with your PIN to see the family's data/);
     expect(mockRefreshNow).not.toHaveBeenCalled();
   });
+
+  it("a double cell shows up to four public chores and still shows no private data", async () => {
+    route({
+      "/api/tasks/family": {
+        ok: true,
+        chores: [
+          { id: 1, title: "Dishes", assignee: "Aurora", done: false },
+          { id: 2, title: "Feed Rico & Rocco", assignee: "Caspian", done: false },
+          { id: 3, title: "Take bins out", assignee: "Aurora", done: false },
+          { id: 4, title: "Water plants", assignee: "Caspian", done: false },
+          { id: 5, title: "Fold laundry", assignee: "Aurora", done: false },
+        ],
+      },
+    });
+    const { findByText, getByText, queryByText, queryByTestId } = render(
+      <TasksWidget span={2} />,
+      { wrapper: wrap },
+    );
+    await findByText("5 pending for the family");
+    expect(getByText("Dishes")).toBeTruthy();
+    expect(getByText("Feed Rico & Rocco")).toBeTruthy();
+    expect(getByText("Take bins out")).toBeTruthy();
+    expect(getByText("Water plants")).toBeTruthy();
+    expect(queryByText("Fold laundry")).toBeNull();
+    expect(queryByText(/pts/)).toBeNull();
+    expect(queryByTestId("tasks-approval-footer")).toBeNull();
+  });
 });
