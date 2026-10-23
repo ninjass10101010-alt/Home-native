@@ -167,6 +167,16 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const volumeRef = React.useRef(0.5);
   const mutedRef = React.useRef(false);
   /**
+   * The generation of the audio hydration.
+   *
+   * A `getVolume`/`isMute` read can resolve long after the session it belongs
+   * to is gone — or after the family has already nudged the new one. Every
+   * session change and every user volume action bumps this epoch, so a stale
+   * read is discarded instead of overwriting a newer level or the wrong
+   * device's state.
+   */
+  const volumeEpochRef = React.useRef(0);
+  /**
    * The completion the auto-advance has already handled.
    *
    * A receiver keeps reporting IDLE/FINISHED for the same completion until it
@@ -223,24 +233,37 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
    * The receiver owns its own amplifier level: read it whenever a session
    * arrives so the sheet describes the device, not a stale default. A
    * receiver that cannot answer keeps the last known value.
+   *
+   * The read is only committed when it still belongs to the current session
+   * AND no newer session change or user action happened while it was in
+   * flight. `allSettled` keeps a failed `isMute` from discarding a good
+   * `getVolume` (and vice versa).
    */
   const hydrateAudio = React.useCallback(async (active: CastSessionLike | null) => {
     if (!active) return;
-    try {
-      const [level, mute] = await Promise.all([active.getVolume(), active.isMute()]);
+    const epoch = volumeEpochRef.current;
+    const [levelResult, muteResult] = await Promise.allSettled([
+      Promise.resolve().then(() => active.getVolume()),
+      Promise.resolve().then(() => active.isMute()),
+    ]);
+    if (volumeEpochRef.current !== epoch || sessionRef.current !== active) return;
+    if (levelResult.status === "fulfilled") {
+      const level = levelResult.value;
       if (typeof level === "number" && Number.isFinite(level)) {
         volumeRef.current = level;
         setVolume(level);
       }
+    }
+    if (muteResult.status === "fulfilled") {
+      const mute = muteResult.value;
       mutedRef.current = mute;
       setMuted(mute);
-    } catch {
-      // Keep the last known level/mute state.
     }
   }, []);
 
   React.useEffect(() => {
     if (session) {
+      volumeEpochRef.current += 1;
       hadSessionRef.current = true;
       clientRef.current = session.client as unknown as CastClient;
       sessionRef.current = session as unknown as CastSessionLike;
@@ -272,6 +295,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     clientRef.current = null;
     sessionRef.current = null;
     targetRef.current = null;
+    volumeEpochRef.current += 1;
     // A session can end before its last load ever reached the surface (the
     // receiver rejected it), so the local `track` is not the only thing worth
     // parking: `playback.current` is where the family's chosen track lives.
@@ -320,11 +344,15 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         // would route through the sink and reload the receiver).
         pauseLocal();
         const switched = targetRef.current?.id !== chosen.id;
+        // A newer session owns the amplifier now: invalidate any read still
+        // in flight for the previous one, then hydrate without blocking the
+        // sheet (the session effect covers a late arrival too).
+        volumeEpochRef.current += 1;
         clientRef.current = current.client;
         sessionRef.current = current;
         targetRef.current = chosen;
         setTarget(chosen);
-        await hydrateAudio(current);
+        void hydrateAudio(current);
         if (switched) setTrack(null);
         return true;
       } catch {
@@ -335,6 +363,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         if (opened || targetRef.current) {
           await CastContext.sessionManager.endCurrentSession(true).catch(() => {});
         }
+        volumeEpochRef.current += 1;
         clientRef.current = null;
         sessionRef.current = null;
         targetRef.current = null;
@@ -430,6 +459,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (cancelled) return;
+      volumeEpochRef.current += 1;
       clientRef.current = null;
       sessionRef.current = null;
       targetRef.current = null;
@@ -445,6 +475,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const disconnect = React.useCallback(async () => {
     setBusy(true);
     setError(null);
+    volumeEpochRef.current += 1;
     try {
       await CastContext.sessionManager.endCurrentSession(true);
       // Park on the track the family chose even when the receiver load FAILED
@@ -517,6 +548,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
    * because a family reaching for Volume up expects to hear something.
    */
   const adjustVolume = React.useCallback(async (delta: number) => {
+    volumeEpochRef.current += 1;
     const active = sessionRef.current;
     if (!active) return;
     const next = Math.round(Math.min(1, Math.max(0, volumeRef.current + delta)) * 100) / 100;
@@ -531,6 +563,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const toggleMute = React.useCallback(async () => {
+    volumeEpochRef.current += 1;
     const active = sessionRef.current;
     if (!active) return;
     const next = !mutedRef.current;

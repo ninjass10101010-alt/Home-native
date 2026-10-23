@@ -275,7 +275,7 @@ export function CastControl({ track }: CastControlProps) {
                 testID="cast-mute"
                 accessibilityRole="button"
                 accessibilityLabel={cast.muted ? "Unmute cast device" : "Mute cast device"}
-                accessibilityState={{ disabled: busy, selected: cast.muted }}
+                accessibilityState={{ disabled: busy, checked: cast.muted }}
                 disabled={busy}
                 onPress={() => void flipMute()}
                 style={{

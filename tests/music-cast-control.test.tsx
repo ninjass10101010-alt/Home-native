@@ -238,11 +238,14 @@ it("propagates busy by disabling every action in the sheet", () => {
     target: { id: "tv", name: "Living Room" },
     busy: true,
   };
-  const { getByTestId } = render(<CastControl track={track} />, { wrapper: wrap });
+  const { getByTestId, UNSAFE_getByProps } = render(<CastControl track={track} />, { wrapper: wrap });
   fireEvent.press(getByTestId("cast-open"));
   expect(getByTestId("cast-device-tv").props.accessibilityState?.disabled).toBe(true);
   expect(getByTestId("cast-device-speaker").props.accessibilityState?.disabled).toBe(true);
   expect(getByTestId("cast-stop").props.accessibilityState?.disabled).toBe(true);
+  expect(UNSAFE_getByProps({ testID: "cast-device-tv", disabled: true })).toBeTruthy();
+  expect(UNSAFE_getByProps({ testID: "cast-device-speaker", disabled: true })).toBeTruthy();
+  expect(UNSAFE_getByProps({ testID: "cast-stop", disabled: true })).toBeTruthy();
 });
 
 it("pressing a disabled (busy) device row makes no call", async () => {
@@ -321,6 +324,7 @@ it("the mute button calls toggleMute and its label follows muted", async () => {
   fireEvent.press(getByTestId("cast-open"));
   expect(getByText("Mute")).toBeTruthy();
   expect(getByTestId("cast-mute").props.accessibilityLabel).toBe("Mute cast device");
+  expect(getByTestId("cast-mute").props.accessibilityState.checked).toBe(false);
 
   await act(async () => {
     fireEvent.press(getByTestId("cast-mute"));
@@ -332,17 +336,33 @@ it("the mute button calls toggleMute and its label follows muted", async () => {
   expect(getByText("Unmute")).toBeTruthy();
   expect(queryByText("Mute")).toBeNull();
   expect(getByTestId("cast-mute").props.accessibilityLabel).toBe("Unmute cast device");
+  expect(getByTestId("cast-mute").props.accessibilityState.checked).toBe(true);
 });
 
-it("busy disables the volume controls too", () => {
+it("busy disables the volume controls too, and pressing them makes no call", async () => {
+  const adjustVolume = jest.fn(async () => {});
+  const toggleMute = jest.fn(async () => {});
   mockCast = {
     ...idleCast(),
     target: { id: "tv", name: "Living Room" },
     busy: true,
+    adjustVolume,
+    toggleMute,
   };
-  const { getByTestId } = render(<CastControl track={track} />, { wrapper: wrap });
+  const { getByTestId, UNSAFE_getByProps } = render(<CastControl track={track} />, { wrapper: wrap });
   fireEvent.press(getByTestId("cast-open"));
   expect(getByTestId("cast-volume-down").props.accessibilityState?.disabled).toBe(true);
   expect(getByTestId("cast-volume-up").props.accessibilityState?.disabled).toBe(true);
   expect(getByTestId("cast-mute").props.accessibilityState?.disabled).toBe(true);
+  expect(UNSAFE_getByProps({ testID: "cast-volume-down", disabled: true })).toBeTruthy();
+  expect(UNSAFE_getByProps({ testID: "cast-volume-up", disabled: true })).toBeTruthy();
+  expect(UNSAFE_getByProps({ testID: "cast-mute", disabled: true })).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.press(getByTestId("cast-volume-down"));
+    fireEvent.press(getByTestId("cast-volume-up"));
+    fireEvent.press(getByTestId("cast-mute"));
+  });
+  expect(adjustVolume).not.toHaveBeenCalled();
+  expect(toggleMute).not.toHaveBeenCalled();
 });

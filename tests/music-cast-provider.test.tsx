@@ -899,6 +899,126 @@ test("a restored session hydrates the receiver's volume and mute state", async (
   expect(api.muted).toBe(true);
 });
 
+test("a stale volume read never overwrites a newer user nudge", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  let resolveVolume!: (value: number) => void;
+  mockGetVolume.mockImplementationOnce(
+    () => new Promise<number>((resolve) => { resolveVolume = resolve; })
+  );
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  // The sheet is usable while the receiver read is still in flight.
+  expect(api.busy).toBe(false);
+
+  await act(async () => { await api.adjustVolume(0.1); });
+  expect(api.volume).toBe(0.6);
+
+  // The old read resolves late: the family's nudge must win.
+  await act(async () => {
+    resolveVolume(0.1);
+    await Promise.resolve();
+  });
+  expect(api.volume).toBe(0.6);
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0.6);
+});
+
+test("a device switch discards the old receiver's late volume read", async () => {
+  const speaker = { ...device, deviceId: "speaker", friendlyName: "Kitchen" };
+  const speakerSession = sessionFor(speaker);
+  let currentSession: any = sessionFor(device);
+  mockDevices = [device, speaker];
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockImplementation(async () => currentSession);
+  let resolveOldVolume!: (value: number) => void;
+  mockGetVolume.mockImplementationOnce(
+    () => new Promise<number>((resolve) => { resolveOldVolume = resolve; })
+  );
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.target?.id).toBe("tv");
+
+  currentSession = speakerSession;
+  mockGetVolume.mockResolvedValue(0.2);
+  await act(async () => { await api.connect("speaker"); });
+  expect(api.target?.id).toBe("speaker");
+  expect(api.volume).toBe(0.2);
+
+  // The TV's read lands after the switch: the kitchen level must stand.
+  await act(async () => {
+    resolveOldVolume(0.9);
+    await Promise.resolve();
+  });
+  expect(api.volume).toBe(0.2);
+  expect(api.target?.id).toBe("speaker");
+});
+
+test("a rejected hydration preserves the previous level and mute state", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  mockGetVolume.mockResolvedValue(0.66);
+  mockIsMute.mockResolvedValue(true);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.volume).toBe(0.66);
+  expect(api.muted).toBe(true);
+
+  mockGetVolume.mockRejectedValue(new Error("no volume"));
+  mockIsMute.mockRejectedValue(new Error("no mute"));
+  await act(async () => { await api.connect("tv"); });
+  expect(api.volume).toBe(0.66);
+  expect(api.muted).toBe(true);
+});
+
+test("one failed hydration read does not discard the other", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  mockGetVolume.mockResolvedValue(0.6);
+  mockIsMute.mockResolvedValue(true);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.volume).toBe(0.6);
+  expect(api.muted).toBe(true);
+
+  // isMute fails: the good level still lands.
+  mockGetVolume.mockResolvedValue(0.3);
+  mockIsMute.mockRejectedValueOnce(new Error("no mute"));
+  await act(async () => { await api.connect("tv"); });
+  expect(api.volume).toBe(0.3);
+  expect(api.muted).toBe(true);
+
+  // getVolume fails: the good mute still lands.
+  mockGetVolume.mockRejectedValueOnce(new Error("no volume"));
+  mockIsMute.mockResolvedValue(false);
+  await act(async () => { await api.connect("tv"); });
+  expect(api.volume).toBe(0.3);
+  expect(api.muted).toBe(false);
+});
+
 test("adjustVolume clamps at zero and up, and sends the rounded level", async () => {
   mockStartSession.mockResolvedValue(true);
   mockGetCurrentCastSession.mockResolvedValue(sessionFor());
