@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect -- the cast session, media status and content policy are external systems; their transitions must clear the cast surface honestly */
 import React from "react";
 import {
   CastContext,
@@ -58,6 +57,9 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const session = useCastSession();
   const position = useStreamPosition();
   const status = useMediaStatus();
+  const playbackPolicy = playback.policy;
+  const playbackPlaying = playback.playing;
+  const togglePlayback = playback.toggle;
 
   const [target, setTarget] = React.useState<CastTarget | null>(null);
   const [track, setTrack] = React.useState<MediaTrack | null>(null);
@@ -72,6 +74,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     } else {
       clientRef.current = null;
       targetRef.current = null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- the native session is the source of truth; losing it must clear the cast surface
       setTarget(null);
       setTrack(null);
     }
@@ -88,13 +91,16 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         if (!started) throw new Error("session not started");
         const current = await CastContext.sessionManager.getCurrentCastSession();
         if (!current?.client) throw new Error("session unavailable");
+        const switched = targetRef.current?.id !== chosen.id;
         clientRef.current = current.client as unknown as CastClient;
         targetRef.current = chosen;
         setTarget(chosen);
+        if (switched) setTrack(null);
       } catch {
         clientRef.current = null;
         targetRef.current = null;
         setTarget(null);
+        setTrack(null);
         setError(castErrorCopy(chosen.name));
       } finally {
         setBusy(false);
@@ -110,20 +116,24 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         setError("Choose a device to cast to.");
         return;
       }
+      if (isContentHidden(next, playbackPolicy)) {
+        setError("This track isn't available to cast.");
+        return;
+      }
       setBusy(true);
       setError(null);
       try {
         const resolved = await resolveAudio(next.id);
         await client.loadMedia({ mediaInfo: castMediaInfo(next, resolved), autoplay: true });
         setTrack(next);
-        if (playback.playing) playback.toggle();
+        if (playbackPlaying) togglePlayback();
       } catch {
         setError(castErrorCopy(targetRef.current?.name ?? "that device"));
       } finally {
         setBusy(false);
       }
     },
-    [playback]
+    [playbackPolicy, playbackPlaying, togglePlayback]
   );
 
   const guarded = React.useCallback(async (run: () => Promise<void>) => {
@@ -139,43 +149,109 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     const action = castStatusAction(
       status ? { playerState: status.playerState, idleReason: status.idleReason } : null
     );
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the media status is external; an idle error must surface
     if (action === "error") setError("The cast stopped. Try again.");
   }, [status]);
 
   React.useEffect(() => {
     if (!track) return;
-    if (!isContentHidden(track, playback.policy)) return;
-    clientRef.current = null;
-    targetRef.current = null;
-    setTrack(null);
-    setTarget(null);
-    void CastContext.sessionManager.endCurrentSession(true).catch(() => {});
-  }, [playback.policy, track]);
+    if (!isContentHidden(track, playbackPolicy)) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await CastContext.sessionManager.endCurrentSession(true);
+      } catch {
+        if (!cancelled) {
+          // The session may still be playing the hidden track: keep the cast
+          // surface and say so instead of pretending the stop succeeded.
+          setError("Couldn't stop casting. Try again.");
+        }
+        return;
+      }
+      if (cancelled) return;
+      clientRef.current = null;
+      targetRef.current = null;
+      // Clear the surface only once the denial actually stopped the cast.
+      setTrack(null);
+      setTarget(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [playbackPolicy, track]);
 
-  const value: CastValue = {
-    state: normalizeCastState(rawState),
-    devices,
-    target,
-    casting: track !== null,
-    playing: status?.playerState === "playing",
-    position: position ?? 0,
-    duration: track?.durationSeconds ?? null,
-    busy,
-    error,
-    connect,
-    startCast,
-    disconnect: async () => {
+  const disconnect = React.useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
       await CastContext.sessionManager.endCurrentSession(true);
       clientRef.current = null;
       targetRef.current = null;
       setTarget(null);
       setTrack(null);
-    },
-    play: () => guarded(async () => { await clientRef.current?.play(); }),
-    pause: () => guarded(async () => { await clientRef.current?.pause(); }),
-    seek: (seconds) => guarded(async () => { await clientRef.current?.seek({ position: seconds }); }),
-    advance: async () => {},
-  };
+    } catch {
+      setError("Couldn't stop casting. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const play = React.useCallback(
+    () => guarded(async () => { await clientRef.current?.play(); }),
+    [guarded]
+  );
+
+  const pause = React.useCallback(
+    () => guarded(async () => { await clientRef.current?.pause(); }),
+    [guarded]
+  );
+
+  const seek = React.useCallback(
+    (seconds: number) => guarded(async () => { await clientRef.current?.seek({ position: seconds }); }),
+    [guarded]
+  );
+
+  const advance = React.useCallback(async () => {}, []);
+
+  const playing = status?.playerState === "playing";
+
+  const value = React.useMemo<CastValue>(
+    () => ({
+      state: normalizeCastState(rawState),
+      devices,
+      target,
+      casting: track !== null,
+      playing,
+      position: position ?? 0,
+      duration: track?.durationSeconds ?? null,
+      busy,
+      error,
+      connect,
+      startCast,
+      disconnect,
+      play,
+      pause,
+      seek,
+      advance,
+    }),
+    [
+      rawState,
+      devices,
+      target,
+      track,
+      playing,
+      position,
+      busy,
+      error,
+      connect,
+      startCast,
+      disconnect,
+      play,
+      pause,
+      seek,
+      advance,
+    ]
+  );
 
   return <CastContextValue.Provider value={value}>{children}</CastContextValue.Provider>;
 }
