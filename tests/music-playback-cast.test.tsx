@@ -62,6 +62,8 @@ jest.mock("react-native-google-cast", () => ({
       startSession: (id: string) => mockStartSession(id),
       endCurrentSession: (stopCasting: boolean) => mockEndCurrentSession(stopCasting),
       getCurrentCastSession: () => mockGetCurrentCastSession(),
+      onSessionStarted: (_handler: (session: any) => void) => ({ remove: () => {} }),
+      onSessionStartFailed: (_handler: (session: any, error: string) => void) => ({ remove: () => {} }),
     },
   },
   useCastState: () => "notConnected",
@@ -163,6 +165,7 @@ function Probe() {
       <Text testID="title">{value.current?.title ?? "none"}</Text>
       <Text testID="index">{String(value.index)}</Text>
       <Text testID="queue">{value.queue.map((t) => t.id).join(",") || "empty"}</Text>
+      <Text testID="history">{value.history.map((t) => t.id).join(",") || "empty"}</Text>
       <Text testID="play-triple" onPress={() => void value.playQueueAt([first, middle, last], 0)}>
         play triple
       </Text>
@@ -564,9 +567,16 @@ it("a failed cast load still parks the chosen track, and the local toggle resume
     pause: mockClientPause,
     seek: mockClientSeek,
   };
-  mockCastSession = { client: sessionClient };
+  const castDevice = { deviceId: "tv", friendlyName: "Living Room" };
+  const castSession = {
+    client: sessionClient,
+    getCastDevice: async () => castDevice,
+  };
+  // The hook stays empty until the SDK event (which this suite never emits):
+  // the local play below must stay LOCAL.
+  mockCastSession = null;
   mockStartSession.mockResolvedValue(true);
-  mockGetCurrentCastSession.mockResolvedValue({ client: sessionClient });
+  mockGetCurrentCastSession.mockResolvedValue(castSession);
   mockLoadMedia.mockRejectedValueOnce(new Error("load failed"));
 
   render(
@@ -607,6 +617,50 @@ it("a failed cast load still parks the chosen track, and the local toggle resume
   // A local Play after Stop resumes B (the parked track), never A.
   await act(async () => { api.toggle(); });
   expect(mockPlay).toHaveBeenCalledTimes(1);
+});
+
+it("a local play records the track in history exactly once", async () => {
+  const { getByTestId } = render(tree());
+  await act(async () => { await api.play(first); });
+  await waitFor(() => expect(getByTestId("history").props.children).toBe("visible-1"));
+});
+
+it("a session restored at mount installs the sink, so a later play reaches the receiver and history", async () => {
+  const restoredClient = {
+    loadMedia: mockLoadMedia,
+    play: mockClientPlay,
+    pause: mockClientPause,
+    seek: mockClientSeek,
+  };
+  const restoredDevice = { deviceId: "tv", friendlyName: "Living Room" };
+  const restoredSession = {
+    client: restoredClient,
+    getCastDevice: async () => restoredDevice,
+  };
+  mockCastSession = restoredSession;
+  mockGetCurrentCastSession.mockResolvedValue(restoredSession);
+
+  const { getByTestId } = render(
+    <PlaybackProvider>
+      <realCast.CastProvider>
+        <Probe />
+        <RealCastProbe />
+      </realCast.CastProvider>
+    </PlaybackProvider>
+  );
+  await act(async () => {});
+  await waitFor(() => expect(realCastApi?.target?.id).toBe("tv"));
+  // Hydrating the restored session silences the tablet at once.
+  expect(mockPause).toHaveBeenCalled();
+  clearPlayer();
+
+  // A later playback play goes through the provider's sink to the receiver;
+  // it never starts local audio and records the track in history once.
+  await act(async () => { await api.play(first); });
+  await waitFor(() => expect(mockLoadMedia).toHaveBeenCalledTimes(1));
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockPlay).not.toHaveBeenCalled();
+  await waitFor(() => expect(getByTestId("history").props.children).toBe("visible-1"));
 });
 
 it("previousForCast clamps to the current track at the start of a repeat-off queue", async () => {

@@ -48,6 +48,70 @@ interface CastClient {
   seek: (options: { position: number }) => Promise<void>;
 }
 
+interface CastSessionLike {
+  client: CastClient;
+  getCastDevice: () => Promise<{ deviceId?: string | null; friendlyName?: string | null } | null>;
+}
+
+/**
+ * Wait for the SDK to report a session on `deviceId`.
+ *
+ * `startSession` resolves when the route has been selected — the actual
+ * session arrives later through `onSessionStarted` (or fails through
+ * `onSessionStartFailed`). Reading the session synchronously therefore sees
+ * `null` on a first connect and the OLD device on a switch, so the wait is
+ * bounded and only accepts a session whose device actually matches.
+ */
+function waitForSession(deviceId: string, timeoutMs = 6000): Promise<CastSessionLike | null> {
+  const manager = CastContext.sessionManager;
+  return new Promise((resolve) => {
+    let settled = false;
+    let startedSub: { remove: () => void } | null = null;
+    let failedSub: { remove: () => void } | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = (session: CastSessionLike | null) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      startedSub?.remove();
+      failedSub?.remove();
+      resolve(session);
+    };
+
+    const matches = async (candidate: CastSessionLike | null): Promise<boolean> => {
+      if (!candidate) return false;
+      try {
+        const device = await candidate.getCastDevice();
+        return device?.deviceId?.trim() === deviceId;
+      } catch {
+        return false;
+      }
+    };
+
+    // Register BEFORE the read: the receiver can start between the two, and
+    // an event that lands before the listener is attached would be lost.
+    startedSub = manager.onSessionStarted((next) => {
+      const cast = next as unknown as CastSessionLike;
+      void matches(cast).then((ok) => { if (ok) finish(cast); });
+    });
+    failedSub = manager.onSessionStartFailed(() => finish(null));
+    timer = setTimeout(() => finish(null), timeoutMs);
+
+    void manager
+      .getCurrentCastSession()
+      .then(async (current) => {
+        if (settled) return;
+        const cast = current as unknown as CastSessionLike | null;
+        if (await matches(cast)) finish(cast);
+      })
+      .catch(() => {
+        // The lookup failed, but the receiver may still announce itself:
+        // keep waiting for the event rather than failing the connect early.
+      });
+  });
+}
+
 const CastContextValue = React.createContext<CastValue | null>(null);
 
 /**
@@ -79,6 +143,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const pauseLocal = playback.pauseLocal;
   const parkLocal = playback.parkLocal;
   const setCastSink = playback.setCastSink;
+  const recordHistory = playback.recordHistory;
 
   const [target, setTarget] = React.useState<CastTarget | null>(null);
   const [track, setTrack] = React.useState<MediaTrack | null>(null);
@@ -144,7 +209,29 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     if (session) {
       hadSessionRef.current = true;
       clientRef.current = session.client as unknown as CastClient;
-      return;
+      // A session restored at mount (the app was backgrounded, the receiver
+      // kept playing) never passed through `connect`: hydrate its target so
+      // the sink is installed and the tablet is silent.
+      if (targetRef.current) return;
+      let cancelled = false;
+      void (async () => {
+        try {
+          const device = await (session as unknown as CastSessionLike).getCastDevice();
+          const id = device?.deviceId?.trim();
+          const name = device?.friendlyName?.trim();
+          if (cancelled || !id || !name || targetRef.current) return;
+          const hydrated = { id, name };
+          targetRef.current = hydrated;
+          setTarget(hydrated);
+          // The sink effect pauses local and drops the lock screen; pausing
+          // here too means a restored session is silent immediately.
+          pauseLocal();
+        } catch {
+          // A restored session that cannot name its device stays targetless;
+          // the sheet can still connect again.
+        }
+      })();
+      return () => { cancelled = true; };
     }
     clientRef.current = null;
     targetRef.current = null;
@@ -174,7 +261,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [parkOnce, session]);
+  }, [parkOnce, pauseLocal, session]);
 
   const connect = React.useCallback(
     async (id: string): Promise<boolean> => {
@@ -186,14 +273,17 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       try {
         opened = await CastContext.sessionManager.startSession(id);
         if (!opened) throw new Error("session not started");
-        const current = await CastContext.sessionManager.getCurrentCastSession();
+        // `startSession` resolves when the route is selected; the SDK session
+        // arrives later. Wait for the session that names THIS device — never
+        // accept the old one on a switch.
+        const current = await waitForSession(chosen.id);
         if (!current?.client) throw new Error("session unavailable");
         // The receiver owns the sound from here: silence the tablet at once,
         // without waiting for the sink effect (and without `toggle`, which
         // would route through the sink and reload the receiver).
         pauseLocal();
         const switched = targetRef.current?.id !== chosen.id;
-        clientRef.current = current.client as unknown as CastClient;
+        clientRef.current = current.client;
         targetRef.current = chosen;
         setTarget(chosen);
         if (switched) setTrack(null);
@@ -238,6 +328,9 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       try {
         const resolved = await resolveAudio(next.id);
         await client.loadMedia({ mediaInfo: castMediaInfo(next, resolved), autoplay: true });
+        // The tablet never plays this track, so its local start path cannot
+        // record it. Record after the load actually landed, exactly once.
+        await recordHistory(next).catch(() => {});
         // A load re-arms the completion guard: the finish that started this
         // advance is done, and the receiver's NEXT finish (even of the same
         // track, repeat one) is a new completion. Keyed to the track now
@@ -250,7 +343,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         setBusy(false);
       }
     },
-    [playbackPolicy]
+    [playbackPolicy, recordHistory]
   );
 
   /**

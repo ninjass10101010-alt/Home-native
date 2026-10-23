@@ -16,6 +16,7 @@ const mockParkLocal = jest.fn(async (_track: any) => {});
 const mockAdvanceForCast = jest.fn();
 const mockPreviousForCast = jest.fn();
 const mockSetCastSink = jest.fn();
+const mockRecordHistory = jest.fn(async (_track: any) => {});
 
 const device = {
   deviceId: "tv",
@@ -28,6 +29,8 @@ const device = {
 };
 
 let mockDevices: any[] = [device];
+let mockSessionStarted: ((session: any) => void) | null = null;
+let mockSessionStartFailed: ((session: any, error: string) => void) | null = null;
 let mockSession: any = null;
 let mockStatus: any = null;
 let mockPosition = 0;
@@ -42,6 +45,7 @@ let mockPlayback: any = {
   advanceForCast: mockAdvanceForCast,
   previousForCast: mockPreviousForCast,
   setCastSink: mockSetCastSink,
+  recordHistory: mockRecordHistory,
 };
 
 jest.mock("react-native-google-cast", () => ({
@@ -52,6 +56,14 @@ jest.mock("react-native-google-cast", () => ({
       startSession: (id: string) => mockStartSession(id),
       endCurrentSession: (stopCasting: boolean) => mockEndCurrentSession(stopCasting),
       getCurrentCastSession: () => mockGetCurrentCastSession(),
+      onSessionStarted: (handler: (session: any) => void) => {
+        mockSessionStarted = handler;
+        return { remove: () => { if (mockSessionStarted === handler) mockSessionStarted = null; } };
+      },
+      onSessionStartFailed: (handler: (session: any, error: string) => void) => {
+        mockSessionStartFailed = handler;
+        return { remove: () => { if (mockSessionStartFailed === handler) mockSessionStartFailed = null; } };
+      },
     },
   },
   useCastState: () => "notConnected",
@@ -87,6 +99,11 @@ const client = () => ({
   seek: mockClientSeek,
 });
 
+const sessionFor = (d = device, c: any = client()) => ({
+  client: c,
+  getCastDevice: async () => d,
+});
+
 function Actions({ onReady }: { onReady: (cast: ReturnType<typeof useCast>) => void }) {
   const cast = useCast();
   React.useEffect(() => {
@@ -98,10 +115,13 @@ function Actions({ onReady }: { onReady: (cast: ReturnType<typeof useCast>) => v
 beforeEach(() => {
   jest.resetAllMocks();
   mockEndCurrentSession.mockResolvedValue(undefined);
+  mockRecordHistory.mockResolvedValue(undefined);
   mockGetCurrentCastSession.mockResolvedValue(null);
   mockLoadMedia.mockResolvedValue(undefined);
   mockDevices = [device];
   mockSession = null;
+  mockSessionStarted = null;
+  mockSessionStartFailed = null;
   mockStatus = null;
   mockPosition = 0;
   mockPlayback = {
@@ -115,13 +135,14 @@ beforeEach(() => {
     advanceForCast: mockAdvanceForCast,
     previousForCast: mockPreviousForCast,
     setCastSink: mockSetCastSink,
+    recordHistory: mockRecordHistory,
   };
 });
 
 test("startCast resolves a FRESH url and loads it on the session client", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   let api!: ReturnType<typeof useCast>;
   render(
     <CastProvider>
@@ -139,13 +160,15 @@ test("startCast resolves a FRESH url and loads it on the session client", async 
     }),
     autoplay: true,
   });
+  expect(mockRecordHistory).toHaveBeenCalledTimes(1);
+  expect(mockRecordHistory).toHaveBeenCalledWith(track);
   expect(mockToggle).not.toHaveBeenCalled();
 });
 
 test("connect pauses local audio directly; starting a cast never toggles it", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   let api!: ReturnType<typeof useCast>;
   render(
     <CastProvider>
@@ -164,7 +187,7 @@ test("connect pauses local audio directly; starting a cast never toggles it", as
 test("a live session installs the cast sink and clears it on stop", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   let api!: ReturnType<typeof useCast>;
   render(
     <CastProvider>
@@ -187,11 +210,37 @@ test("a live session installs the cast sink and clears it on stop", async () => 
   expect(mockSetCastSink).toHaveBeenLastCalledWith(null);
 });
 
+test("a session restored at mount hydrates the target, pauses local and installs the sink", async () => {
+  const restored = sessionFor(device);
+  mockSession = restored;
+  mockGetCurrentCastSession.mockResolvedValue(restored);
+  mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await waitFor(() => expect(api.target?.id).toBe("tv"));
+  expect(api.target?.name).toBe("Living Room");
+  expect(mockPauseLocal).toHaveBeenCalled();
+  expect(mockSetCastSink).toHaveBeenCalledWith(expect.any(Function));
+
+  // The restored session is the sink: a later play reaches the receiver.
+  const sink = mockSetCastSink.mock.calls.find(([value]) => typeof value === "function")?.[0] as
+    | ((value: MediaTrack) => Promise<void>)
+    | undefined;
+  await act(async () => { await sink?.(track); });
+  expect(mockLoadMedia).toHaveBeenCalledTimes(1);
+  expect(mockRecordHistory).toHaveBeenCalledWith(track);
+});
+
 test("a failed load names the target, pauses local audio and never re-enters the sink", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
   mockLoadMedia.mockRejectedValueOnce(new Error("load failed"));
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   let api!: ReturnType<typeof useCast>;
   render(
     <CastProvider>
@@ -205,11 +254,124 @@ test("a failed load names the target, pauses local audio and never re-enters the
   expect(mockLoadMedia).toHaveBeenCalledTimes(1);
   expect(mockPauseLocal).toHaveBeenCalledTimes(1);
   expect(mockToggle).not.toHaveBeenCalled();
+  expect(mockRecordHistory).not.toHaveBeenCalled();
   expect(api.casting).toBe(false);
   expect(api.error).toBe("Couldn't cast to Living Room.");
 });
 
-test("a first connect that opens a session but cannot reach it ends it", async () => {
+test("connect waits for the receiver and loads on the session that arrives later", async () => {
+  const lateLoad = jest.fn(async () => {});
+  const lateClient = { ...client(), loadMedia: lateLoad };
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(null);
+  mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+
+  let pending!: Promise<boolean>;
+  await act(async () => {
+    pending = api.connect("tv");
+    await Promise.resolve();
+  });
+  // startSession resolved, but the SDK session has not arrived yet: the
+  // connect must NOT read the missing session as a failure.
+  expect(api.busy).toBe(true);
+
+  await act(async () => { mockSessionStarted?.(sessionFor(device, lateClient)); });
+  let connected = false;
+  await act(async () => { connected = await pending; });
+  expect(connected).toBe(true);
+  expect(api.target?.id).toBe("tv");
+  expect(api.busy).toBe(false);
+
+  await act(async () => { await api.startCast(track); });
+  expect(lateLoad).toHaveBeenCalledTimes(1);
+  expect(mockLoadMedia).not.toHaveBeenCalled();
+});
+
+test("a device switch ignores the old session and waits for the new device", async () => {
+  const speaker = { ...device, deviceId: "speaker", friendlyName: "Kitchen" };
+  const speakerLoad = jest.fn(async () => {});
+  const speakerClient = { ...client(), loadMedia: speakerLoad };
+  mockDevices = [device, speaker];
+  mockStartSession.mockResolvedValue(true);
+  // The SDK still reports the OLD session after startSession resolves; only
+  // the onSessionStarted event names the new device.
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor(device));
+  mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.target?.id).toBe("tv");
+
+  let pending!: Promise<boolean>;
+  await act(async () => {
+    pending = api.connect("speaker");
+    await Promise.resolve();
+  });
+  let settled = false;
+  void pending.then(() => { settled = true; });
+  await act(async () => { await Promise.resolve(); });
+  // Still waiting: the OLD device must never satisfy the new connect.
+  expect(settled).toBe(false);
+  expect(api.target?.id).toBe("tv");
+
+  await act(async () => { mockSessionStarted?.(sessionFor(speaker, speakerClient)); });
+  let switched = false;
+  await act(async () => { switched = await pending; });
+  expect(switched).toBe(true);
+  expect(api.target?.id).toBe("speaker");
+
+  await act(async () => { await api.startCast(track); });
+  expect(speakerLoad).toHaveBeenCalledTimes(1);
+});
+
+test("connect gives up after the bounded wait and ends the session it opened", async () => {
+  jest.useFakeTimers();
+  try {
+    mockStartSession.mockResolvedValue(true);
+    mockGetCurrentCastSession.mockResolvedValue(null);
+    let api!: ReturnType<typeof useCast>;
+    render(
+      <CastProvider>
+        <Actions onReady={(v) => { api = v; }} />
+      </CastProvider>
+    );
+    await act(async () => {});
+
+    let pending!: Promise<boolean>;
+    await act(async () => {
+      pending = api.connect("tv");
+      await Promise.resolve();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(6000);
+      await Promise.resolve();
+    });
+
+    let connected = true;
+    await act(async () => { connected = await pending; });
+    expect(connected).toBe(false);
+    expect(mockEndCurrentSession).toHaveBeenCalledWith(true);
+    expect(api.target).toBeNull();
+    expect(api.error).toBe("Couldn't cast to Living Room.");
+    expect(mockLoadMedia).not.toHaveBeenCalled();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test("a failed session start ends the session it opened and reports false", async () => {
   mockStartSession.mockResolvedValue(true);
   mockGetCurrentCastSession.mockResolvedValue(null);
   let api!: ReturnType<typeof useCast>;
@@ -219,11 +381,19 @@ test("a first connect that opens a session but cannot reach it ends it", async (
     </CastProvider>
   );
   await act(async () => {});
+
+  let pending!: Promise<boolean>;
+  await act(async () => {
+    pending = api.connect("tv");
+    await Promise.resolve();
+  });
+  await act(async () => { mockSessionStartFailed?.({}, "start failed"); });
+
   let connected = true;
-  await act(async () => { connected = await api.connect("tv"); });
+  await act(async () => { connected = await pending; });
   expect(connected).toBe(false);
   // `startSession` returned true, so a live session may exist even though the
-  // client lookup failed: end it instead of leaving the receiver running.
+  // receiver never produced one: end it instead of leaving it running.
   expect(mockEndCurrentSession).toHaveBeenCalledWith(true);
   expect(api.target).toBeNull();
   expect(api.error).toBe("Couldn't cast to Living Room.");
@@ -231,10 +401,10 @@ test("a first connect that opens a session but cannot reach it ends it", async (
 
 test("a live session parks once across disconnect and the session-end effect", async () => {
   const sessionClient = client();
-  mockSession = { client: sessionClient };
+  mockSession = sessionFor(device, sessionClient);
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: sessionClient });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor(device, sessionClient));
   mockPlayback = { ...mockPlayback, current: track };
   let api!: ReturnType<typeof useCast>;
   const tree = () => (
@@ -262,7 +432,7 @@ test("a live session parks once across disconnect and the session-end effect", a
 
 test("a hidden track is refused before it is resolved or loaded", async () => {
   mockStartSession.mockResolvedValue(true);
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   mockPlayback = {
     ...mockPlayback,
     policy: { isParent: false, filterOn: true, denied: ["adele"] },
@@ -315,7 +485,7 @@ test("a failed device switch ends the previous session before clearing", async (
   const speaker = { ...device, deviceId: "speaker", friendlyName: "Kitchen" };
   mockDevices = [device, speaker];
   mockStartSession.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error("switch failed"));
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   let api!: ReturnType<typeof useCast>;
   render(
     <CastProvider>
@@ -350,7 +520,7 @@ test("never loads without a session and asks for a device", async () => {
 
 test("the transport drives the cast client and disconnect ends the session", async () => {
   mockStartSession.mockResolvedValue(true);
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   let api!: ReturnType<typeof useCast>;
   render(
     <CastProvider>
@@ -377,7 +547,7 @@ test("the transport drives the cast client and disconnect ends the session", asy
 test("disconnect parks the local transport on the last cast track", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   let api!: ReturnType<typeof useCast>;
   render(
     <CastProvider>
@@ -393,10 +563,10 @@ test("disconnect parks the local transport on the last cast track", async () => 
 
 test("losing the cast session parks the local transport on the current cast track", async () => {
   const sessionClient = client();
-  mockSession = { client: sessionClient };
+  mockSession = sessionFor(device, sessionClient);
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: sessionClient });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor(device, sessionClient));
   mockPlayback = { ...mockPlayback, current: nextTrack };
   let api!: ReturnType<typeof useCast>;
   const tree = () => (
@@ -418,7 +588,7 @@ test("losing the cast session parks the local transport on the current cast trac
 
 test("previous seeks the receiver to the start when it is past three seconds", async () => {
   mockStartSession.mockResolvedValue(true);
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   mockPosition = 5;
   let api!: ReturnType<typeof useCast>;
   render(
@@ -437,7 +607,7 @@ test("previous loads the previous visible track near the start", async () => {
   const previousTrack: MediaTrack = { ...track, id: "v0", title: "Previous" };
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   mockPreviousForCast.mockReturnValue(previousTrack);
   mockPosition = 2;
   let api!: ReturnType<typeof useCast>;
@@ -461,7 +631,7 @@ test("previous loads the previous visible track near the start", async () => {
 test("a policy change that hides the cast track stops the session", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   mockPlayback = { ...mockPlayback, playing: false };
   let api!: ReturnType<typeof useCast>;
   const view = render(
@@ -489,7 +659,7 @@ test("a policy change that hides the cast track stops the session", async () => 
 test("a finished cast advances exactly once per completion", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   mockAdvanceForCast.mockReturnValueOnce(nextTrack).mockReturnValueOnce(thirdTrack);
 
   let api!: ReturnType<typeof useCast>;
@@ -530,7 +700,7 @@ test("a finished cast advances exactly once per completion", async () => {
 test("without mediaSessionId, the playing transition re-arms each completion (real SDK sequence)", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   mockAdvanceForCast.mockReturnValueOnce(nextTrack).mockReturnValueOnce(thirdTrack);
 
   let api!: ReturnType<typeof useCast>;
@@ -583,7 +753,7 @@ test("without mediaSessionId, the playing transition re-arms each completion (re
 test("repeat-one reloads the same track and advances again after the next finish", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   // Repeat-one: the queue step returns the SAME track every time.
   mockAdvanceForCast.mockReturnValue(track);
 
@@ -627,7 +797,7 @@ test("repeat-one reloads the same track and advances again after the next finish
 test("a cast error keeps the honest error path and does not advance", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   let api!: ReturnType<typeof useCast>;
   const view = render(
     <CastProvider>
@@ -653,7 +823,7 @@ test("a cast error keeps the honest error path and does not advance", async () =
 test("a failed policy stop keeps the cast surface and says so", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
-  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
   mockPlayback = { ...mockPlayback, playing: false };
   let api!: ReturnType<typeof useCast>;
   const view = render(

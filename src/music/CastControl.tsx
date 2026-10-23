@@ -19,6 +19,8 @@ export function CastControl({ track }: CastControlProps) {
   const [working, setWorking] = React.useState(false);
 
   const busy = cast.busy || working;
+  const unavailable = cast.state === "unavailable";
+  const searching = cast.state === "connecting" || busy;
   const castingLabel =
     cast.casting && cast.target
       ? `Casting · ${cast.target.name}`
@@ -115,7 +117,29 @@ export function CastControl({ track }: CastControlProps) {
             </Text>
           ) : null}
 
-          {cast.devices.length === 0 ? (
+          {unavailable ? (
+            <Text
+              testID="cast-unavailable"
+              style={{
+                color: tokens.label2,
+                fontSize: TYPOGRAPHY.body.fontSize,
+                lineHeight: TYPOGRAPHY.body.lineHeight,
+              }}
+            >
+              {"Casting isn't available on this device."}
+            </Text>
+          ) : searching && cast.devices.length === 0 ? (
+            <Text
+              testID="cast-searching"
+              style={{
+                color: tokens.label2,
+                fontSize: TYPOGRAPHY.body.fontSize,
+                lineHeight: TYPOGRAPHY.body.lineHeight,
+              }}
+            >
+              Searching for cast devices…
+            </Text>
+          ) : cast.devices.length === 0 ? (
             <Text
               testID="cast-empty"
               style={{

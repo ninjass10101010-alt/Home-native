@@ -121,6 +121,14 @@ export interface PlaybackValue {
    */
   pauseLocal: () => void;
   /**
+   * Adds `track` to "Recently played".
+   *
+   * The local start path records automatically; a cast load cannot (the
+   * tablet never plays it), so CastProvider calls this after a successful
+   * receiver load. The store's merge keeps one row per track.
+   */
+  recordHistory: (track: MediaTrack) => Promise<void>;
+  /**
    * Points the local player at `track` WITHOUT starting it.
    *
    * Casting A then B leaves the local player holding A; after Stop, Play
@@ -389,6 +397,15 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     playerRef.current.pause();
   }, []);
 
+  const recordHistory = React.useCallback(async (track: MediaTrack) => {
+    try {
+      setHistory(await appendHistory(track));
+    } catch {
+      // History is a convenience: a store failure must neither fail the
+      // start nor read as a playback error.
+    }
+  }, []);
+
   const parkLocal = React.useCallback(
     async (track: MediaTrack) => {
       // Fail closed on the way OUT too: a track the viewer may not see is
@@ -470,16 +487,16 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
               albumTitle: track.album,
               artworkUrl: track.artworkUrl ?? undefined,
             });
+            void recordHistory(track);
           }
         }
-        void appendHistory(track).then(setHistory).catch(() => {});
       } catch (e) {
         setError(e instanceof Error ? e.message : "play_failed");
       } finally {
         setStart((s) => (s.inFlight ? { ...s, inFlight: false } : s));
       }
     },
-    [player]
+    [player, recordHistory]
   );
 
   const play = React.useCallback(
@@ -864,6 +881,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       previousForCast,
       setCastSink,
       pauseLocal,
+      recordHistory,
       parkLocal,
       previous,
       seek,
@@ -886,6 +904,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       previousForCast,
       queue.index,
       queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,
+      recordHistory,
       setCastSink, setExplicitFilter, setRepeat, settings, status?.isBuffering, toggle, toggleShuffleMode,
       visibleDownloads, visibleHistory,
     ]

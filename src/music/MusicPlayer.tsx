@@ -140,7 +140,10 @@ export function MusicPlayer() {
     }
   };
 
-  const activeLine = lyrics ? currentLineIndex(lyrics, position * 1000) : -1;
+  // While casting, the receiver owns the clock: the lyric follow must read
+  // the SAME position the stage and the seek do, never the paused tablet's.
+  const clockPosition = casting ? cast.position : position;
+  const activeLine = lyrics ? currentLineIndex(lyrics, clockPosition * 1000) : -1;
   const downloaded = !!visibleCurrent && downloads.some((d) => d.id === visibleCurrent.id);
 
   /**
@@ -307,6 +310,76 @@ export function MusicPlayer() {
               </Text>
             ) : null}
           </View>
+        ) : null}
+
+        {/*
+          THE CAST BANNER — the only visible Stop when a cast exists but no
+          track surface does (a hidden current track, or a failed load). It
+          sits on the page ground, never inside a surface that may vanish.
+        */}
+        {cast.target !== null && !visibleCurrent ? (
+          <View
+            testID="cast-alert"
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              minHeight: 64,
+              padding: 12,
+              borderRadius: tokens.panelRadius,
+              borderWidth: 1,
+              borderColor: tokens.panelRim,
+              backgroundColor: tokens.panel,
+            }}
+          >
+            <Text
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+              style={{
+                flex: 1,
+                color: cast.error ? colors["color-accent-rose"] : tokens.label,
+                fontSize: TYPOGRAPHY.body.fontSize,
+                lineHeight: TYPOGRAPHY.body.lineHeight,
+              }}
+            >
+              {cast.error ?? `Casting to ${cast.target.name}.`}
+            </Text>
+            <Pressable
+              testID="cast-stop"
+              accessibilityRole="button"
+              accessibilityLabel="Stop casting"
+              onPress={() => { void cast.disconnect().catch(() => {}); }}
+              style={{
+                minHeight: 64,
+                minWidth: 64,
+                paddingHorizontal: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: tokens.panelRim,
+                backgroundColor: tokens.scrim,
+              }}
+            >
+              <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                Stop casting
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/*
+          With no visible current track the page-level error line would
+          otherwise disappear with the Now Playing panel — surface the cast
+          error here so a failed stop never hides silently.
+        */}
+        {!visibleCurrent && cast.error ? (
+          <Text
+            testID="music-cast-error"
+            style={{ color: colors["color-accent-rose"], fontSize: TYPOGRAPHY.body.fontSize, lineHeight: TYPOGRAPHY.body.lineHeight }}
+          >
+            {cast.error}
+          </Text>
         ) : null}
 
         {visibleCurrent ? (

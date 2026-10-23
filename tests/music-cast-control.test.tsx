@@ -153,6 +153,29 @@ it("no devices is an honest empty state, not a spinner forever", () => {
   expect(getByText("No cast devices found.")).toBeTruthy();
 });
 
+it("says casting is unavailable on this device, not that no devices were found", () => {
+  mockCast = { ...idleCast(), state: "unavailable", devices: [] };
+  const { getByTestId, getByText, queryByText } = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(getByTestId("cast-open"));
+  expect(getByText("Casting isn't available on this device.")).toBeTruthy();
+  expect(queryByText("No cast devices found.")).toBeNull();
+});
+
+it("shows a searching label while connecting or busy instead of the empty state", () => {
+  mockCast = { ...idleCast(), state: "connecting", devices: [] };
+  const first = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(first.getByTestId("cast-open"));
+  expect(first.getByText("Searching for cast devices…")).toBeTruthy();
+  expect(first.queryByText("No cast devices found.")).toBeNull();
+  first.unmount();
+
+  mockCast = { ...idleCast(), devices: [], busy: true };
+  const second = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(second.getByTestId("cast-open"));
+  expect(second.getByText("Searching for cast devices…")).toBeTruthy();
+  expect(second.queryByText("No cast devices found.")).toBeNull();
+});
+
 it("names a live-but-idle session on the capsule and in its a11y label", () => {
   mockCast = {
     ...idleCast(),

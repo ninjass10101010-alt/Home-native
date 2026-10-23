@@ -329,6 +329,28 @@ it("does not render the cast control when there is no current track", async () =
   expect(queryByTestId("cast-open")).toBeNull();
 });
 
+it("a hidden current track keeps a visible cast banner with Stop and the page-level error", async () => {
+  mockMember = KID;
+  mockExplicitFilter = true;
+  mockCurrent = { ...EXPLICIT_TRACK };
+  const disconnect = jest.fn(async () => { throw new Error("stop failed"); });
+  mockCast = {
+    ...idleCast(),
+    casting: true,
+    target: { id: "tv", name: "Living Room" },
+    error: "Couldn't stop casting. Try again.",
+    disconnect,
+  };
+  const { getByTestId, getAllByText } = render(<MusicPlayer />, { wrapper: wrap });
+  await waitFor(() => expect(getByTestId("cast-alert")).toBeTruthy());
+  expect(getByTestId("music-cast-error")).toBeTruthy();
+  // The banner and the page-level line both carry the honest failure copy.
+  expect(getAllByText("Couldn't stop casting. Try again.")).toHaveLength(2);
+
+  await act(async () => { fireEvent.press(getByTestId("cast-stop")); });
+  expect(disconnect).toHaveBeenCalledTimes(1);
+});
+
 it("when casting is paused, the play glyph offers Play", async () => {
   mockCast = {
     ...idleCast(),
@@ -557,6 +579,33 @@ describe("the Now Playing lyrics mode", () => {
     await waitFor(() => expect(getByTestId("music-lyric-1")).toBeTruthy());
     fireEvent.press(getByTestId("music-lyric-1"));
     expect(mockSeek).toHaveBeenCalledWith(5);
+  });
+
+  it("while casting, the active lyric line follows the receiver's clock", async () => {
+    mockLyrics = LINES;
+    mockPosition = 0; // the tablet's own clock is stale while casting
+    mockCast = {
+      ...idleCast(),
+      casting: true,
+      target: { id: "tv", name: "Living Room" },
+      playing: true,
+      position: 1,
+      duration: 120,
+    };
+    const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+    const tokens = musicTokensFor(theme, boost);
+    const { getByText, getByTestId, rerender } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    await waitFor(() => expect(getByTestId("music-lyric-0")).toBeTruthy());
+    const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
+
+    expect(styleOf(getByText("First line")).color).toBe(tokens.accent);
+
+    // A position-only cast tick moves the active line.
+    mockCast = { ...mockCast, position: 6 };
+    rerender(<MusicPlayer />);
+    expect(styleOf(getByText("Second line")).color).toBe(tokens.accent);
+    expect(styleOf(getByText("First line")).color).not.toBe(tokens.accent);
   });
 
   it("while casting, tapping a lyric seeks the receiver, not the paused local player", async () => {
