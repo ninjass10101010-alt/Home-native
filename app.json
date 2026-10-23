@@ -31,14 +31,15 @@
     "plugins": [
       "expo-router",
       "./plugins/with-newpipe-desugaring",
+      ["./plugins/with-cast-pins"],
+      ["react-native-google-cast", {
+        "androidPlayServicesCastFrameworkVersion": "22.3.1",
+        "receiverAppId": "CC1AD845",
+        "expandedController": false
+      }],
       "expo-status-bar",
       "expo-secure-store",
-      [
-        "expo-audio",
-        {
-          "enableBackgroundPlayback": true
-        }
-      ]
+      ["expo-audio", { "enableBackgroundPlayback": true }]
     ]
   }
 }
