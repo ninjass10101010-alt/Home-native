@@ -1,3 +1,5 @@
+/* eslint-disable import/first -- jest.mock factories run before the imports */
+/* eslint-disable @typescript-eslint/no-require-imports -- the AsyncStorage jest mock is CommonJS-only */
 /**
  * The cast-safe queue bridge: `advanceForCast` moves the queue through the
  * SAME visibility gate as the local transport, but it must never touch
@@ -148,6 +150,7 @@ it("advanceForCast moves the index through visible tracks only and never calls t
   expect(getByTestId("index").props.children).toBe("2");
   expect(getByTestId("title").props.children).toBe("Last");
   expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockPause).not.toHaveBeenCalled();
   expect(mockReplace).not.toHaveBeenCalled();
   expect(mockSeek).not.toHaveBeenCalled();
 });
@@ -166,11 +169,12 @@ it("repeat-one returns the same track and keeps the index", async () => {
   expect(getByTestId("index").props.children).toBe("0");
   expect(getByTestId("title").props.children).toBe("First");
   expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockPause).not.toHaveBeenCalled();
   expect(mockReplace).not.toHaveBeenCalled();
   expect(mockSeek).not.toHaveBeenCalled();
 });
 
-it("repeat-off at the end returns null and leaves the queue where it was", async () => {
+it("auto advance at the end of a repeat-off queue returns null and leaves the queue where it was", async () => {
   const { getByTestId } = render(tree());
   await act(async () => { getByTestId("play-last").props.onPress(); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Last"));
@@ -183,6 +187,7 @@ it("repeat-off at the end returns null and leaves the queue where it was", async
   expect(getByTestId("index").props.children).toBe("1");
   expect(getByTestId("title").props.children).toBe("Last");
   expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockPause).not.toHaveBeenCalled();
   expect(mockReplace).not.toHaveBeenCalled();
   expect(mockSeek).not.toHaveBeenCalled();
 });
@@ -196,6 +201,7 @@ it("an empty queue returns null without touching the player", async () => {
   expect(moved).toBeNull();
   expect(api.index).toBe(-1);
   expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockPause).not.toHaveBeenCalled();
   expect(mockReplace).not.toHaveBeenCalled();
   expect(mockSeek).not.toHaveBeenCalled();
 });

@@ -429,7 +429,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
    * It mirrors `next`'s semantics exactly:
    * - repeat-one with `auto` stays on the same index (the same track is
    *   loaded again on the receiver);
-   * - a repeat-off queue at the end returns null (nothing to advance to);
+   * - a repeat-off queue at the end: an AUTO advance returns null (nothing
+   *   to advance to), while a MANUAL advance restarts the current track —
+   *   exactly what `next()` does when there is no next index;
    * - a hidden row is SKIPPED, and a direction with nothing visible returns
    *   null, never a hidden fallback.
    */

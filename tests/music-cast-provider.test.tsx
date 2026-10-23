@@ -306,6 +306,103 @@ test("a finished cast advances exactly once per completion", async () => {
   expect(mockResolveAudio).toHaveBeenLastCalledWith("v3");
 });
 
+test("without mediaSessionId, the playing transition re-arms each completion (real SDK sequence)", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
+  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockAdvanceForCast.mockReturnValueOnce(nextTrack).mockReturnValueOnce(thirdTrack);
+
+  let api!: ReturnType<typeof useCast>;
+  const tree = () => (
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  const view = render(tree());
+  await act(async () => {});
+
+  // The receiver is PLAYING (the load autoplays) and reports NO mediaSessionId
+  // — the only shape react-native-google-cast 4.9.1 can produce.
+  mockStatus = { playerState: "playing", idleReason: null };
+  await act(async () => { await api.connect("tv"); await api.startCast(track); });
+  await act(async () => { view.rerender(tree()); });
+  expect(mockLoadMedia).toHaveBeenCalledTimes(1);
+  expect(mockAdvanceForCast).not.toHaveBeenCalled();
+
+  // First completion: idle/finished, still no session id.
+  mockStatus = { playerState: "idle", idleReason: "finished" };
+  await act(async () => { view.rerender(tree()); });
+  await waitFor(() => expect(mockLoadMedia).toHaveBeenCalledTimes(2));
+  expect(mockAdvanceForCast).toHaveBeenCalledTimes(1);
+  expect(mockAdvanceForCast).toHaveBeenCalledWith(true);
+  expect(mockResolveAudio).toHaveBeenLastCalledWith("v2");
+
+  // The 1 Hz status tick is a NEW object that differs ONLY in streamPosition:
+  // same playerState/idleReason, same (missing) session id. No second advance.
+  mockStatus = { playerState: "idle", idleReason: "finished", streamPosition: 42 };
+  await act(async () => { view.rerender(tree()); });
+  mockStatus = { playerState: "idle", idleReason: "finished", streamPosition: 43 };
+  await act(async () => { view.rerender(tree()); });
+  expect(mockAdvanceForCast).toHaveBeenCalledTimes(1);
+  expect(mockLoadMedia).toHaveBeenCalledTimes(2);
+
+  // The receiver reports PLAYING again: the guard re-arms (the key shape is
+  // `none:<trackId>` both times, so this transition is the only re-arm).
+  mockStatus = { playerState: "playing", idleReason: null };
+  await act(async () => { view.rerender(tree()); });
+
+  // Second completion: the next finish advances again.
+  mockStatus = { playerState: "idle", idleReason: "finished" };
+  await act(async () => { view.rerender(tree()); });
+  await waitFor(() => expect(mockLoadMedia).toHaveBeenCalledTimes(3));
+  expect(mockAdvanceForCast).toHaveBeenCalledTimes(2);
+  expect(mockResolveAudio).toHaveBeenLastCalledWith("v3");
+});
+
+test("repeat-one reloads the same track and advances again after the next finish", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
+  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  // Repeat-one: the queue step returns the SAME track every time.
+  mockAdvanceForCast.mockReturnValue(track);
+
+  let api!: ReturnType<typeof useCast>;
+  const tree = () => (
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  const view = render(tree());
+  await act(async () => {});
+
+  mockStatus = { playerState: "playing", idleReason: null };
+  await act(async () => { await api.connect("tv"); await api.startCast(track); });
+  await act(async () => { view.rerender(tree()); });
+  expect(mockLoadMedia).toHaveBeenCalledTimes(1);
+
+  // First finish: one advance, and the SAME track is loaded again.
+  mockStatus = { playerState: "idle", idleReason: "finished" };
+  await act(async () => { view.rerender(tree()); });
+  await waitFor(() => expect(mockLoadMedia).toHaveBeenCalledTimes(2));
+  expect(mockAdvanceForCast).toHaveBeenCalledTimes(1);
+  expect(mockLoadMedia).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      mediaInfo: expect.objectContaining({ contentId: "v1" }),
+    })
+  );
+
+  // The reload starts playing: with no mediaSessionId this is the ONLY re-arm.
+  mockStatus = { playerState: "playing", idleReason: null };
+  await act(async () => { view.rerender(tree()); });
+
+  // The reloaded track finishes again — it must advance, not stall.
+  mockStatus = { playerState: "idle", idleReason: "finished" };
+  await act(async () => { view.rerender(tree()); });
+  await waitFor(() => expect(mockLoadMedia).toHaveBeenCalledTimes(3));
+  expect(mockAdvanceForCast).toHaveBeenCalledTimes(2);
+  expect(mockResolveAudio).toHaveBeenLastCalledWith("v1");
+});
+
 test("a cast error keeps the honest error path and does not advance", async () => {
   mockStartSession.mockResolvedValue(true);
   mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
