@@ -107,3 +107,29 @@ describe("WeatherHeroCell (self-fetching wall cell)", () => {
     expect(await findByTestId("wx-poster")).toBeTruthy();
   });
 });
+
+describe("WeatherPoster — the roomy double-height rhythm", () => {
+  it("uses the approved larger type and art scale at span two", () => {
+    const { getByTestId } = render(
+      <WeatherPoster size="cell" span={2} data={SNAPSHOT} />,
+      { wrapper: wrap },
+    );
+    expect(getByTestId("wx-digit-6").props.height).toBe(128);
+    expect(getByTestId("wx-icon-rain").props.width).toBe(160);
+    expect(getByTestId("wx-condition").props.style.fontSize).toBe(20);
+    expect(getByTestId("wx-outlook").props.style.fontSize).toBe(16);
+    expect(getByTestId("wx-updated").props.style.fontSize).toBe(16);
+  });
+
+  it("preserves the compact scale at span one", () => {
+    const { getByTestId } = render(
+      <WeatherPoster size="cell" span={1} data={SNAPSHOT} />,
+      { wrapper: wrap },
+    );
+    expect(getByTestId("wx-digit-6").props.height).toBe(96);
+    expect(getByTestId("wx-icon-rain").props.width).toBe(124);
+    expect(getByTestId("wx-condition").props.style.fontSize).toBe(16);
+    expect(getByTestId("wx-outlook").props.style.fontSize).toBe(14);
+    expect(getByTestId("wx-updated").props.style.fontSize).toBe(14);
+  });
+});
