@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports, import/first -- jest.mock factories run before the imports */
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
@@ -16,11 +17,16 @@ let mockPath = "/";
 jest.mock("expo-router", () => ({ usePathname: () => mockPath, useRouter: () => ({ push: jest.fn() }) }));
 
 import React from "react";
-import { render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
+import { render, renderHook } from "@testing-library/react-native";
 import { MiniPlayer } from "../src/music/MiniPlayer";
-import { ThemeProvider } from "../src/theme/ThemeProvider";
+import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
+import { musicTokensFor } from "../src/theme/music-tokens";
 
 const wrap = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
+
+/** The theme the app resolved — the Liquid palette follows it. */
+const resolved = () => renderHook(() => useTheme(), { wrapper: wrap }).result.current;
 
 beforeEach(() => {
   mockPath = "/";
@@ -136,4 +142,86 @@ it("the deny rule holds even with the explicit filter off", () => {
   const { getByTestId, queryByText } = render(<MiniPlayer />, { wrapper: wrap });
   expect(queryByText("Till I Collapse")).toBeNull();
   expect(getByTestId("mini-player-title").props.children).toBe("Nothing playing");
+});
+
+/**
+ * THE CAPSULE (SP2 Task 6) — the bar above the dock, on the Liquid palette.
+ *
+ * The bar is a music surface like every other one: it reads the music tokens
+ * (the panel fill, the panel rim, the label tiers) and it keeps its geometry
+ * contract — the artwork leads at 48dp, the transport is thumb-sized.
+ */
+describe("the MiniPlayer capsule", () => {
+  const styleOf = (node: any) => StyleSheet.flatten(node.props.style) as Record<string, any>;
+
+  it("is a Liquid capsule — the panel fill, the panel rim, the panel radius", () => {
+    const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+    const { theme, boost } = resolved();
+    const tokens = musicTokensFor(theme, boost);
+    const style = styleOf(getByTestId("mini-player-capsule"));
+    expect(style.backgroundColor).toBe(tokens.panel);
+    expect(style.borderColor).toBe(tokens.panelRim);
+    expect(style.borderWidth).toBe(1);
+    expect(style.borderRadius).toBe(tokens.panelRadius);
+  });
+
+  it("the artwork leads at 48dp on the Liquid radius", () => {
+    const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+    const { theme, boost } = resolved();
+    const tokens = musicTokensFor(theme, boost);
+    const style = styleOf(getByTestId("mini-player-art-tile"));
+    expect(style.width).toBe(48);
+    expect(style.height).toBe(48);
+    expect(style.borderRadius).toBe(tokens.artworkRadius);
+  });
+
+  it("the title and the artist read the music tiers", () => {
+    const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+    const { theme, boost } = resolved();
+    const tokens = musicTokensFor(theme, boost);
+    expect(styleOf(getByTestId("mini-player-title")).color).toBe(tokens.label);
+    expect(styleOf(getByTestId("mini-player-artist")).color).toBe(tokens.label3);
+  });
+
+  it("the transport is thumb-sized — play/pause and next are at least 64dp", () => {
+    const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+    for (const id of ["mini-player-play", "mini-player-next"]) {
+      const style = styleOf(getByTestId(id));
+      expect(style.width).toBeGreaterThanOrEqual(64);
+      expect(style.height).toBeGreaterThanOrEqual(64);
+    }
+  });
+
+  it("keeps its testIDs and its a11y labels", () => {
+    const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+    expect(getByTestId("mini-player")).toBeTruthy();
+    expect(getByTestId("mini-player-play").props.accessibilityLabel).toBe("Play");
+    expect(getByTestId("mini-player-next").props.accessibilityLabel).toBe("Next track");
+  });
+});
+
+/**
+ * THE NEUTRAL STATE — a track the viewer may not see keeps the bar's place
+ * and says the neutral truth: no title, no artist, no artwork, and a
+ * disabled transport.
+ */
+describe("the MiniPlayer's neutral state", () => {
+  it("says the neutral truth for a hidden track — and paints none of it", () => {
+    mockState = {
+      current: { id: "exp11111111", title: "Bad Song", artist: "Artist", artworkUrl: "https://img/bad.jpg", explicit: true },
+      playing: false,
+    };
+    mockPolicy = { isParent: false, filterOn: true, denied: [] };
+    const { getByTestId, queryByText, queryByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+    expect(getByTestId("mini-player")).toBeTruthy();
+    expect(getByTestId("mini-player-capsule")).toBeTruthy();
+    expect(queryByText("Bad Song")).toBeNull();
+    expect(queryByText("Artist")).toBeNull();
+    expect(queryByTestId("mini-player-art")).toBeNull();
+    expect(getByTestId("mini-player-title").props.children).toBe("Nothing playing");
+    expect(getByTestId("mini-player-artist").props.children).toBe("Search YouTube Music from the player");
+    // And it never PLAYS it either.
+    expect(getByTestId("mini-player-play").props.accessibilityState?.disabled).toBe(true);
+    expect(getByTestId("mini-player-next").props.accessibilityState?.disabled).toBe(true);
+  });
 });

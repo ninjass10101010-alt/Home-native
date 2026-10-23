@@ -2,7 +2,7 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
 
-import { currentLineIndex, parseLrc } from "../src/music/lyrics";
+import { currentLineIndex, followOffset, FOLLOW_PAUSE_MS, parseLrc } from "../src/music/lyrics";
 
 describe("LRC parser", () => {
   it("parses timestamps, sorts them and keeps text", () => {
@@ -31,6 +31,31 @@ describe("LRC parser", () => {
     expect(currentLineIndex(lines, 1000)).toBe(0);
     expect(currentLineIndex(lines, 4999)).toBe(0);
     expect(currentLineIndex(lines, 5000)).toBe(1);
+  });
+});
+
+/**
+ * The auto-follow's maths — where the view lands when the song moves on.
+ */
+describe("the lyrics follow", () => {
+  it("brings the current line into the upper third of the viewport", () => {
+    // A line 600px down, in a 900px viewport: the lead-in is a third of the
+    // viewport, so the line lands 300px down — read, not glued to the edge.
+    expect(followOffset(600, 900)).toBe(300);
+  });
+
+  it("never scrolls above the top of the list", () => {
+    expect(followOffset(100, 900)).toBe(0);
+    expect(followOffset(0, 900)).toBe(0);
+    expect(followOffset(-40, 900)).toBe(0);
+  });
+
+  it("scrolls to the line itself when the viewport is not measured yet", () => {
+    expect(followOffset(128, 0)).toBe(128);
+  });
+
+  it("pauses for ~3s after the user scrolls — long enough to read, short enough to resume", () => {
+    expect(FOLLOW_PAUSE_MS).toBe(3000);
   });
 });
 

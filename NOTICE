@@ -29,5 +29,9 @@ This program bundles the following third-party components:
   Copyright JetBrains s.r.o. and contributors. Licensed under Apache-2.0.
   Kotlin standard library pulled in by the engine module's Kotlin code and NewPipe Extractor.
 
+- androidx.palette (AndroidX Palette) — https://developer.android.com/jetpack/androidx/releases/palette
+  Copyright The Android Open Source Project. Licensed under Apache-2.0.
+  Used to read the artwork's dominant colour for the Now Playing stage.
+
 Copyright notices placed by upstream authors inside individual files are kept
 unmodified.

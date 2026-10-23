@@ -103,6 +103,28 @@ object Engine {
     .readTimeout(BADGE_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     .build()
 
+  /**
+   * The artwork client's timeouts, in seconds.
+   *
+   * The stage's tint is a nicety, not a contract: a slow thumbnail must not
+   * hold an engine thread (and with it a playback resolution) for long, so
+   * these are short and the tint simply falls back to the accent token.
+   */
+  internal const val ARTWORK_CONNECT_TIMEOUT_SECONDS = 5L
+  internal const val ARTWORK_READ_TIMEOUT_SECONDS = 8L
+
+  /**
+   * The client that fetches the artwork.
+   *
+   * Its own client, not the badge one: the artwork is a different host and a
+   * different job, and a stalled thumbnail must not spend the badge
+   * client's budget.
+   */
+  private val artworkClient: OkHttpClient = OkHttpClient.Builder()
+    .connectTimeout(ARTWORK_CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    .readTimeout(ARTWORK_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    .build()
+
   private fun ensureInit() {
     if (initialized) return
     synchronized(this) {
@@ -193,6 +215,32 @@ object Engine {
    */
   fun relatedAsync(id: String, promise: Promise) =
     onEngineThread(promise) { related(id) }
+
+  /**
+   * Reads the artwork's own colours, off Expo's shared async queue.
+   */
+  fun artworkColorsAsync(url: String, promise: Promise) =
+    onEngineThread(promise) { artworkColors(url) }
+
+  /**
+   * The dominant and vibrant colours of the artwork at [url].
+   *
+   * `{ dominant, vibrant }` — either may be null. The extraction never
+   * throws and never invents a colour: a failure answers with two nulls and
+   * the app falls back to its accent token.
+   *
+   * The artwork thumbnails are PUBLIC (they are the same URLs the cover
+   * image is loaded from), so the signed-stream rule does not apply here —
+   * but the no-logging discipline still does: the URL and the bytes never
+   * reach logcat.
+   */
+  fun artworkColors(url: String): Map<String, Any?> {
+    val colors = ArtworkColors.extract(url, artworkClient)
+    return mapOf(
+      "dominant" to colors["dominant"],
+      "vibrant" to colors["vibrant"]
+    )
+  }
 
   /**
    * Searches YouTube Music for tracks.

@@ -28,3 +28,15 @@ export interface ResolvedAudio {
   durationSeconds: number | null;
   expiresAt: number;
 }
+
+/**
+ * The artwork's own colour, read on-device by the engine (AndroidX Palette).
+ *
+ * Either colour may be null: the extraction NEVER invents one. A null means
+ * "no colour to report" — a missing cover, a failed fetch, a palette with no
+ * swatch — and the stage falls back to the app's accent token.
+ */
+export interface ArtworkColors {
+  dominant: string | null;
+  vibrant: string | null;
+}
