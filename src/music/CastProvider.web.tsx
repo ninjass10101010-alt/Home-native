@@ -22,6 +22,8 @@ const noopCast: CastValue = {
   duration: null,
   busy: false,
   error: null,
+  volume: 0.5,
+  muted: false,
   connect: async () => false,
   startCast: async () => {},
   disconnect: async () => {},
@@ -30,6 +32,8 @@ const noopCast: CastValue = {
   seek: async () => {},
   advance: async () => {},
   previous: async () => {},
+  adjustVolume: async () => {},
+  toggleMute: async () => {},
 };
 
 export function CastProvider({ children }: { children: React.ReactNode }) {

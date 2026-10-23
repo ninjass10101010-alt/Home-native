@@ -29,10 +29,12 @@ jest.mock("../src/music/CastProvider", () => ({
   useCast: () => ({
     state: "notConnected", devices: [], target: null, casting: false, playing: false,
     position: 0, duration: null, busy: false, error: null,
+    volume: 0.5, muted: false,
     connect: jest.fn(async () => true), startCast: jest.fn(async () => {}),
     disconnect: jest.fn(async () => {}), play: jest.fn(async () => {}),
     pause: jest.fn(async () => {}), seek: jest.fn(async () => {}),
     advance: jest.fn(async () => {}), previous: jest.fn(async () => {}),
+    adjustVolume: jest.fn(async () => {}), toggleMute: jest.fn(async () => {}),
   }),
 }));
 jest.mock("expo-secure-store", () => ({

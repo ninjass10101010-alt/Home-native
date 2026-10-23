@@ -57,6 +57,26 @@ export function CastControl({ track }: CastControlProps) {
     }
   };
 
+  const nudgeVolume = async (delta: number) => {
+    if (busy) return;
+    try {
+      await cast.adjustVolume(delta);
+    } catch {
+      // The provider owns receiver failures; a rejecting method must not
+      // escape through `void`.
+    }
+  };
+
+  const flipMute = async () => {
+    if (busy) return;
+    try {
+      await cast.toggleMute();
+    } catch {
+      // The provider owns receiver failures; a rejecting method must not
+      // escape through `void`.
+    }
+  };
+
   return (
     <>
       <Pressable
@@ -189,6 +209,98 @@ export function CastControl({ track }: CastControlProps) {
               );
             })
           )}
+
+          {cast.target !== null ? (
+            <View style={{ gap: 12 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <Pressable
+                  testID="cast-volume-down"
+                  accessibilityRole="button"
+                  accessibilityLabel="Volume down"
+                  accessibilityState={{ disabled: busy }}
+                  disabled={busy}
+                  onPress={() => void nudgeVolume(-0.1)}
+                  style={{
+                    width: 64,
+                    height: 64,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: tokens.panelRim,
+                    backgroundColor: tokens.sheet,
+                  }}
+                >
+                  <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize }}>
+                    −
+                  </Text>
+                </Pressable>
+                <Text
+                  testID="cast-volume"
+                  accessibilityLabel={`Volume ${Math.round(cast.volume * 100)} percent`}
+                  style={{
+                    flex: 1,
+                    textAlign: "center",
+                    color: tokens.label,
+                    fontSize: TYPOGRAPHY.body.fontSize,
+                    fontWeight: "700",
+                  }}
+                >
+                  {Math.round(cast.volume * 100)}%
+                </Text>
+                <Pressable
+                  testID="cast-volume-up"
+                  accessibilityRole="button"
+                  accessibilityLabel="Volume up"
+                  accessibilityState={{ disabled: busy }}
+                  disabled={busy}
+                  onPress={() => void nudgeVolume(0.1)}
+                  style={{
+                    width: 64,
+                    height: 64,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: tokens.panelRim,
+                    backgroundColor: tokens.sheet,
+                  }}
+                >
+                  <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize }}>
+                    +
+                  </Text>
+                </Pressable>
+              </View>
+              <Pressable
+                testID="cast-mute"
+                accessibilityRole="button"
+                accessibilityLabel={cast.muted ? "Unmute cast device" : "Mute cast device"}
+                accessibilityState={{ disabled: busy, selected: cast.muted }}
+                disabled={busy}
+                onPress={() => void flipMute()}
+                style={{
+                  minHeight: 64,
+                  paddingHorizontal: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: tokens.panelRim,
+                  backgroundColor: tokens.sheet,
+                }}
+              >
+                <Text
+                  style={{
+                    color: tokens.label,
+                    fontSize: TYPOGRAPHY.body.fontSize,
+                    fontWeight: "700",
+                  }}
+                >
+                  {cast.muted ? "Unmute" : "Mute"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           {cast.target !== null ? (
             <Pressable

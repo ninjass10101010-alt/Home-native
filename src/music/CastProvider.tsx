@@ -31,6 +31,8 @@ export interface CastValue {
   duration: number | null;
   busy: boolean;
   error: string | null;
+  volume: number;
+  muted: boolean;
   connect: (id: string) => Promise<boolean>;
   startCast: (track: MediaTrack) => Promise<void>;
   disconnect: () => Promise<void>;
@@ -39,6 +41,8 @@ export interface CastValue {
   seek: (seconds: number) => Promise<void>;
   advance: (auto: boolean) => Promise<void>;
   previous: () => Promise<void>;
+  adjustVolume: (delta: number) => Promise<void>;
+  toggleMute: () => Promise<void>;
 }
 
 interface CastClient {
@@ -51,6 +55,10 @@ interface CastClient {
 interface CastSessionLike {
   client: CastClient;
   getCastDevice: () => Promise<{ deviceId?: string | null; friendlyName?: string | null } | null>;
+  getVolume: () => Promise<number>;
+  isMute: () => Promise<boolean>;
+  setVolume: (volume: number) => void;
+  setMute: (mute: boolean) => void;
 }
 
 /**
@@ -149,9 +157,15 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const [track, setTrack] = React.useState<MediaTrack | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [volume, setVolume] = React.useState(0.5);
+  const [muted, setMuted] = React.useState(false);
   const castTrackId = track?.id ?? null;
   const clientRef = React.useRef<CastClient | null>(null);
+  const sessionRef = React.useRef<CastSessionLike | null>(null);
   const targetRef = React.useRef<CastTarget | null>(null);
+  /** The last known receiver level, read by rapid nudges before a re-render. */
+  const volumeRef = React.useRef(0.5);
+  const mutedRef = React.useRef(false);
   /**
    * The completion the auto-advance has already handled.
    *
@@ -205,10 +219,32 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     [parkLocal]
   );
 
+  /**
+   * The receiver owns its own amplifier level: read it whenever a session
+   * arrives so the sheet describes the device, not a stale default. A
+   * receiver that cannot answer keeps the last known value.
+   */
+  const hydrateAudio = React.useCallback(async (active: CastSessionLike | null) => {
+    if (!active) return;
+    try {
+      const [level, mute] = await Promise.all([active.getVolume(), active.isMute()]);
+      if (typeof level === "number" && Number.isFinite(level)) {
+        volumeRef.current = level;
+        setVolume(level);
+      }
+      mutedRef.current = mute;
+      setMuted(mute);
+    } catch {
+      // Keep the last known level/mute state.
+    }
+  }, []);
+
   React.useEffect(() => {
     if (session) {
       hadSessionRef.current = true;
       clientRef.current = session.client as unknown as CastClient;
+      sessionRef.current = session as unknown as CastSessionLike;
+      void hydrateAudio(sessionRef.current);
       // A session restored at mount (the app was backgrounded, the receiver
       // kept playing) never passed through `connect`: hydrate its target so
       // the sink is installed and the tablet is silent.
@@ -234,6 +270,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       return () => { cancelled = true; };
     }
     clientRef.current = null;
+    sessionRef.current = null;
     targetRef.current = null;
     // A session can end before its last load ever reached the surface (the
     // receiver rejected it), so the local `track` is not the only thing worth
@@ -261,7 +298,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [parkOnce, pauseLocal, session]);
+  }, [hydrateAudio, parkOnce, pauseLocal, session]);
 
   const connect = React.useCallback(
     async (id: string): Promise<boolean> => {
@@ -284,8 +321,10 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         pauseLocal();
         const switched = targetRef.current?.id !== chosen.id;
         clientRef.current = current.client;
+        sessionRef.current = current;
         targetRef.current = chosen;
         setTarget(chosen);
+        await hydrateAudio(current);
         if (switched) setTrack(null);
         return true;
       } catch {
@@ -297,6 +336,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
           await CastContext.sessionManager.endCurrentSession(true).catch(() => {});
         }
         clientRef.current = null;
+        sessionRef.current = null;
         targetRef.current = null;
         setTarget(null);
         setTrack(null);
@@ -306,7 +346,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         setBusy(false);
       }
     },
-    [devices, pauseLocal]
+    [devices, hydrateAudio, pauseLocal]
   );
 
   const startCast = React.useCallback(
@@ -391,6 +431,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       }
       if (cancelled) return;
       clientRef.current = null;
+      sessionRef.current = null;
       targetRef.current = null;
       // Clear the surface only once the denial actually stopped the cast.
       setTrack(null);
@@ -412,6 +453,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       const toPark = playbackCurrent ?? track;
       if (toPark) await parkOnce(toPark);
       clientRef.current = null;
+      sessionRef.current = null;
       targetRef.current = null;
       setTarget(null);
       setTrack(null);
@@ -469,6 +511,34 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     [advanceForCast, startCast]
   );
 
+  /**
+   * The receiver's own amplifier. `setVolume` is synchronous in the SDK, so
+   * the state updates optimistically; a positive nudge also lifts a mute,
+   * because a family reaching for Volume up expects to hear something.
+   */
+  const adjustVolume = React.useCallback(async (delta: number) => {
+    const active = sessionRef.current;
+    if (!active) return;
+    const next = Math.round(Math.min(1, Math.max(0, volumeRef.current + delta)) * 100) / 100;
+    active.setVolume(next);
+    volumeRef.current = next;
+    setVolume(next);
+    if (mutedRef.current && delta > 0) {
+      active.setMute(false);
+      mutedRef.current = false;
+      setMuted(false);
+    }
+  }, []);
+
+  const toggleMute = React.useCallback(async () => {
+    const active = sessionRef.current;
+    if (!active) return;
+    const next = !mutedRef.current;
+    active.setMute(next);
+    mutedRef.current = next;
+    setMuted(next);
+  }, []);
+
   const playing = status?.playerState === "playing";
 
   /**
@@ -506,6 +576,8 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       duration: track?.durationSeconds ?? null,
       busy,
       error,
+      volume,
+      muted,
       connect,
       startCast,
       disconnect,
@@ -514,6 +586,8 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       seek,
       advance,
       previous,
+      adjustVolume,
+      toggleMute,
     }),
     [
       rawState,
@@ -524,6 +598,8 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       position,
       busy,
       error,
+      volume,
+      muted,
       connect,
       startCast,
       disconnect,
@@ -532,6 +608,8 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       seek,
       advance,
       previous,
+      adjustVolume,
+      toggleMute,
     ]
   );
 

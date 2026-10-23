@@ -22,6 +22,8 @@ function idleCast() {
     duration: null,
     busy: false,
     error: null,
+    volume: 0.5,
+    muted: false,
     connect: mockConnect,
     startCast: mockStartCast,
     disconnect: mockDisconnect,
@@ -30,6 +32,8 @@ function idleCast() {
     seek: jest.fn(async () => {}),
     advance: jest.fn(async () => {}),
     previous: jest.fn(async () => {}),
+    adjustVolume: jest.fn(async () => {}),
+    toggleMute: jest.fn(async () => {}),
   };
 }
 
@@ -262,4 +266,83 @@ it("the capsule is a 64dp wall-floor control on the Liquid tokens", () => {
   expect(style.minHeight).toBeGreaterThanOrEqual(64);
   expect(style.backgroundColor).toBe(tokens.scrim);
   expect(style.borderColor).toBe(tokens.panelRim);
+});
+
+it("with a target, the sheet shows the receiver's volume as a percentage", () => {
+  mockCast = {
+    ...idleCast(),
+    target: { id: "tv", name: "Living Room" },
+    volume: 0.35,
+  };
+  const { getByTestId, getByText } = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(getByTestId("cast-open"));
+  expect(getByTestId("cast-volume")).toBeTruthy();
+  expect(getByText("35%")).toBeTruthy();
+});
+
+it("the volume buttons nudge the receiver by ten percent", async () => {
+  const adjustVolume = jest.fn(async () => {});
+  mockCast = {
+    ...idleCast(),
+    target: { id: "tv", name: "Living Room" },
+    adjustVolume,
+  };
+  const { getByTestId } = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(getByTestId("cast-open"));
+
+  await act(async () => {
+    fireEvent.press(getByTestId("cast-volume-down"));
+  });
+  expect(adjustVolume).toHaveBeenCalledWith(-0.1);
+
+  await act(async () => {
+    fireEvent.press(getByTestId("cast-volume-up"));
+  });
+  expect(adjustVolume).toHaveBeenCalledWith(0.1);
+});
+
+it("without a target, the sheet has no volume row", () => {
+  const { getByTestId, queryByTestId } = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(getByTestId("cast-open"));
+  expect(queryByTestId("cast-volume")).toBeNull();
+});
+
+it("the mute button calls toggleMute and its label follows muted", async () => {
+  const toggleMute = jest.fn(async () => {});
+  mockCast = {
+    ...idleCast(),
+    target: { id: "tv", name: "Living Room" },
+    muted: false,
+    toggleMute,
+  };
+  const { getByTestId, getByText, queryByText, rerender } = render(<CastControl track={track} />, {
+    wrapper: wrap,
+  });
+  fireEvent.press(getByTestId("cast-open"));
+  expect(getByText("Mute")).toBeTruthy();
+  expect(getByTestId("cast-mute").props.accessibilityLabel).toBe("Mute cast device");
+
+  await act(async () => {
+    fireEvent.press(getByTestId("cast-mute"));
+  });
+  expect(toggleMute).toHaveBeenCalledTimes(1);
+
+  mockCast = { ...mockCast, muted: true };
+  rerender(<CastControl track={track} />);
+  expect(getByText("Unmute")).toBeTruthy();
+  expect(queryByText("Mute")).toBeNull();
+  expect(getByTestId("cast-mute").props.accessibilityLabel).toBe("Unmute cast device");
+});
+
+it("busy disables the volume controls too", () => {
+  mockCast = {
+    ...idleCast(),
+    target: { id: "tv", name: "Living Room" },
+    busy: true,
+  };
+  const { getByTestId } = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(getByTestId("cast-open"));
+  expect(getByTestId("cast-volume-down").props.accessibilityState?.disabled).toBe(true);
+  expect(getByTestId("cast-volume-up").props.accessibilityState?.disabled).toBe(true);
+  expect(getByTestId("cast-mute").props.accessibilityState?.disabled).toBe(true);
 });

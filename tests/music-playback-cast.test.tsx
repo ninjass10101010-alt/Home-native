@@ -96,9 +96,13 @@ jest.mock("../src/music/CastProvider", () => ({
   useCast: () => ({
     casting: false,
     playing: false,
+    volume: 0.5,
+    muted: false,
     play: jest.fn(async () => {}),
     pause: jest.fn(async () => {}),
     advance: jest.fn(async () => {}),
+    adjustVolume: jest.fn(async () => {}),
+    toggleMute: jest.fn(async () => {}),
   }),
 }));
 

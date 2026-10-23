@@ -9,6 +9,10 @@ const mockLoadMedia = jest.fn();
 const mockClientPlay = jest.fn();
 const mockClientPause = jest.fn();
 const mockClientSeek = jest.fn();
+const mockGetVolume = jest.fn(async () => 0.5);
+const mockIsMute = jest.fn(async () => false);
+const mockSetVolume = jest.fn();
+const mockSetMute = jest.fn();
 const mockResolveAudio = jest.fn();
 const mockToggle = jest.fn();
 const mockPauseLocal = jest.fn();
@@ -102,6 +106,10 @@ const client = () => ({
 const sessionFor = (d = device, c: any = client()) => ({
   client: c,
   getCastDevice: async () => d,
+  getVolume: mockGetVolume,
+  isMute: mockIsMute,
+  setVolume: mockSetVolume,
+  setMute: mockSetMute,
 });
 
 function Actions({ onReady }: { onReady: (cast: ReturnType<typeof useCast>) => void }) {
@@ -118,6 +126,8 @@ beforeEach(() => {
   mockRecordHistory.mockResolvedValue(undefined);
   mockGetCurrentCastSession.mockResolvedValue(null);
   mockLoadMedia.mockResolvedValue(undefined);
+  mockGetVolume.mockResolvedValue(0.5);
+  mockIsMute.mockResolvedValue(false);
   mockDevices = [device];
   mockSession = null;
   mockSessionStarted = null;
@@ -849,4 +859,146 @@ test("a failed policy stop keeps the cast surface and says so", async () => {
   expect(api.casting).toBe(true);
   expect(api.target?.id).toBe("tv");
   expect(api.error).toBe("Couldn't stop casting. Try again.");
+});
+
+test("connect hydrates the receiver's volume and mute state", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  mockGetVolume.mockResolvedValue(0.35);
+  mockIsMute.mockResolvedValue(true);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(mockGetVolume).toHaveBeenCalled();
+  expect(mockIsMute).toHaveBeenCalled();
+  expect(api.volume).toBe(0.35);
+  expect(api.muted).toBe(true);
+});
+
+test("a restored session hydrates the receiver's volume and mute state", async () => {
+  mockSession = sessionFor(device);
+  mockGetCurrentCastSession.mockResolvedValue(mockSession);
+  mockGetVolume.mockResolvedValue(0.8);
+  mockIsMute.mockResolvedValue(true);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await waitFor(() => expect(api.target?.id).toBe("tv"));
+  expect(mockGetVolume).toHaveBeenCalled();
+  expect(mockIsMute).toHaveBeenCalled();
+  expect(api.volume).toBe(0.8);
+  expect(api.muted).toBe(true);
+});
+
+test("adjustVolume clamps at zero and up, and sends the rounded level", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  mockGetVolume.mockResolvedValue(0.05);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+
+  await act(async () => { await api.adjustVolume(-0.1); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0);
+  expect(api.volume).toBe(0);
+
+  await act(async () => { await api.adjustVolume(0.1); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0.1);
+  expect(api.volume).toBe(0.1);
+
+  mockGetVolume.mockResolvedValue(0.95);
+  await act(async () => { await api.connect("tv"); });
+  await act(async () => { await api.adjustVolume(0.1); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(1);
+  expect(api.volume).toBe(1);
+});
+
+test("adjustVolume sends a rounded level, not a float artefact", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  mockGetVolume.mockResolvedValue(0.5);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  await act(async () => { await api.adjustVolume(0.1); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0.6);
+  expect(api.volume).toBe(0.6);
+});
+
+test("adjusting up while muted also unmutes the receiver", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  mockIsMute.mockResolvedValue(true);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.muted).toBe(true);
+
+  await act(async () => { await api.adjustVolume(0.1); });
+  expect(mockSetMute).toHaveBeenCalledWith(false);
+  expect(api.muted).toBe(false);
+});
+
+test("toggleMute flips the receiver and the state", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.muted).toBe(false);
+
+  await act(async () => { await api.toggleMute(); });
+  expect(mockSetMute).toHaveBeenLastCalledWith(true);
+  expect(api.muted).toBe(true);
+
+  await act(async () => { await api.toggleMute(); });
+  expect(mockSetMute).toHaveBeenLastCalledWith(false);
+  expect(api.muted).toBe(false);
+});
+
+test("volume controls are a no-op without a session", async () => {
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => {
+    await api.adjustVolume(0.1);
+    await api.toggleMute();
+  });
+  expect(mockSetVolume).not.toHaveBeenCalled();
+  expect(mockSetMute).not.toHaveBeenCalled();
+  expect(api.volume).toBe(0.5);
+  expect(api.muted).toBe(false);
 });
