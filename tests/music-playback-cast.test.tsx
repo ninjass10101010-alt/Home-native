@@ -47,6 +47,16 @@ jest.mock("expo-router", () => ({
   useRouter: () => ({ push: jest.fn() }),
   usePathname: () => "/",
 }));
+/** The wall widget's cast surface is idle here — this suite exercises the sink. */
+jest.mock("../src/music/CastProvider", () => ({
+  useCast: () => ({
+    casting: false,
+    playing: false,
+    play: jest.fn(async () => {}),
+    pause: jest.fn(async () => {}),
+    advance: jest.fn(async () => {}),
+  }),
+}));
 
 /** A kid, so the content policy is the one that hides the middle track. */
 const KID = { id: "c1", name: "Kid", role: "child", emoji: "🐯", color: "green" };

@@ -14,6 +14,29 @@ let mockPolicy: { isParent: boolean; filterOn: boolean; denied: string[] } = { i
 jest.mock("../src/music/playback", () => ({
   usePlayback: () => ({ ...mockState, policy: mockPolicy, toggle: mockToggle, next: mockNext }),
 }));
+function idleCast() {
+  return {
+    state: "notConnected",
+    devices: [],
+    target: null,
+    casting: false,
+    playing: false,
+    position: 0,
+    duration: null,
+    busy: false,
+    error: null,
+    connect: jest.fn(async () => true),
+    startCast: jest.fn(async () => {}),
+    disconnect: jest.fn(async () => {}),
+    play: jest.fn(async () => {}),
+    pause: jest.fn(async () => {}),
+    seek: jest.fn(async () => {}),
+    advance: jest.fn(async () => {}),
+    previous: jest.fn(async () => {}),
+  };
+}
+let mockCastState: any = idleCast();
+jest.mock("../src/music/CastProvider", () => ({ useCast: () => mockCastState }));
 jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush }) }));
 
 import React from "react";
@@ -32,6 +55,7 @@ const resolved = () => renderHook(() => useTheme(), { wrapper: wrap }).result.cu
 beforeEach(() => {
   mockState = { current: null, playing: false };
   mockPolicy = { isParent: false, filterOn: true, denied: [] };
+  mockCastState = idleCast();
   jest.clearAllMocks();
 });
 
@@ -55,6 +79,83 @@ it("hands next to the provider transport — the path that is cast-safe", () => 
   const { getByTestId } = render(<MusicWidget />, { wrapper: wrap });
   fireEvent.press(getByTestId("music-widget-next"));
   expect(mockNext).toHaveBeenCalledTimes(1);
+});
+
+describe("while casting", () => {
+  const track = { id: "abc12345678", title: "Song", artist: "Artist", artworkUrl: null, explicit: false };
+
+  it("drives the receiver's play/pause — never a local toggle", () => {
+    const castPlay = jest.fn(async () => {});
+    const castPause = jest.fn(async () => {});
+    mockState = { current: track, playing: false };
+    mockCastState = { ...idleCast(), casting: true, target: { id: "tv", name: "Living Room" }, playing: false, play: castPlay, pause: castPause };
+    const { getByTestId, getByText, rerender } = render(<MusicWidget />, { wrapper: wrap });
+
+    expect(getByTestId("music-widget-play").props.accessibilityLabel).toBe("Play");
+    expect(getByText("▶")).toBeTruthy();
+    fireEvent.press(getByTestId("music-widget-play"));
+    expect(castPlay).toHaveBeenCalledTimes(1);
+    expect(castPause).not.toHaveBeenCalled();
+    expect(mockToggle).not.toHaveBeenCalled();
+
+    mockCastState = { ...mockCastState, playing: true };
+    rerender(<MusicWidget />);
+    // The glyph and label follow the RECEIVER's clock, not the local one.
+    expect(getByTestId("music-widget-play").props.accessibilityLabel).toBe("Pause");
+    expect(getByText("❚❚")).toBeTruthy();
+    fireEvent.press(getByTestId("music-widget-play"));
+    expect(castPause).toHaveBeenCalledTimes(1);
+    expect(castPlay).toHaveBeenCalledTimes(1);
+    expect(mockToggle).not.toHaveBeenCalled();
+  });
+
+  it("hands next to the receiver's advance — never the local next", () => {
+    const castAdvance = jest.fn(async () => {});
+    mockState = { current: track, playing: false };
+    mockCastState = { ...idleCast(), casting: true, target: { id: "tv", name: "Living Room" }, playing: true, advance: castAdvance };
+    const { getByTestId } = render(<MusicWidget />, { wrapper: wrap });
+
+    fireEvent.press(getByTestId("music-widget-next"));
+    expect(castAdvance).toHaveBeenCalledWith(false);
+    expect(castAdvance).toHaveBeenCalledTimes(1);
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it("keeps the neutral gate — hidden or absent tracks never expose cast controls", () => {
+    const castPlay = jest.fn(async () => {});
+    const castPause = jest.fn(async () => {});
+    const castAdvance = jest.fn(async () => {});
+    mockPolicy = { isParent: false, filterOn: true, denied: [] };
+    mockState = {
+      current: { id: "exp11111111", title: "Bad Song", artist: "Artist", artworkUrl: null, explicit: true },
+      playing: false,
+    };
+    mockCastState = { ...idleCast(), casting: true, playing: true, play: castPlay, pause: castPause, advance: castAdvance };
+    const hidden = render(<MusicWidget />, { wrapper: wrap });
+
+    expect(hidden.getByTestId("music-widget-play").props.accessibilityState?.disabled).toBe(true);
+    expect(hidden.getByTestId("music-widget-next").props.accessibilityState?.disabled).toBe(true);
+    fireEvent.press(hidden.getByTestId("music-widget-play"));
+    fireEvent.press(hidden.getByTestId("music-widget-next"));
+    expect(castPlay).not.toHaveBeenCalled();
+    expect(castPause).not.toHaveBeenCalled();
+    expect(castAdvance).not.toHaveBeenCalled();
+    expect(mockToggle).not.toHaveBeenCalled();
+    expect(mockNext).not.toHaveBeenCalled();
+    hidden.unmount();
+
+    mockState = { current: null, playing: false };
+    const idle = render(<MusicWidget />, { wrapper: wrap });
+    expect(idle.getByTestId("music-widget-play").props.accessibilityState?.disabled).toBe(true);
+    expect(idle.getByTestId("music-widget-next").props.accessibilityState?.disabled).toBe(true);
+    fireEvent.press(idle.getByTestId("music-widget-play"));
+    fireEvent.press(idle.getByTestId("music-widget-next"));
+    expect(castPlay).not.toHaveBeenCalled();
+    expect(castPause).not.toHaveBeenCalled();
+    expect(castAdvance).not.toHaveBeenCalled();
+    expect(mockToggle).not.toHaveBeenCalled();
+    expect(mockNext).not.toHaveBeenCalled();
+  });
 });
 
 it("shows a neutral placeholder for a track the viewer may not see", () => {

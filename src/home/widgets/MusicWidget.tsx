@@ -9,6 +9,7 @@ import { mix } from "../../theme/mix";
 import { musicTokensFor } from "../../theme/music-tokens";
 import { WidgetFrame, HEADER_BAND_H } from "./WidgetFrame";
 import { usePlayback } from "../../music/playback";
+import { useCast } from "../../music/CastProvider";
 import { isContentHidden } from "../../music/explicit";
 
 /**
@@ -113,6 +114,7 @@ export function MusicWidget() {
   const router = useRouter();
   const { member, hydrated } = useAuth();
   const { current, playing, toggle, next, policy } = usePlayback();
+  const cast = useCast();
   const guest = hydrated && !member;
   const open = () => router.push("/music" as never);
 
@@ -123,6 +125,11 @@ export function MusicWidget() {
    */
   const hidden = !!current && isContentHidden(current, policy);
   const showTrack = !!current && !hidden;
+  // While casting, the card is a remote for the receiver: its transport reads
+  // the cast's clock and drives the session, never the tablet's local audio
+  // (the sink is load-only, so a "toggle" would restart the track).
+  const casting = cast.casting;
+  const transportPlaying = casting ? cast.playing : playing;
 
   /**
    * The header band — the frame's default band plus the Music badge. The
@@ -285,18 +292,22 @@ export function MusicWidget() {
             <Pressable
               testID="music-widget-play"
               accessibilityRole="button"
-              accessibilityLabel={playing ? "Pause" : "Play"}
+              accessibilityLabel={transportPlaying ? "Pause" : "Play"}
               accessibilityState={{ disabled: !showTrack }}
               disabled={!showTrack}
               hitSlop={12}
-              onPress={(event) => { event?.stopPropagation?.(); toggle(); }}
+              onPress={(event) => {
+                event?.stopPropagation?.();
+                if (casting) void (cast.playing ? cast.pause() : cast.play());
+                else toggle();
+              }}
               style={{
                 width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center",
                 backgroundColor: mix(tokens.label, "transparent", showTrack ? 8 : 4),
                 borderWidth: 1, borderColor: showTrack ? tokens.panelRim : mix(tokens.panelRim, "transparent", 40),
               }}
             >
-              <Text style={{ fontSize: 18, color: showTrack ? tokens.label : tokens.label3 }}>{playing ? "❚❚" : "▶"}</Text>
+              <Text style={{ fontSize: 18, color: showTrack ? tokens.label : tokens.label3 }}>{transportPlaying ? "❚❚" : "▶"}</Text>
             </Pressable>
             <Pressable
               testID="music-widget-next"
@@ -305,7 +316,11 @@ export function MusicWidget() {
               accessibilityState={{ disabled: !showTrack }}
               disabled={!showTrack}
               hitSlop={12}
-              onPress={(event) => { event?.stopPropagation?.(); void next(); }}
+              onPress={(event) => {
+                event?.stopPropagation?.();
+                if (casting) void cast.advance(false);
+                else void next();
+              }}
               style={{
                 width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center",
                 backgroundColor: mix(tokens.label, "transparent", showTrack ? 8 : 4),
