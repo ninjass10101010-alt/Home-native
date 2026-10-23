@@ -25,6 +25,8 @@ import { musicTokensFor, type MusicTokens } from "../theme/music-tokens";
 import { Modal } from "../ui/Modal";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { usePlayback } from "./playback";
+import { useCast } from "./CastProvider";
+import { CastControl } from "./CastControl";
 import { currentLineIndex, fetchLyrics, followOffset, FOLLOW_PAUSE_MS, type LyricLine } from "./lyrics";
 import { countUnrated, isContentHidden, isDeniedTerm, searchNote, visibleTracks } from "./explicit";
 import { totalDownloadBytes } from "./library";
@@ -64,6 +66,8 @@ export function MusicPlayer() {
     downloads, removeDownload, history, policy,
     denylist, addDenied, removeDenied,
   } = usePlayback();
+  const cast = useCast();
+  const casting = cast.casting;
 
   const [query, setQuery] = React.useState("");
   const [tracks, setTracks] = React.useState<MediaTrack[]>([]);
@@ -312,17 +316,22 @@ export function MusicPlayer() {
               one; Lyrics and Queue are behind the switcher until T4 restyles
               them.
             */}
-            <SegmentedControl
-              testID="music-mode"
-              accessibilityLabel="Now Playing view"
-              options={[
-                { id: "stage", label: "Now Playing" },
-                { id: "lyrics", label: "Lyrics" },
-                { id: "queue", label: "Queue" },
-              ]}
-              value={mode}
-              onChange={(id) => setMode(id as Mode)}
-            />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <SegmentedControl
+                  testID="music-mode"
+                  accessibilityLabel="Now Playing view"
+                  options={[
+                    { id: "stage", label: "Now Playing" },
+                    { id: "lyrics", label: "Lyrics" },
+                    { id: "queue", label: "Queue" },
+                  ]}
+                  value={mode}
+                  onChange={(id) => setMode(id as Mode)}
+                />
+              </View>
+              <CastControl track={visibleCurrent} />
+            </View>
 
             {mode === "stage" ? (
               <NowPlayingStage
@@ -330,16 +339,16 @@ export function MusicPlayer() {
                 tint={stageTint}
                 tokens={tokens}
                 reduceMotion={reduceMotion}
-                playing={playing}
-                position={position}
-                duration={duration}
+                playing={casting ? cast.playing : playing}
+                position={casting ? cast.position : position}
+                duration={casting ? (cast.duration ?? 0) : duration}
                 repeat={repeat}
                 shuffle={shuffle}
                 downloaded={downloaded}
-                onToggle={toggle}
-                onNext={() => void next()}
+                onToggle={casting ? (cast.playing ? cast.pause : cast.play) : toggle}
+                onNext={casting ? () => void cast.advance(false) : () => void next()}
                 onPrevious={() => void previous()}
-                onSeek={(seconds) => void seek(seconds)}
+                onSeek={casting ? (seconds) => void cast.seek(seconds) : (seconds) => void seek(seconds)}
                 onToggleShuffle={toggleShuffleMode}
                 onCycleRepeat={cycleRepeatMode}
                 onDownload={() => void downloadCurrent()}

@@ -100,6 +100,29 @@ jest.mock("../src/music/playback", () => {
   };
 });
 
+function idleCast() {
+  return {
+    state: "notConnected",
+    devices: [],
+    target: null,
+    casting: false,
+    playing: false,
+    position: 0,
+    duration: null,
+    busy: false,
+    error: null,
+    connect: jest.fn(async () => {}),
+    startCast: jest.fn(async () => {}),
+    disconnect: jest.fn(async () => {}),
+    play: jest.fn(async () => {}),
+    pause: jest.fn(async () => {}),
+    seek: jest.fn(async () => {}),
+    advance: jest.fn(async () => {}),
+  };
+}
+let mockCast: any = idleCast();
+jest.mock("../src/music/CastProvider", () => ({ useCast: () => mockCast }));
+
 const CLEAN_TRACK = {
   id: "clean11111", title: "Found", artist: "A", album: "", durationSeconds: 100,
   artworkUrl: null, explicit: false, source: "youtube_music",
@@ -231,6 +254,7 @@ beforeEach(() => {
   mockSearchOutcome = { tracks: [CLEAN_TRACK], explicitKnown: true };
   mockArtworkColors = { dominant: null, vibrant: null };
   mockLyrics = null;
+  mockCast = idleCast();
   jest.clearAllMocks();
 });
 
@@ -241,6 +265,54 @@ it("renders now playing and drives the transport", async () => {
   expect(mockToggle).toHaveBeenCalled();
   fireEvent.press(getByTestId("np-next"));
   expect(mockNext).toHaveBeenCalled();
+});
+
+it("while casting, the stage drives the receiver and reads its clock", async () => {
+  mockCast = {
+    ...idleCast(),
+    casting: true,
+    target: { id: "tv", name: "Living Room" },
+    playing: true,
+    position: 30,
+    duration: 120,
+  };
+  const { getByTestId, getByText } = render(<MusicPlayer />, { wrapper: wrap });
+  await waitFor(() => expect(getByTestId("np-title").props.children).toBe("Song"));
+  expect(getByText("0:30")).toBeTruthy();
+  expect(getByText("2:00")).toBeTruthy();
+  expect(getByTestId("np-play").props.accessibilityLabel).toBe("Pause");
+
+  fireEvent.press(getByTestId("np-play"));
+  expect(mockCast.pause).toHaveBeenCalledTimes(1);
+  expect(mockToggle).not.toHaveBeenCalled();
+
+  fireEvent.press(getByTestId("np-next"));
+  expect(mockCast.advance).toHaveBeenCalledWith(false);
+  expect(mockNext).not.toHaveBeenCalled();
+
+  fireEvent(getByTestId("np-seek"), "layout", {
+    nativeEvent: { layout: { width: 300, height: 64, x: 0, y: 0 } },
+  });
+  fireEvent(getByTestId("np-seek"), "press", { nativeEvent: { locationX: 150 } });
+  expect(mockCast.seek).toHaveBeenCalledWith(60);
+  expect(mockSeek).not.toHaveBeenCalled();
+});
+
+it("when casting is paused, the play glyph offers Play", async () => {
+  mockCast = {
+    ...idleCast(),
+    casting: true,
+    target: { id: "tv", name: "Living Room" },
+    playing: false,
+    position: 30,
+    duration: 120,
+  };
+  const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+  await waitFor(() => expect(getByTestId("np-title").props.children).toBe("Song"));
+  expect(getByTestId("np-play").props.accessibilityLabel).toBe("Play");
+  fireEvent.press(getByTestId("np-play"));
+  expect(mockCast.play).toHaveBeenCalledTimes(1);
+  expect(mockCast.pause).not.toHaveBeenCalled();
 });
 
 /**

@@ -13,6 +13,25 @@ let mockPolicy: any = { isParent: false, filterOn: true, denied: [] };
 jest.mock("../src/music/playback", () => ({
   usePlayback: () => ({ ...mockState, policy: mockPolicy, toggle: mockToggle, next: jest.fn() }),
 }));
+let mockCastState: any = {
+  state: "notConnected",
+  devices: [],
+  target: null,
+  casting: false,
+  playing: false,
+  position: 0,
+  duration: null,
+  busy: false,
+  error: null,
+  connect: jest.fn(async () => {}),
+  startCast: jest.fn(async () => {}),
+  disconnect: jest.fn(async () => {}),
+  play: jest.fn(async () => {}),
+  pause: jest.fn(async () => {}),
+  seek: jest.fn(async () => {}),
+  advance: jest.fn(async () => {}),
+};
+jest.mock("../src/music/CastProvider", () => ({ useCast: () => mockCastState }));
 let mockPath = "/";
 jest.mock("expo-router", () => ({ usePathname: () => mockPath, useRouter: () => ({ push: jest.fn() }) }));
 
@@ -35,6 +54,7 @@ beforeEach(() => {
     playing: false,
   };
   mockPolicy = { isParent: false, filterOn: true, denied: [] };
+  mockCastState = { ...mockCastState, casting: false, target: null };
   jest.clearAllMocks();
 });
 
@@ -46,6 +66,17 @@ it("renders on a normal route and hides on the player route", () => {
   mockPath = "/music";
   const second = render(<MiniPlayer />, { wrapper: wrap });
   expect(second.queryByTestId("mini-player")).toBeNull();
+});
+
+it("marks the bar as casting only while a cast is live", () => {
+  const idle = render(<MiniPlayer />, { wrapper: wrap });
+  expect(idle.queryByTestId("mini-player-cast")).toBeNull();
+  idle.unmount();
+
+  mockCastState = { ...mockCastState, casting: true, target: { id: "tv", name: "Living Room" } };
+  const live = render(<MiniPlayer />, { wrapper: wrap });
+  expect(live.getByTestId("mini-player-cast")).toBeTruthy();
+  expect(live.getByText("Casting")).toBeTruthy();
 });
 
 it("paints the current track's title and artwork", () => {

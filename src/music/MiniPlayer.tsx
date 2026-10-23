@@ -6,6 +6,7 @@ import { TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
 import { musicTokensFor } from "../theme/music-tokens";
 import { usePlayback } from "./playback";
+import { useCast } from "./CastProvider";
 import { isContentHidden } from "./explicit";
 
 /**
@@ -34,6 +35,7 @@ export function MiniPlayer() {
   const pathname = usePathname();
   const router = useRouter();
   const { current, playing, toggle, next, policy } = usePlayback();
+  const cast = useCast();
 
   if (!current) return null;
   if (pathname === "/music" || pathname === "/screensaver") return null;
@@ -114,7 +116,12 @@ export function MiniPlayer() {
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text testID="mini-player-title" numberOfLines={1} style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>{title}</Text>
-              <Text testID="mini-player-artist" numberOfLines={1} style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize }}>{artist}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text testID="mini-player-artist" numberOfLines={1} style={{ flexShrink: 1, color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize }}>{artist}</Text>
+                {cast.casting ? (
+                  <Text testID="mini-player-cast" style={{ color: tokens.label2, fontSize: TYPOGRAPHY.label.fontSize }}>Casting</Text>
+                ) : null}
+              </View>
             </View>
           </Pressable>
           <Pressable testID="mini-player-play" accessibilityRole="button" accessibilityLabel={playing ? "Pause" : "Play"} accessibilityState={{ disabled: hidden }} disabled={hidden} hitSlop={10} onPress={toggle} style={transport}>
