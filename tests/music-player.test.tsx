@@ -14,6 +14,7 @@ jest.mock("expo-secure-store", () => ({
 const mockPlay = jest.fn(async () => {});
 const mockToggle = jest.fn();
 const mockNext = jest.fn(async () => {});
+const mockPrevious = jest.fn(async () => {});
 const mockSeek = jest.fn(async () => {});
 const mockRemoveDownload = jest.fn();
 /** The queue's own affordances (the provider's remove/reorder). */
@@ -90,7 +91,7 @@ jest.mock("../src/music/playback", () => {
         },
         // ...while the LIST itself keeps the terms as the parent typed them.
         denylist: mockDenied.map((term, index) => ({ term, addedAt: index })),
-        play: mockPlay, playQueueAt: jest.fn(), toggle: mockToggle, next: mockNext, previous: jest.fn(),
+        play: mockPlay, playQueueAt: jest.fn(), toggle: mockToggle, next: mockNext, previous: mockPrevious,
         seek: mockSeek, setRepeat: jest.fn(), cycleRepeatMode: mockCycleRepeat, toggleShuffleMode: mockToggleShuffle,
         addToQueue: jest.fn(), removeFromQueue: mockRemoveFromQueue, moveQueueItem: mockMoveQueueItem,
         downloadCurrent: jest.fn(), removeDownload: mockRemoveDownload, setExplicitFilter: jest.fn(),
@@ -111,13 +112,14 @@ function idleCast() {
     duration: null,
     busy: false,
     error: null,
-    connect: jest.fn(async () => {}),
+    connect: jest.fn(async () => true),
     startCast: jest.fn(async () => {}),
     disconnect: jest.fn(async () => {}),
     play: jest.fn(async () => {}),
     pause: jest.fn(async () => {}),
     seek: jest.fn(async () => {}),
     advance: jest.fn(async () => {}),
+    previous: jest.fn(async () => {}),
   };
 }
 let mockCast: any = idleCast();
@@ -265,6 +267,8 @@ it("renders now playing and drives the transport", async () => {
   expect(mockToggle).toHaveBeenCalled();
   fireEvent.press(getByTestId("np-next"));
   expect(mockNext).toHaveBeenCalled();
+  fireEvent.press(getByTestId("np-prev"));
+  expect(mockPrevious).toHaveBeenCalled();
 });
 
 it("while casting, the stage drives the receiver and reads its clock", async () => {
@@ -290,12 +294,23 @@ it("while casting, the stage drives the receiver and reads its clock", async () 
   expect(mockCast.advance).toHaveBeenCalledWith(false);
   expect(mockNext).not.toHaveBeenCalled();
 
+  fireEvent.press(getByTestId("np-prev"));
+  expect(mockCast.previous).toHaveBeenCalledTimes(1);
+  expect(mockPrevious).not.toHaveBeenCalled();
+
   fireEvent(getByTestId("np-seek"), "layout", {
     nativeEvent: { layout: { width: 300, height: 64, x: 0, y: 0 } },
   });
   fireEvent(getByTestId("np-seek"), "press", { nativeEvent: { locationX: 150 } });
   expect(mockCast.seek).toHaveBeenCalledWith(60);
   expect(mockSeek).not.toHaveBeenCalled();
+});
+
+it("does not render the cast control when there is no current track", async () => {
+  mockCurrent = null;
+  const { getByTestId, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+  await waitFor(() => expect(getByTestId("music-search-input")).toBeTruthy());
+  expect(queryByTestId("cast-open")).toBeNull();
 });
 
 it("when casting is paused, the play glyph offers Play", async () => {

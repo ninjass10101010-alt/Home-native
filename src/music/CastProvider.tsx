@@ -31,13 +31,14 @@ export interface CastValue {
   duration: number | null;
   busy: boolean;
   error: string | null;
-  connect: (id: string) => Promise<void>;
+  connect: (id: string) => Promise<boolean>;
   startCast: (track: MediaTrack) => Promise<void>;
   disconnect: () => Promise<void>;
   play: () => Promise<void>;
   pause: () => Promise<void>;
   seek: (seconds: number) => Promise<void>;
   advance: (auto: boolean) => Promise<void>;
+  previous: () => Promise<void>;
 }
 
 interface CastClient {
@@ -63,6 +64,7 @@ type CastMediaStatus = { mediaSessionId?: number | null };
 export function CastProvider({ children }: { children: React.ReactNode }) {
   const playback = usePlayback();
   const advanceForCast = playback.advanceForCast;
+  const previousForCast = playback.previousForCast;
   const rawState = useCastState();
   const deviceList = useDevices();
   const devices = React.useMemo(() => toTargets(deviceList), [deviceList]);
@@ -111,9 +113,9 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   }, [session]);
 
   const connect = React.useCallback(
-    async (id: string) => {
+    async (id: string): Promise<boolean> => {
       const chosen = devices.find((device) => device.id === id) ?? null;
-      if (!chosen) return;
+      if (!chosen) return false;
       setBusy(true);
       setError(null);
       try {
@@ -126,12 +128,14 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         targetRef.current = chosen;
         setTarget(chosen);
         if (switched) setTrack(null);
+        return true;
       } catch {
         clientRef.current = null;
         targetRef.current = null;
         setTarget(null);
         setTrack(null);
         setError(castErrorCopy(chosen.name));
+        return false;
       } finally {
         setBusy(false);
       }
@@ -247,6 +251,24 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   );
 
   /**
+   * The receiver's previous step.
+   *
+   * Past three seconds it restarts the current track on the receiver, exactly
+   * like the local transport. Near the start it walks the queue backwards
+   * through the SAME visibility gate and loads the previous visible track —
+   * local audio is never touched.
+   */
+  const previous = React.useCallback(async () => {
+    if ((position ?? 0) > 3) {
+      await seek(0);
+      return;
+    }
+    const next = previousForCast();
+    if (!next) return;
+    await startCast(next);
+  }, [position, previousForCast, seek, startCast]);
+
+  /**
    * The one transport's queue step: move the queue through the SAME
    * visibility gate as local playback, then load the chosen track on the
    * receiver with a FRESH resolve. Local audio is never touched here.
@@ -304,6 +326,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       pause,
       seek,
       advance,
+      previous,
     }),
     [
       rawState,
@@ -321,6 +344,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       pause,
       seek,
       advance,
+      previous,
     ]
   );
 

@@ -124,6 +124,12 @@ const callAdvance = async (auto: boolean): Promise<MediaTrack | null> => {
   return result.track;
 };
 
+const callPrevious = async (): Promise<MediaTrack | null> => {
+  const result: { track: MediaTrack | null } = { track: null };
+  await act(async () => { result.track = api.previousForCast(); });
+  return result.track;
+};
+
 beforeEach(async () => {
   await AsyncStorage.clear();
   mockMember = KID;
@@ -200,6 +206,45 @@ it("an empty queue returns null without touching the player", async () => {
 
   expect(moved).toBeNull();
   expect(api.index).toBe(-1);
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockPause).not.toHaveBeenCalled();
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockSeek).not.toHaveBeenCalled();
+});
+
+it("previousForCast skips a hidden track and never calls the player", async () => {
+  const { getByTestId } = render(tree());
+  await act(async () => { getByTestId("play-triple").props.onPress(); });
+  await waitFor(() => expect(getByTestId("title").props.children).toBe("First"));
+  middle.explicit = true;
+  await callAdvance(false);
+  expect(api.index).toBe(2);
+  clearPlayer();
+
+  const moved = await callPrevious();
+
+  expect(moved?.id).toBe("visible-1");
+  expect(api.index).toBe(0);
+  expect(getByTestId("index").props.children).toBe("0");
+  expect(getByTestId("title").props.children).toBe("First");
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockPause).not.toHaveBeenCalled();
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockSeek).not.toHaveBeenCalled();
+});
+
+it("previousForCast clamps to the current track at the start of a repeat-off queue", async () => {
+  const { getByTestId } = render(tree());
+  await act(async () => { getByTestId("play-triple").props.onPress(); });
+  await waitFor(() => expect(getByTestId("title").props.children).toBe("First"));
+  clearPlayer();
+
+  const moved = await callPrevious();
+
+  expect(moved?.id).toBe("visible-1");
+  expect(api.index).toBe(0);
+  expect(getByTestId("index").props.children).toBe("0");
+  expect(getByTestId("title").props.children).toBe("First");
   expect(mockPlay).not.toHaveBeenCalled();
   expect(mockPause).not.toHaveBeenCalled();
   expect(mockReplace).not.toHaveBeenCalled();

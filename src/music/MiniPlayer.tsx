@@ -50,6 +50,10 @@ export function MiniPlayer() {
   const hidden = isContentHidden(current, policy);
   const title = hidden ? "Nothing playing" : current.title;
   const artist = hidden ? "Search YouTube Music from the player" : current.artist;
+  // While casting, the bar is a remote for the receiver: its transport reads
+  // the cast's clock and drives the session, never the tablet's local audio.
+  const casting = cast.casting;
+  const transportPlaying = casting ? cast.playing : playing;
 
   /**
    * The transport disc — a ghost on the panel rim.
@@ -124,10 +128,28 @@ export function MiniPlayer() {
               </View>
             </View>
           </Pressable>
-          <Pressable testID="mini-player-play" accessibilityRole="button" accessibilityLabel={playing ? "Pause" : "Play"} accessibilityState={{ disabled: hidden }} disabled={hidden} hitSlop={10} onPress={toggle} style={transport}>
-            <Text style={{ color: hidden ? tokens.label3 : tokens.label, fontSize: 20 }}>{playing ? "❚❚" : "▶"}</Text>
+          <Pressable
+            testID="mini-player-play"
+            accessibilityRole="button"
+            accessibilityLabel={transportPlaying ? "Pause" : "Play"}
+            accessibilityState={{ disabled: hidden }}
+            disabled={hidden}
+            hitSlop={10}
+            onPress={casting ? () => void (cast.playing ? cast.pause() : cast.play()) : toggle}
+            style={transport}
+          >
+            <Text style={{ color: hidden ? tokens.label3 : tokens.label, fontSize: 20 }}>{transportPlaying ? "❚❚" : "▶"}</Text>
           </Pressable>
-          <Pressable testID="mini-player-next" accessibilityRole="button" accessibilityLabel="Next track" accessibilityState={{ disabled: hidden }} disabled={hidden} hitSlop={10} onPress={() => void next()} style={transport}>
+          <Pressable
+            testID="mini-player-next"
+            accessibilityRole="button"
+            accessibilityLabel="Next track"
+            accessibilityState={{ disabled: hidden }}
+            disabled={hidden}
+            hitSlop={10}
+            onPress={casting ? () => void cast.advance(false) : () => void next()}
+            style={transport}
+          >
             <Text style={{ color: hidden ? tokens.label3 : tokens.label, fontSize: 18 }}>⏭</Text>
           </Pressable>
         </View>

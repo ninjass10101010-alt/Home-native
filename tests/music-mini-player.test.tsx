@@ -3,6 +3,7 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
 const mockToggle = jest.fn();
+const mockNext = jest.fn(async () => {});
 /** The track the provider is on (null = nothing playing). */
 let mockState: any = {
   current: { id: "abc12345678", title: "Song", artist: "Artist", artworkUrl: null, explicit: false },
@@ -11,33 +12,37 @@ let mockState: any = {
 /** The role-aware content policy the viewer is under. */
 let mockPolicy: any = { isParent: false, filterOn: true, denied: [] };
 jest.mock("../src/music/playback", () => ({
-  usePlayback: () => ({ ...mockState, policy: mockPolicy, toggle: mockToggle, next: jest.fn() }),
+  usePlayback: () => ({ ...mockState, policy: mockPolicy, toggle: mockToggle, next: mockNext }),
 }));
-let mockCastState: any = {
-  state: "notConnected",
-  devices: [],
-  target: null,
-  casting: false,
-  playing: false,
-  position: 0,
-  duration: null,
-  busy: false,
-  error: null,
-  connect: jest.fn(async () => {}),
-  startCast: jest.fn(async () => {}),
-  disconnect: jest.fn(async () => {}),
-  play: jest.fn(async () => {}),
-  pause: jest.fn(async () => {}),
-  seek: jest.fn(async () => {}),
-  advance: jest.fn(async () => {}),
-};
+function idleCast() {
+  return {
+    state: "notConnected",
+    devices: [],
+    target: null,
+    casting: false,
+    playing: false,
+    position: 0,
+    duration: null,
+    busy: false,
+    error: null,
+    connect: jest.fn(async () => true),
+    startCast: jest.fn(async () => {}),
+    disconnect: jest.fn(async () => {}),
+    play: jest.fn(async () => {}),
+    pause: jest.fn(async () => {}),
+    seek: jest.fn(async () => {}),
+    advance: jest.fn(async () => {}),
+    previous: jest.fn(async () => {}),
+  };
+}
+let mockCastState: any = idleCast();
 jest.mock("../src/music/CastProvider", () => ({ useCast: () => mockCastState }));
 let mockPath = "/";
 jest.mock("expo-router", () => ({ usePathname: () => mockPath, useRouter: () => ({ push: jest.fn() }) }));
 
 import React from "react";
 import { StyleSheet } from "react-native";
-import { render, renderHook } from "@testing-library/react-native";
+import { fireEvent, render, renderHook } from "@testing-library/react-native";
 import { MiniPlayer } from "../src/music/MiniPlayer";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
 import { musicTokensFor } from "../src/theme/music-tokens";
@@ -54,7 +59,7 @@ beforeEach(() => {
     playing: false,
   };
   mockPolicy = { isParent: false, filterOn: true, denied: [] };
-  mockCastState = { ...mockCastState, casting: false, target: null };
+  mockCastState = idleCast();
   jest.clearAllMocks();
 });
 
@@ -77,6 +82,66 @@ it("marks the bar as casting only while a cast is live", () => {
   const live = render(<MiniPlayer />, { wrapper: wrap });
   expect(live.getByTestId("mini-player-cast")).toBeTruthy();
   expect(live.getByText("Casting")).toBeTruthy();
+});
+
+it("routes the transport to the receiver while casting", () => {
+  const castPause = jest.fn(async () => {});
+  const castAdvance = jest.fn(async () => {});
+  mockCastState = {
+    ...idleCast(),
+    casting: true,
+    target: { id: "tv", name: "Living Room" },
+    playing: true,
+    pause: castPause,
+    advance: castAdvance,
+  };
+  const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+
+  expect(getByTestId("mini-player-play").props.accessibilityLabel).toBe("Pause");
+  fireEvent.press(getByTestId("mini-player-play"));
+  expect(castPause).toHaveBeenCalledTimes(1);
+  expect(mockToggle).not.toHaveBeenCalled();
+
+  fireEvent.press(getByTestId("mini-player-next"));
+  expect(castAdvance).toHaveBeenCalledWith(false);
+  expect(mockNext).not.toHaveBeenCalled();
+});
+
+it("starts the receiver when a paused cast is resumed", () => {
+  const castPlay = jest.fn(async () => {});
+  mockCastState = {
+    ...idleCast(),
+    casting: true,
+    target: { id: "tv", name: "Living Room" },
+    playing: false,
+    play: castPlay,
+  };
+  const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+
+  expect(getByTestId("mini-player-play").props.accessibilityLabel).toBe("Play");
+  fireEvent.press(getByTestId("mini-player-play"));
+  expect(castPlay).toHaveBeenCalledTimes(1);
+  expect(mockToggle).not.toHaveBeenCalled();
+});
+
+it("keeps the local transport while not casting", () => {
+  const castPause = jest.fn(async () => {});
+  const castAdvance = jest.fn(async () => {});
+  mockCastState = {
+    ...idleCast(),
+    playing: true,
+    pause: castPause,
+    advance: castAdvance,
+  };
+  const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+
+  fireEvent.press(getByTestId("mini-player-play"));
+  expect(mockToggle).toHaveBeenCalledTimes(1);
+  expect(castPause).not.toHaveBeenCalled();
+
+  fireEvent.press(getByTestId("mini-player-next"));
+  expect(mockNext).toHaveBeenCalledTimes(1);
+  expect(castAdvance).not.toHaveBeenCalled();
 });
 
 it("paints the current track's title and artwork", () => {

@@ -347,7 +347,7 @@ export function MusicPlayer() {
                 downloaded={downloaded}
                 onToggle={casting ? (cast.playing ? cast.pause : cast.play) : toggle}
                 onNext={casting ? () => void cast.advance(false) : () => void next()}
-                onPrevious={() => void previous()}
+                onPrevious={casting ? () => void cast.previous() : () => void previous()}
                 onSeek={casting ? (seconds) => void cast.seek(seconds) : (seconds) => void seek(seconds)}
                 onToggleShuffle={toggleShuffleMode}
                 onCycleRepeat={cycleRepeatMode}

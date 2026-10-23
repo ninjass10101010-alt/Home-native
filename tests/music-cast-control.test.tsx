@@ -3,7 +3,7 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
 
-const mockConnect = jest.fn(async (_id: string) => {});
+const mockConnect = jest.fn(async (_id: string) => true);
 const mockStartCast = jest.fn(async (_track: any) => {});
 const mockDisconnect = jest.fn(async () => {});
 
@@ -29,6 +29,7 @@ function idleCast() {
     pause: jest.fn(async () => {}),
     seek: jest.fn(async () => {}),
     advance: jest.fn(async () => {}),
+    previous: jest.fn(async () => {}),
   };
 }
 
@@ -76,6 +77,72 @@ it("the sheet lists devices and picking one connects then casts the current trac
   expect(mockConnect.mock.invocationCallOrder[0]).toBeLessThan(
     mockStartCast.mock.invocationCallOrder[0]
   );
+});
+
+it("a failed connect leaves its error visible and never starts a cast", async () => {
+  mockConnect.mockImplementationOnce(async () => {
+    mockCast = { ...mockCast, error: "Couldn't cast to Living Room." };
+    return false;
+  });
+  const { getByTestId, getByText, rerender } = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(getByTestId("cast-open"));
+
+  await act(async () => {
+    fireEvent.press(getByTestId("cast-device-tv"));
+  });
+  rerender(<CastControl track={track} />);
+
+  expect(mockConnect).toHaveBeenCalledWith("tv");
+  expect(mockStartCast).not.toHaveBeenCalled();
+  expect(getByTestId("cast-error")).toBeTruthy();
+  expect(getByText("Couldn't cast to Living Room.")).toBeTruthy();
+});
+
+it("a connected but idle session keeps a visible Stop and can be stopped", async () => {
+  mockCast = {
+    ...idleCast(),
+    target: { id: "tv", name: "Living Room" },
+    error: "Couldn't cast to Living Room.",
+  };
+  const { getByTestId, getByText } = render(<CastControl track={track} />, { wrapper: wrap });
+  expect(getByText("Cast")).toBeTruthy();
+
+  fireEvent.press(getByTestId("cast-open"));
+  expect(getByText("Connected")).toBeTruthy();
+  expect(getByTestId("cast-stop")).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.press(getByTestId("cast-stop"));
+  });
+  expect(mockDisconnect).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the Stop affordance when connect succeeds but the load fails", async () => {
+  mockConnect.mockImplementationOnce(async () => {
+    mockCast = { ...mockCast, target: { id: "tv", name: "Living Room" } };
+    return true;
+  });
+  mockStartCast.mockImplementationOnce(async () => {
+    mockCast = { ...mockCast, error: "Couldn't cast to Living Room." };
+  });
+  const { getByTestId, getByText, rerender } = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(getByTestId("cast-open"));
+
+  await act(async () => {
+    fireEvent.press(getByTestId("cast-device-tv"));
+  });
+  rerender(<CastControl track={track} />);
+
+  expect(mockConnect).toHaveBeenCalledWith("tv");
+  expect(mockStartCast).toHaveBeenCalledWith(track);
+  expect(getByTestId("cast-error")).toBeTruthy();
+  expect(getByText("Connected")).toBeTruthy();
+  expect(getByTestId("cast-stop")).toBeTruthy();
+
+  await act(async () => {
+    fireEvent.press(getByTestId("cast-stop"));
+  });
+  expect(mockDisconnect).toHaveBeenCalledTimes(1);
 });
 
 it("no devices is an honest empty state, not a spinner forever", () => {
@@ -134,6 +201,19 @@ it("propagates busy by disabling every action in the sheet", () => {
   expect(getByTestId("cast-device-tv").props.accessibilityState?.disabled).toBe(true);
   expect(getByTestId("cast-device-speaker").props.accessibilityState?.disabled).toBe(true);
   expect(getByTestId("cast-stop").props.accessibilityState?.disabled).toBe(true);
+});
+
+it("pressing a disabled (busy) device row makes no call", async () => {
+  mockCast = { ...idleCast(), busy: true };
+  const { getByTestId } = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(getByTestId("cast-open"));
+
+  await act(async () => {
+    fireEvent.press(getByTestId("cast-device-tv"));
+  });
+
+  expect(mockConnect).not.toHaveBeenCalled();
+  expect(mockStartCast).not.toHaveBeenCalled();
 });
 
 it("the capsule is a 64dp wall-floor control on the Liquid tokens", () => {

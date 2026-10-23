@@ -12,6 +12,7 @@ const mockClientSeek = jest.fn();
 const mockResolveAudio = jest.fn();
 const mockToggle = jest.fn();
 const mockAdvanceForCast = jest.fn();
+const mockPreviousForCast = jest.fn();
 
 const device = {
   deviceId: "tv",
@@ -26,6 +27,7 @@ const device = {
 let mockDevices: any[] = [device];
 let mockSession: any = null;
 let mockStatus: any = null;
+let mockPosition = 0;
 let mockPlayback: any = {
   current: null,
   queue: [],
@@ -33,6 +35,7 @@ let mockPlayback: any = {
   playing: true,
   toggle: mockToggle,
   advanceForCast: mockAdvanceForCast,
+  previousForCast: mockPreviousForCast,
 };
 
 jest.mock("react-native-google-cast", () => ({
@@ -48,7 +51,7 @@ jest.mock("react-native-google-cast", () => ({
   useCastState: () => "notConnected",
   useDevices: () => mockDevices,
   useCastSession: () => mockSession,
-  useStreamPosition: () => 0,
+  useStreamPosition: () => mockPosition,
   useMediaStatus: () => mockStatus,
 }));
 
@@ -94,6 +97,7 @@ beforeEach(() => {
   mockDevices = [device];
   mockSession = null;
   mockStatus = null;
+  mockPosition = 0;
   mockPlayback = {
     current: null,
     queue: [],
@@ -101,6 +105,7 @@ beforeEach(() => {
     playing: true,
     toggle: mockToggle,
     advanceForCast: mockAdvanceForCast,
+    previousForCast: mockPreviousForCast,
   };
 });
 
@@ -185,7 +190,7 @@ test("a hidden track is refused before it is resolved or loaded", async () => {
   expect(api.error).toBe("This track isn't available to cast.");
 });
 
-test("a failed session start surfaces honest copy and never loads", async () => {
+test("a failed session start surfaces honest copy, reports false and never loads", async () => {
   mockStartSession.mockRejectedValue(new Error("nope"));
   let api!: ReturnType<typeof useCast>;
   render(
@@ -194,9 +199,25 @@ test("a failed session start surfaces honest copy and never loads", async () => 
     </CastProvider>
   );
   await act(async () => {});
-  await act(async () => { await api.connect("tv"); });
+  let connected = true;
+  await act(async () => { connected = await api.connect("tv"); });
+  expect(connected).toBe(false);
   expect(mockLoadMedia).not.toHaveBeenCalled();
   expect(api.error).toBe("Couldn't cast to Living Room.");
+});
+
+test("an unknown device reports false without opening a session", async () => {
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  let connected = true;
+  await act(async () => { connected = await api.connect("missing"); });
+  expect(connected).toBe(false);
+  expect(mockStartSession).not.toHaveBeenCalled();
 });
 
 test("never loads without a session and asks for a device", async () => {
@@ -235,6 +256,48 @@ test("the transport drives the cast client and disconnect ends the session", asy
   await act(async () => { await api.disconnect(); });
   expect(mockEndCurrentSession).toHaveBeenCalledWith(true);
   expect(api.target).toBeNull();
+});
+
+test("previous seeks the receiver to the start when it is past three seconds", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockPosition = 5;
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); await api.previous(); });
+  expect(mockClientSeek).toHaveBeenCalledWith({ position: 0 });
+  expect(mockPreviousForCast).not.toHaveBeenCalled();
+  expect(mockLoadMedia).not.toHaveBeenCalled();
+});
+
+test("previous loads the previous visible track near the start", async () => {
+  const previousTrack: MediaTrack = { ...track, id: "v0", title: "Previous" };
+  mockStartSession.mockResolvedValue(true);
+  mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
+  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockPreviousForCast.mockReturnValue(previousTrack);
+  mockPosition = 2;
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); await api.previous(); });
+  expect(mockPreviousForCast).toHaveBeenCalledTimes(1);
+  expect(mockClientSeek).not.toHaveBeenCalled();
+  expect(mockResolveAudio).toHaveBeenCalledWith("v0");
+  expect(mockLoadMedia).toHaveBeenCalledWith(
+    expect.objectContaining({
+      mediaInfo: expect.objectContaining({ contentId: "v0" }),
+    })
+  );
 });
 
 test("a policy change that hides the cast track stops the session", async () => {

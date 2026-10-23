@@ -26,8 +26,11 @@ export function CastControl({ track }: CastControlProps) {
     if (busy) return;
     setWorking(true);
     try {
-      await cast.connect(id);
-      if (track) await cast.startCast(track);
+      const connected = await cast.connect(id);
+      if (connected && track) await cast.startCast(track);
+    } catch {
+      // The provider surfaces its own failure copy; never let a rejecting
+      // provider method escape through `void`.
     } finally {
       setWorking(false);
     }
@@ -38,6 +41,9 @@ export function CastControl({ track }: CastControlProps) {
     setWorking(true);
     try {
       await cast.disconnect();
+    } catch {
+      // The provider surfaces its own failure copy; never let a rejecting
+      // provider method escape through `void`.
     } finally {
       setWorking(false);
     }
@@ -114,7 +120,7 @@ export function CastControl({ track }: CastControlProps) {
             </Text>
           ) : (
             cast.devices.map((device) => {
-              const connected = cast.casting && cast.target?.id === device.id;
+              const connected = cast.target?.id === device.id;
               return (
                 <Pressable
                   key={device.id}
@@ -152,7 +158,7 @@ export function CastControl({ track }: CastControlProps) {
             })
           )}
 
-          {cast.casting ? (
+          {cast.target !== null ? (
             <Pressable
               testID="cast-stop"
               accessibilityRole="button"

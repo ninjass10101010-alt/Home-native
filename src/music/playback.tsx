@@ -95,6 +95,13 @@ export interface PlaybackValue {
    * the tablet.
    */
   advanceForCast: (auto: boolean) => MediaTrack | null;
+  /**
+   * The cast transport's backward queue step.
+   *
+   * Mirrors `previous`'s queue semantics through the SAME visibility gate,
+   * returns the track the receiver should load, and NEVER touches expo-audio.
+   */
+  previousForCast: () => MediaTrack | null;
   previous: () => Promise<void>;
   seek: (seconds: number) => Promise<void>;
   setRepeat: (mode: RepeatMode) => void;
@@ -452,6 +459,23 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     [policy, queue]
   );
 
+  /**
+   * The cast-safe backward step: choose the previous visible track and move
+   * the queue's index, but NEVER start local audio. The caller (CastProvider)
+   * loads the returned track on the receiver.
+   */
+  const previousForCast = React.useCallback((): MediaTrack | null => {
+    if (queue.tracks.length === 0) return null;
+    const index = previousIndex(queue);
+    if (index < 0) return null;
+    const target = findVisibleIndex(queue.tracks, index, policy, -1, queue.repeat === "all");
+    if (target < 0) return null;
+    const track = queue.tracks[target];
+    if (!track) return null;
+    setQueue((q) => ({ ...q, index: target }));
+    return track;
+  }, [policy, queue]);
+
   const previous = React.useCallback(async () => {
     if (position > 3) {
       await player.seekTo(0);
@@ -697,6 +721,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       toggle,
       next,
       advanceForCast,
+      previousForCast,
       previous,
       seek,
       setRepeat,
@@ -714,6 +739,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     [
       addDenied, addToQueue, advanceForCast, current, cycleRepeatMode, downloadCurrent, duration,
       error, denylist, moveQueueItem, next, play, playQueueAt, playing, policy, position, previous,
+      previousForCast,
       queue.index,
       queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,
       setExplicitFilter, setRepeat, settings, status?.isBuffering, toggle, toggleShuffleMode,
