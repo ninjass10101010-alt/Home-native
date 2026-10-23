@@ -49,14 +49,29 @@ interface CastClient {
 
 const CastContextValue = React.createContext<CastValue | null>(null);
 
+/**
+ * The receiver's media-session id.
+ *
+ * react-native-google-cast 4.9.1 does not include it in its published
+ * `MediaStatus` type (the Android bridge omits it), but it is the field that
+ * makes a completion unique: a repeat-one reload creates a NEW session for
+ * the SAME track. It is read defensively and the guard falls back to the
+ * track id when the receiver does not report it.
+ */
+type CastMediaStatus = { mediaSessionId?: number | null };
+
 export function CastProvider({ children }: { children: React.ReactNode }) {
   const playback = usePlayback();
+  const advanceForCast = playback.advanceForCast;
   const rawState = useCastState();
   const deviceList = useDevices();
   const devices = React.useMemo(() => toTargets(deviceList), [deviceList]);
   const session = useCastSession();
   const position = useStreamPosition();
   const status = useMediaStatus();
+  const playerState = status?.playerState ?? null;
+  const idleReason = status?.idleReason ?? null;
+  const mediaSessionId = (status as CastMediaStatus | null)?.mediaSessionId ?? null;
   const playbackPolicy = playback.policy;
   const playbackPlaying = playback.playing;
   const togglePlayback = playback.toggle;
@@ -65,8 +80,23 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const [track, setTrack] = React.useState<MediaTrack | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const castTrackId = track?.id ?? null;
   const clientRef = React.useRef<CastClient | null>(null);
   const targetRef = React.useRef<CastTarget | null>(null);
+  /**
+   * The completion the auto-advance has already handled.
+   *
+   * A receiver keeps reporting IDLE/FINISHED for the same completion until it
+   * loads the next item, and React can re-run the effect for other reasons —
+   * so the effect remembers the session + track it already advanced from.
+   */
+  const lastFinishedRef = React.useRef<string | null>(null);
+  /** The session the next successful load belongs to (read by `startCast`). */
+  const mediaSessionIdRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    mediaSessionIdRef.current = mediaSessionId;
+  }, [mediaSessionId]);
 
   React.useEffect(() => {
     if (session) {
@@ -125,6 +155,11 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       try {
         const resolved = await resolveAudio(next.id);
         await client.loadMedia({ mediaInfo: castMediaInfo(next, resolved), autoplay: true });
+        // A load re-arms the completion guard: the finish that started this
+        // advance is done, and the receiver's NEXT finish (even of the same
+        // track, repeat one) is a new completion. Keyed to the track now
+        // loading so the stale IDLE/FINISHED status cannot fire twice.
+        lastFinishedRef.current = `${mediaSessionIdRef.current ?? "none"}:${next.id}`;
         setTrack(next);
         if (playbackPlaying) togglePlayback();
       } catch {
@@ -211,9 +246,45 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     [guarded]
   );
 
-  const advance = React.useCallback(async () => {}, []);
+  /**
+   * The one transport's queue step: move the queue through the SAME
+   * visibility gate as local playback, then load the chosen track on the
+   * receiver with a FRESH resolve. Local audio is never touched here.
+   */
+  const advance = React.useCallback(
+    async (auto: boolean) => {
+      const next = advanceForCast(auto);
+      if (!next) return;
+      await startCast(next);
+    },
+    [advanceForCast, startCast]
+  );
 
   const playing = status?.playerState === "playing";
+
+  /**
+   * A receiver that finishes a track advances the queue ONCE.
+   *
+   * The guard is keyed by the media session + track, so the repeated
+   * IDLE/FINISHED status the receiver keeps sending for the same completion
+   * cannot roll the queue twice. A successful load re-arms it, so repeat-one
+   * can finish the same track again. The deps are primitives: a position tick
+   * (`useStreamPosition`) never re-runs this effect.
+   */
+  React.useEffect(() => {
+    const action = castStatusAction({ playerState, idleReason });
+    if (action === "none") {
+      // The receiver has moved on (loading/playing/paused): the next finish
+      // is a new completion, even when the same track repeats.
+      lastFinishedRef.current = null;
+      return;
+    }
+    if (action !== "advance" || !castTrackId) return;
+    const key = `${mediaSessionId ?? "none"}:${castTrackId}`;
+    if (lastFinishedRef.current === key) return;
+    lastFinishedRef.current = key;
+    void advance(true);
+  }, [advance, castTrackId, idleReason, mediaSessionId, playerState]);
 
   const value = React.useMemo<CastValue>(
     () => ({

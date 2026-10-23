@@ -86,6 +86,15 @@ export interface PlaybackValue {
   playQueueAt: (tracks: MediaTrack[], index: number) => Promise<void>;
   toggle: () => void;
   next: () => Promise<void>;
+  /**
+   * The cast transport's queue step.
+   *
+   * It moves `index` through the SAME visibility gate as `next`, and returns
+   * the track the receiver should load — WITHOUT touching expo-audio. Local
+   * playback must stay out of the cast path: the sound is on the TV, not on
+   * the tablet.
+   */
+  advanceForCast: (auto: boolean) => MediaTrack | null;
   previous: () => Promise<void>;
   seek: (seconds: number) => Promise<void>;
   setRepeat: (mode: RepeatMode) => void;
@@ -412,6 +421,35 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     await goTo(target);
   }, [goTo, player, policy, queue]);
 
+  /**
+   * The cast-safe step: choose the next visible track and move the queue's
+   * index, but NEVER start local audio. The caller (CastProvider) loads the
+   * returned track on the receiver.
+   *
+   * It mirrors `next`'s semantics exactly:
+   * - repeat-one with `auto` stays on the same index (the same track is
+   *   loaded again on the receiver);
+   * - a repeat-off queue at the end returns null (nothing to advance to);
+   * - a hidden row is SKIPPED, and a direction with nothing visible returns
+   *   null, never a hidden fallback.
+   */
+  const advanceForCast = React.useCallback(
+    (auto: boolean): MediaTrack | null => {
+      if (queue.tracks.length === 0) return null;
+      const index = nextIndex(queue, { auto });
+      if (index < 0) return null;
+      // NEVER move into a track the viewer may not see: the queue closure can
+      // predate the policy change, so the gate is checked HERE too.
+      const target = findVisibleIndex(queue.tracks, index, policy, 1, queue.repeat === "all");
+      if (target < 0) return null;
+      const track = queue.tracks[target];
+      if (!track) return null;
+      setQueue((q) => ({ ...q, index: target }));
+      return track;
+    },
+    [policy, queue]
+  );
+
   const previous = React.useCallback(async () => {
     if (position > 3) {
       await player.seekTo(0);
@@ -656,6 +694,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       playQueueAt,
       toggle,
       next,
+      advanceForCast,
       previous,
       seek,
       setRepeat,
@@ -671,8 +710,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       removeDenied,
     }),
     [
-      addDenied, addToQueue, current, cycleRepeatMode, downloadCurrent, duration, error, denylist,
-      moveQueueItem, next, play, playQueueAt, playing, policy, position, previous, queue.index,
+      addDenied, addToQueue, advanceForCast, current, cycleRepeatMode, downloadCurrent, duration,
+      error, denylist, moveQueueItem, next, play, playQueueAt, playing, policy, position, previous,
+      queue.index,
       queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,
       setExplicitFilter, setRepeat, settings, status?.isBuffering, toggle, toggleShuffleMode,
       visibleDownloads, visibleHistory,

@@ -1,6 +1,6 @@
 /* eslint-disable import/first -- jest.mock factories run before the imports */
 import React from "react";
-import { act, render } from "@testing-library/react-native";
+import { act, render, waitFor } from "@testing-library/react-native";
 
 const mockStartSession = jest.fn();
 const mockEndCurrentSession = jest.fn();
@@ -11,6 +11,7 @@ const mockClientPause = jest.fn();
 const mockClientSeek = jest.fn();
 const mockResolveAudio = jest.fn();
 const mockToggle = jest.fn();
+const mockAdvanceForCast = jest.fn();
 
 const device = {
   deviceId: "tv",
@@ -31,6 +32,7 @@ let mockPlayback: any = {
   policy: { isParent: false, filterOn: false, denied: [] },
   playing: true,
   toggle: mockToggle,
+  advanceForCast: mockAdvanceForCast,
 };
 
 jest.mock("react-native-google-cast", () => ({
@@ -66,6 +68,8 @@ const track: MediaTrack = {
   explicit: false,
   source: "youtube_music",
 };
+const nextTrack: MediaTrack = { ...track, id: "v2", title: "Next" };
+const thirdTrack: MediaTrack = { ...track, id: "v3", title: "Third" };
 
 const client = () => ({
   loadMedia: mockLoadMedia,
@@ -96,6 +100,7 @@ beforeEach(() => {
     policy: { isParent: false, filterOn: false, denied: [] },
     playing: true,
     toggle: mockToggle,
+    advanceForCast: mockAdvanceForCast,
   };
 });
 
@@ -258,6 +263,73 @@ test("a policy change that hides the cast track stops the session", async () => 
   await act(async () => {});
   expect(mockEndCurrentSession).toHaveBeenCalledWith(true);
   expect(api.casting).toBe(false);
+});
+
+test("a finished cast advances exactly once per completion", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
+  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  mockAdvanceForCast.mockReturnValueOnce(nextTrack).mockReturnValueOnce(thirdTrack);
+
+  let api!: ReturnType<typeof useCast>;
+  const tree = () => (
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  const view = render(tree());
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); await api.startCast(track); });
+  expect(mockLoadMedia).toHaveBeenCalledTimes(1);
+
+  // The receiver finishes the cast track and keeps reporting FINISHED.
+  mockStatus = { playerState: "idle", idleReason: "finished", mediaSessionId: 1 };
+  await act(async () => { view.rerender(tree()); });
+  await waitFor(() => expect(mockLoadMedia).toHaveBeenCalledTimes(2));
+
+  expect(mockAdvanceForCast).toHaveBeenCalledTimes(1);
+  expect(mockAdvanceForCast).toHaveBeenCalledWith(true);
+  expect(mockResolveAudio).toHaveBeenLastCalledWith("v2");
+
+  // The stale FINISHED status is still on screen: no second advance.
+  await act(async () => { view.rerender(tree()); });
+  await act(async () => {});
+  expect(mockAdvanceForCast).toHaveBeenCalledTimes(1);
+  expect(mockLoadMedia).toHaveBeenCalledTimes(2);
+
+  // The next track finishes — a new media session is a new completion.
+  mockStatus = { playerState: "idle", idleReason: "finished", mediaSessionId: 2 };
+  await act(async () => { view.rerender(tree()); });
+  await waitFor(() => expect(mockLoadMedia).toHaveBeenCalledTimes(3));
+
+  expect(mockAdvanceForCast).toHaveBeenCalledTimes(2);
+  expect(mockResolveAudio).toHaveBeenLastCalledWith("v3");
+});
+
+test("a cast error keeps the honest error path and does not advance", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
+  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  let api!: ReturnType<typeof useCast>;
+  const view = render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); await api.startCast(track); });
+
+  mockStatus = { playerState: "idle", idleReason: "error", mediaSessionId: 1 };
+  await act(async () => {
+    view.rerender(
+      <CastProvider>
+        <Actions onReady={(v) => { api = v; }} />
+      </CastProvider>
+    );
+  });
+
+  expect(mockAdvanceForCast).not.toHaveBeenCalled();
+  expect(api.error).toBe("The cast stopped. Try again.");
 });
 
 test("a failed policy stop keeps the cast surface and says so", async () => {
