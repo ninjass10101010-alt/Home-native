@@ -26,6 +26,12 @@ export interface WidgetDef {
   description: string;
 }
 
+export type WallSpan = 1 | 2;
+
+export interface WallWidgetProps {
+  span: WallSpan;
+}
+
 /** Port of Home-ai src/lib/layout-config.ts ALL_WIDGETS (verbatim). */
 export const ALL_WIDGETS: WidgetDef[] = [
   { id: "morningBriefing", label: "Morning Briefing", emoji: "🌅", description: "Today's events, tasks, meals, and what Consuela noticed" },
@@ -45,20 +51,48 @@ export const ALL_WIDGETS: WidgetDef[] = [
   { id: "photos", label: "Photos", emoji: "📸", description: "A rotating stream of family photos from the shared library" },
 ];
 
-/** Wall default order + hidden set (verbatim from TABLET_DEFAULT_WIDGETS / TABLET_HIDDEN_WIDGETS). */
-export const WALL_DEFAULT_WIDGETS: WidgetId[] = [
+export const WALL_CONFIGURABLE_WIDGETS: WidgetId[] = [
   "photos",
-  "morningBriefing", "weather", "todayEvents", "tasks",
-  "currentMeal", "music", "leaderboard",
-  "homeSecurity", "homeClimate", "homeLights",
-  "aiQuickAsk", "schedule", "consuelaSuggestions", "financeLedger",
-];
-export const WALL_HIDDEN_WIDGETS: WidgetId[] = [
-  "aiQuickAsk", "schedule", "consuelaSuggestions", "financeLedger",
+  "weather",
+  "todayEvents",
+  "tasks",
+  "morningBriefing",
+  "music",
+  "currentMeal",
+  "leaderboard",
+  "homeSecurity",
+  "homeClimate",
+  "homeLights",
 ];
 
-/** Only photos earns 2 cells on the wall board (the portrait hero). */
-export const WALL_SPANS: Partial<Record<WidgetId, number>> = { photos: 2 };
+export const WALL_DEFAULT_HIDDEN_WIDGETS: WidgetId[] = [
+  "homeSecurity",
+  "homeClimate",
+  "homeLights",
+];
+
+export const WALL_LOCKED_HIDDEN_WIDGETS: WidgetId[] = [
+  "aiQuickAsk",
+  "schedule",
+  "consuelaSuggestions",
+  "financeLedger",
+];
+
+export const WALL_HIDDEN_WIDGETS: WidgetId[] = [
+  ...WALL_DEFAULT_HIDDEN_WIDGETS,
+  ...WALL_LOCKED_HIDDEN_WIDGETS,
+];
+
+export const WALL_SPANS: Partial<Record<WidgetId, WallSpan>> = {
+  photos: 2,
+  weather: 2,
+  todayEvents: 2,
+  tasks: 2,
+};
+
+export function wallRowBudget(span: WallSpan): 2 | 4 {
+  return span === 2 ? 4 : 2;
+}
 
 /**
  * The web's per-widget tone map (WidgetCard `--widget-tone`, globals.css:
@@ -98,12 +132,12 @@ export const WALL_ROWS = 4;
  */
 export function wallColumns(
   defs: WidgetDef[] = visibleOnWall(),
-  spans: Partial<Record<WidgetId, number>> = WALL_SPANS
+  spans: Partial<Record<WidgetId, WallSpan>> = WALL_SPANS
 ): WidgetDef[][] {
   const occupied = new Set<string>();
   const cols: WidgetDef[][] = Array.from({ length: WALL_COLS }, () => []);
   for (const def of defs) {
-    const span = spans[def.id] ?? 1;
+    const span = spans[def.id] ?? WALL_SPANS[def.id] ?? 1;
     outer: for (let r = 0; r < WALL_ROWS; r++) {
       for (let c = 0; c < WALL_COLS; c++) {
         if (occupied.has(`${r},${c}`)) continue;
@@ -118,9 +152,12 @@ export function wallColumns(
   return cols;
 }
 
-export function visibleOnWall(): WidgetDef[] {
-  const off = new Set(WALL_HIDDEN_WIDGETS);
-  return WALL_DEFAULT_WIDGETS.map((id) => ALL_WIDGETS.find((w) => w.id === id)!).filter((w) => !off.has(w.id));
+export function visibleOnWall(hidden: readonly WidgetId[] = WALL_HIDDEN_WIDGETS): WidgetDef[] {
+  const off = new Set(hidden);
+  return WALL_CONFIGURABLE_WIDGETS
+    .map((id) => ALL_WIDGETS.find((widget) => widget.id === id))
+    .filter((widget): widget is WidgetDef => Boolean(widget))
+    .filter((widget) => !off.has(widget.id));
 }
 
 /** A placeholder card until a widget's own task lands its content. */
