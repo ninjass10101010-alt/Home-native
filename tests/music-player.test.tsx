@@ -306,6 +306,22 @@ it("while casting, the stage drives the receiver and reads its clock", async () 
   expect(mockSeek).not.toHaveBeenCalled();
 });
 
+it("an unknown cast duration shows an honest total, never a fake 0:00", async () => {
+  mockCast = {
+    ...idleCast(),
+    casting: true,
+    target: { id: "tv", name: "Living Room" },
+    playing: true,
+    position: 30,
+    duration: null,
+  };
+  const { getByTestId, getByText, queryByText } = render(<MusicPlayer />, { wrapper: wrap });
+  await waitFor(() => expect(getByTestId("np-title").props.children).toBe("Song"));
+  expect(getByText("0:30")).toBeTruthy();
+  expect(getByText("--:--")).toBeTruthy();
+  expect(queryByText("0:00")).toBeNull();
+});
+
 it("does not render the cast control when there is no current track", async () => {
   mockCurrent = null;
   const { getByTestId, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });

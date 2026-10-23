@@ -75,8 +75,9 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const idleReason = status?.idleReason ?? null;
   const mediaSessionId = (status as CastMediaStatus | null)?.mediaSessionId ?? null;
   const playbackPolicy = playback.policy;
-  const playbackPlaying = playback.playing;
-  const togglePlayback = playback.toggle;
+  const playbackCurrent = playback.current;
+  const pauseLocal = playback.pauseLocal;
+  const parkLocal = playback.parkLocal;
   const setCastSink = playback.setCastSink;
 
   const [target, setTarget] = React.useState<CastTarget | null>(null);
@@ -96,22 +97,61 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const lastFinishedRef = React.useRef<string | null>(null);
   /** The session the next successful load belongs to (read by `startCast`). */
   const mediaSessionIdRef = React.useRef<number | null>(null);
+  /**
+   * Whether a cast session had been established before it disappeared.
+   *
+   * The session effect must park the local transport only when a LIVE session
+   * ends with a cast track on the surface — never on mount, and never for a
+   * provider that merely holds a track while no session ever existed.
+   */
+  const hadSessionRef = React.useRef(false);
+  /** The latest cast track — read by the session-end effect. */
+  const trackRef = React.useRef<MediaTrack | null>(null);
+  /** The provider's latest current track — the park fallback when the cast track is gone. */
+  const playbackCurrentRef = React.useRef<MediaTrack | null>(playbackCurrent);
 
   React.useEffect(() => {
     mediaSessionIdRef.current = mediaSessionId;
   }, [mediaSessionId]);
 
   React.useEffect(() => {
+    trackRef.current = track;
+  }, [track]);
+
+  React.useEffect(() => {
+    playbackCurrentRef.current = playbackCurrent;
+  }, [playbackCurrent]);
+
+  React.useEffect(() => {
     if (session) {
+      hadSessionRef.current = true;
       clientRef.current = session.client as unknown as CastClient;
-    } else {
-      clientRef.current = null;
-      targetRef.current = null;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- the native session is the source of truth; losing it must clear the cast surface
+      return;
+    }
+    clientRef.current = null;
+    targetRef.current = null;
+    const ended = hadSessionRef.current ? trackRef.current : null;
+    hadSessionRef.current = false;
+    if (!ended) {
       setTarget(null);
       setTrack(null);
+      return;
     }
-  }, [session]);
+    // A cast session ended with a track on the surface: park the local player
+    // on that track BEFORE the surface clears, so pressing Play after Stop
+    // resumes the track the family was casting, not whatever the tablet held
+    // before the cast began. Unmount cleanup never reaches here.
+    let cancelled = false;
+    void (async () => {
+      await parkLocal(playbackCurrentRef.current ?? ended);
+      if (cancelled) return;
+      setTarget(null);
+      setTrack(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [parkLocal, session]);
 
   const connect = React.useCallback(
     async (id: string): Promise<boolean> => {
@@ -124,6 +164,10 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         if (!started) throw new Error("session not started");
         const current = await CastContext.sessionManager.getCurrentCastSession();
         if (!current?.client) throw new Error("session unavailable");
+        // The receiver owns the sound from here: silence the tablet at once,
+        // without waiting for the sink effect (and without `toggle`, which
+        // would route through the sink and reload the receiver).
+        pauseLocal();
         const switched = targetRef.current?.id !== chosen.id;
         clientRef.current = current.client as unknown as CastClient;
         targetRef.current = chosen;
@@ -131,6 +175,11 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         if (switched) setTrack(null);
         return true;
       } catch {
+        // A failed SWITCH must not leave the previous receiver live: end it
+        // before clearing, so it cannot keep playing while local audio starts.
+        if (targetRef.current) {
+          await CastContext.sessionManager.endCurrentSession(true).catch(() => {});
+        }
         clientRef.current = null;
         targetRef.current = null;
         setTarget(null);
@@ -141,7 +190,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         setBusy(false);
       }
     },
-    [devices]
+    [devices, pauseLocal]
   );
 
   const startCast = React.useCallback(
@@ -166,14 +215,13 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         // loading so the stale IDLE/FINISHED status cannot fire twice.
         lastFinishedRef.current = `${mediaSessionIdRef.current ?? "none"}:${next.id}`;
         setTrack(next);
-        if (playbackPlaying) togglePlayback();
       } catch {
         setError(castErrorCopy(targetRef.current?.name ?? "that device"));
       } finally {
         setBusy(false);
       }
     },
-    [playbackPolicy, playbackPlaying, togglePlayback]
+    [playbackPolicy]
   );
 
   /**
@@ -236,6 +284,10 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       await CastContext.sessionManager.endCurrentSession(true);
+      // A cast track was on the surface: park the local player on the track
+      // the family was casting, so Stop then Play never resumes the track the
+      // tablet held before the cast. No cast track means nothing to park.
+      if (track) await parkLocal(playbackCurrent ?? track);
       clientRef.current = null;
       targetRef.current = null;
       setTarget(null);
@@ -245,7 +297,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [parkLocal, playbackCurrent, track]);
 
   const play = React.useCallback(
     () => guarded(async () => { await clientRef.current?.play(); }),

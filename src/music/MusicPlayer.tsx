@@ -1123,7 +1123,7 @@ function NowPlayingStage({
       */}
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
         <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}>{clock(position)}</Text>
-        <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}>{clock(duration)}</Text>
+        <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}>{duration > 0 ? clock(duration) : "--:--"}</Text>
       </View>
 
       {/* The transport: an 88dp play disc, 72dp skips — all thumb-sized. */}

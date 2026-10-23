@@ -112,6 +112,23 @@ export interface PlaybackValue {
    * so a session that goes live mid-track leaves no local sound behind.
    */
   setCastSink: (sink: ((track: MediaTrack) => Promise<void>) | null) => void;
+  /**
+   * Stops the tablet's own player, unconditionally.
+   *
+   * The cast connect path calls this directly instead of `toggle`: `toggle`
+   * routes through the live cast sink once a session exists, so using it to
+   * silence local audio would reload the track on the receiver.
+   */
+  pauseLocal: () => void;
+  /**
+   * Points the local player at `track` WITHOUT starting it.
+   *
+   * Casting A then B leaves the local player holding A; after Stop, Play
+   * would resume A under B's title. The cast provider calls this when a
+   * session ends so the local transport is parked on the track the family
+   * was last casting, paused at zero.
+   */
+  parkLocal: (track: MediaTrack) => Promise<void>;
   previous: () => Promise<void>;
   seek: (seconds: number) => Promise<void>;
   setRepeat: (mode: RepeatMode) => void;
@@ -357,10 +374,41 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const setCastSink = React.useCallback(
     (sink: ((track: MediaTrack) => Promise<void>) | null) => {
       castSinkRef.current = sink;
-      if (sink) playerRef.current.pause();
+      if (sink) {
+        // Installing a sink means the receiver owns the sound: stop the local
+        // player AND drop its lock-screen session, so the system Play action
+        // cannot resume tablet audio mid-cast.
+        playerRef.current.pause();
+        playerRef.current.setActiveForLockScreen?.(false);
+      }
     },
     []
   );
+
+  const pauseLocal = React.useCallback(() => {
+    playerRef.current.pause();
+  }, []);
+
+  const parkLocal = React.useCallback(async (track: MediaTrack) => {
+    let source: { uri: string };
+    try {
+      const local = localFileFor(track.id);
+      source = local.exists
+        ? { uri: local.uri }
+        : { uri: await resolveStreamUrl(track.id) };
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "play_failed");
+      return;
+    }
+    playerRef.current.replace(source);
+    playerRef.current.setActiveForLockScreen?.(false);
+    try {
+      await playerRef.current.seekTo(0);
+    } catch {
+      // The replace already reset the playhead; a seek failure must not fake
+      // a playback error on a player that is deliberately silent.
+    }
+  }, []);
 
   const startTrack = React.useCallback(
     async (track: MediaTrack) => {
@@ -786,6 +834,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       advanceForCast,
       previousForCast,
       setCastSink,
+      pauseLocal,
+      parkLocal,
       previous,
       seek,
       setRepeat,
@@ -802,7 +852,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       addDenied, addToQueue, advanceForCast, current, cycleRepeatMode, downloadCurrent, duration,
-      error, denylist, moveQueueItem, next, play, playQueueAt, playing, policy, position, previous,
+      error, denylist, moveQueueItem, next, parkLocal, pauseLocal, play, playQueueAt, playing, policy,
+      position, previous,
       previousForCast,
       queue.index,
       queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,

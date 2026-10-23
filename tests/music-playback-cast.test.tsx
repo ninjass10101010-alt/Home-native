@@ -129,8 +129,10 @@ const tree = () => (
 /** Clear the calls made while the queue was being built. */
 const clearPlayer = () => {
   mockPlay.mockClear();
+  mockPause.mockClear();
   mockReplace.mockClear();
   mockSeek.mockClear();
+  mockLock.mockClear();
 };
 
 /** The state update must be flushed by act; the holder keeps the return typed. */
@@ -263,8 +265,11 @@ it("installs a cast sink that stops local sound, then routes play and next to th
   clearPlayer();
 
   await act(async () => { api.setCastSink(sink); });
-  // Installing the sink stops whatever the local player was doing.
+  // Installing the sink stops whatever the local player was doing AND drops
+  // the lock screen, so the system Play action cannot resume tablet audio.
   expect(mockPause).toHaveBeenCalled();
+  expect(mockLock).toHaveBeenCalledWith(false);
+  mockLock.mockClear();
 
   // A search-result row plays through the provider.
   await act(async () => { await api.play(first, [first, middle]); });
@@ -294,6 +299,69 @@ it("a repeat-one next on a cast session reloads on the receiver, not locally", a
   expect(sink).toHaveBeenLastCalledWith(first);
   expect(mockSeek).not.toHaveBeenCalled();
   expect(mockPlay).not.toHaveBeenCalled();
+});
+
+it("toggle while a sink is installed reloads on the receiver and never touches local audio", async () => {
+  render(tree());
+  await act(async () => { await api.play(first, [first, middle]); });
+  const sink = jest.fn(async (_track: MediaTrack) => {});
+  await act(async () => { api.setCastSink(sink); });
+  clearPlayer();
+
+  await act(async () => { api.toggle(); });
+
+  expect(sink).toHaveBeenCalledWith(first);
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockPause).not.toHaveBeenCalled();
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockSeek).not.toHaveBeenCalled();
+});
+
+it("previous while a sink is installed reloads on the receiver and never touches local audio", async () => {
+  render(tree());
+  await act(async () => { await api.play(first, [first, middle]); });
+  await act(async () => { await api.next(); });
+  const sink = jest.fn(async (_track: MediaTrack) => {});
+  await act(async () => { api.setCastSink(sink); });
+  clearPlayer();
+
+  // Past three seconds "previous" restarts the current track on the receiver.
+  await act(async () => { await api.previous(); });
+
+  expect(sink).toHaveBeenCalledWith(middle);
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockPause).not.toHaveBeenCalled();
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockSeek).not.toHaveBeenCalled();
+});
+
+it("parkLocal points the local player at the track without starting it", async () => {
+  render(tree());
+  await act(async () => { await api.play(first, [first, middle]); });
+  await act(async () => { await api.next(); });
+  clearPlayer();
+
+  await act(async () => { await api.parkLocal(last); });
+
+  expect(mockResolve).toHaveBeenLastCalledWith("visible-2");
+  expect(mockReplace).toHaveBeenCalledWith({
+    uri: "https://rr1---sn-test.googlevideo.com/videoplayback?x=1",
+  });
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockLock).toHaveBeenCalledWith(false);
+  expect(mockSeek).toHaveBeenCalledWith(0);
+});
+
+it("parkLocal surfaces a resolve failure through the existing error", async () => {
+  mockResolve.mockRejectedValueOnce(new Error("blocked"));
+  render(tree());
+  clearPlayer();
+
+  await act(async () => { await api.parkLocal(first); });
+
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(api.error).toBe("resolve_failed");
 });
 
 it("the wall Music widget's next starts the receiver, not local audio", async () => {
