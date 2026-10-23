@@ -4,7 +4,16 @@ import { fireEvent, render } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { HomeWall, greetingFor, GRID_CELL_H, seasonGlyph } from "../src/home/HomeWall";
-import { visibleOnWall, wallColumns, WALL_SPANS, WALL_HIDDEN_WIDGETS, WALL_DEFAULT_WIDGETS } from "../src/home/widgets";
+import {
+  visibleOnWall,
+  wallColumns,
+  WALL_CONFIGURABLE_WIDGETS,
+  WALL_HIDDEN_WIDGETS,
+  WALL_SPANS,
+  type WidgetId,
+  type WallSpan,
+  type WallWidgetProps,
+} from "../src/home/widgets";
 import { publishWallStats, resetWallStats, weekCellsFor } from "../src/home/wall-stats";
 
 
@@ -67,31 +76,31 @@ function subtreeText(root: any, testID: string): string {
 }
 
 describe("HomeWall (the 12-cell wall bento)", () => {
-  it("renders the 11 default widgets in wall order + hides the 4 ambient/finance ones", () => {
+  it("renders the eight default daily essentials and hides the three home controls", () => {
     const { getByTestId, queryByTestId } = render(
       <HomeWall members={members} onSelectMember={() => {}} />,
       { wrapper: wrap }
     );
-    for (const id of WALL_DEFAULT_WIDGETS) {
+    for (const id of WALL_CONFIGURABLE_WIDGETS) {
       if (WALL_HIDDEN_WIDGETS.includes(id)) {
         expect(queryByTestId(`widget-${id}`)).toBeNull();
       } else {
         expect(getByTestId(`widget-${id}`)).toBeTruthy();
       }
     }
-    // 3 explicit columns (dense placement), 11 cells inside them
+    // 3 explicit columns (dense placement), 8 cells inside them
     const grid = getByTestId("wall-grid");
     expect(grid.children.length).toBe(3);
-    expect(getByTestId("wall-col-0").children.length).toBe(3);
-    expect(getByTestId("wall-col-1").children.length).toBe(4);
-    expect(getByTestId("wall-col-2").children.length).toBe(4);
+    expect(getByTestId("wall-col-0").children.length).toBe(2);
+    expect(getByTestId("wall-col-1").children.length).toBe(3);
+    expect(getByTestId("wall-col-2").children.length).toBe(3);
   });
 
-  it("dense row-major placement fills the 3×4 grid (web grid-flow-dense port)", () => {
-    expect(wallColumns().map((c) => c.map((d) => d.id))).toEqual([
-      ["photos", "currentMeal", "homeSecurity"],
-      ["morningBriefing", "todayEvents", "music", "homeClimate"],
-      ["weather", "tasks", "leaderboard", "homeLights"],
+  it("dense row-major placement fills the approved 3×4 composition", () => {
+    expect(wallColumns().map((column) => column.map((widget) => widget.id))).toEqual([
+      ["photos", "tasks"],
+      ["weather", "morningBriefing", "currentMeal"],
+      ["todayEvents", "music", "leaderboard"],
     ]);
   });
 
@@ -111,13 +120,25 @@ describe("HomeWall (the 12-cell wall bento)", () => {
     }
   });
 
-  it("photos spans 2 rows (the wall-hero contract)", () => {
-    expect(WALL_SPANS.photos).toBe(2);
-    const { getByTestId } = render(<HomeWall members={members} onSelectMember={() => {}} />, { wrapper: wrap });
-    const photos = getByTestId("widget-photos");
-    const tasks = getByTestId("widget-tasks");
-    expect(photos.props.style.height).toBe(GRID_CELL_H * 2 + 16);
-    expect(tasks.props.style.height).toBe(GRID_CELL_H);
+  it("the four priority cards each span two rows", () => {
+    expect(WALL_SPANS).toEqual({
+      photos: 2,
+      weather: 2,
+      todayEvents: 2,
+      tasks: 2,
+    });
+    const { getByTestId } = render(
+      <HomeWall members={members} onSelectMember={() => {}} />,
+      { wrapper: wrap }
+    );
+    for (const id of ["photos", "weather", "todayEvents", "tasks"]) {
+      expect(getByTestId(`widget-${id}`).props.style.height).toBe(
+        GRID_CELL_H * 2 + 16
+      );
+    }
+    for (const id of ["morningBriefing", "music", "currentMeal", "leaderboard"]) {
+      expect(getByTestId(`widget-${id}`).props.style.height).toBe(GRID_CELL_H);
+    }
   });
 
   it("member rail renders and reports selections", () => {
@@ -272,14 +293,57 @@ describe("HomeWall KPI band + This Week tail", () => {
 });
 
 describe("widget registry", () => {
-  it("wall order matches layout-config TABLET order", () => {
-    expect(visibleOnWall()[0].id).toBe("photos");
-    const ids = visibleOnWall().map((w) => w.id);
-    expect(ids).toEqual([
+  it("passes each widget its effective span", () => {
+    const seen: Partial<Record<WidgetId, WallSpan>> = {};
+    const ids: WidgetId[] = [
       "photos",
-      "morningBriefing", "weather", "todayEvents", "tasks",
-      "currentMeal", "music", "leaderboard",
-      "homeSecurity", "homeClimate", "homeLights",
+      "weather",
+      "todayEvents",
+      "tasks",
+      "morningBriefing",
+      "music",
+      "currentMeal",
+      "leaderboard",
+    ];
+    const widgets = ids.reduce<
+      Partial<Record<WidgetId, React.ComponentType<WallWidgetProps>>>
+    >((registry, id) => {
+      registry[id] = ({ span }: WallWidgetProps) => {
+        seen[id] = span;
+        return null;
+      };
+      return registry;
+    }, {});
+    render(
+      <HomeWall
+        members={members}
+        onSelectMember={() => {}}
+        widgets={widgets}
+      />,
+      { wrapper: wrap }
+    );
+    expect(seen).toEqual({
+      photos: 2,
+      weather: 2,
+      todayEvents: 2,
+      tasks: 2,
+      morningBriefing: 1,
+      music: 1,
+      currentMeal: 1,
+      leaderboard: 1,
+    });
+  });
+
+  it("wall order matches the approved reading order", () => {
+    expect(visibleOnWall().map((widget) => widget.id)).toEqual([
+      "photos",
+      "weather",
+      "todayEvents",
+      "tasks",
+      "morningBriefing",
+      "music",
+      "currentMeal",
+      "leaderboard",
     ]);
   });
 
@@ -288,7 +352,9 @@ describe("widget registry", () => {
       <HomeWall members={members} onSelectMember={() => {}} />,
       { wrapper: wrap }
     );
-    const widgetIds = WALL_DEFAULT_WIDGETS.filter((id) => !WALL_HIDDEN_WIDGETS.includes(id));
+    const widgetIds = WALL_CONFIGURABLE_WIDGETS.filter(
+      (id) => !WALL_HIDDEN_WIDGETS.includes(id)
+    );
     for (const id of widgetIds) {
       const text = subtreeText(view, `widget-${id}`);
       expect(text).not.toMatch(/offline|can't be reached|Couldn't load/i);

@@ -19,7 +19,7 @@ import { onBaseUrlChange } from "../src/api/config";
 import { ApiError } from "../src/api/client";
 import { PinRequired } from "../src/api/auth";
 import { idleBoardDue, IDLE_CHECK_MS } from "../src/home/idle";
-import type { WidgetId } from "../src/home/widgets";
+import type { WidgetId, WallWidgetProps } from "../src/home/widgets";
 import { TasksWidget } from "../src/home/widgets/TasksWidget";
 import { TodayEventsWidget } from "../src/home/widgets/TodayEventsWidget";
 import { CurrentMealWidget } from "../src/home/widgets/CurrentMealWidget";
@@ -33,17 +33,19 @@ import { LeaderboardWidget } from "../src/home/widgets/LeaderboardWidget";
 import { MusicWidget } from "../src/home/widgets/MusicWidget";
 
 /** Wave 1 live widgets — the full 11-cell wall is live as of Task 5/6. */
-const WALL_WIDGETS: Partial<Record<WidgetId, React.ComponentType>> = {
+const WALL_WIDGETS: Partial<
+  Record<WidgetId, React.ComponentType<WallWidgetProps>>
+> = {
   tasks: TasksWidget,
   todayEvents: TodayEventsWidget,
-  currentMeal: CurrentMealWidget,
+  currentMeal: () => <CurrentMealWidget />,
   morningBriefing: BriefingWidget,
   weather: WeatherHeroCell,
   photos: PhotosWidget,
-  homeSecurity: HomeSecurityWidget,
+  homeSecurity: () => <HomeSecurityWidget />,
   homeClimate: HomeClimateWidget,
   homeLights: HomeLightsWidget,
-  leaderboard: LeaderboardWidget,
+  leaderboard: () => <LeaderboardWidget />,
   music: MusicWidget,
 };
 
@@ -102,7 +104,9 @@ export default function HomePlaceholder() {
 
   // The wall registry, with the leaderboard bound to the live roster so its
   // top-3 rows can show member avatars (web HomeLeaderboardWidget parity).
-  const wallWidgets = React.useMemo<Partial<Record<WidgetId, React.ComponentType>>>(
+  const wallWidgets = React.useMemo<
+    Partial<Record<WidgetId, React.ComponentType<WallWidgetProps>>>
+  >(
     () => {
       return ({
       ...WALL_WIDGETS,
