@@ -70,6 +70,10 @@
     "setupFilesAfterEnv": [
       "./jest.setup.ts"
     ],
-    "resolver": "./jest.resolver.js"
+    "resolver": "./jest.resolver.js",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/\\.worktrees/"
+    ]
   }
 }

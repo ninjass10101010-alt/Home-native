@@ -220,6 +220,27 @@ describe("filter options", () => {
     expect(kid.find((o) => o.id === "Aurora")).toMatchObject({ label: "Aurora", emoji: "🧚" });
   });
 
+  it("prefers the live roster avatar over a collapsed task glyph", () => {
+    // The PB boundary collapses a photo member's assigneeEmoji to 👤; the
+    // roster still holds the real avatar. The chip must read the roster first.
+    const PHOTO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const opts = filterOptions([task({ assignee: "Aurora", assigneeEmoji: "👤" })], {
+      signedIn: true,
+      roster: [{ name: "Aurora", emoji: PHOTO }],
+      me: "Rebecca (Mom)",
+    });
+    expect(opts.find((o) => o.id === "Aurora")?.emoji).toBe(PHOTO);
+  });
+
+  it("keeps the stored glyph for a non-roster assignee", () => {
+    const opts = filterOptions([task({ assignee: "Grandma", assigneeEmoji: "👵" })], {
+      signedIn: true,
+      roster: [{ name: "Aurora", emoji: "🧚" }],
+      me: "Rebecca (Mom)",
+    });
+    expect(opts.find((o) => o.id === "Grandma")?.emoji).toBe("👵");
+  });
+
   it("the signed-in My Tasks tile carries the session member's own emoji", () => {
     const opts = filterOptions([], { signedIn: true, roster: [], me: "Aurora", meEmoji: "🧚" });
     expect(opts[0]).toMatchObject({ id: "My Tasks", emoji: "🧚" });

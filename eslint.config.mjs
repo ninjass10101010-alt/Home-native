@@ -8,7 +8,7 @@ export default [
     languageOptions: { globals: globals.node },
   },
   {
-    ignores: [".expo/**", "node_modules/**", "reference/**", "screenshots/**", ".superpowers/**"],
+    ignores: [".expo/**", ".worktrees/**", "node_modules/**", "reference/**", "screenshots/**", ".superpowers/**"],
   },
   {
     rules: {

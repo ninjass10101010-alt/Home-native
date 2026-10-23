@@ -151,6 +151,28 @@ export function completedByWeek(tasks: WallTask[]): { weekKey: string; rows: Wal
   return [...groups.entries()].map(([weekKey, rows]) => ({ weekKey, rows }));
 }
 
+/**
+ * Roster-first member lookup for avatar and colour resolution.
+ *
+ * Exact full name wins. A task or ledger row can still carry a LEGACY name
+ * ("Aurora Garcia") while the roster has the current one ("Aurora"), so the
+ * second pass folds on the first name — the same convention filterOptions
+ * already uses for assignee chips and the wall leaderboard uses for its rows.
+ * Returns undefined for a non-member assignee ("Open", "Crew", "Grandma"),
+ * so the caller keeps the stored glyph.
+ */
+export function rosterMemberFor<T extends { name: string }>(
+  roster: readonly T[],
+  name: string
+): T | undefined {
+  const wanted = name.trim();
+  if (!wanted) return undefined;
+  const exact = roster.find((m) => m.name === wanted);
+  if (exact) return exact;
+  const first = wanted.split(" ")[0].toLowerCase();
+  return roster.find((m) => m.name.split(" ")[0].toLowerCase() === first);
+}
+
 /** Filter chip labels: "All" (or "My Tasks" when signed in), the roster, then "Open" (web memberFilterOptions). */
 export function filterOptions(
   tasks: WallTask[],
@@ -177,10 +199,14 @@ export function filterOptions(
     const folded = rosterByFirstName.get(assignee.split(" ")[0].toLowerCase());
     names.add(folded ?? assignee);
   }
-  const byName = new Map(opts.roster.map((m) => [m.name, m.emoji]));
   const emojiFor = (name: string) => {
+    // Roster first: a photo member's stored glyph collapses to 👤 at the PB
+    // boundary, so the task glyph is only the fallback for names the roster
+    // cannot resolve (Open/Crew/legacy non-members).
+    const member = rosterMemberFor(opts.roster, name);
+    if (member?.emoji) return member.emoji;
     for (const t of tasks) if (t.assignee === name && t.assigneeEmoji) return t.assigneeEmoji;
-    return byName.get(name) ?? "👤";
+    return "👤";
   };
   return [
     { id: myLabel, label: myLabel, emoji: opts.signedIn && opts.meEmoji ? opts.meEmoji : "👥" },

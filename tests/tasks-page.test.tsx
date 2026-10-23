@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { act, fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { ToastProvider } from "../src/ui/Toast";
@@ -1127,4 +1128,96 @@ describe("TasksPage — parent controls (WS-5)", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0][1].body).toEqual({ operationId: "op-q" });
   });
+});
+
+describe("TasksPage — roster-first avatars", () => {
+  // A real PNG data URI: the persisted photo shape that froze the leaderboard
+  // as a raw <Text> child (the wall/filter tiles already render these as Image).
+  const PHOTO =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const AVATAR_WEEK_DATA = {
+    weekStart: "2026-10-05",
+    points: { "Rebecca (Mom)": 40, Aurora: 25, Bailey: 10 },
+    streak: {},
+    lastActive: {},
+  };
+  const roster = [
+    { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: PHOTO, color: "green" },
+    { id: "c1", name: "Aurora", role: "child", emoji: PHOTO, color: "violet" },
+    { id: "c2", name: "Bailey", role: "child", emoji: "🐱", color: "amber" },
+  ];
+
+  beforeEach(async () => {
+    await AsyncStorage.setItem("consuela-members", JSON.stringify(roster));
+  });
+
+  afterEach(async () => {
+    await AsyncStorage.clear();
+  });
+
+  it("leaderboard renders roster photos as images, never as raw text", async () => {
+    mockMember = parent;
+    mockSnapshot = { tasks: PARENT_TASKS, weekData: AVATAR_WEEK_DATA };
+    const { getByText, findByTestId, queryByText, getAllByTestId } = render(<TasksPage />, {
+      wrapper: wrap,
+    });
+    await act(async () => {
+      fireEvent.press(getByText("Leaderboard"));
+      await Promise.resolve();
+    });
+    expect(await findByTestId("tasks-leaderboard")).toBeTruthy();
+    await waitFor(() => expect(getAllByTestId("row-avatar-photo").length).toBeGreaterThan(0));
+    expect(queryByText(/data:image/)).toBeNull();
+    expect(getAllByTestId("row-avatar-photo")[0].props.source.uri).toBe(PHOTO);
+    // A plain emoji avatar is still text, not swallowed by the photo branch.
+    expect(getByText("🐱")).toBeTruthy();
+  }, 20_000);
+
+  it("resolves a legacy ledger name to the roster's photo", async () => {
+    mockMember = parent;
+    mockSnapshot = {
+      tasks: PARENT_TASKS,
+      weekData: { weekStart: "2026-10-05", points: { "Aurora Garcia": 25 }, streak: {}, lastActive: {} },
+    };
+    const { getByText, findByTestId, getAllByTestId, queryByText } = render(<TasksPage />, {
+      wrapper: wrap,
+    });
+    await act(async () => {
+      fireEvent.press(getByText("Leaderboard"));
+      await Promise.resolve();
+    });
+    expect(await findByTestId("tasks-leaderboard")).toBeTruthy();
+    await waitFor(() => expect(getAllByTestId("row-avatar-photo").length).toBeGreaterThan(0));
+    expect(queryByText(/data:image/)).toBeNull();
+  }, 20_000);
+
+  it("task rows and member chips use the roster photo over the collapsed glyph", async () => {
+    mockMember = parent;
+    mockSnapshot = {
+      tasks: [
+        { id: 5, title: "Water plants", assignee: "Aurora", assigneeEmoji: "👤", points: 8, completed: false, due: "2026-10-20" },
+      ],
+      weekData: WEEK_DATA,
+    };
+    const { findByTestId, getAllByTestId, queryByText } = render(<TasksPage />, { wrapper: wrap });
+    fireEvent.press(await findByTestId("tasks-filter-Aurora"));
+    expect(await findByTestId("tasks-filter-Aurora-photo")).toBeTruthy();
+    await waitFor(() => expect(getAllByTestId("row-avatar-photo").length).toBeGreaterThan(0));
+    expect(queryByText(/data:image/)).toBeNull();
+  }, 20_000);
+
+  it("weekly prizes render the seeded text field", async () => {
+    mockMember = parent;
+    parentSnapshot();
+    route({
+      "/api/tasks/all-time": { historyComplete: false },
+      "/api/db/weekly_prizes": { items: [{ id: "w1", rank: 1, emoji: "🍿", text: "Movie night" }] },
+    });
+    const { getByText, findByText } = render(<TasksPage />, { wrapper: wrap });
+    await act(async () => {
+      fireEvent.press(getByText("Leaderboard"));
+      await Promise.resolve();
+    });
+    expect(await findByText(/Movie night/)).toBeTruthy();
+  }, 20_000);
 });

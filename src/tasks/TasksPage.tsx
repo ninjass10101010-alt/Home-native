@@ -36,12 +36,14 @@ import {
   weekGroupLabel,
   isCrewTask,
   crewFull,
+  rosterMemberFor,
 } from "./board";
 import {
   normalizeSnapshotTasks,
   submitApproval,
   submitClaim,
   taskRefusalCopy,
+  displayEmoji,
   type TaskCommandOutcome,
   type WallTask,
   newOperationId,
@@ -275,9 +277,14 @@ function MemberFilterTile({
             }}
           >
             {isPhotoUri(emoji) ? (
-              <Image source={{ uri: emoji }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+              <Image
+                testID={`${testID}-photo`}
+                source={{ uri: emoji }}
+                style={{ width: 36, height: 36, borderRadius: 18 }}
+                resizeMode="cover"
+              />
             ) : (
-              <Text style={{ fontSize: 20 }}>{emoji}</Text>
+              <Text style={{ fontSize: 20 }}>{displayEmoji(emoji)}</Text>
             )}
           </View>
           <Text
@@ -359,7 +366,16 @@ function RowAvatar({ emoji, memberColor, fallbackRail }: { emoji: string; member
         backgroundColor: mix(tone, "transparent", 18),
       }}
     >
-      <Text style={{ fontSize: 22 }}>{emoji}</Text>
+      {isPhotoUri(emoji) ? (
+        <Image
+          testID="row-avatar-photo"
+          source={{ uri: emoji }}
+          style={{ width: 36, height: 36, borderRadius: 18 }}
+          resizeMode="cover"
+        />
+      ) : (
+        <Text style={{ fontSize: 22 }}>{displayEmoji(emoji)}</Text>
+      )}
     </View>
   );
 }
@@ -650,10 +666,13 @@ export function TasksPage() {
       alive = false;
     };
   }, []);
+  // name → the member's own identity (roster-first: a ledger/task row may
+  // still carry a legacy full name while the roster holds the current one).
+  const rosterMemberOf = (name: string) => rosterMemberFor(cachedRoster, name);
   // name → the member's own identity colour (web memberColors), resolved
   // through the theme so the avatar disc carries the wall's per-member idiom.
   const memberColorOf = (name: string): string | undefined => {
-    const row = cachedRoster.find((m) => m.name === name);
+    const row = rosterMemberOf(name);
     return row?.color ? memberAccentHex(row.color, theme, accentColor) : undefined;
   };
   const options = filterOptions(tasks, {
@@ -1079,7 +1098,7 @@ export function TasksPage() {
                    </Text>
                  </View>
                  <RowAvatar
-                   emoji={cachedRoster.find((m) => m.name === topScorer.name)?.emoji || "👤"}
+                   emoji={rosterMemberOf(topScorer.name)?.emoji || "👤"}
                    memberColor={memberColorOf(topScorer.name)}
                    fallbackRail={colors["color-accent-amber"]}
                  />
@@ -1094,7 +1113,7 @@ export function TasksPage() {
                  {prizes.map((p, idx) => (
                    <View key={String(p.id ?? idx)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                      <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
-                       #{p.rank ?? idx + 1} {p.title || p.prize || p.name}
+                       #{p.rank ?? idx + 1} {p.text || p.title || p.prize || p.name}
                      </Text>
                      <Text style={{ color: colors["color-accent-amber"] ?? colors["color-accent"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
                        {p.points ? `${p.points}pts` : "Top prize"}
@@ -1121,7 +1140,7 @@ export function TasksPage() {
                  </Text>
                ) : (
                  ranked.map((r) => {
-                   const memberRow = cachedRoster.find((m) => m.name === r.name);
+                   const memberRow = rosterMemberOf(r.name);
                    return (
                      <View
                        key={r.name}
@@ -1255,7 +1274,7 @@ export function TasksPage() {
                     testID={`pending-row-${t.id}`}
                     toneHex={rail}
                     accessibilityLabel={awaiting ? `${t.title} — waiting for approval` : `Complete ${t.title}`}
-                    leading={<RowAvatar emoji={t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={rail} />}
+                    leading={<RowAvatar emoji={rosterMemberOf(t.assignee)?.emoji || t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={rail} />}
                     title={t.title}
                     subtitle={subtitleParts.join(" · ")}
                     trailing={
@@ -1317,7 +1336,7 @@ export function TasksPage() {
                     }}
                   >
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
-                      <RowAvatar emoji={t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={colors["color-accent-amber"]} />
+                      <RowAvatar emoji={rosterMemberOf(t.assignee)?.emoji || t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={colors["color-accent-amber"]} />
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                           <Text style={{ color: colors["color-accent-amber"] ?? colors["color-accent"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
@@ -1387,7 +1406,7 @@ export function TasksPage() {
                       <SchedRow
                         testID={`completed-row-${t.id}`}
                         toneKey="color-accent-amber"
-                        leading={<RowAvatar emoji={t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={colors["color-accent-mint"]} />}
+                        leading={<RowAvatar emoji={rosterMemberOf(t.assignee)?.emoji || t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={colors["color-accent-mint"]} />}
                         title={t.title}
                         subtitle={`${waiterName(t)} · ${tappedLabel(t)} · ${WAITING_COPY}`}
                         trailing={
@@ -1454,7 +1473,7 @@ export function TasksPage() {
                           <SchedRow
                             testID={`completed-row-${t.id}`}
                             toneKey="color-accent-mint"
-                            leading={<RowAvatar emoji={t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={colors["color-accent-mint"]} />}
+                            leading={<RowAvatar emoji={rosterMemberOf(t.assignee)?.emoji || t.assigneeEmoji} memberColor={memberColorOf(t.assignee)} fallbackRail={colors["color-accent-mint"]} />}
                             title={t.title}
                             subtitle={completerMeta(t)}
                             trailing={<ToneChip label="Done" toneKey="color-accent-mint" />}
