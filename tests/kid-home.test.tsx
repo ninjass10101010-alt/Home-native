@@ -25,6 +25,16 @@ jest.mock("../src/music/playback", () => ({
     removeDownload: jest.fn(), setExplicitFilter: jest.fn(),
   }),
 }));
+jest.mock("../src/music/CastProvider", () => ({
+  useCast: () => ({
+    state: "notConnected", devices: [], target: null, casting: false, playing: false,
+    position: 0, duration: null, busy: false, error: null,
+    connect: jest.fn(async () => true), startCast: jest.fn(async () => {}),
+    disconnect: jest.fn(async () => {}), play: jest.fn(async () => {}),
+    pause: jest.fn(async () => {}), seek: jest.fn(async () => {}),
+    advance: jest.fn(async () => {}), previous: jest.fn(async () => {}),
+  }),
+}));
 jest.mock("expo-secure-store", () => ({
   getItemAsync: jest.fn(async () => null),
   setItemAsync: jest.fn(async () => {}),
