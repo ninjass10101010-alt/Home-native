@@ -16,6 +16,11 @@ const mockToggle = jest.fn();
 const mockNext = jest.fn(async () => {});
 const mockSeek = jest.fn(async () => {});
 const mockRemoveDownload = jest.fn();
+/** The queue's own affordances (the provider's remove/reorder). */
+const mockRemoveFromQueue = jest.fn();
+const mockMoveQueueItem = jest.fn();
+const mockCycleRepeat = jest.fn();
+const mockToggleShuffle = jest.fn();
 /**
  * Notifies the mocked provider when the family's own list changes, so the
  * editor re-renders the way the REAL provider does (it holds the list in
@@ -45,6 +50,10 @@ let mockCurrent: any = DEFAULT_CURRENT;
 let mockQueue: any[] = [];
 let mockDownloads: any[] = [];
 let mockHistory: any[] = [];
+/** The playhead — the position the lyrics follow. */
+let mockPosition = 10;
+let mockRepeat: "off" | "all" | "one" = "off";
+let mockShuffle = false;
 /** The family setting: the explicit filter is ON by default. */
 let mockExplicitFilter: boolean | undefined = true;
 /** The signed-in viewer. null = signed-out guest, which also fails closed. */
@@ -66,11 +75,11 @@ jest.mock("../src/music/playback", () => {
       }, []);
       return {
         current: mockCurrent,
-        queue: mockQueue, index: 0, playing: false, position: 10, duration: 200, buffering: false,
-        repeat: "off", shuffle: false, error: null,
+        queue: mockQueue, index: 0, playing: false, position: mockPosition, duration: 200, buffering: false,
+        repeat: mockRepeat, shuffle: mockShuffle, error: null,
         downloads: mockDownloads, downloadBytes: mockDownloads.reduce((sum, item) => sum + item.bytes, 0),
         history: mockHistory,
-        settings: { repeat: "off", shuffle: false, explicitFilter: mockExplicitFilter },
+        settings: { repeat: mockRepeat, shuffle: mockShuffle, explicitFilter: mockExplicitFilter },
         // The provider owns the role-aware policy — the surfaces read it from
         // there so the rule can never drift between them. The POLICY carries
         // the list NORMALIZED (that is what the rule matches on)...
@@ -82,8 +91,8 @@ jest.mock("../src/music/playback", () => {
         // ...while the LIST itself keeps the terms as the parent typed them.
         denylist: mockDenied.map((term, index) => ({ term, addedAt: index })),
         play: mockPlay, playQueueAt: jest.fn(), toggle: mockToggle, next: mockNext, previous: jest.fn(),
-        seek: mockSeek, setRepeat: jest.fn(), cycleRepeatMode: jest.fn(), toggleShuffleMode: jest.fn(),
-        addToQueue: jest.fn(), removeFromQueue: jest.fn(), moveQueueItem: jest.fn(),
+        seek: mockSeek, setRepeat: jest.fn(), cycleRepeatMode: mockCycleRepeat, toggleShuffleMode: mockToggleShuffle,
+        addToQueue: jest.fn(), removeFromQueue: mockRemoveFromQueue, moveQueueItem: mockMoveQueueItem,
         downloadCurrent: jest.fn(), removeDownload: mockRemoveDownload, setExplicitFilter: jest.fn(),
         addDenied: mockAddDenied, removeDenied: mockRemoveDenied,
       };
@@ -134,9 +143,25 @@ jest.mock("../modules/youtube-engine", () => ({
   artworkColors: jest.fn(async () => mockArtworkColors),
 }));
 
+/**
+ * The lyrics the engine answered with — null means the track has none.
+ *
+ * The real fetcher talks to lrclib.net; the lyrics pane needs a deterministic
+ * answer (and the panel must never wait on the network to paint).
+ */
+let mockLyrics: { timeMs: number; text: string }[] | null = null;
+
+jest.mock("../src/music/lyrics", () => {
+  const actual = jest.requireActual("../src/music/lyrics");
+  return {
+    ...actual,
+    fetchLyrics: jest.fn(async () => mockLyrics),
+  };
+});
+
 import React from "react";
-import { Dimensions, StyleSheet } from "react-native";
-import { fireEvent, render, renderHook, waitFor } from "@testing-library/react-native";
+import { Dimensions, ScrollView, StyleSheet } from "react-native";
+import { act, fireEvent, render, renderHook, waitFor } from "@testing-library/react-native";
 import { MusicPlayer } from "../src/music/MusicPlayer";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
 import { musicTokensFor } from "../src/theme/music-tokens";
@@ -168,16 +193,44 @@ const darkWrap = ({ children }: { children: React.ReactNode }) => (
 const KID = { id: "c1", name: "Kid", role: "child", emoji: "🐯", color: "green" };
 const PARENT = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" };
 
+/**
+ * The lyrics pane's ScrollView — the composite element and its instance.
+ *
+ * The ref is a prop (React 19), so the test can reach the instance and watch
+ * exactly what the follow does to the view.
+ */
+function lyricsScroll(elements: any[]) {
+  const element = elements.find((node) => node.props?.testID === "music-lyrics-scroll");
+  if (!element) throw new Error("the lyrics scroll view is not rendered");
+  return { element, instance: element.props.ref.current as ScrollView };
+}
+
+/**
+ * Renders the player and lets the lyrics fetch settle INSIDE act().
+ *
+ * The fetch is a promise: without the flush its answer lands on the microtask
+ * queue after the test body, and React reports an update outside act.
+ */
+async function renderPlayer() {
+  const utils = render(<MusicPlayer />, { wrapper: wrap });
+  await act(async () => {});
+  return utils;
+}
+
 beforeEach(() => {
   mockCurrent = DEFAULT_CURRENT;
   mockQueue = [];
   mockDownloads = [];
   mockHistory = [];
+  mockPosition = 10;
+  mockRepeat = "off";
+  mockShuffle = false;
   mockExplicitFilter = true;
   mockMember = null;
   mockDenied = [];
   mockSearchOutcome = { tracks: [CLEAN_TRACK], explicitKnown: true };
   mockArtworkColors = { dominant: null, vibrant: null };
+  mockLyrics = null;
   jest.clearAllMocks();
 });
 
@@ -304,6 +357,20 @@ describe("the Now Playing stage", () => {
     }
   });
 
+  it("the chips on the tinted field wear the DARK scrim, never a white fill", async () => {
+    // A white fill LIFTS the ground under the chip's own label (the dark
+    // band's brightest tint + white@12% measured 4.06:1 — under the 4.5
+    // floor). The scrim DARKENS that ground instead, in both themes, so the
+    // label clears AA on any tint in the band (tests/music-stage-contrast).
+    const { theme, boost } = resolved();
+    const tokens = musicTokensFor(theme, boost);
+    const { getByTestId } = await renderPlayer();
+    const styleOf = (id: string) => StyleSheet.flatten(getByTestId(id).props.style);
+    expect(styleOf("np-shuffle").backgroundColor).toBe(tokens.scrim);
+    expect(styleOf("np-repeat").backgroundColor).toBe(tokens.scrim);
+    expect(styleOf("np-download").backgroundColor).toBe(tokens.scrim);
+  });
+
   it("paints every stage text tier in the FULL label token — no dim tier on the tint", async () => {
     // The stage's ground is the tinted field, NOT the page ground the tiers
     // were checked against: on the tint the dim tiers read ~3.4:1 (label2) and
@@ -346,6 +413,225 @@ describe("the Now Playing stage", () => {
     // heavier than the times, and the title leads on size.
     expect(artist.fontWeight).toBe("600");
     expect(time.fontWeight).toBe("500");
+  });
+});
+
+/**
+ * The Now Playing LYRICS mode (SP2 Task 4).
+ *
+ * The words are the surface: bold lines, the current line led in the accent
+ * and scaled, its neighbours stepping down. Tapping a line SEEKS to it, and
+ * the follow keeps the current line in view — without ever fighting a finger
+ * that is scrolling.
+ */
+describe("the Now Playing lyrics mode", () => {
+  const LINES = [
+    { timeMs: 1000, text: "First line" },
+    { timeMs: 5000, text: "Second line" },
+    { timeMs: 9000, text: "Third line" },
+  ];
+
+  it("renders the lyrics behind the switcher, not the stage", async () => {
+    mockLyrics = LINES;
+    const { getByText, getByTestId, queryByTestId, findByText } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    expect(getByTestId("music-lyrics")).toBeTruthy();
+    expect(queryByTestId("np-stage")).toBeNull();
+    expect(await findByText("Second line")).toBeTruthy();
+  });
+
+  it("keeps the honest empty state byte-for-byte", async () => {
+    mockLyrics = null;
+    const { getByText, findByText } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    expect(await findByText("No lyrics for this track.")).toBeTruthy();
+  });
+
+  it("tapping a line seeks to that line", async () => {
+    mockLyrics = LINES;
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    await waitFor(() => expect(getByTestId("music-lyric-1")).toBeTruthy());
+    fireEvent.press(getByTestId("music-lyric-1"));
+    expect(mockSeek).toHaveBeenCalledWith(5);
+  });
+
+  it("leads the current line in the accent and scales it; the neighbours step down", async () => {
+    mockLyrics = LINES;
+    mockPosition = 6; // 6000ms — the second line is the one being sung
+    const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+    const tokens = musicTokensFor(theme, boost);
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    await waitFor(() => expect(getByTestId("music-lyric-1")).toBeTruthy());
+    const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
+
+    // the current line: the accent, and scaled up a touch
+    const current = styleOf(getByText("Second line"));
+    expect(current.color).toBe(tokens.accent);
+    expect(current.transform[0].scale).toBeGreaterThan(1);
+    // its neighbours: the second tier
+    expect(styleOf(getByText("First line")).color).toBe(tokens.label2);
+    expect(styleOf(getByText("Third line")).color).toBe(tokens.label2);
+    // everything further away: the third tier
+    expect(styleOf(getByText("Second line")).fontSize).toBeGreaterThanOrEqual(14);
+  });
+
+  it("holds the 14sp floor on every line", async () => {
+    mockLyrics = LINES;
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    await waitFor(() => expect(getByTestId("music-lyric-0")).toBeTruthy());
+    const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
+    for (const text of ["First line", "Second line", "Third line"]) {
+      expect(styleOf(getByText(text)).fontSize).toBeGreaterThanOrEqual(14);
+    }
+  });
+
+  it("the follow scrolls the current line into view", async () => {
+    mockLyrics = LINES;
+    mockPosition = 0;
+    const { getByText, getByTestId, UNSAFE_getAllByType, rerender } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    await waitFor(() => expect(getByTestId("music-lyric-0")).toBeTruthy());
+
+    const scroll = lyricsScroll(UNSAFE_getAllByType(ScrollView));
+    const spy = jest.spyOn(Object.getPrototypeOf(scroll.instance), "scrollTo");
+
+    // the lines are measured (jest has no layout engine, so the pane is told)
+    fireEvent(getByTestId("music-lyric-1"), "layout", { nativeEvent: { layout: { x: 0, y: 64, width: 600, height: 64 } } });
+    fireEvent(getByTestId("music-lyric-2"), "layout", { nativeEvent: { layout: { x: 0, y: 128, width: 600, height: 64 } } });
+    spy.mockClear();
+
+    // the song moves on to the second line — the follow follows it
+    mockPosition = 6;
+    rerender(<MusicPlayer />);
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(spy).toHaveBeenCalledWith({ y: 64, animated: true });
+  });
+
+  it("the follow pauses while the user scrolls and resumes ~3s later", async () => {
+    jest.useFakeTimers();
+    try {
+      mockLyrics = LINES;
+      mockPosition = 0;
+      const { getByText, getByTestId, UNSAFE_getAllByType, rerender } = await renderPlayer();
+      fireEvent.press(getByText("Lyrics"));
+
+      const scroll = lyricsScroll(UNSAFE_getAllByType(ScrollView));
+      const spy = jest.spyOn(Object.getPrototypeOf(scroll.instance), "scrollTo");
+      fireEvent(getByTestId("music-lyric-2"), "layout", { nativeEvent: { layout: { x: 0, y: 128, width: 600, height: 64 } } });
+      spy.mockClear();
+
+      // the user drags the list: the follow must not fight the finger
+      fireEvent(scroll.element, "scrollBeginDrag", {
+        nativeEvent: {
+          contentOffset: { x: 0, y: 220 },
+          contentSize: { width: 600, height: 2000 },
+          layoutMeasurement: { width: 600, height: 600 },
+        },
+      });
+
+      mockPosition = 9;
+      rerender(<MusicPlayer />);
+      expect(spy).not.toHaveBeenCalled();
+
+      // ...and it comes back once the pause expires
+      act(() => { jest.advanceTimersByTime(3000); });
+      expect(spy).toHaveBeenCalledWith({ y: 128, animated: true });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+/**
+ * The Now Playing QUEUE mode (SP2 Task 4).
+ *
+ * "Playing Next" is a panel — the visible queue, and nothing a viewer may not
+ * see — with the recently played rows below it. Every row is thumb-sized.
+ */
+describe("the Now Playing queue mode", () => {
+  const SECOND = {
+    id: "second1111", title: "Second Song", artist: "D", album: "", durationSeconds: 100,
+    artworkUrl: null, explicit: false, source: "youtube_music",
+  };
+
+  it("renders the queue panel with the visible tracks", async () => {
+    mockQueue = [CLEAN_TRACK, SECOND];
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Queue"));
+    expect(getByTestId("music-queue")).toBeTruthy();
+    expect(getByText("Playing Next")).toBeTruthy();
+    expect(getByText("Found")).toBeTruthy();
+    expect(getByText("Second Song")).toBeTruthy();
+  });
+
+  it("never paints a track the viewer may not see", async () => {
+    mockMember = KID;
+    mockDenied = ["eminem"];
+    mockQueue = [CLEAN_TRACK, DENIED_TRACK];
+    const { getByText, queryByText } = await renderPlayer();
+    fireEvent.press(getByText("Queue"));
+    expect(getByText("Found")).toBeTruthy();
+    expect(queryByText("Till I Collapse")).toBeNull();
+  });
+
+  it("the rows are thumb-sized and carry the artwork, the title and the artist", async () => {
+    mockQueue = [CLEAN_TRACK];
+    const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+    const tokens = musicTokensFor(theme, boost);
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Queue"));
+    const row = StyleSheet.flatten(getByTestId("music-queue-row-0").props.style);
+    expect(row.minHeight).toBeGreaterThanOrEqual(64);
+    const thumb = StyleSheet.flatten(getByTestId("music-queue-thumb-0").props.style);
+    expect(thumb.width).toBe(48);
+    expect(thumb.height).toBe(48);
+    const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
+    expect(styleOf(getByText("Found")).color).toBe(tokens.label);
+    expect(styleOf(getByText("A")).color).toBe(tokens.label3);
+  });
+
+  it("removes a track from the queue and reorders another", async () => {
+    mockQueue = [CLEAN_TRACK, SECOND];
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Queue"));
+    fireEvent.press(getByTestId("music-queue-remove-0"));
+    expect(mockRemoveFromQueue).toHaveBeenCalledWith(0);
+    fireEvent.press(getByTestId("music-queue-down-0"));
+    expect(mockMoveQueueItem).toHaveBeenCalledWith(0, 1);
+  });
+
+  it("lists the recently played rows below the queue", async () => {
+    mockQueue = [CLEAN_TRACK];
+    mockHistory = [{
+      id: "zzz99999999", title: "Older", artist: "Artist", album: "",
+      durationSeconds: 100, artworkUrl: null, explicit: false, source: "youtube_music",
+    }];
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Queue"));
+    expect(getByText("Recently played")).toBeTruthy();
+    const row = getByTestId("music-history-zzz99999999");
+    expect(row).toBeTruthy();
+    fireEvent.press(row);
+    expect(mockPlay).toHaveBeenCalledWith(expect.objectContaining({ id: "zzz99999999" }), [expect.objectContaining({ id: "zzz99999999" })]);
+  });
+
+  it("the shuffle and repeat capsules sit in the section header", async () => {
+    mockQueue = [CLEAN_TRACK];
+    mockShuffle = true;
+    mockRepeat = "all";
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Queue"));
+    const shuffle = getByTestId("music-queue-shuffle");
+    const repeat = getByTestId("music-queue-repeat");
+    expect(shuffle).toBeTruthy();
+    expect(repeat).toBeTruthy();
+    fireEvent.press(shuffle);
+    expect(mockToggleShuffle).toHaveBeenCalled();
+    fireEvent.press(repeat);
+    expect(mockCycleRepeat).toHaveBeenCalled();
   });
 });
 

@@ -101,3 +101,28 @@ export async function fetchLyrics(track: MediaTrack): Promise<LyricLine[] | null
 export function clearLyricsCache(): void {
   cache.clear();
 }
+
+/* ── The auto-follow (the pane that keeps the current line in view) ───────── */
+
+/**
+ * How long the follow stays paused after the user scrolls (ms).
+ *
+ * WHY A PAUSE AT ALL: the follow moves the view to the line being sung. If
+ * it kept doing that while a finger was on the glass, the list would fight
+ * the scroll — the worst possible feel on a wall panel. So a scroll pauses
+ * the follow, and the follow comes back a few seconds later.
+ */
+export const FOLLOW_PAUSE_MS = 3000;
+
+/**
+ * The offset the follow scrolls to, so the current line sits in the upper
+ * third of the viewport (not glued to the top edge, where it would be cut).
+ *
+ * A viewport that has not been measured yet (height 0) scrolls to the line
+ * itself — the honest answer when nothing else is known.
+ */
+export function followOffset(lineY: number, viewportHeight: number): number {
+  if (!Number.isFinite(lineY) || lineY <= 0) return 0;
+  const lead = Math.max(0, Math.round(viewportHeight / 3));
+  return Math.max(0, lineY - lead);
+}

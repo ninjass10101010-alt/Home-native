@@ -114,6 +114,7 @@ const COLOR_KEYS = [
   "separator",
   "panelSeparator",
   "sheet",
+  "scrim",
   "label",
   "label2",
   "label3",

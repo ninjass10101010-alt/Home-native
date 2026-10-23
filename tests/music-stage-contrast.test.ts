@@ -221,3 +221,54 @@ describe("the stage's tinted field — the text contract", () => {
     expect(parseColor(LIGHT.label).a).toBe(1);
   });
 });
+
+/**
+ * The CHIPS on the tinted field — the ground under a chip's OWN label.
+ *
+ * The chips (shuffle, repeat, download) sit ON the artwork's tint, so their
+ * fill is part of the ground their label is measured against. The fill they
+ * used to wear — white@12% — LIFTS that ground: on the dark band's brightest
+ * edge the white label measured 4.06:1, under the 4.5:1 floor.
+ *
+ * A DARK translucent scrim DARKENS the ground instead (and in the light theme
+ * it darkens it under the black label), so the label clears AA on any tint in
+ * the band WITHOUT flattening the tint — Shiny's poster does the same over
+ * its artwork.
+ */
+describe("the chips on the tinted field", () => {
+  it("the scrim keeps the label AA on the band's worst-case tint", () => {
+    // Dark theme: the band's BRIGHTEST ground is the worst case for white.
+    const darkGround = brightestBandedGround();
+    const darkChip = composite(DARK.scrim, darkGround);
+    const darkRatio = contrast(darkChip, DARK.label);
+
+    // Light theme: the band's DARKEST ground is the worst case for black.
+    const lightGround = darkestBandedGround();
+    const lightChip = composite(LIGHT.scrim, lightGround);
+    const lightRatio = contrast(lightChip, LIGHT.label);
+
+    console.log(
+      `chips on the tint: dark ${darkRatio.toFixed(2)}:1 (ground ${darkGround}), ` +
+        `light ${lightRatio.toFixed(2)}:1 (ground ${lightGround})`
+    );
+    expect(darkRatio).toBeGreaterThanOrEqual(4.5);
+    expect(lightRatio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("the scrim only ever DARKENS the ground — it can never lift it", () => {
+    for (const ground of [brightestBandedGround(), darkestBandedGround()]) {
+      expect(luminance(composite(DARK.scrim, ground))).toBeLessThan(luminance(ground));
+      expect(luminance(composite(LIGHT.scrim, ground))).toBeLessThan(luminance(ground));
+    }
+  });
+
+  it("the white fill it replaces FAILED — that is why the scrim is dark", () => {
+    // The review's finding, kept as a regression guard: a white@12% fill
+    // lifted the ground under the chip's label below the AA floor.
+    const ground = brightestBandedGround();
+    const whiteChip = composite("rgba(255,255,255,0.12)", ground);
+    const whiteRatio = contrast(whiteChip, DARK.label);
+    console.log(`the old white@12% fill: ${whiteRatio.toFixed(2)}:1 on ${ground}`);
+    expect(whiteRatio).toBeLessThan(4.5);
+  });
+});

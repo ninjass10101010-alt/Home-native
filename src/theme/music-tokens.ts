@@ -28,6 +28,11 @@
  * at 14sp — that is why its floor is 3:1 and not 4.5:1. The dark accent
  * clears 4.5:1 outright, so it is never constrained.
  *
+ * The SCRIM (a dark translucent fill for a control that sits ON a tinted
+ * field) is measured where it is used, not here: its contract is the label
+ * over the scrim over the band's worst-case tint (see
+ * tests/music-stage-contrast.test.ts).
+ *
  * Geometry (pageMargin 20 / shelfGap 12 / artworkRadius 14 / panelRadius 22)
  * is part of the same contract: the Liquid layout is a constant, not a
  * per-screen improvisation.
@@ -48,6 +53,18 @@ export interface MusicTokens {
   panelSeparator: string;
   /** A bottom sheet / modal ground. */
   sheet: string;
+  /**
+   * A dark translucent scrim — the fill of a control that sits ON a tinted
+   * field (the stage's chips).
+   *
+   * WHY DARK: such a control's fill is part of the ground its OWN label is
+   * measured against. A white fill LIFTS that ground (the dark band's
+   * brightest edge + white@12% measured 4.06:1 — under the 4.5:1 floor);
+   * a dark scrim DARKENS it, in BOTH themes: the dark band's white label
+   * gains contrast and the light band's black label keeps it. Shiny's poster
+   * does the same over its artwork (see tests/music-stage-contrast.test.ts).
+   */
+  scrim: string;
   /** Primary text tier (body-eligible, 14sp+). */
   label: string;
   /** Secondary text tier (body-eligible, 14sp+). */
@@ -78,6 +95,7 @@ const DARK: MusicTokens = {
   separator: "rgba(140,140,150,0.55)",
   panelSeparator: "rgba(255,255,255,0.09)",
   sheet: "#131315",
+  scrim: "rgba(0,0,0,0.28)",
   label: "#FFFFFF",
   label2: "rgba(255,255,255,0.72)",
   label3: "rgba(255,255,255,0.55)",
@@ -98,6 +116,7 @@ const LIGHT: MusicTokens = {
   separator: "rgba(60,60,67,0.29)",
   panelSeparator: "rgba(60,60,67,0.12)",
   sheet: "#F2F2F7",
+  scrim: "rgba(0,0,0,0.28)",
   label: "#000000",
   label2: "rgba(0,0,0,0.72)",
   label3: "rgba(0,0,0,0.55)",

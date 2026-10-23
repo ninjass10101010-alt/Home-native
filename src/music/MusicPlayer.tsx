@@ -24,11 +24,11 @@ import { musicTokensFor, type MusicTokens } from "../theme/music-tokens";
 import { Modal } from "../ui/Modal";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { usePlayback } from "./playback";
-import { currentLineIndex, fetchLyrics, type LyricLine } from "./lyrics";
+import { currentLineIndex, fetchLyrics, followOffset, FOLLOW_PAUSE_MS, type LyricLine } from "./lyrics";
 import { countUnrated, isContentHidden, isDeniedTerm, searchNote, visibleTracks } from "./explicit";
 import { totalDownloadBytes } from "./library";
 import { bandStageTint } from "./tint";
-import { STAGE_TYPE } from "./stage-type";
+import { LYRIC_CURRENT_SCALE, LYRIC_TYPE, STAGE_TYPE } from "./stage-type";
 import type { MediaTrack, RepeatMode } from "./types";
 
 /** The Now Playing screen's three modes. Stage is the artwork-led one. */
@@ -40,6 +40,15 @@ const STAGE_FADE_MS = 250;
 /** The artwork never grows past this edge (the wall's width is the real limit). */
 const STAGE_MAX_ARTWORK_EDGE = 560;
 
+/**
+ * How tall the lyrics viewport is (dp).
+ *
+ * The words get their own scroll: the follow moves them to the line being
+ * sung, and a list inside the page's own scroll could not be followed. The
+ * pane is a fixed viewport — a sheet of lyrics, not a page of them.
+ */
+const LYRICS_VIEWPORT_DP = 600;
+
 export function MusicPlayer() {
   const { colors, accentColor, theme, boost, reduceMotion } = useTheme();
   // The music surface's OWN palette (Shiny's Liquid), gated in
@@ -50,6 +59,7 @@ export function MusicPlayer() {
     current, queue, playing, position, duration, error,
     play, toggle, next, previous, seek, repeat, shuffle,
     cycleRepeatMode, toggleShuffleMode, downloadCurrent, addToQueue,
+    removeFromQueue, moveQueueItem,
     downloads, removeDownload, history, policy,
     denylist, addDenied, removeDenied,
   } = usePlayback();
@@ -351,32 +361,28 @@ export function MusicPlayer() {
             ) : null}
 
             {mode === "lyrics" ? (
-              <Material tier="thin" style={{ borderRadius: 20, padding: 18, minHeight: 180 }}>
-                {lyrics && lyrics.length > 0 ? (
-                  lyrics.map((line, i) => (
-                    <Text key={`${line.timeMs}-${i}`} style={{ color: i === activeLine ? colors["color-text-primary"] : colors["color-text-secondary"], fontSize: i === activeLine ? 24 : TYPOGRAPHY.body.fontSize, lineHeight: 34, fontWeight: i === activeLine ? "800" : "500", marginBottom: 6 }}>
-                      {line.text || "♪"}
-                    </Text>
-                  ))
-                ) : (
-                  <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>No lyrics for this track.</Text>
-                )}
-              </Material>
+              <LyricsPane
+                lines={lyrics}
+                activeIndex={activeLine}
+                tokens={tokens}
+                reduceMotion={reduceMotion}
+                onSeek={(seconds) => void seek(seconds)}
+              />
             ) : null}
 
             {mode === "queue" ? (
-              <Material tier="thin" style={{ borderRadius: 20, padding: 18, gap: 6 }}>
-                {visibleQueue.length === 0 ? (
-                  <Text style={{ color: colors["color-text-secondary"] }}>The queue is empty.</Text>
-                ) : (
-                  visibleQueue.map((track, i) => (
-                    <Pressable key={`${track.id}-${i}`} accessibilityRole="button" accessibilityLabel={`Play ${track.title}`} onPress={() => void play(track, visibleQueue)} style={{ minHeight: 52, justifyContent: "center", paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors["color-border"] }}>
-                      <Text numberOfLines={1} style={{ color: i === 0 ? accentColor : colors["color-text-primary"], fontWeight: "700" }}>{track.title}</Text>
-                      <Text numberOfLines={1} style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>{track.artist}</Text>
-                    </Pressable>
-                  ))
-                )}
-              </Material>
+              <QueuePane
+                queue={visibleQueue}
+                history={visibleHistory}
+                tokens={tokens}
+                shuffle={shuffle}
+                repeat={repeat}
+                onToggleShuffle={toggleShuffleMode}
+                onCycleRepeat={cycleRepeatMode}
+                onPlay={(track, list) => void play(track, list)}
+                onRemove={(index) => removeFromQueue(index)}
+                onMove={(from, to) => moveQueueItem(from, to)}
+              />
             ) : null}
 
             {/*
@@ -700,7 +706,11 @@ function NowPlayingStage({
             alignItems: "center",
             justifyContent: "center",
             borderRadius: tokens.panelRadius,
-            backgroundColor: mix(tokens.label, "transparent", downloaded ? 6 : 12),
+            // The scrim, not a white fill: this control sits on the tint, so
+            // its fill is part of the ground under its own label.
+            backgroundColor: tokens.scrim,
+            borderWidth: 1,
+            borderColor: tokens.panelRim,
           }}
         >
           <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
@@ -726,18 +736,527 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * A round stage control: the disc's fill is the tint's own light, and an
- * active control (shuffle on, repeat on) wears the accent.
+ * A round stage control: the disc's fill is the scrim (a DARK translucent
+ * wash), and an active control (shuffle on, repeat on) wears the accent.
+ *
+ * WHY THE SCRIM AND NOT A WHITE FILL: the chip sits on the artwork's tint,
+ * so its fill IS part of the ground its own label is measured against. A
+ * white fill lifts that ground — on the dark band's brightest edge the
+ * white label read 4.06:1, under the 4.5:1 floor. A dark scrim lowers it
+ * instead, in both themes, without flattening the tint (see
+ * tests/music-stage-contrast.test.ts).
  */
-function stageDisc(tokens: MusicTokens, size: number, tint?: string) {
+function stageDisc(tokens: MusicTokens, size: number, active?: string) {
   return {
     width: size,
     height: size,
     borderRadius: size / 2,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: tint ? mix(tint, "transparent", 18) : mix(tokens.label, "transparent", 10),
+    backgroundColor: active ? mix(active, "transparent", 18) : tokens.scrim,
+    borderWidth: 1,
+    borderColor: tokens.panelRim,
   };
+}
+
+interface LyricsPaneProps {
+  /** The lines of the track, or null when it has none. */
+  lines: LyricLine[] | null;
+  /** The index of the line being sung (-1 before the first one). */
+  activeIndex: number;
+  tokens: MusicTokens;
+  /** The app's reduced-motion authority — the follow arrives at once. */
+  reduceMotion: boolean;
+  onSeek: (seconds: number) => void;
+}
+
+/**
+ * The LYRICS pane — the words, line-synced.
+ *
+ * Three rules, in order of importance:
+ *
+ *   1. THE LINE BEING SUNG IS LED: the accent colour and a touch bigger (a
+ *      TRANSFORM, so the list never reflows under the finger that follows
+ *      it). Its neighbours step down to the second tier, the rest to the
+ *      third.
+ *      (The accent is a LARGE-TEXT colour: at 22sp bold the line is large
+ *      copy, so the light theme's 3.65:1 accent clears the 3:1 large-text
+ *      floor — the same contract the Now Playing title follows.)
+ *   2. TAPPING A LINE SEEKS TO IT — the whole point of showing the words.
+ *   3. THE FOLLOW KEEPS THE CURRENT LINE IN VIEW, and pauses for ~3s when
+ *      the user scrolls, so it never fights the finger.
+ *
+ * LINE-LEVEL only: the word-by-word fill is SP3.
+ */
+function LyricsPane({ lines, activeIndex, tokens, reduceMotion, onSeek }: LyricsPaneProps) {
+  const scrollRef = React.useRef<ScrollView | null>(null);
+  // Each line's measured y — the follow's map from a line to an offset.
+  const offsets = React.useRef<Record<number, number>>({});
+  const viewportHeight = React.useRef(0);
+  const [followPaused, setFollowPaused] = React.useState(false);
+  const resumeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scrollToLine = React.useCallback(
+    (index: number) => {
+      const y = offsets.current[index];
+      if (y === undefined) return;
+      scrollRef.current?.scrollTo({
+        y: followOffset(y, viewportHeight.current),
+        // Reduced motion: the follow arrives at once (the app's authority is
+        // AccessibilityInfo.isReduceMotionEnabled, read by the ThemeProvider).
+        animated: !reduceMotion,
+      });
+    },
+    [reduceMotion]
+  );
+
+  // The follow: the line being sung is brought into view whenever it
+  // changes — unless the user is scrolling (then the finger wins).
+  React.useEffect(() => {
+    if (activeIndex < 0 || followPaused) return;
+    scrollToLine(activeIndex);
+  }, [activeIndex, followPaused, scrollToLine]);
+
+  const pauseFollow = React.useCallback(() => {
+    setFollowPaused(true);
+    if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    resumeTimer.current = setTimeout(() => setFollowPaused(false), FOLLOW_PAUSE_MS);
+  }, []);
+
+  const resumeFollow = React.useCallback(() => {
+    if (resumeTimer.current) {
+      clearTimeout(resumeTimer.current);
+      resumeTimer.current = null;
+    }
+    setFollowPaused(false);
+  }, []);
+
+  React.useEffect(
+    () => () => {
+      if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    },
+    []
+  );
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      testID="music-lyrics-scroll"
+      style={{ maxHeight: LYRICS_VIEWPORT_DP }}
+      nestedScrollEnabled
+      onLayout={(e) => {
+        viewportHeight.current = e.nativeEvent.layout.height;
+      }}
+      onScrollBeginDrag={pauseFollow}
+    >
+      <View testID="music-lyrics" style={{ gap: 4, paddingVertical: 8 }}>
+        {lines && lines.length > 0 ? (
+          lines.map((line, index) => {
+            const isCurrent = index === activeIndex;
+            const isNeighbour =
+              activeIndex >= 0 && (index === activeIndex - 1 || index === activeIndex + 1);
+            const color = isCurrent ? tokens.accent : isNeighbour ? tokens.label2 : tokens.label3;
+            return (
+              <Pressable
+                key={`${line.timeMs}-${index}`}
+                testID={`music-lyric-${index}`}
+                accessibilityRole="button"
+                accessibilityLabel={line.text || "Rest"}
+                onPress={() => {
+                  // A tap is an intent: the follow comes back with the seek.
+                  resumeFollow();
+                  onSeek(line.timeMs / 1000);
+                }}
+                onLayout={(e) => {
+                  offsets.current[index] = e.nativeEvent.layout.y;
+                  // The line may be measured after the song moved on to it.
+                  if (index === activeIndex) scrollToLine(index);
+                }}
+                style={{ minHeight: 64, justifyContent: "center", paddingVertical: 8 }}
+              >
+                <Text
+                  style={{
+                    color,
+                    ...LYRIC_TYPE.line,
+                    fontWeight: isCurrent
+                      ? LYRIC_TYPE.current.fontWeight
+                      : LYRIC_TYPE.line.fontWeight,
+                    transform: isCurrent ? [{ scale: LYRIC_CURRENT_SCALE }] : undefined,
+                  }}
+                >
+                  {line.text || "♪"}
+                </Text>
+              </Pressable>
+            );
+          })
+        ) : (
+          <Text
+            testID="music-lyrics-empty"
+            style={{ color: tokens.label2, ...TYPOGRAPHY.body, paddingVertical: 12 }}
+          >
+            No lyrics for this track.
+          </Text>
+        )}
+      </View>
+    </ScrollView>
+  );
+}
+
+interface QueuePaneProps {
+  /** The VISIBLE queue — a track this viewer may not see never arrives here. */
+  queue: MediaTrack[];
+  /** The VISIBLE history — the same rule, the same list. */
+  history: MediaTrack[];
+  tokens: MusicTokens;
+  shuffle: boolean;
+  repeat: RepeatMode;
+  onToggleShuffle: () => void;
+  onCycleRepeat: () => void;
+  onPlay: (track: MediaTrack, list: MediaTrack[]) => void;
+  onRemove: (index: number) => void;
+  onMove: (from: number, to: number) => void;
+}
+
+/**
+ * The QUEUE pane — what plays next, and what just played.
+ *
+ * Two panels on the Liquid grounds: "Playing Next" (the visible queue) with
+ * the shuffle/repeat capsules in its header — they change what plays next,
+ * so they belong with it — and "Recently played" (the visible history)
+ * below.
+ */
+function QueuePane({
+  queue, history, tokens, shuffle, repeat,
+  onToggleShuffle, onCycleRepeat, onPlay, onRemove, onMove,
+}: QueuePaneProps) {
+  return (
+    <View testID="music-queue" style={{ gap: tokens.shelfGap }}>
+      <View
+        style={{
+          backgroundColor: tokens.panel,
+          borderRadius: tokens.panelRadius,
+          borderWidth: 1,
+          borderColor: tokens.panelRim,
+          overflow: "hidden",
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            minHeight: 64,
+          }}
+        >
+          <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "700", flex: 1 }}>
+            Playing Next
+          </Text>
+          <QueueCapsule
+            testID="music-queue-shuffle"
+            label="Shuffle"
+            active={shuffle}
+            onPress={onToggleShuffle}
+            tokens={tokens}
+          />
+          <QueueCapsule
+            testID="music-queue-repeat"
+            label="Repeat"
+            active={repeat !== "off"}
+            onPress={onCycleRepeat}
+            tokens={tokens}
+          />
+        </View>
+        {queue.length === 0 ? (
+          <Text
+            testID="music-queue-empty"
+            style={{
+              color: tokens.label2,
+              ...TYPOGRAPHY.body,
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              borderTopWidth: 1,
+              borderTopColor: tokens.panelSeparator,
+            }}
+          >
+            The queue is empty.
+          </Text>
+        ) : (
+          queue.map((track, index) => (
+            <QueueRow
+              key={`${track.id}-${index}`}
+              track={track}
+              index={index}
+              count={queue.length}
+              queue={queue}
+              tokens={tokens}
+              onPlay={onPlay}
+              onRemove={onRemove}
+              onMove={onMove}
+            />
+          ))
+        )}
+      </View>
+
+      <View
+        style={{
+          backgroundColor: tokens.panel,
+          borderRadius: tokens.panelRadius,
+          borderWidth: 1,
+          borderColor: tokens.panelRim,
+          overflow: "hidden",
+        }}
+      >
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            minHeight: 64,
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "700" }}>
+            Recently played
+          </Text>
+        </View>
+        {history.length === 0 ? (
+          <Text
+            testID="music-history-empty"
+            style={{
+              color: tokens.label2,
+              ...TYPOGRAPHY.body,
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              borderTopWidth: 1,
+              borderTopColor: tokens.panelSeparator,
+            }}
+          >
+            Nothing played yet.
+          </Text>
+        ) : (
+          history.slice(0, 8).map((track) => (
+            <HistoryRow
+              key={track.id}
+              track={track}
+              history={history}
+              tokens={tokens}
+              onPlay={onPlay}
+            />
+          ))
+        )}
+      </View>
+    </View>
+  );
+}
+
+/** One row of the queue: the artwork, the words, and the row's own actions. */
+function QueueRow({
+  track, index, count, queue, tokens, onPlay, onRemove, onMove,
+}: {
+  track: MediaTrack;
+  index: number;
+  count: number;
+  queue: MediaTrack[];
+  tokens: MusicTokens;
+  onPlay: (track: MediaTrack, list: MediaTrack[]) => void;
+  onRemove: (index: number) => void;
+  onMove: (from: number, to: number) => void;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        minHeight: 64,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderTopWidth: 1,
+        borderTopColor: tokens.panelSeparator,
+      }}
+    >
+      <ArtworkThumb testID={`music-queue-thumb-${index}`} track={track} tokens={tokens} />
+      <Pressable
+        testID={`music-queue-row-${index}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Play ${track.title} by ${track.artist}`}
+        onPress={() => onPlay(track, queue)}
+        style={{ flex: 1, minHeight: 64, justifyContent: "center" }}
+      >
+        <Text numberOfLines={1} style={{ color: tokens.label, ...TYPOGRAPHY.body, fontWeight: "700" }}>
+          {track.title}
+        </Text>
+        <Text numberOfLines={1} style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>
+          {track.artist}
+        </Text>
+      </Pressable>
+      <QueueAction
+        testID={`music-queue-up-${index}`}
+        label={`Move ${track.title} up`}
+        glyph="↑"
+        disabled={index === 0}
+        onPress={() => onMove(index, index - 1)}
+        tokens={tokens}
+      />
+      <QueueAction
+        testID={`music-queue-down-${index}`}
+        label={`Move ${track.title} down`}
+        glyph="↓"
+        disabled={index === count - 1}
+        onPress={() => onMove(index, index + 1)}
+        tokens={tokens}
+      />
+      <QueueAction
+        testID={`music-queue-remove-${index}`}
+        label={`Remove ${track.title} from the queue`}
+        glyph="✕"
+        onPress={() => onRemove(index)}
+        tokens={tokens}
+      />
+    </View>
+  );
+}
+
+/** One row of the recently played shelf — it plays, exactly as it always did. */
+function HistoryRow({
+  track, history, tokens, onPlay,
+}: {
+  track: MediaTrack;
+  history: MediaTrack[];
+  tokens: MusicTokens;
+  onPlay: (track: MediaTrack, list: MediaTrack[]) => void;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        minHeight: 64,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderTopWidth: 1,
+        borderTopColor: tokens.panelSeparator,
+      }}
+    >
+      <ArtworkThumb testID={`music-history-thumb-${track.id}`} track={track} tokens={tokens} />
+      <Pressable
+        testID={`music-history-${track.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Play ${track.title} by ${track.artist}`}
+        onPress={() => onPlay(track, history)}
+        style={{ flex: 1, minHeight: 64, justifyContent: "center" }}
+      >
+        <Text numberOfLines={1} style={{ color: tokens.label, ...TYPOGRAPHY.body, fontWeight: "700" }}>
+          {track.title}
+        </Text>
+        <Text numberOfLines={1} style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>
+          {track.artist}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** The artwork thumbnail — 48dp, the Liquid radius, on the grouped ground. */
+function ArtworkThumb({
+  testID, track, tokens,
+}: {
+  testID: string;
+  track: MediaTrack;
+  tokens: MusicTokens;
+}) {
+  return (
+    <View
+      testID={testID}
+      style={{
+        width: 48,
+        height: 48,
+        borderRadius: tokens.artworkRadius,
+        overflow: "hidden",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: tokens.grouped,
+      }}
+    >
+      {track.artworkUrl ? (
+        <Image
+          source={{ uri: track.artworkUrl }}
+          style={{ width: 48, height: 48 }}
+          resizeMode="cover"
+        />
+      ) : (
+        <Text style={{ fontSize: 20 }}>🎵</Text>
+      )}
+    </View>
+  );
+}
+
+/** A row's own action — a ghost button on the 64dp wall floor. */
+function QueueAction({
+  testID, label, glyph, disabled, onPress, tokens,
+}: {
+  testID: string;
+  label: string;
+  glyph: string;
+  disabled?: boolean;
+  onPress: () => void;
+  tokens: MusicTokens;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
+      hitSlop={8}
+      onPress={() => {
+        if (disabled) return;
+        onPress();
+      }}
+      style={{ width: 48, height: 64, alignItems: "center", justifyContent: "center" }}
+    >
+      <Text style={{ color: disabled ? tokens.label3 : tokens.label2, fontSize: 20 }}>{glyph}</Text>
+    </Pressable>
+  );
+}
+
+/** The shuffle/repeat capsule — a state switch in the section header. */
+function QueueCapsule({
+  testID, label, active, onPress, tokens,
+}: {
+  testID: string;
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  tokens: MusicTokens;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} ${active ? "on" : "off"}`}
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={{
+        minWidth: 64,
+        minHeight: 64,
+        paddingHorizontal: 16,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: active ? tokens.accent : tokens.panelRim,
+        backgroundColor: active ? mix(tokens.accent, "transparent", 18) : "transparent",
+      }}
+    >
+      <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
 }
 
 export default MusicPlayer;

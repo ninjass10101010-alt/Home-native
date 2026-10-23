@@ -37,3 +37,37 @@ export const STAGE_TYPE = {
     fontWeight: "600",
   },
 } as const;
+
+/**
+ * The LYRICS type steps — the reading size of the words.
+ *
+ * WHY A LYRICS RAMP: the shared ramp tops out at `body` (16sp) for running
+ * text, and a lyric line is not running text — it is a line of a song, read
+ * at a distance on a wall, one line at a time. So the lyric step lives here,
+ * beside the stage steps it shares a surface with.
+ *
+ * The current line does NOT get its own size: it is SCALED (a transform),
+ * so the list never reflows under the finger that is following it.
+ */
+export const LYRIC_TYPE = {
+  /** A lyric line — the bold reading size. */
+  line: {
+    fontSize: 22,
+    lineHeight: 30,
+    fontWeight: "700",
+  },
+  /** The line being sung — the same step, one weight heavier. */
+  current: {
+    fontSize: 22,
+    lineHeight: 30,
+    fontWeight: "800",
+  },
+} as const;
+
+/**
+ * How much bigger the current line is painted.
+ *
+ * A TRANSFORM, not a font size: the line keeps its box, so the lines around
+ * it never jump while the song plays.
+ */
+export const LYRIC_CURRENT_SCALE = 1.08;
