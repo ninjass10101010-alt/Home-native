@@ -27,6 +27,7 @@ import { SegmentedControl } from "../ui/SegmentedControl";
 import { usePlayback } from "./playback";
 import { useCast } from "./CastProvider";
 import { CastControl } from "./CastControl";
+import { CastVolume } from "./CastVolume";
 import { currentLineIndex, fetchLyrics, followOffset, FOLLOW_PAUSE_MS, type LyricLine } from "./lyrics";
 import { countUnrated, isContentHidden, isDeniedTerm, searchNote, visibleTracks } from "./explicit";
 import { totalDownloadBytes } from "./library";
@@ -418,6 +419,7 @@ export function MusicPlayer() {
                 repeat={repeat}
                 shuffle={shuffle}
                 downloaded={downloaded}
+                casting={casting}
                 onToggle={casting ? (cast.playing ? cast.pause : cast.play) : toggle}
                 onNext={casting ? () => void cast.advance(false) : () => void next()}
                 onPrevious={casting ? () => void cast.previous() : () => void previous()}
@@ -1057,6 +1059,7 @@ interface StageProps {
   repeat: RepeatMode;
   shuffle: boolean;
   downloaded: boolean;
+  casting: boolean;
   onToggle: () => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -1076,7 +1079,7 @@ interface StageProps {
  */
 function NowPlayingStage({
   track, tint, tokens, reduceMotion,
-  playing, position, duration, repeat, shuffle, downloaded,
+  playing, position, duration, repeat, shuffle, downloaded, casting,
   onToggle, onNext, onPrevious, onSeek, onToggleShuffle, onCycleRepeat, onDownload,
 }: StageProps) {
   // The artwork's crossfade: on a track change it comes up from 0.96 with a
@@ -1211,6 +1214,9 @@ function NowPlayingStage({
           <Text style={{ color: tokens.label, fontSize: 26 }}>⏭</Text>
         </Pressable>
       </View>
+
+      {/* The receiver's amplifier — only while a cast session owns the sound. */}
+      {casting ? <CastVolume compact /> : null}
 
       {/* The secondary row: shuffle, repeat, download. */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 }}>

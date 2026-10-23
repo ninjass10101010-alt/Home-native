@@ -283,7 +283,7 @@ it("with a target, the sheet shows the receiver's volume as a percentage", () =>
   expect(getByText("35%")).toBeTruthy();
 });
 
-it("the volume buttons nudge the receiver by ten percent", async () => {
+it("the volume buttons nudge the receiver by two percent", async () => {
   const adjustVolume = jest.fn(async () => {});
   mockCast = {
     ...idleCast(),
@@ -296,12 +296,12 @@ it("the volume buttons nudge the receiver by ten percent", async () => {
   await act(async () => {
     fireEvent.press(getByTestId("cast-volume-down"));
   });
-  expect(adjustVolume).toHaveBeenCalledWith(-0.1);
+  expect(adjustVolume).toHaveBeenCalledWith(-0.02);
 
   await act(async () => {
     fireEvent.press(getByTestId("cast-volume-up"));
   });
-  expect(adjustVolume).toHaveBeenCalledWith(0.1);
+  expect(adjustVolume).toHaveBeenCalledWith(0.02);
 });
 
 it("without a target, the sheet has no volume row", () => {
