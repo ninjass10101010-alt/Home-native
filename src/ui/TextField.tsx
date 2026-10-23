@@ -15,6 +15,9 @@ export interface TextFieldProps {
   errorText?: React.ReactNode;
   style?: ViewStyle;
   testID?: string;
+  multiline?: boolean;
+  minHeight?: number;
+  autoFocus?: boolean;
 }
 
 /**
@@ -34,6 +37,9 @@ export function TextField({
   errorText,
   style,
   testID,
+  multiline = false,
+  minHeight,
+  autoFocus = false,
 }: TextFieldProps) {
   const { colors, accentColor } = useTheme();
   const [focused, setFocused] = React.useState(false);
@@ -60,11 +66,14 @@ export function TextField({
         placeholderTextColor={colors["color-text-secondary"]}
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
+        multiline={multiline}
+        numberOfLines={multiline ? 3 : 1}
+        autoFocus={autoFocus}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         accessibilityLabel={label}
         style={{
-          minHeight: MIN_TARGET_DP,
+          minHeight: multiline ? Math.max(minHeight ?? 96, MIN_TARGET_DP) : MIN_TARGET_DP,
           borderRadius: 20,
           borderWidth: 1,
           borderColor: errorText
@@ -75,6 +84,7 @@ export function TextField({
           backgroundColor: colors["color-surface-2"],
           paddingHorizontal: 20,
           paddingVertical: 14,
+          textAlignVertical: multiline ? "top" : "center",
           color: colors["color-text-primary"],
           fontSize: TYPOGRAPHY.body.fontSize,
         }}

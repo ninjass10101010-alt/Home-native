@@ -26,7 +26,7 @@ import {
   type GoogleEventRow,
   type WallEvent,
 } from "../../calendar/events-merge";
-import { publishWallStats } from "../wall-stats";
+import { publishWallStats, publishWallStatsUnknown } from "../wall-stats";
 import { DayLine } from "./DayLine";
 
 const WALL_ROW_BUDGET = 2; // the wall reads at a glance — more rows live on /calendar
@@ -300,12 +300,22 @@ export function TodayEventsWidget() {
       : "Events on the family calendar";
   const daylineTone = colors["color-accent-selected"] ?? colors[FAMILY_RAIL_TOKEN];
 
+  const googleKnown =
+    !googleFailure || googleFailure === "not_connected" || (guest && googleFailure === "unauthorised");
+  const countKnown = Boolean(data?.familyAnswered && googleKnown);
+
   // The wall's KPI band reads THIS widget's count (src/home/wall-stats.ts) —
   // one read, two surfaces, so the "Events · Today" tile can never disagree
   // with the card it sits above. A null data set publishes nothing.
   React.useEffect(() => {
-    if (data) publishWallStats({ eventsToday: data.events.length });
-  }, [data]);
+    if (data && countKnown) {
+      publishWallStats({ eventsToday: data.events.length });
+      return;
+    }
+    if (data || status === "error") {
+      publishWallStatsUnknown("eventsToday");
+    }
+  }, [data, status, countKnown]);
 
   return (
     <WidgetFrame
@@ -316,7 +326,7 @@ export function TodayEventsWidget() {
       status={status}
       failure={failure}
       hasData={data !== null}
-      stale={stale}
+      stale={stale || Boolean(googleFailure && googleFailure !== "not_connected" && !(guest && googleFailure === "unauthorised"))}
       onRetry={retry}
     >
       <View style={{ flex: 1 }}>

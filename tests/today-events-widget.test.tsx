@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { act, fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import * as wallStats from "../src/home/wall-stats";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { TodayEventsWidget } from "../src/home/widgets/TodayEventsWidget";
@@ -318,5 +319,35 @@ describe("TodayEventsWidget — the amber pill ink clears AA in both themes", ()
       expect(contrastRatio(ink, wash)).toBeGreaterThanOrEqual(4.5);
       expect(contrastRatio(ink, surface)).toBeGreaterThanOrEqual(4.5); // and on the bare card
     }
+  });
+});
+
+describe("TodayEventsWidget — wall stats", () => {
+  it("publishes unknown eventsToday when the count cannot be read", async () => {
+    wallStats.resetWallStats();
+    const publishUnknown = jest.spyOn(wallStats, "publishWallStatsUnknown");
+    route({
+      "/api/db/events": new ApiError({ message: "PocketBase down", status: 503, code: "unavailable" }),
+      "/api/google-calendar": googleOk([]),
+    });
+
+    render(<TodayEventsWidget />, { wrapper: wrap });
+
+    await waitFor(() => expect(publishUnknown).toHaveBeenCalledWith("eventsToday"));
+  });
+
+  it("keeps the family count when Google is intentionally disconnected", async () => {
+    wallStats.resetWallStats();
+    const publish = jest.spyOn(wallStats, "publishWallStats");
+    const publishUnknown = jest.spyOn(wallStats, "publishWallStatsUnknown");
+    route({
+      "/api/db/events": { items: [{ id: "e1", title: "Piano", date: today, time: "17:30" }] },
+      "/api/google-calendar": { ok: true, connected: false, events: [] },
+    });
+
+    render(<TodayEventsWidget />, { wrapper: wrap });
+
+    await waitFor(() => expect(publish).toHaveBeenCalledWith({ eventsToday: 1 }));
+    expect(publishUnknown).not.toHaveBeenCalled();
   });
 });
