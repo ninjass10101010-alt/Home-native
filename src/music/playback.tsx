@@ -102,6 +102,16 @@ export interface PlaybackValue {
    * returns the track the receiver should load, and NEVER touches expo-audio.
    */
   previousForCast: () => MediaTrack | null;
+  /**
+   * Installs the live cast session's loader as the destination for every
+   * start path, or clears it (`null`) when no session is live.
+   *
+   * While it is installed, `play`, `playQueueAt`, `next`, `previous` and the
+   * auto-advance all hand the track to the receiver and NEVER touch
+   * expo-audio. Installing it also stops whatever the local player was doing,
+   * so a session that goes live mid-track leaves no local sound behind.
+   */
+  setCastSink: (sink: ((track: MediaTrack) => Promise<void>) | null) => void;
   previous: () => Promise<void>;
   seek: (seconds: number) => Promise<void>;
   setRepeat: (mode: RepeatMode) => void;
@@ -168,6 +178,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     explicitFilter: true,
   });
   const playerRef = React.useRef(player);
+  /**
+   * The live cast session's track loader.
+   *
+   * It is a REF, not state: the transport callbacks read it at the moment
+   * they run, and installing one must not re-render the whole music tree.
+   */
+  const castSinkRef = React.useRef<((track: MediaTrack) => Promise<void>) | null>(null);
   /**
    * The queue as it stands RIGHT NOW.
    *
@@ -332,6 +349,19 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setQueue({ ...state, tracks, baseTracks, index });
   }, [policy]);
 
+  /**
+   * Installs/clears the cast sink. Stable by design: CastProvider puts it in
+   * an effect's dependency list, and a changing identity would make that
+   * effect churn. Installing a sink stops the local player at once.
+   */
+  const setCastSink = React.useCallback(
+    (sink: ((track: MediaTrack) => Promise<void>) | null) => {
+      castSinkRef.current = sink;
+      if (sink) playerRef.current.pause();
+    },
+    []
+  );
+
   const startTrack = React.useCallback(
     async (track: MediaTrack) => {
       // A start is IN FLIGHT from here on: the finish flag that is still on
@@ -344,19 +374,27 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setStart((s) => ({ seq: s.seq + 1, inFlight: true }));
       setError(null);
       try {
-        const local = localFileFor(track.id);
-        const source = local.exists
-          ? { uri: local.uri }
-          : { uri: await resolveStreamUrl(track.id) };
+        const sink = castSinkRef.current;
+        if (sink) {
+          // A cast session is live: the sound is on the receiver, so the
+          // local player is never replaced, started or given lock-screen
+          // metadata. Every start path funnels through here.
+          await sink(track);
+        } else {
+          const local = localFileFor(track.id);
+          const source = local.exists
+            ? { uri: local.uri }
+            : { uri: await resolveStreamUrl(track.id) };
 
-        player.replace(source);
-        player.play();
-        player.setActiveForLockScreen?.(true, {
-          title: track.title,
-          artist: track.artist,
-          albumTitle: track.album,
-          artworkUrl: track.artworkUrl ?? undefined,
-        });
+          player.replace(source);
+          player.play();
+          player.setActiveForLockScreen?.(true, {
+            title: track.title,
+            artist: track.artist,
+            albumTitle: track.album,
+            artworkUrl: track.artworkUrl ?? undefined,
+          });
+        }
         void appendHistory(track).then(setHistory).catch(() => {});
       } catch (e) {
         setError(e instanceof Error ? e.message : "play_failed");
@@ -416,6 +454,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     if (queue.tracks.length === 0) return;
     const index = nextIndex(queue);
     if (index === queue.index) {
+      // A manual "next" at the end (or in repeat-one) restarts the current
+      // track. While casting, that restart happens ON the receiver.
+      const sink = castSinkRef.current;
+      if (sink) {
+        const track = queue.tracks[queue.index];
+        if (track) await sink(track);
+        return;
+      }
       await player.seekTo(0);
       player.play();
       return;
@@ -478,6 +524,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const previous = React.useCallback(async () => {
     if (position > 3) {
+      // Past three seconds "previous" restarts. While casting, the receiver
+      // gets the reload, never the paused local player.
+      const sink = castSinkRef.current;
+      if (sink) {
+        const track = queue.index >= 0 ? queue.tracks[queue.index] : null;
+        if (track) await sink(track);
+        return;
+      }
       await player.seekTo(0);
       return;
     }
@@ -537,9 +591,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, [current?.id, goTo, player, policy, queue, status?.didJustFinish]);
 
   const toggle = React.useCallback(() => {
+    // A live cast owns the sound: a surface that only knows `toggle` (the
+    // wall widget) must start the receiver, never the paused local player.
+    const sink = castSinkRef.current;
+    if (sink) {
+      const track = queue.index >= 0 ? queue.tracks[queue.index] : null;
+      if (track) void sink(track).catch(() => {});
+      return;
+    }
     if (playing) player.pause();
     else player.play();
-  }, [player, playing]);
+  }, [player, playing, queue.index, queue.tracks]);
 
   const seek = React.useCallback(
     async (seconds: number) => {
@@ -698,6 +760,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     [history, policy]
   );
 
+  /* eslint-disable react-hooks/refs -- the transport callbacks read the player/cast refs only when a user action invokes them, never during render */
   const value = React.useMemo<PlaybackValue>(
     () => ({
       current,
@@ -722,6 +785,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       next,
       advanceForCast,
       previousForCast,
+      setCastSink,
       previous,
       seek,
       setRepeat,
@@ -742,10 +806,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       previousForCast,
       queue.index,
       queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,
-      setExplicitFilter, setRepeat, settings, status?.isBuffering, toggle, toggleShuffleMode,
+      setCastSink, setExplicitFilter, setRepeat, settings, status?.isBuffering, toggle, toggleShuffleMode,
       visibleDownloads, visibleHistory,
     ]
   );
+  /* eslint-enable react-hooks/refs */
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

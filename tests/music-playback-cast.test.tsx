@@ -43,6 +43,10 @@ jest.mock("../modules/youtube-engine", () => ({
   search: jest.fn(async () => []),
   related: jest.fn(async () => []),
 }));
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ push: jest.fn() }),
+  usePathname: () => "/",
+}));
 
 /** A kid, so the content policy is the one that hides the middle track. */
 const KID = { id: "c1", name: "Kid", role: "child", emoji: "🐯", color: "green" };
@@ -59,10 +63,12 @@ jest.mock("../src/state/AuthProvider", () => ({
 }));
 
 import React from "react";
-import { act, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Text } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PlaybackProvider, usePlayback, type PlaybackValue } from "../src/music/playback";
+import { MusicWidget } from "../src/home/widgets/MusicWidget";
+import { ThemeProvider } from "../src/theme/ThemeProvider";
 import type { MediaTrack } from "../src/music/types";
 
 const first: MediaTrack = {
@@ -231,6 +237,89 @@ it("previousForCast skips a hidden track and never calls the player", async () =
   expect(mockPause).not.toHaveBeenCalled();
   expect(mockReplace).not.toHaveBeenCalled();
   expect(mockSeek).not.toHaveBeenCalled();
+});
+
+/**
+ * THE LOCAL-PLAY CHOKE POINT (SP4 task 5 review fix).
+ *
+ * Search results, queue/history rows and the wall widget all drive the
+ * provider's transport. With a live cast session the provider installs the
+ * receiver's loader as a sink, so those paths reach the TV and never start
+ * the tablet's own audio.
+ */
+it("installs a cast sink that stops local sound, then routes play and next to the receiver", async () => {
+  render(tree());
+  const sink = jest.fn(async (_track: MediaTrack) => {});
+  clearPlayer();
+
+  await act(async () => { api.setCastSink(sink); });
+  // Installing the sink stops whatever the local player was doing.
+  expect(mockPause).toHaveBeenCalled();
+
+  // A search-result row plays through the provider.
+  await act(async () => { await api.play(first, [first, middle]); });
+  expect(sink).toHaveBeenCalledWith(first);
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockLock).not.toHaveBeenCalled();
+
+  // The next row / widget transport.
+  await act(async () => { await api.next(); });
+  expect(sink).toHaveBeenLastCalledWith(middle);
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockLock).not.toHaveBeenCalled();
+});
+
+it("a repeat-one next on a cast session reloads on the receiver, not locally", async () => {
+  render(tree());
+  const sink = jest.fn(async (_track: MediaTrack) => {});
+  await act(async () => { api.setCastSink(sink); });
+  await act(async () => { await api.play(first, [first]); });
+  await act(async () => { api.setRepeat("one"); });
+  clearPlayer();
+
+  await act(async () => { await api.next(); });
+
+  expect(sink).toHaveBeenLastCalledWith(first);
+  expect(mockSeek).not.toHaveBeenCalled();
+  expect(mockPlay).not.toHaveBeenCalled();
+});
+
+it("the wall Music widget's next starts the receiver, not local audio", async () => {
+  const { getByTestId } = render(
+    <PlaybackProvider>
+      <ThemeProvider>
+        <Probe />
+        <MusicWidget />
+      </ThemeProvider>
+    </PlaybackProvider>
+  );
+  const sink = jest.fn(async (_track: MediaTrack) => {});
+  await act(async () => { api.setCastSink(sink); });
+  await act(async () => { await api.play(first, [first, middle]); });
+  clearPlayer();
+
+  await act(async () => { fireEvent.press(getByTestId("music-widget-next")); });
+  await waitFor(() => expect(sink).toHaveBeenLastCalledWith(middle));
+  expect(mockReplace).not.toHaveBeenCalled();
+  expect(mockPlay).not.toHaveBeenCalled();
+  expect(mockLock).not.toHaveBeenCalled();
+});
+
+it("clears the cast sink and resumes local playback", async () => {
+  render(tree());
+  const sink = jest.fn(async (_track: MediaTrack) => {});
+  await act(async () => { api.setCastSink(sink); });
+  await act(async () => { api.setCastSink(null); });
+  clearPlayer();
+
+  await act(async () => { await api.play(last); });
+
+  expect(sink).not.toHaveBeenCalled();
+  expect(mockReplace).toHaveBeenCalledTimes(1);
+  expect(mockPlay).toHaveBeenCalledTimes(1);
+  expect(mockLock).toHaveBeenCalled();
 });
 
 it("previousForCast clamps to the current track at the start of a repeat-off queue", async () => {

@@ -77,6 +77,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const playbackPolicy = playback.policy;
   const playbackPlaying = playback.playing;
   const togglePlayback = playback.toggle;
+  const setCastSink = playback.setCastSink;
 
   const [target, setTarget] = React.useState<CastTarget | null>(null);
   const [track, setTrack] = React.useState<MediaTrack | null>(null);
@@ -174,6 +175,17 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     },
     [playbackPolicy, playbackPlaying, togglePlayback]
   );
+
+  /**
+   * While a session is LIVE (connected, even if idle) every start path in
+   * PlaybackProvider goes to the receiver. The sink is installed on `target`,
+   * not `casting`, so a track started from search, the queue or the wall
+   * widget reaches the TV before the first cast track exists.
+   */
+  React.useEffect(() => {
+    setCastSink(target ? startCast : null);
+    return () => setCastSink(null);
+  }, [target, startCast, setCastSink]);
 
   const guarded = React.useCallback(async (run: () => Promise<void>) => {
     if (!clientRef.current) return;

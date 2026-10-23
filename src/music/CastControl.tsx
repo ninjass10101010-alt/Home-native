@@ -20,7 +20,13 @@ export function CastControl({ track }: CastControlProps) {
 
   const busy = cast.busy || working;
   const castingLabel =
-    cast.casting && cast.target ? `Casting · ${cast.target.name}` : cast.casting ? "Casting" : "Cast";
+    cast.casting && cast.target
+      ? `Casting · ${cast.target.name}`
+      : cast.casting
+        ? "Casting"
+        : cast.target
+          ? `Connected · ${cast.target.name}`
+          : "Cast";
 
   const pick = async (id: string) => {
     if (busy) return;
@@ -57,7 +63,9 @@ export function CastControl({ track }: CastControlProps) {
         accessibilityLabel={
           cast.casting && cast.target
             ? `Casting to ${cast.target.name}. Change cast device`
-            : "Cast to a device"
+            : cast.target
+              ? `Connected to ${cast.target.name}. Change cast device`
+              : "Cast to a device"
         }
         onPress={() => setOpen(true)}
         style={{

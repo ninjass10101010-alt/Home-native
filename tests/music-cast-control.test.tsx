@@ -105,7 +105,7 @@ it("a connected but idle session keeps a visible Stop and can be stopped", async
     error: "Couldn't cast to Living Room.",
   };
   const { getByTestId, getByText } = render(<CastControl track={track} />, { wrapper: wrap });
-  expect(getByText("Cast")).toBeTruthy();
+  expect(getByText("Connected · Living Room")).toBeTruthy();
 
   fireEvent.press(getByTestId("cast-open"));
   expect(getByText("Connected")).toBeTruthy();
@@ -153,6 +153,18 @@ it("no devices is an honest empty state, not a spinner forever", () => {
   expect(getByText("No cast devices found.")).toBeTruthy();
 });
 
+it("names a live-but-idle session on the capsule and in its a11y label", () => {
+  mockCast = {
+    ...idleCast(),
+    target: { id: "tv", name: "Living Room" },
+  };
+  const { getByText, getByTestId } = render(<CastControl track={track} />, { wrapper: wrap });
+  expect(getByText("Connected · Living Room")).toBeTruthy();
+  expect(getByTestId("cast-open").props.accessibilityLabel).toBe(
+    "Connected to Living Room. Change cast device"
+  );
+});
+
 it("the capsule reads Cast while idle and Casting · <name> while casting", () => {
   const idle = render(<CastControl track={track} />, { wrapper: wrap });
   expect(idle.getByText("Cast")).toBeTruthy();
@@ -165,6 +177,9 @@ it("the capsule reads Cast while idle and Casting · <name> while casting", () =
   };
   const casting = render(<CastControl track={track} />, { wrapper: wrap });
   expect(casting.getByText("Casting · Living Room")).toBeTruthy();
+  expect(casting.getByTestId("cast-open").props.accessibilityLabel).toBe(
+    "Casting to Living Room. Change cast device"
+  );
 });
 
 it("stop casting calls disconnect", async () => {

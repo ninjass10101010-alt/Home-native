@@ -13,6 +13,7 @@ const mockResolveAudio = jest.fn();
 const mockToggle = jest.fn();
 const mockAdvanceForCast = jest.fn();
 const mockPreviousForCast = jest.fn();
+const mockSetCastSink = jest.fn();
 
 const device = {
   deviceId: "tv",
@@ -36,6 +37,7 @@ let mockPlayback: any = {
   toggle: mockToggle,
   advanceForCast: mockAdvanceForCast,
   previousForCast: mockPreviousForCast,
+  setCastSink: mockSetCastSink,
 };
 
 jest.mock("react-native-google-cast", () => ({
@@ -106,6 +108,7 @@ beforeEach(() => {
     toggle: mockToggle,
     advanceForCast: mockAdvanceForCast,
     previousForCast: mockPreviousForCast,
+  setCastSink: mockSetCastSink,
   };
 });
 
@@ -148,6 +151,32 @@ test("a bare connect does not pause local audio; starting a cast does", async ()
   expect(mockToggle).not.toHaveBeenCalled();
   await act(async () => { await api.startCast(track); });
   expect(mockToggle).toHaveBeenCalledTimes(1);
+});
+
+test("a live session installs the cast sink and clears it on stop", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
+  mockGetCurrentCastSession.mockResolvedValue({ client: client() });
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(mockSetCastSink).toHaveBeenCalledWith(expect.any(Function));
+
+  // The installed sink is the provider's own loader: handing it a track
+  // reaches the receiver.
+  const sink = mockSetCastSink.mock.calls.find(([value]) => typeof value === "function")?.[0] as
+    | ((value: MediaTrack) => Promise<void>)
+    | undefined;
+  await act(async () => { await sink?.(track); });
+  expect(mockLoadMedia).toHaveBeenCalledTimes(1);
+
+  await act(async () => { await api.disconnect(); });
+  expect(mockSetCastSink).toHaveBeenLastCalledWith(null);
 });
 
 test("a failed load names the target and never pauses local audio", async () => {

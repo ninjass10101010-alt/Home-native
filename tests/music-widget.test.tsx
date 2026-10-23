@@ -50,6 +50,13 @@ it("shows the current track and toggles playback", () => {
   expect(mockToggle).toHaveBeenCalled();
 });
 
+it("hands next to the provider transport — the path that is cast-safe", () => {
+  mockState = { current: { id: "abc12345678", title: "Song", artist: "Artist", artworkUrl: null, explicit: false }, playing: false };
+  const { getByTestId } = render(<MusicWidget />, { wrapper: wrap });
+  fireEvent.press(getByTestId("music-widget-next"));
+  expect(mockNext).toHaveBeenCalledTimes(1);
+});
+
 it("shows a neutral placeholder for a track the viewer may not see", () => {
   mockState = {
     current: { id: "exp11111111", title: "Bad Song", artist: "Artist", artworkUrl: "https://img/bad.jpg", explicit: true },

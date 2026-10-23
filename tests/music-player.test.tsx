@@ -543,6 +543,24 @@ describe("the Now Playing lyrics mode", () => {
     expect(mockSeek).toHaveBeenCalledWith(5);
   });
 
+  it("while casting, tapping a lyric seeks the receiver, not the paused local player", async () => {
+    mockCast = {
+      ...idleCast(),
+      casting: true,
+      target: { id: "tv", name: "Living Room" },
+      playing: true,
+      position: 30,
+      duration: 120,
+    };
+    mockLyrics = LINES;
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    await waitFor(() => expect(getByTestId("music-lyric-1")).toBeTruthy());
+    fireEvent.press(getByTestId("music-lyric-1"));
+    expect(mockCast.seek).toHaveBeenCalledWith(5);
+    expect(mockSeek).not.toHaveBeenCalled();
+  });
+
   it("leads the current line in the accent and scales it; the neighbours step down", async () => {
     mockLyrics = LINES;
     mockPosition = 6; // 6000ms — the second line is the one being sung
@@ -790,6 +808,36 @@ describe("the search surface on the Liquid panels", () => {
     expect(StyleSheet.flatten(play.props.style).minHeight).toBeGreaterThanOrEqual(64);
     fireEvent.press(play);
     expect(mockPlay).toHaveBeenCalledWith(CLEAN_TRACK, [CLEAN_TRACK, SECOND]);
+  });
+
+  it("while a cast session is live, search and queue rows hand playback to the provider", async () => {
+    mockCast = {
+      ...idleCast(),
+      casting: true,
+      target: { id: "tv", name: "Living Room" },
+      playing: true,
+    };
+    mockCurrent = null;
+    mockSearchOutcome = { tracks: [CLEAN_TRACK, SECOND], explicitKnown: true };
+    const view = render(<MusicPlayer />, { wrapper: wrap });
+    fireEvent.changeText(view.getByTestId("music-search-input"), "beatles");
+    await act(async () => {
+      fireEvent.press(view.getByTestId("music-search-submit"));
+    });
+
+    // The search TOP RESULT goes through the provider's play path — the one
+    // that routes to the receiver while the cast sink is installed.
+    fireEvent.press(await view.findByTestId("music-top-result-play"));
+    expect(mockPlay).toHaveBeenCalledWith(CLEAN_TRACK, [CLEAN_TRACK, SECOND]);
+    expect(mockCast.startCast).not.toHaveBeenCalled();
+
+    mockCurrent = DEFAULT_CURRENT;
+    mockQueue = [CLEAN_TRACK, SECOND];
+    view.rerender(<MusicPlayer />);
+    fireEvent.press(view.getByText("Queue"));
+    fireEvent.press(view.getByTestId("music-queue-row-1"));
+    expect(mockPlay).toHaveBeenLastCalledWith(SECOND, [CLEAN_TRACK, SECOND]);
+    expect(mockCast.startCast).not.toHaveBeenCalled();
   });
 
   it("keeps the remaining results as rows on a panel, with hairline separators", async () => {

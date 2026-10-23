@@ -361,7 +361,7 @@ export function MusicPlayer() {
                 activeIndex={activeLine}
                 tokens={tokens}
                 reduceMotion={reduceMotion}
-                onSeek={(seconds) => void seek(seconds)}
+                onSeek={casting ? (seconds) => void cast.seek(seconds) : (seconds) => void seek(seconds)}
               />
             ) : null}
 
