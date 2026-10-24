@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
+/* eslint-disable @typescript-eslint/no-require-imports, import/first -- jest.mock factories run before the imports */
 jest.mock("@react-native-async-storage/async-storage", () => {
   const store = require("@react-native-async-storage/async-storage/jest/async-storage-mock");
   // Writes are dropped on purpose: the dark-theme stage test below switches
@@ -217,6 +217,7 @@ import { MusicPlayer } from "../src/music/MusicPlayer";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
 import { musicTokensFor } from "../src/theme/music-tokens";
 import { legibilityTint } from "../src/music/backdrop";
+import { CapsuleDock } from "../src/nav/CapsuleDock";
 
 const wrap = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 
@@ -443,6 +444,21 @@ describe("the Now Playing stage", () => {
     const backdrop = getByTestId("music-backdrop");
     expect(backdrop).toBeTruthy();
     await waitFor(() => expect(getByTestId("music-backdrop-tint")).toBeTruthy());
+  });
+
+  it("floats the dock on a bottom scrim — the wallpaper's legibility gradient", async () => {
+    // The floating glass dock sits at the foot of the wallpaper, where a
+    // cover's bright patches would wash the ground out. The backdrop paints
+    // the app's own `scrimBottom` token there (the token Task 3 left unused),
+    // pointing at the theme's ink so the dock's own glass is enough.
+    mockCurrent = { ...DEFAULT_CURRENT, artworkUrl: "https://img.example/cover.jpg" };
+    mockArtworkColors = { dominant: "#3B82F6", vibrant: null };
+    const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+    const tokens = musicTokensFor(theme, boost);
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(getByTestId("music-backdrop-scrim-top")).toBeTruthy());
+    const scrim = getByTestId("music-backdrop-scrim-bottom");
+    expect(scrim.props.colors).toContain(tokens.scrimBottom);
   });
 
   it("hands the backdrop the cover's own colour, and the neutral veil without one", async () => {
@@ -1014,7 +1030,24 @@ describe("the Now Playing queue mode", () => {
     expect(thumb.height).toBe(48);
     const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
     expect(styleOf(getByText("Found")).color).toBe(tokens.label);
-    expect(styleOf(getByText("A")).color).toBe(tokens.label3);
+    // The queue is a glass sheet over the blurred art, so BOTH tiers read the
+    // full label token (the dim tier falls under AA on that ground).
+    expect(styleOf(getByText("A")).color).toBe(tokens.label);
+  });
+
+  it("sits on a GLASS sheet over the artwork backdrop", async () => {
+    mockQueue = [CLEAN_TRACK];
+    const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+    const tokens = musicTokensFor(theme, boost);
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Queue"));
+    const panel = StyleSheet.flatten(getByTestId("music-queue-panel").props.style);
+    // The queue is a listening surface over the living backdrop, so its panel
+    // is the glass layer the blurred art reads through — same family as the
+    // Now Playing stage.
+    expect(panel.backgroundColor).toBe(tokens.glassFill);
+    expect(panel.borderColor).toBe(tokens.glassRim);
+    expect(panel.borderWidth).toBe(1);
   });
 
   it("removes a track from the queue and reorders another", async () => {
@@ -1700,5 +1733,60 @@ describe("the parent-only deny-list editor", () => {
     expect(queryByText("Till I Collapse")).toBeNull();
     expect(queryByText("Blocked for kids")).toBeNull();
     expect(queryByTestId(`music-result-blocked-${DENIED_TRACK.id}`)).toBeNull();
+  });
+});
+
+/**
+ * THE FLOATING GLASS DOCK (SP3-B Task 5).
+ *
+ * The app's bottom bar is the manifest-driven capsule dock, and this wave
+ * floats it as a glass bar with page margins. The look changes; the CONTRACT
+ * does not — every cap keeps its label, its testID and its destination.
+ */
+describe("the floating glass dock", () => {
+  it("floats with page margins (a fixed bar — it never morphs or drags)", () => {
+    const { getByTestId } = render(
+      <CapsuleDock role="parent" hydrated pathname="/" onNavigate={() => {}} />,
+      { wrapper: wrap }
+    );
+    const dock = StyleSheet.flatten(getByTestId("floating-dock").props.style);
+    expect(dock.position).toBe("absolute");
+    expect(dock.left).toBe(12);
+    expect(dock.right).toBe(12);
+    expect(dock.bottom).toBe(12);
+  });
+
+  it("still routes every tab — same labels, same destinations", () => {
+    const onNavigate = jest.fn();
+    const { getByLabelText } = render(
+      <CapsuleDock role="parent" hydrated pathname="/" onNavigate={onNavigate} />,
+      { wrapper: wrap }
+    );
+    const routes: [string, string][] = [
+      ["Home", "/"],
+      ["Ask", "/chat"],
+      ["Meals", "/meals"],
+      ["Tasks", "/tasks"],
+      ["Calendar", "/calendar"],
+      ["House", "/ha"],
+      ["Settings", "/settings"],
+    ];
+    for (const [label, path] of routes) {
+      fireEvent.press(getByLabelText(label));
+      expect(onNavigate).toHaveBeenCalledWith(path);
+    }
+    expect(onNavigate).toHaveBeenCalledTimes(routes.length);
+  });
+
+  it("the kid dock keeps every cap on its route too", () => {
+    const onNavigate = jest.fn();
+    const { getByLabelText } = render(
+      <CapsuleDock role="child" hydrated pathname="/" onNavigate={onNavigate} />,
+      { wrapper: wrap }
+    );
+    fireEvent.press(getByLabelText("Rewards"));
+    expect(onNavigate).toHaveBeenCalledWith("/rewards");
+    fireEvent.press(getByLabelText("Meals"));
+    expect(onNavigate).toHaveBeenCalledWith("/meals");
   });
 });

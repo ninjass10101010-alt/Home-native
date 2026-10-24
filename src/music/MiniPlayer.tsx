@@ -8,6 +8,7 @@ import { musicTokensFor } from "../theme/music-tokens";
 import { usePlayback } from "./playback";
 import { useCast } from "./CastProvider";
 import { isContentHidden } from "./explicit";
+import { DOCK_TOP_OFFSET } from "../nav/CapsuleDock";
 
 /**
  * The bar's own glyph — the beamed note U+266B.
@@ -75,22 +76,38 @@ export function MiniPlayer() {
   };
 
   return (
-    <View pointerEvents="box-none" style={{ position: "absolute", left: 16, right: 16, bottom: 120, alignItems: "center" }}>
+    <View
+      testID="mini-player-floating"
+      pointerEvents="box-none"
+      // The floating chrome clears the dock by design: the pill sits ABOVE the
+      // dock's reserved band (DOCK_TOP_OFFSET), so the two never overlap.
+      style={{ position: "absolute", left: 16, right: 16, bottom: DOCK_TOP_OFFSET + 12, alignItems: "center" }}
+    >
       {/*
-        THE CAPSULE — the bar above the dock, on the Liquid palette: the panel
-        fill, the panel rim, the panel radius. It floats over the wall, so it
-        carries its own ground rather than borrowing the wall's glass.
+        THE FLOATING GLASS PILL — the bar above the dock, on the Yuma glass
+        language: the DENSE glass fill (opaque on purpose — it carries the
+        transport glyphs over content whose colour is unknown), the glass
+        hairline, the pill radius and a soft shadow.
+
+        It is the same family as the transport pill: glassStrong fill,
+        glassRim hairline, shadow. It floats over the page, so it carries its
+        own ground rather than borrowing the wall's glass.
       */}
       <View
         testID="mini-player-capsule"
         style={{
           width: "100%",
           maxWidth: 760,
-          backgroundColor: tokens.panel,
-          borderRadius: tokens.panelRadius,
+          backgroundColor: tokens.glassStrong,
+          borderRadius: 9999,
           borderWidth: 1,
-          borderColor: tokens.panelRim,
+          borderColor: tokens.glassRim,
           padding: 8,
+          shadowColor: tokens.shadow,
+          shadowOpacity: 1,
+          shadowRadius: 20,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 6,
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>

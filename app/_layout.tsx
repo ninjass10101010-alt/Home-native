@@ -68,6 +68,21 @@ export default function RootLayout() {
                   <NavigationBar hidden />
                   <PokeBoundary>
                     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }} />
+                    {/*
+                      THE FLOATING CHROME (SP3-B Task 5).
+
+                      The app's nav is the floating glass dock
+                      (src/nav/CapsuleDock.tsx), rendered per route; the
+                      mini-player pill is the one global piece of floating
+                      chrome. It renders DIRECTLY here — its own wrapper
+                      (testID `mini-player-floating`) is already
+                      absolute + `pointerEvents="box-none"` and only occupies
+                      the pill's band, so it sits above the page and clears the
+                      dock's reserved band (DOCK_TOP_OFFSET) without covering
+                      it. Wrapping it in an extra full-screen box-none layer
+                      was tried and reverted: on Fabric Android that layer
+                      swallowed the dock's taps.
+                    */}
                     <MiniPlayer />
                   </PokeBoundary>
                 </ToastProvider>

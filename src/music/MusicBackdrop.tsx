@@ -199,6 +199,29 @@ export function MusicBackdrop({
         locations={[0, 0.38, 1]}
         style={{ position: "absolute", top: 0, left: 0, right: 0, height: "26%" }}
       />
+
+      {/*
+        5. THE BOTTOM SCRIM — the FLOATING GLASS DOCK's legibility gradient.
+
+        The dock (SP3-B Task 5) floats at the foot of the wallpaper, where a
+        cover's bright patches would wash the ground under it out. The dock
+        carries its own glass, but the ground it floats OVER still has to be
+        calm, so the backdrop paints the app's own `scrimBottom` token there
+        (the token Task 3 defined and left unused). It points at the theme's
+        ink — dark under a white label, light under a black one — and holds at
+        the foot, fading upward, so the artwork is never flattened.
+      */}
+      <LinearGradient
+        testID="music-backdrop-scrim-bottom"
+        pointerEvents="none"
+        colors={[
+          mix(tokens.scrimBottom, "transparent", 0),
+          tokens.scrimBottom,
+          tokens.scrimBottom,
+        ]}
+        locations={[0, 0.62, 1]}
+        style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "26%" }}
+      />
     </View>
   );
 }

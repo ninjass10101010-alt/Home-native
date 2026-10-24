@@ -287,3 +287,24 @@ describe("the cast volume's mute button on the glass", () => {
     }
   });
 });
+
+/**
+ * THE QUEUE SHEET — the glass list over the tinted artwork (SP3-B Task 5).
+ *
+ * The queue is a listening surface on the SAME ground as the stage: the
+ * backdrop's legibility veil, then the glass sheet on top. It follows the
+ * SAME rule the stage documents — its text reads the FULL, opaque `label`
+ * token, because the dim tiers fall under AA over the blurred art (~2.5:1
+ * worst case). Hierarchy stays in size and weight, never in a sub-AA colour.
+ */
+describe("the queue sheet — the glass list over the tinted artwork", () => {
+  it("the full label clears AA on every cover, through the glass, in both themes", () => {
+    for (const hex of ADVERSARIAL) {
+      const darkGround = stageGround(hex, "dark", DARK.glassFill);
+      expect({ hex, dark: contrast(darkGround, DARK.label) >= 4.5 }).toEqual({ hex, dark: true });
+
+      const lightGround = stageGround(hex, "light", LIGHT.glassFill);
+      expect({ hex, light: contrast(lightGround, LIGHT.label) >= 4.5 }).toEqual({ hex, light: true });
+    }
+  });
+});

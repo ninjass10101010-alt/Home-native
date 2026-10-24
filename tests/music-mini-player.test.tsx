@@ -51,6 +51,7 @@ import { fireEvent, render, renderHook } from "@testing-library/react-native";
 import { MiniPlayer } from "../src/music/MiniPlayer";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
 import { musicTokensFor } from "../src/theme/music-tokens";
+import { DOCK_TOP_OFFSET } from "../src/nav/CapsuleDock";
 
 const wrap = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 
@@ -255,15 +256,27 @@ it("the deny rule holds even with the explicit filter off", () => {
 describe("the MiniPlayer capsule", () => {
   const styleOf = (node: any) => StyleSheet.flatten(node.props.style) as Record<string, any>;
 
-  it("is a Liquid capsule — the panel fill, the panel rim, the panel radius", () => {
+  it("is a floating GLASS pill — the dense glass fill, the glass rim, the pill radius", () => {
     const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
     const { theme, boost } = resolved();
     const tokens = musicTokensFor(theme, boost);
     const style = styleOf(getByTestId("mini-player-capsule"));
-    expect(style.backgroundColor).toBe(tokens.panel);
-    expect(style.borderColor).toBe(tokens.panelRim);
+    // The pill carries the transport glyphs over content whose colour is
+    // unknown, so it wears the DENSE glass (opaque on purpose) and the glass
+    // hairline, with a soft shadow so it reads as raised above the page.
+    expect(style.backgroundColor).toBe(tokens.glassStrong);
+    expect(style.borderColor).toBe(tokens.glassRim);
     expect(style.borderWidth).toBe(1);
-    expect(style.borderRadius).toBe(tokens.panelRadius);
+    expect(style.borderRadius).toBe(9999);
+    expect(style.shadowColor).toBe(tokens.shadow);
+  });
+
+  it("floats above the dock — absorbed by the page, never overlapping it", () => {
+    const { getByTestId } = render(<MiniPlayer />, { wrapper: wrap });
+    const float = styleOf(getByTestId("mini-player-floating"));
+    expect(float.position).toBe("absolute");
+    // The floating layer clears the dock's top edge (no overlap).
+    expect(float.bottom).toBeGreaterThanOrEqual(DOCK_TOP_OFFSET);
   });
 
   it("the artwork leads at 48dp on the Liquid radius", () => {

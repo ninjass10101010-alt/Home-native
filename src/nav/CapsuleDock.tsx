@@ -88,6 +88,13 @@ const CAP_GAP = 6; // --capsule-gap — the gap between two caps
 const CAP_DISC = 72; // the wall cap's h-[72px] w-[72px] circle
 const CAP_GLYPH = 36; // the wall cap's h-9 w-9 glyph box
 /**
+ * The floating bar's height, and the screen-space it reserves at the foot of
+ * the wall: the capsule's page margin + its own height (top padding + the cap
+ * cell + the 1px rim, top and bottom). The MiniPlayer pill sits ABOVE this
+ * line, so the floating chrome never overlaps.
+ */
+export const DOCK_TOP_OFFSET = CAP_EDGE + CAP_PAD * 2 + CAP_DISC + 2;
+/**
  * The wall cap's label. The web writes `text-lg` (18px); the native's system
  * face measures a shade wider per glyph, and the KID dock swaps "House" (5
  * characters) for "Rewards" (7) — at 18sp the widest role's seven labels no
@@ -117,13 +124,17 @@ export function CapsuleDock({ role, hydrated, pathname, onNavigate, style, testI
 
   return (
     <View
-      testID={testID}
+      testID={testID ?? "floating-dock"}
       style={[
         // The web's nav is `fixed bottom-0 left-0 right-0` with the capsule
         // inset by --capsule-edge and lifted by `mb-3` (12px). The native
         // centred a CONTENT-WIDTH capsule instead, which left a ~77px gutter
         // on each side of the wall — the dock read as a floating strip rather
         // than as the wall's chrome.
+        //
+        // SP3-B: it is the FLOATING GLASS DOCK — a fixed bar with page margins
+        // on all three sides, no morph, no drag. The routes, labels and
+        // testIDs are unchanged; only the Yuma glass language is adopted.
         {
           position: "absolute",
           left: CAP_EDGE,

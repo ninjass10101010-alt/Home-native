@@ -1624,12 +1624,19 @@ function QueuePane({
 }: QueuePaneProps) {
   return (
     <View testID="music-queue" style={{ gap: tokens.shelfGap }}>
+      {/*
+        THE QUEUE SHEET — the Listening surface over the living artwork
+        backdrop, so its panel is the GLASS layer the blurred art reads
+        through: the same family as the Now Playing stage (glassFill +
+        glassRim), never a solid tint that would hide the art.
+      */}
       <View
+        testID="music-queue-panel"
         style={{
-          backgroundColor: tokens.panel,
+          backgroundColor: tokens.glassFill,
           borderRadius: tokens.panelRadius,
           borderWidth: 1,
-          borderColor: tokens.panelRim,
+          borderColor: tokens.glassRim,
           overflow: "hidden",
         }}
       >
@@ -1665,7 +1672,10 @@ function QueuePane({
           <Text
             testID="music-queue-empty"
             style={{
-              color: tokens.label2,
+              // On the glass sheet the dim tiers fall under AA (the same
+              // reason the stage dims nothing), so the empty state reads the
+              // full, opaque label token.
+              color: tokens.label,
               ...TYPOGRAPHY.body,
               paddingHorizontal: 16,
               paddingVertical: 14,
@@ -1738,7 +1748,13 @@ function QueueRow({
         <Text numberOfLines={1} style={{ color: tokens.label, ...TYPOGRAPHY.body, fontWeight: "700" }}>
           {track.title}
         </Text>
-        <Text numberOfLines={1} style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>
+        {/*
+          On the glass sheet the dim tier falls under AA over the blurred art
+          (measured ~2.5:1 worst case), so the artist steps up to the full,
+          opaque label token — hierarchy stays in size and weight, never in a
+          sub-AA colour (the same rule the Now Playing stage follows).
+        */}
+        <Text numberOfLines={1} style={{ color: tokens.label, ...TYPOGRAPHY.label }}>
           {track.artist}
         </Text>
       </Pressable>
