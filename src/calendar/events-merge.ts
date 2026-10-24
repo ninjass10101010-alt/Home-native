@@ -179,8 +179,16 @@ export function familyEventsForDay(rows: DbEventRow[], dayISO: string): WallEven
 
 /** Google events covering one day (all-day spans included via googleCoversDay). */
 export function googleEventsForDay(rows: GoogleEventRow[], dayISO: string): WallEvent[] {
+  const seenGoogleIds = new Set<string>();
   return rows
     .filter((row) => googleCoversDay(row, dayISO))
+    .filter((row) => {
+      const googleId = row.google_id || "";
+      if (!googleId) return true;
+      if (seenGoogleIds.has(googleId)) return false;
+      seenGoogleIds.add(googleId);
+      return true;
+    })
     .map((row, i) => {
       const clock = googleClock(row);
       return {
