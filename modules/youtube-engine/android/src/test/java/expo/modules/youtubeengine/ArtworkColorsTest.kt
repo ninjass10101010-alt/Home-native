@@ -114,4 +114,98 @@ class ArtworkColorsTest {
   fun `no colour is null, never a fake one`() {
     assertNull(ArtworkColors.formatColor(null))
   }
+
+  /* ── The blurred artwork (the living backdrop's image) ─────────────────── */
+
+  /** A cache directory for the blur's answers. */
+  private fun tempCache(): java.io.File =
+    java.nio.file.Files.createTempDirectory("artwork-blur").toFile()
+
+  /**
+   * The blur's FAILURE path.
+   *
+   * The backdrop's image is blurred on-device, and the JVM cannot decode a
+   * bitmap (the framework is stubbed), so the success path is a device probe.
+   * The failure path is what can be pinned here, and it is the path that
+   * matters: a blur that throws would take the music down with it, and a
+   * wallpaper is an ENHANCEMENT — every failure answers with null and the
+   * app falls back to the unblurred cover under the tint scrim.
+   */
+  @Test
+  fun `a blank url answers with no blur`() {
+    assertNull(
+      ArtworkColors.blurred("", 24, stubClient(200, byteArrayOf(1, 2, 3)), tempCache())
+    )
+  }
+
+  @Test
+  fun `a failed fetch answers with no blur`() {
+    val dead = OkHttpClient.Builder()
+      .connectTimeout(1, TimeUnit.SECONDS)
+      .readTimeout(1, TimeUnit.SECONDS)
+      .build()
+    assertNull(ArtworkColors.blurred("http://127.0.0.1:1/art.jpg", 24, dead, tempCache()))
+  }
+
+  @Test
+  fun `a non-success status answers with no blur`() {
+    assertNull(
+      ArtworkColors.blurred(
+        "https://example.invalid/art.jpg",
+        24,
+        stubClient(404, byteArrayOf()),
+        tempCache()
+      )
+    )
+  }
+
+  @Test
+  fun `an empty body answers with no blur`() {
+    assertNull(
+      ArtworkColors.blurred(
+        "https://example.invalid/art.jpg",
+        24,
+        stubClient(200, byteArrayOf()),
+        tempCache()
+      )
+    )
+  }
+
+  @Test
+  fun `a body that is not an image answers with no blur`() {
+    assertNull(
+      ArtworkColors.blurred(
+        "https://example.invalid/art.jpg",
+        24,
+        stubClient(200, "this is not an image".toByteArray()),
+        tempCache()
+      )
+    )
+  }
+
+  @Test
+  fun `the blur never throws`() {
+    val answers = listOf(
+      ArtworkColors.blurred("", 24, stubClient(200, byteArrayOf()), tempCache()),
+      ArtworkColors.blurred("://broken", 24, stubClient(200, byteArrayOf()), tempCache()),
+      ArtworkColors.blurred(
+        "https://example.invalid/art.jpg",
+        24,
+        stubClient(500, byteArrayOf(9)),
+        tempCache()
+      ),
+    )
+    for (answer in answers) assertNull("every failure answers with null", answer)
+  }
+
+  @Test
+  fun `the cache key is the artwork's hash, never its url`() {
+    // The URL is a secret-ish string: it must never become a file name (and
+    // never a log line).
+    val key = ArtworkColors.cacheKey("https://img.example/cover.jpg")
+    assertEquals("a hex digest", 64, key.length)
+    assertTrue("no url in the key", !key.contains("img.example"))
+    assertEquals("the same artwork always finds the same file", key, ArtworkColors.cacheKey("https://img.example/cover.jpg"))
+    assertTrue("another artwork gets another file", key != ArtworkColors.cacheKey("https://img.example/other.jpg"))
+  }
 }

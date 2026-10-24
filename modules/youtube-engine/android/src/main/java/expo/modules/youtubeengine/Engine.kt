@@ -17,6 +17,7 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
+import java.io.File
 
 private val AUDIO_ITAG_PREFERENCE = listOf(140, 251, 139, 249)
 
@@ -86,6 +87,21 @@ object Engine {
    */
   private val fallbackExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
     Thread(runnable, "youtube-engine-fallback").apply {
+      isDaemon = true
+    }
+  }
+
+  /**
+   * The thread the ARTWORK work runs on.
+   *
+   * The blur is a heavy, blocking job — a download, a decode, a blur and a
+   * JPEG write — and it may sit on neither Expo's shared async queue (that
+   * would stall every other native call) nor an engine thread (the wall's
+   * music must never wait for a wallpaper). One thread of its own, and the
+   * artwork jobs queue behind each other instead of competing.
+   */
+  private val artworkExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+    Thread(runnable, "youtube-engine-artwork").apply {
       isDaemon = true
     }
   }
@@ -221,6 +237,24 @@ object Engine {
    */
   fun artworkColorsAsync(url: String, promise: Promise) =
     onEngineThread(promise) { artworkColors(url) }
+
+  /**
+   * The blurred artwork at [url], off Expo's shared async queue.
+   *
+   * The promise is ALWAYS settled, and it is settled with a VALUE: a failure
+   * answers with null and never with a rejection, because the blur is an
+   * enhancement — the app falls back to the unblurred artwork under the tint
+   * scrim, and a backdrop that failed must not take the music down with it.
+   */
+  fun artworkBlurredAsync(url: String, radius: Int, cacheDir: File, promise: Promise) {
+    try {
+      artworkExecutor.execute {
+        promise.resolve(ArtworkColors.blurred(url, radius, artworkClient, cacheDir))
+      }
+    } catch (rejected: RejectedExecutionException) {
+      promise.resolve(null)
+    }
+  }
 
   /**
    * The dominant and vibrant colours of the artwork at [url].

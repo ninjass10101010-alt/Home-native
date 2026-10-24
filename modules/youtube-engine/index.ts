@@ -121,3 +121,61 @@ export async function artworkColors(url: string): Promise<ArtworkColors> {
 }
 
 export type { ArtworkColors, MediaTrack, ResolvedAudio } from "./src/types";
+
+/**
+ * The blurred artwork's radius, in the image's own pixels.
+ *
+ * The default is the one the spec asks for: a radius that fully obscures the
+ * artwork's detail (~24dp equivalent), so nothing under the title can be
+ * read.
+ */
+export const ARTWORK_BLUR_RADIUS = 24;
+
+/**
+ * The blurred artwork, by artwork URL and radius.
+ *
+ * The native side downloads the cover, blurs it (a colour field, not a
+ * picture), writes it into the app's cache and answers with a `file://` URI.
+ *
+ * The contract is the same one the colour extraction has, and for the same
+ * reason — a backdrop is an ENHANCEMENT, never a blocker:
+ *
+ *  - It NEVER rejects. A dead network, a 404, a body that is not an image, a
+ *    build without the native module — every one of them answers with null,
+ *    and the app paints the unblurred cover under the tint scrim.
+ *  - It NEVER invents a URI. A native answer that is not a string becomes
+ *    null, never a made-up path.
+ *  - It NEVER logs the URL. The logging discipline is the native side's.
+ *
+ * A NULL IS CACHED TOO: a cover that could not be blurred must not be asked
+ * again on every render of the stage.
+ */
+const blurredCache = new Map<string, string | null>();
+
+export async function artworkBlurred(
+  url: string,
+  radius: number = ARTWORK_BLUR_RADIUS
+): Promise<string | null> {
+  const key = url.trim();
+  if (!key) return null;
+  const cacheKey = `${key}#${radius}`;
+  const cached = blurredCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  let answer: string | null = null;
+  try {
+    const raw = (await native().artworkBlurred(key, radius)) as unknown;
+    answer = typeof raw === "string" && raw.length > 0 ? raw : null;
+  } catch {
+    // The native side never rejects, but a build without the module (the web
+    // preview) does — and the answer is the same either way: no blur.
+    answer = null;
+  }
+
+  if (blurredCache.size >= ARTWORK_CACHE_LIMIT) {
+    const oldest = blurredCache.keys().next().value;
+    if (oldest !== undefined) blurredCache.delete(oldest);
+  }
+  blurredCache.set(cacheKey, answer);
+  return answer;
+}

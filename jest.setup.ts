@@ -162,4 +162,6 @@ jest.mock("./modules/youtube-engine", () => ({
   })),
   // The stage's tint: the artwork's own colour, read on-device.
   artworkColors: jest.fn(async () => ({ dominant: "#3B82F6", vibrant: null })),
+  // The living backdrop's image: the artwork, blurred on-device.
+  artworkBlurred: jest.fn(async () => null),
 }));

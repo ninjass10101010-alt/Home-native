@@ -12,7 +12,7 @@
  * Every failure path answers with two nulls, and the stage falls back to the
  * app's accent token.
  */
-import { artworkColors } from "./index";
+import { artworkBlurred, artworkColors } from "./index";
 
 // The module under test is mocked GLOBALLY (the test setup fakes the whole
 // engine), so this file asks for the real one. Jest hoists the call above
@@ -24,10 +24,11 @@ jest.unmock("./index");
 // native surface stays exactly as the environment set it up.
 const ExpoModulesCore = jest.requireMock("expo-modules-core");
 
-const native = { artworkColors: jest.fn() };
+const native = { artworkColors: jest.fn(), artworkBlurred: jest.fn() };
 
 beforeEach(() => {
   native.artworkColors.mockReset();
+  native.artworkBlurred.mockReset();
   jest
     .spyOn(ExpoModulesCore, "requireNativeModule")
     .mockReturnValue(native as never);
@@ -98,5 +99,72 @@ describe("artworkColors", () => {
     // (it never grows past its ceiling) instead of growing forever.
     await artworkColors(first);
     expect(native.artworkColors).toHaveBeenCalledTimes(102);
+  });
+});
+
+/**
+ * The blurred artwork (the living backdrop's image).
+ *
+ * The native side writes the blurred cover into the app's cache and answers
+ * with a `file://` URI. The wrapper's contract is the colour extraction's:
+ * a failure answers with null and NEVER with a rejection — a wallpaper is an
+ * enhancement, and the app falls back to the raw cover under the tint scrim.
+ */
+describe("artworkBlurred", () => {
+  it("answers with the URI the native side wrote", async () => {
+    native.artworkBlurred.mockResolvedValue("file:///cache/artwork-blur/abc.jpg");
+    await expect(artworkBlurred("https://img.invalid/a.jpg")).resolves.toBe(
+      "file:///cache/artwork-blur/abc.jpg"
+    );
+    expect(native.artworkBlurred).toHaveBeenCalledWith(
+      "https://img.invalid/a.jpg",
+      24
+    );
+  });
+
+  it("never invents a URI: a missing or wrongly typed answer becomes null", async () => {
+    native.artworkBlurred.mockResolvedValue(42);
+    await expect(artworkBlurred("https://img.invalid/b.jpg")).resolves.toBeNull();
+
+    native.artworkBlurred.mockResolvedValue("");
+    await expect(artworkBlurred("https://img.invalid/c.jpg")).resolves.toBeNull();
+
+    native.artworkBlurred.mockResolvedValue(null);
+    await expect(artworkBlurred("https://img.invalid/d.jpg")).resolves.toBeNull();
+  });
+
+  it("a native failure answers with null, never a rejection", async () => {
+    native.artworkBlurred.mockRejectedValue(new Error("no module"));
+    await expect(artworkBlurred("https://img.invalid/e.jpg")).resolves.toBeNull();
+  });
+
+  it("a blank url answers with null and never reaches the native side", async () => {
+    await expect(artworkBlurred("   ")).resolves.toBeNull();
+    expect(native.artworkBlurred).not.toHaveBeenCalled();
+  });
+
+  it("blurs a cover once — and remembers a FAILURE too", async () => {
+    native.artworkBlurred.mockResolvedValue("file:///cache/artwork-blur/one.jpg");
+    await artworkBlurred("https://img.invalid/f.jpg");
+    await artworkBlurred("https://img.invalid/f.jpg");
+    expect(native.artworkBlurred).toHaveBeenCalledTimes(1);
+
+    // A cover that could not be blurred must not be asked again on every
+    // render of the stage.
+    native.artworkBlurred.mockResolvedValue(null);
+    await artworkBlurred("https://img.invalid/g.jpg");
+    await artworkBlurred("https://img.invalid/g.jpg");
+    expect(native.artworkBlurred).toHaveBeenCalledTimes(2);
+  });
+
+  it("a different radius is a different artwork", async () => {
+    native.artworkBlurred.mockResolvedValue("file:///cache/artwork-blur/h.jpg");
+    await artworkBlurred("https://img.invalid/h.jpg", 24);
+    await artworkBlurred("https://img.invalid/h.jpg", 48);
+    expect(native.artworkBlurred).toHaveBeenCalledTimes(2);
+    expect(native.artworkBlurred).toHaveBeenLastCalledWith(
+      "https://img.invalid/h.jpg",
+      48
+    );
   });
 });

@@ -17,7 +17,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { artworkColors, search as engineSearch } from "../../modules/youtube-engine";
+import { artworkBlurred, artworkColors, search as engineSearch } from "../../modules/youtube-engine";
 import { useTheme } from "../theme/ThemeProvider";
 import { FONTS, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
@@ -28,6 +28,7 @@ import { usePlayback } from "./playback";
 import { useCast } from "./CastProvider";
 import { CastControl } from "./CastControl";
 import { CastVolume } from "./CastVolume";
+import { MusicBackdrop } from "./MusicBackdrop";
 import { currentLineIndex, fetchLyrics, followOffset, FOLLOW_PAUSE_MS, type LyricLine } from "./lyrics";
 import { countUnrated, isContentHidden, isDeniedTerm, searchNote, visibleTracks } from "./explicit";
 import { totalDownloadBytes } from "./library";
@@ -156,8 +157,13 @@ export function MusicPlayer() {
    *
    * NO FAKE COLOUR: a track with no artwork, or an extraction that failed,
    * falls back to the ACCENT banded — never to a random or invented hue.
+   *
+   * The RAW swatch is what is cached (not the banded colour): the backdrop
+   * bands it for ITSELF, and a colour that was banded twice would lose the
+   * artwork's own brightness — which is exactly what the backdrop's legibility
+   * maths has to know.
    */
-  const [tintCache, setTintCache] = React.useState<Record<string, string>>({});
+  const [tintCache, setTintCache] = React.useState<Record<string, string | null>>({});
   const trackId = visibleCurrent?.id ?? null;
   const artworkUrl = visibleCurrent?.artworkUrl ?? null;
   const tintKey = trackId ? `${theme}:${trackId}` : null;
@@ -167,24 +173,50 @@ export function MusicPlayer() {
     // and the engine is never asked.
     if (!trackId || !artworkUrl || !tintKey) return;
     // Already resolved for this cover — never read it twice.
-    if (tintCache[tintKey]) return;
+    if (tintKey in tintCache) return;
     let alive = true;
-    const settle = (value: string) => {
+    const settle = (value: string | null) => {
       if (!alive) return;
       setTintCache((prev) => ({ ...prev, [tintKey]: value }));
     };
-    const fallback = bandStageTint(tokens.accent, theme);
     void artworkColors(artworkUrl)
-      .then((extracted) =>
-        settle(extracted.dominant ? bandStageTint(extracted.dominant, theme) : fallback)
-      )
-      .catch(() => settle(fallback));
+      .then((extracted) => settle(extracted.dominant))
+      .catch(() => settle(null));
     return () => { alive = false; };
   }, [trackId, artworkUrl, tintKey, tintCache, theme, tokens.accent]);
 
   // Until the cover's colour lands, the stage wears the banded accent — the
   // field is NEVER unpainted.
-  const stageTint = (tintKey ? tintCache[tintKey] : undefined) ?? bandStageTint(tokens.accent, theme);
+  const rawDominant = tintKey && tintKey in tintCache ? tintCache[tintKey] : null;
+  const stageTint = bandStageTint(rawDominant ?? tokens.accent, theme);
+
+  /**
+   * The BACKDROP's artwork — the cover, blurred on-device.
+   *
+   * The blur is a native job (a cover cannot be blurred in JS) and it answers
+   * with a `file://` URI or with null. The UNBLURRED cover under the tint
+   * scrim is the DEFAULT (the blur is an enhancement, never a blocker), so
+   * the wallpaper is there from the first frame; the blurred file replaces it
+   * when it lands, and a failed blur simply leaves the cover there.
+   */
+  const [blurred, setBlurred] = React.useState<{ key: string; uri: string | null } | null>(null);
+
+  React.useEffect(() => {
+    // No artwork: no backdrop at all. The answer is derived from the artwork
+    // URL below (the state is keyed by it), so there is nothing to reset.
+    if (!artworkUrl) return;
+    let alive = true;
+    void artworkBlurred(artworkUrl)
+      .then((uri) => { if (alive) setBlurred({ key: artworkUrl, uri }); })
+      .catch(() => { if (alive) setBlurred({ key: artworkUrl, uri: null }); });
+    return () => { alive = false; };
+  }, [artworkUrl]);
+
+  const backdropUri = artworkUrl
+    ? blurred && blurred.key === artworkUrl
+      ? blurred.uri ?? artworkUrl
+      : artworkUrl
+    : null;
 
   /**
    * Adds a term to the family's own list and clears the input.
@@ -201,6 +233,22 @@ export function MusicPlayer() {
 
   return (
     <>
+      {/*
+        THE LIVING BACKDROP — the track's own artwork, blurred on-device and
+        drifting behind the music surface. It paints NOTHING when there is no
+        track (and costs nothing either), and its drift follows the PLAYBACK
+        CLOCK: a wall at rest never animates.
+
+        It is an ABSOLUTE layer inside the screen's own frame, so it does not
+        take part in the page's layout and the page still scrolls over it.
+      */}
+      <MusicBackdrop
+        uri={backdropUri}
+        dominantHex={rawDominant}
+        theme={theme}
+        boost={boost}
+        positionMs={Math.max(0, Math.round(clockPosition * 1000))}
+      />
       <ScrollView testID="music-player" contentContainerStyle={{ padding: tokens.pageMargin, gap: tokens.shelfGap, paddingBottom: 200 }} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Text style={{ color: colors["color-text-primary"], fontFamily: FONTS.display, fontSize: 44 }}>Music</Text>

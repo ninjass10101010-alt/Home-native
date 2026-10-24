@@ -26,5 +26,12 @@ class YoutubeEngineModule : Module() {
     AsyncFunction("artworkColors") { url: String, promise: Promise ->
       Engine.artworkColorsAsync(url, promise)
     }
+    // The living backdrop's image: the artwork, blurred on-device. It runs on
+    // the artwork thread — a download AND a blur on Expo's shared queue would
+    // stall every other native call, and the wall's music must never wait for
+    // a wallpaper.
+    AsyncFunction("artworkBlurred") { url: String, radius: Int, promise: Promise ->
+      Engine.artworkBlurredAsync(url, radius, appContext.cacheDirectory, promise)
+    }
   }
 }

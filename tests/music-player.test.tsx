@@ -165,12 +165,19 @@ let mockArtworkColors: { dominant: string | null; vibrant: string | null } = {
   vibrant: null,
 };
 
+/**
+ * The blurred artwork the engine answered with — null means the native blur
+ * failed (or is not there), and the backdrop falls back to the raw cover.
+ */
+let mockArtworkBlurred: string | null = null;
+
 jest.mock("../modules/youtube-engine", () => ({
   search: jest.fn(async () => mockSearchOutcome),
   related: jest.fn(async () => []),
   resolveAudio: jest.fn(async () => ({ url: "https://x.y/audio.m4a", mimeType: "audio/mp4",
     contentLength: 1, durationSeconds: 1, expiresAt: 0 })),
   artworkColors: jest.fn(async () => mockArtworkColors),
+  artworkBlurred: jest.fn(async () => mockArtworkBlurred),
 }));
 
 /**
