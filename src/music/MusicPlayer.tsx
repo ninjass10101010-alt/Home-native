@@ -31,7 +31,7 @@ import { CastVolume } from "./CastVolume";
 import { MusicBackdrop } from "./MusicBackdrop";
 import { formatCodecChip } from "./codec";
 import { TransportPill } from "./TransportPill";
-import { currentLineIndex, fetchLyrics, followOffset, FOLLOW_PAUSE_MS, type LyricLine } from "./lyrics";
+import { currentLineIndex, fetchLyrics, followOffset, FOLLOW_PAUSE_MS, lyricSegments, type LyricLine } from "./lyrics";
 import { countUnrated, isContentHidden, isDeniedTerm, searchNote, visibleTracks } from "./explicit";
 import { totalDownloadBytes } from "./library";
 import { LYRIC_CURRENT_SCALE, LYRIC_TYPE, STAGE_TYPE } from "./stage-type";
@@ -495,6 +495,7 @@ export function MusicPlayer() {
               <LyricsPane
                 lines={lyrics}
                 activeIndex={activeLine}
+                positionMs={Math.max(0, Math.round(clockPosition * 1000))}
                 tokens={tokens}
                 reduceMotion={reduceMotion}
                 onSeek={casting ? (seconds) => void cast.seek(seconds) : (seconds) => void seek(seconds)}
@@ -1399,6 +1400,13 @@ interface LyricsPaneProps {
   lines: LyricLine[] | null;
   /** The index of the line being sung (-1 before the first one). */
   activeIndex: number;
+  /**
+   * The playhead, in ms — the clock the karaoke fill reads.
+   *
+   * It is the SAME clock the follow reads: while casting, the receiver owns
+   * it (the tablet's own player is paused).
+   */
+  positionMs: number;
   tokens: MusicTokens;
   /** The app's reduced-motion authority — the follow arrives at once. */
   reduceMotion: boolean;
@@ -1408,7 +1416,7 @@ interface LyricsPaneProps {
 /**
  * The LYRICS pane — the words, line-synced.
  *
- * Three rules, in order of importance:
+ * Four rules, in order of importance:
  *
  *   1. THE LINE BEING SUNG IS LED: the accent colour and a touch bigger (a
  *      TRANSFORM, so the list never reflows under the finger that follows
@@ -1420,10 +1428,16 @@ interface LyricsPaneProps {
  *   2. TAPPING A LINE SEEKS TO IT — the whole point of showing the words.
  *   3. THE FOLLOW KEEPS THE CURRENT LINE IN VIEW, and pauses for ~3s when
  *      the user scrolls, so it never fights the finger.
+ *   4. THE WORDS FILL TO THE PLAYHEAD — the karaoke fill. A source that
+ *      carries word timings fills the active line word by word, to the
+ *      clock; a source that does not gets the LINE-level fill (the whole
+ *      line lights up while it is sung) and never a made-up word time.
  *
- * LINE-LEVEL only: the word-by-word fill is SP3.
+ * THE FILL IS CONTENT, NOT MOTION: it is the words being sung, so reduced
+ * motion does not switch it off (it never moves anything — it only changes
+ * which colour a word wears).
  */
-function LyricsPane({ lines, activeIndex, tokens, reduceMotion, onSeek }: LyricsPaneProps) {
+function LyricsPane({ lines, activeIndex, positionMs, tokens, reduceMotion, onSeek }: LyricsPaneProps) {
   const scrollRef = React.useRef<ScrollView | null>(null);
   // Each line's measured y — the follow's map from a line to an offset.
   const offsets = React.useRef<Record<number, number>>({});
@@ -1477,20 +1491,52 @@ function LyricsPane({ lines, activeIndex, tokens, reduceMotion, onSeek }: Lyrics
     <ScrollView
       ref={scrollRef}
       testID="music-lyrics-scroll"
-      style={{ maxHeight: LYRICS_VIEWPORT_DP }}
+      style={{
+        maxHeight: LYRICS_VIEWPORT_DP,
+        /*
+         * THE GLASS SHEET — the words' own ground.
+         *
+         * WHY A SHEET AT ALL: the pane sits on the WALLPAPER (the blurred
+         * artwork), and a cover's bright patches wash the ground out — the
+         * dim tiers measured 2.4:1 and the accent 1.4:1 straight on the
+         * artwork. The sheet is the DENSE glass (`glassStrong`), which is
+         * OPAQUE on purpose (the same reason the transport pill is): only an
+         * opaque ground can guarantee a word's contrast over a cover whose
+         * colour is unknown. Measured over the sheet, in both themes:
+         * the label 17.00:1 / 19.63:1, the dim tiers 9.25:1 / 8.95:1 and
+         * 5.97:1 / 4.69:1, the accent 4.83:1 / 3.41:1 (see
+         * tests/music-lyrics-contrast.test.ts).
+         */
+        backgroundColor: tokens.glassStrong,
+        borderRadius: tokens.panelRadius,
+        borderWidth: 1,
+        borderColor: tokens.glassRim,
+        overflow: "hidden",
+      }}
       nestedScrollEnabled
       onLayout={(e) => {
         viewportHeight.current = e.nativeEvent.layout.height;
       }}
       onScrollBeginDrag={pauseFollow}
     >
-      <View testID="music-lyrics" style={{ gap: 4, paddingVertical: 8 }}>
+      <View testID="music-lyrics" style={{ gap: 4, paddingVertical: 8, paddingHorizontal: 16 }}>
         {lines && lines.length > 0 ? (
           lines.map((line, index) => {
             const isCurrent = index === activeIndex;
             const isNeighbour =
               activeIndex >= 0 && (index === activeIndex - 1 || index === activeIndex + 1);
             const color = isCurrent ? tokens.accent : isNeighbour ? tokens.label2 : tokens.label3;
+            /*
+             * THE KARAOKE FILL — the pieces of the line, each one either
+             * sung (the accent, the fill) or still to come (stepped down).
+             *
+             * ONLY the line being sung is filled, and ONLY when the source
+             * carries word timings. A line-only source keeps the line-level
+             * fill: the whole line is led, and no word is ever claimed that
+             * the source did not time.
+             */
+            const segments =
+              isCurrent && line.words.length > 0 ? lyricSegments(line, positionMs) : null;
             return (
               <Pressable
                 key={`${line.timeMs}-${index}`}
@@ -1519,7 +1565,19 @@ function LyricsPane({ lines, activeIndex, tokens, reduceMotion, onSeek }: Lyrics
                     transform: isCurrent ? [{ scale: LYRIC_CURRENT_SCALE }] : undefined,
                   }}
                 >
-                  {line.text || "♪"}
+                  {segments
+                    ? segments.map((segment, segmentIndex) => (
+                        <Text
+                          key={segmentIndex}
+                          testID={`music-lyric-${index}-seg-${segmentIndex}`}
+                          style={{
+                            color: segment.sung ? tokens.accent : tokens.label2,
+                          }}
+                        >
+                          {segment.text}
+                        </Text>
+                      ))
+                    : (line.text || "♪")}
                 </Text>
               </Pressable>
             );

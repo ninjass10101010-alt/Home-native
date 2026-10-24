@@ -200,7 +200,7 @@ jest.mock("../modules/youtube-engine", () => ({
  * The real fetcher talks to lrclib.net; the lyrics pane needs a deterministic
  * answer (and the panel must never wait on the network to paint).
  */
-let mockLyrics: { timeMs: number; text: string }[] | null = null;
+let mockLyrics: { timeMs: number; text: string; words: { timeMs: number; text: string }[] }[] | null = null;
 
 jest.mock("../src/music/lyrics", () => {
   const actual = jest.requireActual("../src/music/lyrics");
@@ -690,9 +690,9 @@ describe("the Now Playing stage", () => {
  */
 describe("the Now Playing lyrics mode", () => {
   const LINES = [
-    { timeMs: 1000, text: "First line" },
-    { timeMs: 5000, text: "Second line" },
-    { timeMs: 9000, text: "Third line" },
+    { timeMs: 1000, text: "First line", words: [] },
+    { timeMs: 5000, text: "Second line", words: [] },
+    { timeMs: 9000, text: "Third line", words: [] },
   ];
 
   it("renders the lyrics behind the switcher, not the stage", async () => {
@@ -851,6 +851,121 @@ describe("the Now Playing lyrics mode", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+/**
+ * The KARAOKE fill (SP3-B Task 4).
+ *
+ * A line whose source carries word timings fills word by word, to the
+ * playhead; a line-only source fills as a whole and says nothing false
+ * about words it does not have.
+ */
+describe("the karaoke fill", () => {
+  const WORD_LINES = [
+    {
+      timeMs: 1000,
+      text: "Hello world",
+      words: [
+        { timeMs: 1000, text: "Hello" },
+        { timeMs: 1500, text: "world" },
+      ],
+    },
+    { timeMs: 5000, text: "Second line", words: [] },
+    { timeMs: 9000, text: "Third line", words: [] },
+  ];
+
+  /** The same lines, but from a source that knows only WHEN a line is sung. */
+  const LINES_FOR_KARAOKE = [
+    { timeMs: 1000, text: "Hello world", words: [] },
+    { timeMs: 5000, text: "Second line", words: [] },
+    { timeMs: 9000, text: "Third line", words: [] },
+  ];
+
+  it("fills the active line's words up to the playhead", async () => {
+    mockLyrics = WORD_LINES;
+    mockPosition = 1.2; // 1200ms — the first word is sung, the second is not
+    const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+    const tokens = musicTokensFor(theme, boost);
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    await waitFor(() => expect(getByTestId("music-lyric-0")).toBeTruthy());
+    const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
+
+    // the sung word wears the accent; the word still to come steps down
+    expect(styleOf(getByTestId("music-lyric-0-seg-0")).color).toBe(tokens.accent);
+    expect(styleOf(getByTestId("music-lyric-0-seg-1")).color).toBe(tokens.label2);
+    // the neighbours stay dimmed
+    expect(styleOf(getByText("Second line")).color).toBe(tokens.label2);
+  });
+
+  it("the fill advances with the clock", async () => {
+    mockLyrics = WORD_LINES;
+    mockPosition = 1.2;
+    const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+    const tokens = musicTokensFor(theme, boost);
+    const { getByText, getByTestId, rerender } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    await waitFor(() => expect(getByTestId("music-lyric-0")).toBeTruthy());
+    const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
+
+    mockPosition = 1.6; // 1600ms — the second word has started
+    rerender(<MusicPlayer />);
+    expect(styleOf(getByTestId("music-lyric-0-seg-1")).color).toBe(tokens.accent);
+  });
+
+  it("while casting, the fill follows the RECEIVER's clock", async () => {
+    mockLyrics = WORD_LINES;
+    mockPosition = 0; // the tablet's own clock is stale while casting
+    mockCast = {
+      ...idleCast(),
+      casting: true,
+      target: { id: "tv", name: "Living Room" },
+      playing: true,
+      position: 1.2,
+      duration: 120,
+    };
+    const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+    const tokens = musicTokensFor(theme, boost);
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    await waitFor(() => expect(getByTestId("music-lyric-0")).toBeTruthy());
+    const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
+
+    expect(styleOf(getByTestId("music-lyric-0-seg-0")).color).toBe(tokens.accent);
+    expect(styleOf(getByTestId("music-lyric-0-seg-1")).color).toBe(tokens.label2);
+  });
+
+  it("a line-only source fills as a whole and claims no words", async () => {
+    mockLyrics = LINES_FOR_KARAOKE;
+    mockPosition = 1.2;
+    const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+    const tokens = musicTokensFor(theme, boost);
+    const { getByText, getByTestId, queryByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    await waitFor(() => expect(getByTestId("music-lyric-0")).toBeTruthy());
+    const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
+
+    // the whole line is lit — the line-level fill
+    expect(styleOf(getByText("Hello world")).color).toBe(tokens.accent);
+    // and there is no word to pretend about
+    expect(queryByTestId("music-lyric-0-seg-0")).toBeNull();
+  });
+
+  it("the words read on a GLASS SHEET, not straight on the artwork", async () => {
+    mockLyrics = LINES_FOR_KARAOKE;
+    const { theme, boost } = renderHook(() => useTheme(), { wrapper: wrap }).result.current;
+    const tokens = musicTokensFor(theme, boost);
+    const { getByText, getByTestId } = await renderPlayer();
+    fireEvent.press(getByText("Lyrics"));
+    await waitFor(() => expect(getByTestId("music-lyric-0")).toBeTruthy());
+    const styleOf = (node: any) => StyleSheet.flatten(node.props.style);
+
+    // The sheet is the DENSE glass (opaque on purpose: a translucent fill
+    // cannot guarantee a word's contrast over a cover of unknown colour).
+    const sheet = styleOf(getByTestId("music-lyrics-scroll"));
+    expect(sheet.backgroundColor).toBe(tokens.glassStrong);
+    expect(sheet.borderColor).toBe(tokens.glassRim);
   });
 });
 
