@@ -18,6 +18,8 @@ Expo ships breaking changes per SDK. Before writing code touching Expo/RN APIs: 
 
 Routes live in `app/` (repo-root, expo-router). Non-route code lives in `src/`. Never create `src/app/`. ios/ and android/ are generated (CNG) — never hand-edit; configure via `app.json` + plugins. Local APK builds only (`expo prebuild` + Gradle); no EAS account, no Play Store.
 
+**Updating the panel itself:** the tablet is updated over **adb/wifi** (`adb install -r` of the release APK, then `am force-stop` + `am start`) — **nothing else has to be rebuilt or redeployed**: the NAS stack, the web app and the API are untouched by that loop. The runbook is **`DEPLOY_TABLET_LOCAL.md` — LOCAL-ONLY** (gitignored, like the NAS one): it holds the household's addresses, the pairing steps and the debugging helpers, and it must never reach GitHub.
+
 ## Documentation contract (mirrors parent + Home-ai)
 
 1. Specs/plans live in the PARENT repo `../docs/superpowers/specs|plans/` — not here.
