@@ -297,6 +297,23 @@ describe("CurrentMealWidget", () => {
     await findByText("No meal planned yet");
     expect(await findByText("Plan dinner in the Kitchen tab")).toBeTruthy();
   });
+
+  it("guest planned meal without a schedule reads the schedule gate, not the no-schedule hint", async () => {
+    mockMember = null;
+    route({
+      "/api/db/schedules": { items: [] },
+      "/api/db/meal_plan_entries": {
+        items: [{ id: "m1", name: "Chicken wings with white rice", emoji: "🍗", time: "Sat", mealType: "dinner", tags: [], weekOf: "2026-10-05" }],
+      },
+    });
+    const { findByText, queryByText } = render(
+      <CurrentMealWidget now={now} />,
+      { wrapper: wrap },
+    );
+    await findByText("Chicken wings with white rice");
+    expect(await findByText("Sign in to see the schedule")).toBeTruthy();
+    expect(queryByText("Set a meal schedule to see times")).toBeNull();
+  });
 });
 
 describe("BriefingWidget", () => {

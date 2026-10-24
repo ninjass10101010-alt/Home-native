@@ -211,15 +211,17 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
       (m) => (m.weekOf || weekMonday) === weekMonday && m.time === todayShort && m.mealType === mealType
     ) ?? null;
 
-  const subtitle = !scheduledTime
-    ? "Set a meal schedule to see times"
-    : minutesUntil === null || minutesUntil > 90
-      ? `Scheduled at ${scheduledTime}`
-      : minutesUntil > 0
-        ? minutesUntil <= 15
-          ? `Almost time · in ${formatDuration(minutesUntil)}`
-          : `In ${formatDuration(minutesUntil)} · at ${scheduledTime}`
-        : `Started at ${scheduledTime}`;
+  const subtitle = guest && !scheduledTime
+    ? "Sign in to see the schedule"
+    : !scheduledTime
+      ? "Set a meal schedule to see times"
+      : minutesUntil === null || minutesUntil > 90
+        ? `Scheduled at ${scheduledTime}`
+        : minutesUntil > 0
+          ? minutesUntil <= 15
+            ? `Almost time · in ${formatDuration(minutesUntil)}`
+            : `In ${formatDuration(minutesUntil)} · at ${scheduledTime}`
+          : `Started at ${scheduledTime}`;
 
   // Card tint mirrors the web's proximity glow (static at wall distance): the
   // meal accent mints the card border at 30%, matching `accentColor`+`30` web fill.
