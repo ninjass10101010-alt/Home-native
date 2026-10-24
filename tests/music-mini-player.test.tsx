@@ -35,6 +35,7 @@ function idleCast() {
     seek: jest.fn(async () => {}),
     advance: jest.fn(async () => {}),
     previous: jest.fn(async () => {}),
+    setVolume: jest.fn(async () => {}),
     adjustVolume: jest.fn(async () => {}),
     toggleMute: jest.fn(async () => {}),
   };

@@ -41,6 +41,7 @@ export interface CastValue {
   seek: (seconds: number) => Promise<void>;
   advance: (auto: boolean) => Promise<void>;
   previous: () => Promise<void>;
+  setVolume: (value: number) => Promise<void>;
   adjustVolume: (delta: number) => Promise<void>;
   toggleMute: () => Promise<void>;
 }
@@ -169,7 +170,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const [track, setTrack] = React.useState<MediaTrack | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [volume, setVolume] = React.useState(0.5);
+  const [volume, setVolumeState] = React.useState(0.5);
   const [muted, setMuted] = React.useState(false);
   const castTrackId = track?.id ?? null;
   const clientRef = React.useRef<CastClient | null>(null);
@@ -263,7 +264,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       const level = levelResult.value;
       if (typeof level === "number" && Number.isFinite(level)) {
         volumeRef.current = level;
-        setVolume(level);
+        setVolumeState(level);
       }
     }
     if (muteResult.status === "fulfilled") {
@@ -563,24 +564,52 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   );
 
   /**
-   * The receiver's own amplifier. `setVolume` is synchronous in the SDK, so
-   * the state updates optimistically; a positive nudge also lifts a mute,
-   * because a family reaching for Volume up expects to hear something.
+   * The receiver's own amplifier, set to an absolute level.
+   *
+   * `setVolume` is synchronous in the SDK, so the state updates optimistically.
+   * The epoch guard discards any in-flight hydration read that belongs to an
+   * older session or predates this action, exactly like `adjustVolume`.
+   *
+   * RAISING the level lifts a mute, because a family reaching for the volume
+   * (the bar, or the + step) expects to hear something. Lowering it never
+   * unmutes: a quiet receiver stays quiet until it is asked for.
    */
-  const adjustVolume = React.useCallback(async (delta: number) => {
+  const setVolume = React.useCallback(async (value: number) => {
+    // A level that is not a number can never reach the receiver: refuse it
+    // before it invalidates a pending hydration.
+    if (!Number.isFinite(value)) return;
     volumeEpochRef.current += 1;
     const active = sessionRef.current;
     if (!active) return;
-    const next = Math.round(Math.min(1, Math.max(0, volumeRef.current + delta)) * 100) / 100;
+    const next = Math.round(Math.min(1, Math.max(0, value)) * 100) / 100;
+    const raised = next > volumeRef.current;
     active.setVolume(next);
     volumeRef.current = next;
-    setVolume(next);
-    if (mutedRef.current && delta > 0) {
+    setVolumeState(next);
+    if (raised && mutedRef.current) {
       active.setMute(false);
       mutedRef.current = false;
       setMuted(false);
     }
   }, []);
+
+  /**
+   * A relative nudge on the receiver's amplifier: read the latest level from
+   * the ref (rapid presses must not see a stale render) and delegate.
+   *
+   * A positive nudge also lifts a mute even when the level is already at the
+   * ceiling — a family reaching for Volume up expects to hear something.
+   */
+  const adjustVolume = React.useCallback(async (delta: number) => {
+    const active = sessionRef.current;
+    if (!active) return;
+    await setVolume(volumeRef.current + delta);
+    if (mutedRef.current && delta > 0) {
+      active.setMute(false);
+      mutedRef.current = false;
+      setMuted(false);
+    }
+  }, [setVolume]);
 
   const toggleMute = React.useCallback(async () => {
     volumeEpochRef.current += 1;
@@ -639,6 +668,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       seek,
       advance,
       previous,
+      setVolume,
       adjustVolume,
       toggleMute,
     }),
@@ -661,6 +691,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       seek,
       advance,
       previous,
+      setVolume,
       adjustVolume,
       toggleMute,
     ]

@@ -34,6 +34,7 @@ jest.mock("../src/music/CastProvider", () => ({
     disconnect: jest.fn(async () => {}), play: jest.fn(async () => {}),
     pause: jest.fn(async () => {}), seek: jest.fn(async () => {}),
     advance: jest.fn(async () => {}), previous: jest.fn(async () => {}),
+    setVolume: jest.fn(async () => {}),
     adjustVolume: jest.fn(async () => {}), toggleMute: jest.fn(async () => {}),
   }),
 }));

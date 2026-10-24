@@ -1134,6 +1134,60 @@ test("adjustVolume sends a rounded level, not a float artefact", async () => {
   expect(api.volume).toBe(0.6);
 });
 
+test("setVolume clamps to [0,1] and rounds to two decimals", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+
+  await act(async () => { await api.setVolume(-0.5); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0);
+  expect(api.volume).toBe(0);
+
+  await act(async () => { await api.setVolume(0.556); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0.56);
+  expect(api.volume).toBe(0.56);
+
+  await act(async () => { await api.setVolume(2); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(1);
+  expect(api.volume).toBe(1);
+});
+
+test("a stale volume read never overwrites a newer setVolume", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  let resolveVolume!: (value: number) => void;
+  mockGetVolume.mockImplementationOnce(
+    () => new Promise<number>((resolve) => { resolveVolume = resolve; })
+  );
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.busy).toBe(false);
+
+  await act(async () => { await api.setVolume(0.8); });
+  expect(api.volume).toBe(0.8);
+
+  // The old read resolves late: the family's absolute set must win.
+  await act(async () => {
+    resolveVolume(0.1);
+    await Promise.resolve();
+  });
+  expect(api.volume).toBe(0.8);
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0.8);
+});
+
 test("adjusting up while muted also unmutes the receiver", async () => {
   mockStartSession.mockResolvedValue(true);
   mockGetCurrentCastSession.mockResolvedValue(sessionFor());
@@ -1151,6 +1205,48 @@ test("adjusting up while muted also unmutes the receiver", async () => {
   await act(async () => { await api.adjustVolume(0.1); });
   expect(mockSetMute).toHaveBeenCalledWith(false);
   expect(api.muted).toBe(false);
+});
+
+test("raising the level with setVolume lifts a mute", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  mockGetVolume.mockResolvedValue(0.4);
+  mockIsMute.mockResolvedValue(true);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.muted).toBe(true);
+
+  await act(async () => { await api.setVolume(0.6); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0.6);
+  expect(mockSetMute).toHaveBeenCalledWith(false);
+  expect(api.muted).toBe(false);
+});
+
+test("lowering the level with setVolume keeps the receiver muted", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  mockGetVolume.mockResolvedValue(0.6);
+  mockIsMute.mockResolvedValue(true);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.muted).toBe(true);
+
+  await act(async () => { await api.setVolume(0.2); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0.2);
+  expect(mockSetMute).not.toHaveBeenCalled();
+  expect(api.muted).toBe(true);
 });
 
 test("toggleMute flips the receiver and the state", async () => {
@@ -1184,6 +1280,7 @@ test("volume controls are a no-op without a session", async () => {
   );
   await act(async () => {});
   await act(async () => {
+    await api.setVolume(0.8);
     await api.adjustVolume(0.1);
     await api.toggleMute();
   });

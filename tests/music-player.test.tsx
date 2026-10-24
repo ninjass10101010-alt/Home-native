@@ -122,6 +122,7 @@ function idleCast() {
     seek: jest.fn(async () => {}),
     advance: jest.fn(async () => {}),
     previous: jest.fn(async () => {}),
+    setVolume: jest.fn(async () => {}),
     adjustVolume: jest.fn(async () => {}),
     toggleMute: jest.fn(async () => {}),
   };
@@ -504,7 +505,7 @@ describe("the Now Playing stage", () => {
     expect(casting.getByText("40%")).toBeTruthy();
   });
 
-  it("the stage volume buttons drive the receiver's amplifier", async () => {
+  it("the stage volume bar drives the receiver's amplifier", async () => {
     mockCast = {
       ...idleCast(),
       casting: true,
@@ -514,14 +515,23 @@ describe("the Now Playing stage", () => {
     };
     const { getByTestId } = await renderPlayer();
     await waitFor(() => expect(getByTestId("stage-volume")).toBeTruthy());
+    const bar = getByTestId("stage-volume-bar");
+    fireEvent(bar, "layout", {
+      nativeEvent: { layout: { width: 200, height: 64, x: 0, y: 0 } },
+    });
 
     await act(async () => {
-      fireEvent.press(getByTestId("stage-volume-down"));
+      fireEvent(bar, "responderGrant", { nativeEvent: { locationX: 100 } });
+    });
+    expect(mockCast.setVolume).toHaveBeenCalledWith(0.5);
+
+    await act(async () => {
+      fireEvent(bar, "accessibilityAction", { nativeEvent: { actionName: "decrement" } });
     });
     expect(mockCast.adjustVolume).toHaveBeenCalledWith(-0.02);
 
     await act(async () => {
-      fireEvent.press(getByTestId("stage-volume-up"));
+      fireEvent(bar, "accessibilityAction", { nativeEvent: { actionName: "increment" } });
     });
     expect(mockCast.adjustVolume).toHaveBeenCalledWith(0.02);
 
