@@ -33,6 +33,41 @@
  * over the scrim over the band's worst-case tint (see
  * tests/music-stage-contrast.test.ts).
  *
+ * THE GLASS FAMILY (SP3-B, 2026-10-23): the surfaces that sit over the
+ * blurred artwork backdrop (the Yuma-inspired language). The backdrop is
+ * BUSY and its colour is UNKNOWN (it is a cover), so these tokens are split
+ * by the job they do:
+ *
+ *   glassFill   a TRANSLUCENT panel fill (white in light, near-black in
+ *               dark) — the sheets and the panels that sit over the art.
+ *   glassRim    the hairline that separates a glass surface from the art.
+ *   glassStrong the transport pill's fill — OPAQUE on purpose (see below).
+ *   scrimTop    the TOP legibility gradient over the blurred art.
+ *   scrimBottom the BOTTOM legibility gradient over the blurred art.
+ *   grain       a STATIC ~4% neutral overlay (never animated).
+ *   shadow      a soft dark elevation tint under a raised surface.
+ *
+ * WHY THE SCRIMS POINT AT THEIR OWN INK: the label is black in light and
+ * white in dark, so a legible scrim LIGHTENS the art in light and DARKENS it
+ * in dark — a scrim that pushed the other way would fight its own text.
+ *
+ * WHY THE PILL IS OPAQUE: the pill carries the transport glyphs and sits over
+ * a backdrop whose colour is unknown. A translucent fill cannot GUARANTEE the
+ * glyph's contrast over an unknown cover; an opaque one can. The pill is
+ * therefore a solid surface with a hairline rim, and the translucency of the
+ * family lives in `glassFill` (the surfaces over a KNOWN ground).
+ *
+ * MEASURED RATIOS — THE GLASS FAMILY (composited pixels; the same rule as
+ * the tiers above — see tests/music-tokens.test.ts):
+ *
+ *   variant       title/scrim  artist/scrim  label/glass  label/pill  rim/bg
+ *   light            21.00        21.00         21.00       19.63      1.41
+ *   dark             21.00        21.00         20.02       17.00      1.91
+ *   dark + boost     21.00        21.00         20.14       18.24      2.38
+ *
+ * (The rim is a hairline, not text: it is held to VISIBILITY — >1.2 on its
+ * own ground — and never to the 4.5:1 text floor.)
+ *
  * Geometry (pageMargin 20 / shelfGap 12 / artworkRadius 14 / panelRadius 22)
  * is part of the same contract: the Liquid layout is a constant, not a
  * per-screen improvisation.
@@ -77,6 +112,33 @@ export interface MusicTokens {
   onAccent: string;
   /** The "playing"/success green. */
   green: string;
+  /**
+   * A glass panel's fill over the artwork backdrop — translucent (white in
+   * light, near-black in dark), so the blurred art still reads through it.
+   */
+  glassFill: string;
+  /**
+   * The hairline that separates a glass surface from the artwork behind it.
+   *
+   * Opaque on purpose: a hairline is one pixel wide, so its legibility
+   * depends on its VALUE, not on an alpha that would only ever blur it.
+   */
+  glassRim: string;
+  /**
+   * The transport pill's fill — the DENSE glass (the mini-player's pill too).
+   *
+   * Opaque on purpose: the pill carries the transport glyphs over a backdrop
+   * of unknown colour, and only an opaque fill can guarantee their contrast.
+   */
+  glassStrong: string;
+  /** The TOP legibility gradient over the blurred artwork (the title's scrim). */
+  scrimTop: string;
+  /** The BOTTOM legibility gradient over the blurred artwork (the artist's). */
+  scrimBottom: string;
+  /** A STATIC, ~4% neutral overlay — the film grain over the backdrop. */
+  grain: string;
+  /** A soft dark elevation tint under a raised glass surface. */
+  shadow: string;
   /** Page side margin (dp). */
   pageMargin: number;
   /** Vertical gap between shelves (dp). */
@@ -102,6 +164,13 @@ const DARK: MusicTokens = {
   accent: "#FF375F",
   onAccent: "#FFFFFF",
   green: "#30D158",
+  glassFill: "rgba(14,14,16,0.58)",
+  glassRim: "#3C3C40",
+  glassStrong: "#1C1C1F",
+  scrimTop: "rgba(0,0,0,0.60)",
+  scrimBottom: "rgba(0,0,0,0.68)",
+  grain: "rgba(255,255,255,0.04)",
+  shadow: "rgba(0,0,0,0.45)",
   pageMargin: 20,
   shelfGap: 12,
   artworkRadius: 14,
@@ -123,6 +192,13 @@ const LIGHT: MusicTokens = {
   accent: "#FF2D55",
   onAccent: "#FFFFFF",
   green: "#34C759",
+  glassFill: "rgba(255,255,255,0.62)",
+  glassRim: "#D9D9DE",
+  glassStrong: "#F7F7F9",
+  scrimTop: "rgba(255,255,255,0.86)",
+  scrimBottom: "rgba(255,255,255,0.76)",
+  grain: "rgba(0,0,0,0.04)",
+  shadow: "rgba(0,0,0,0.26)",
   pageMargin: 20,
   shelfGap: 12,
   artworkRadius: 14,
@@ -136,6 +212,15 @@ const DARK_BOOST: MusicTokens = {
   label3: "rgba(255,255,255,0.70)",
   panel: "rgba(255,255,255,0.10)",
   panelRim: "rgba(255,255,255,0.16)",
+  // The glass family lifts with it: a denser fill, a brighter rim and a
+  // deeper scrim — the same reason the tiers are lifted.
+  glassFill: "rgba(10,10,12,0.68)",
+  glassRim: "#4A4A4F",
+  glassStrong: "#151517",
+  scrimTop: "rgba(0,0,0,0.68)",
+  scrimBottom: "rgba(0,0,0,0.74)",
+  grain: "rgba(255,255,255,0.05)",
+  shadow: "rgba(0,0,0,0.55)",
 };
 
 /**

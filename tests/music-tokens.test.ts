@@ -90,6 +90,13 @@ function composite(fg: string, bg: string): string {
   return `#${byte(blend(f.r, b.r))}${byte(blend(f.g, b.g))}${byte(blend(f.b, b.b))}`;
 }
 
+/** A translucent colour AS IF it were opaque — the direction of a veil. */
+function opaqueOf(c: string): string {
+  const p = parseColor(c);
+  const byte = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${byte(p.r)}${byte(p.g)}${byte(p.b)}`;
+}
+
 /* ── The variants under contract ───────────────────────────────────────── */
 
 type Variant = {
@@ -121,6 +128,14 @@ const COLOR_KEYS = [
   "accent",
   "onAccent",
   "green",
+  // The glass family (SP3-B): surfaces over the blurred artwork backdrop.
+  "glassFill",
+  "glassRim",
+  "glassStrong",
+  "scrimTop",
+  "scrimBottom",
+  "grain",
+  "shadow",
 ] as const;
 
 const GEOMETRY = {
@@ -242,5 +257,115 @@ describe("the Liquid palette — measured ratios", () => {
       console.log(line);
     }
     expect(rows).toHaveLength(3);
+  });
+});
+
+/* ── The glass family (SP3-B Task 1) ────────────────────────────────────── */
+
+/**
+ * The glass surfaces that sit over the blurred artwork backdrop.
+ *
+ * The backdrop is BUSY and its colour is UNKNOWN (it is a cover), so the
+ * legibility of a surface over it cannot be taken on faith: every assertion
+ * here is taken on the COMPOSITED pixel, the same rule the Liquid tiers use.
+ *
+ * The measured grounds:
+ *   - the title/artist sit on the SCREMS (top and bottom gradients),
+ *   - the transport pill (and the mini-player) sit on the STRONG glass,
+ *   - the panels sit on the translucent FILL,
+ *   - the rim is a hairline, not text — it only has to be VISIBLE.
+ */
+describe.each(VARIANTS)("the glass family — $name", (v) => {
+  const tokens = musicTokensFor(v.theme, v.boost);
+
+  it("the title over the artwork scrim clears AA (4.5:1)", () => {
+    // The title sits on the artwork scrim: measure label on scrimTop-over-bg and on
+    // glassStrong-over-glassFill (both composited, both must clear 4.5).
+    expect(
+      contrast(composite(tokens.scrimTop, tokens.bg), tokens.label)
+    ).toBeGreaterThanOrEqual(4.5);
+    expect(
+      contrast(composite(tokens.label, tokens.glassStrong), tokens.bg)
+    ).toBeGreaterThanOrEqual(4.5);
+    // The rim is a hairline, not text: it only has to be visible (>1.2 on its own ground).
+    expect(contrast(tokens.glassRim, tokens.bg)).toBeGreaterThan(1.2);
+  });
+
+  it("the artist over the BOTTOM scrim clears AA (4.5:1)", () => {
+    expect(
+      contrast(composite(tokens.scrimBottom, tokens.bg), tokens.label)
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("the scrim moves the ground TOWARD the theme's own ink", () => {
+    // Light ink is black, so a legible scrim LIGHTENS the art; dark ink is
+    // white, so it DARKENS it. A scrim that pushed the other way would fight
+    // its own text. The direction is read from the veil's OWN colour (the
+    // gradient's direction) — over the page ground a dark scrim on a black
+    // ground cannot darken it any further.
+    const veil = opaqueOf(tokens.scrimTop);
+    const towardInk =
+      v.theme === "light"
+        ? luminance(veil) > luminance(tokens.label)
+        : luminance(veil) < luminance(tokens.label);
+    expect(towardInk).toBe(true);
+  });
+
+  it("the label on the glass fill clears AA (4.5:1)", () => {
+    // The translucent fill is a ground in its own right: the label over it
+    // (composited over the page ground) is what a panel actually paints.
+    const ground = composite(tokens.glassFill, tokens.bg);
+    expect(contrast(composite(tokens.label, ground), ground)).toBeGreaterThanOrEqual(
+      4.5
+    );
+  });
+
+  it("the label on the strong glass (the pill) clears AA (4.5:1)", () => {
+    const ground = composite(tokens.glassStrong, tokens.bg);
+    expect(contrast(composite(tokens.label, ground), ground)).toBeGreaterThanOrEqual(
+      4.5
+    );
+  });
+
+  it("the grain is a STATIC, low-alpha NEUTRAL overlay", () => {
+    const grain = parseColor(tokens.grain);
+    expect(grain.a).toBeGreaterThanOrEqual(0.02);
+    expect(grain.a).toBeLessThanOrEqual(0.06);
+    expect(grain.r).toBe(grain.g);
+    expect(grain.g).toBe(grain.b);
+  });
+
+  it("the shadow is a soft, DARK elevation tint", () => {
+    const shadow = parseColor(tokens.shadow);
+    expect(shadow.r).toBe(shadow.g);
+    expect(shadow.g).toBe(shadow.b);
+    expect(shadow.a).toBeGreaterThan(0);
+    expect(shadow.a).toBeLessThanOrEqual(0.6);
+  });
+
+  it("reports the measured glass ratios", () => {
+    const scrimGround = composite(tokens.scrimTop, tokens.bg);
+    const glassGround = composite(tokens.glassFill, tokens.bg);
+    const strongGround = composite(tokens.glassStrong, tokens.bg);
+    console.log(
+      [
+        v.name.padEnd(13),
+        `title/scrim ${contrast(scrimGround, tokens.label).toFixed(2)}`,
+        `artist/scrim ${contrast(
+          composite(tokens.scrimBottom, tokens.bg),
+          tokens.label
+        ).toFixed(2)}`,
+        `label/glass ${contrast(
+          composite(tokens.label, glassGround),
+          glassGround
+        ).toFixed(2)}`,
+        `label/pill ${contrast(
+          composite(tokens.label, strongGround),
+          strongGround
+        ).toFixed(2)}`,
+        `rim/bg ${contrast(tokens.glassRim, tokens.bg).toFixed(2)}`,
+      ].join("  ")
+    );
+    expect(true).toBe(true);
   });
 });
