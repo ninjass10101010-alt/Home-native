@@ -32,6 +32,7 @@ function idleCast() {
     seek: jest.fn(async () => {}),
     advance: jest.fn(async () => {}),
     previous: jest.fn(async () => {}),
+    setVolume: jest.fn(async () => {}),
     adjustVolume: jest.fn(async () => {}),
     toggleMute: jest.fn(async () => {}),
   };
@@ -280,10 +281,65 @@ it("with a target, the sheet shows the receiver's volume as a percentage", () =>
   const { getByTestId, getByText } = render(<CastControl track={track} />, { wrapper: wrap });
   fireEvent.press(getByTestId("cast-open"));
   expect(getByTestId("cast-volume")).toBeTruthy();
+  expect(getByTestId("cast-volume-bar")).toBeTruthy();
+  expect(getByTestId("cast-volume-bar").props.accessibilityRole).toBe("adjustable");
+  expect(getByTestId("cast-volume-bar").props.accessibilityValue).toEqual({
+    min: 0,
+    max: 100,
+    now: 35,
+    text: "35%",
+  });
   expect(getByText("35%")).toBeTruthy();
 });
 
-it("the volume buttons nudge the receiver by ten percent", async () => {
+it("tapping the volume bar sets the receiver at the tapped fraction", async () => {
+  const setVolume = jest.fn(async () => {});
+  mockCast = {
+    ...idleCast(),
+    target: { id: "tv", name: "Living Room" },
+    volume: 0.2,
+    setVolume,
+  };
+  const { getByTestId } = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(getByTestId("cast-open"));
+  const bar = getByTestId("cast-volume-bar");
+  fireEvent(bar, "layout", {
+    nativeEvent: { layout: { width: 200, height: 64, x: 0, y: 0 } },
+  });
+
+  await act(async () => {
+    fireEvent(bar, "responderGrant", { nativeEvent: { locationX: 100 } });
+  });
+  expect(setVolume).toHaveBeenCalledWith(0.5);
+});
+
+it("dragging the volume bar updates the receiver continuously", async () => {
+  const setVolume = jest.fn(async () => {});
+  mockCast = {
+    ...idleCast(),
+    target: { id: "tv", name: "Living Room" },
+    volume: 0.2,
+    setVolume,
+  };
+  const { getByTestId } = render(<CastControl track={track} />, { wrapper: wrap });
+  fireEvent.press(getByTestId("cast-open"));
+  const bar = getByTestId("cast-volume-bar");
+  fireEvent(bar, "layout", {
+    nativeEvent: { layout: { width: 200, height: 64, x: 0, y: 0 } },
+  });
+
+  await act(async () => {
+    fireEvent(bar, "responderGrant", { nativeEvent: { locationX: 40 } });
+  });
+  expect(setVolume).toHaveBeenLastCalledWith(0.2);
+
+  await act(async () => {
+    fireEvent(bar, "responderMove", { nativeEvent: { locationX: 150 } });
+  });
+  expect(setVolume).toHaveBeenLastCalledWith(0.75);
+});
+
+it("the volume bar's accessibility actions nudge the receiver by two percent", async () => {
   const adjustVolume = jest.fn(async () => {});
   mockCast = {
     ...idleCast(),
@@ -292,16 +348,17 @@ it("the volume buttons nudge the receiver by ten percent", async () => {
   };
   const { getByTestId } = render(<CastControl track={track} />, { wrapper: wrap });
   fireEvent.press(getByTestId("cast-open"));
+  const bar = getByTestId("cast-volume-bar");
 
   await act(async () => {
-    fireEvent.press(getByTestId("cast-volume-down"));
+    fireEvent(bar, "accessibilityAction", { nativeEvent: { actionName: "increment" } });
   });
-  expect(adjustVolume).toHaveBeenCalledWith(-0.1);
+  expect(adjustVolume).toHaveBeenCalledWith(0.02);
 
   await act(async () => {
-    fireEvent.press(getByTestId("cast-volume-up"));
+    fireEvent(bar, "accessibilityAction", { nativeEvent: { actionName: "decrement" } });
   });
-  expect(adjustVolume).toHaveBeenCalledWith(0.1);
+  expect(adjustVolume).toHaveBeenCalledWith(-0.02);
 });
 
 it("without a target, the sheet has no volume row", () => {
@@ -339,30 +396,34 @@ it("the mute button calls toggleMute and its label follows muted", async () => {
   expect(getByTestId("cast-mute").props.accessibilityState.checked).toBe(true);
 });
 
-it("busy disables the volume controls too, and pressing them makes no call", async () => {
+it("busy disables the volume bar and mute, and interacting makes no call", async () => {
+  const setVolume = jest.fn(async () => {});
   const adjustVolume = jest.fn(async () => {});
   const toggleMute = jest.fn(async () => {});
   mockCast = {
     ...idleCast(),
     target: { id: "tv", name: "Living Room" },
     busy: true,
+    setVolume,
     adjustVolume,
     toggleMute,
   };
   const { getByTestId, UNSAFE_getByProps } = render(<CastControl track={track} />, { wrapper: wrap });
   fireEvent.press(getByTestId("cast-open"));
-  expect(getByTestId("cast-volume-down").props.accessibilityState?.disabled).toBe(true);
-  expect(getByTestId("cast-volume-up").props.accessibilityState?.disabled).toBe(true);
+  const bar = getByTestId("cast-volume-bar");
+  expect(bar.props.accessibilityState?.disabled).toBe(true);
   expect(getByTestId("cast-mute").props.accessibilityState?.disabled).toBe(true);
-  expect(UNSAFE_getByProps({ testID: "cast-volume-down", disabled: true })).toBeTruthy();
-  expect(UNSAFE_getByProps({ testID: "cast-volume-up", disabled: true })).toBeTruthy();
   expect(UNSAFE_getByProps({ testID: "cast-mute", disabled: true })).toBeTruthy();
+  fireEvent(bar, "layout", {
+    nativeEvent: { layout: { width: 200, height: 64, x: 0, y: 0 } },
+  });
 
   await act(async () => {
-    fireEvent.press(getByTestId("cast-volume-down"));
-    fireEvent.press(getByTestId("cast-volume-up"));
+    fireEvent(bar, "responderGrant", { nativeEvent: { locationX: 100 } });
+    fireEvent(bar, "accessibilityAction", { nativeEvent: { actionName: "increment" } });
     fireEvent.press(getByTestId("cast-mute"));
   });
+  expect(setVolume).not.toHaveBeenCalled();
   expect(adjustVolume).not.toHaveBeenCalled();
   expect(toggleMute).not.toHaveBeenCalled();
 });

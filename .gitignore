@@ -51,3 +51,5 @@ reference/
 screenshots/
 *.log
 DEPLOY_*_LOCAL.md
+# the tablet update runbook (adb/wifi) — local only, like the NAS one
+DEPLOY_TABLET_LOCAL.md

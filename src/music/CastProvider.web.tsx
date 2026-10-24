@@ -32,6 +32,7 @@ const noopCast: CastValue = {
   seek: async () => {},
   advance: async () => {},
   previous: async () => {},
+  setVolume: async () => {},
   adjustVolume: async () => {},
   toggleMute: async () => {},
 };

@@ -41,6 +41,7 @@ export interface CastValue {
   seek: (seconds: number) => Promise<void>;
   advance: (auto: boolean) => Promise<void>;
   previous: () => Promise<void>;
+  setVolume: (value: number) => Promise<void>;
   adjustVolume: (delta: number) => Promise<void>;
   toggleMute: () => Promise<void>;
 }
@@ -61,63 +62,75 @@ interface CastSessionLike {
   setMute: (mute: boolean) => void;
 }
 
+interface SessionWaiter {
+  session: Promise<CastSessionLike | null>;
+  cancel: () => void;
+}
+
 /**
  * Wait for the SDK to report a session on `deviceId`.
  *
+ * The listeners are registered BEFORE `startSession` is called: on the tablet
+ * the receiver announces its session while `startSession` is still resolving,
+ * and an event that lands before the listener is attached would be lost.
  * `startSession` resolves when the route has been selected — the actual
  * session arrives later through `onSessionStarted` (or fails through
- * `onSessionStartFailed`). Reading the session synchronously therefore sees
+ * `onSessionStartFailed`) — while reading the session synchronously can see
  * `null` on a first connect and the OLD device on a switch, so the wait is
  * bounded and only accepts a session whose device actually matches.
  */
-function waitForSession(deviceId: string, timeoutMs = 6000): Promise<CastSessionLike | null> {
+function waitForSession(deviceId: string, timeoutMs = 6000): SessionWaiter {
   const manager = CastContext.sessionManager;
-  return new Promise((resolve) => {
-    let settled = false;
-    let startedSub: { remove: () => void } | null = null;
-    let failedSub: { remove: () => void } | null = null;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const finish = (session: CastSessionLike | null) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      startedSub?.remove();
-      failedSub?.remove();
-      resolve(session);
-    };
-
-    const matches = async (candidate: CastSessionLike | null): Promise<boolean> => {
-      if (!candidate) return false;
-      try {
-        const device = await candidate.getCastDevice();
-        return device?.deviceId?.trim() === deviceId;
-      } catch {
-        return false;
-      }
-    };
-
-    // Register BEFORE the read: the receiver can start between the two, and
-    // an event that lands before the listener is attached would be lost.
-    startedSub = manager.onSessionStarted((next) => {
-      const cast = next as unknown as CastSessionLike;
-      void matches(cast).then((ok) => { if (ok) finish(cast); });
-    });
-    failedSub = manager.onSessionStartFailed(() => finish(null));
-    timer = setTimeout(() => finish(null), timeoutMs);
-
-    void manager
-      .getCurrentCastSession()
-      .then(async (current) => {
-        if (settled) return;
-        const cast = current as unknown as CastSessionLike | null;
-        if (await matches(cast)) finish(cast);
-      })
-      .catch(() => {
-        // The lookup failed, but the receiver may still announce itself:
-        // keep waiting for the event rather than failing the connect early.
-      });
+  let settled = false;
+  let startedSub: { remove: () => void } | null = null;
+  let failedSub: { remove: () => void } | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let resolveSession!: (session: CastSessionLike | null) => void;
+  const session = new Promise<CastSessionLike | null>((resolve) => {
+    resolveSession = resolve;
   });
+
+  const finish = (next: CastSessionLike | null) => {
+    if (settled) return;
+    settled = true;
+    if (timer) clearTimeout(timer);
+    startedSub?.remove();
+    failedSub?.remove();
+    resolveSession(next);
+  };
+
+  const matches = async (candidate: CastSessionLike | null): Promise<boolean> => {
+    if (!candidate) return false;
+    try {
+      const device = await candidate.getCastDevice();
+      return device?.deviceId?.trim() === deviceId;
+    } catch {
+      return false;
+    }
+  };
+
+  // Register BEFORE the read: the receiver can start between the two, and
+  // an event that lands before the listener is attached would be lost.
+  startedSub = manager.onSessionStarted((next) => {
+    const cast = next as unknown as CastSessionLike;
+    void matches(cast).then((ok) => { if (ok) finish(cast); });
+  });
+  failedSub = manager.onSessionStartFailed(() => finish(null));
+  timer = setTimeout(() => finish(null), timeoutMs);
+
+  void manager
+    .getCurrentCastSession()
+    .then(async (current) => {
+      if (settled) return;
+      const cast = current as unknown as CastSessionLike | null;
+      if (await matches(cast)) finish(cast);
+    })
+    .catch(() => {
+      // The lookup failed, but the receiver may still announce itself:
+      // keep waiting for the event rather than failing the connect early.
+    });
+
+  return { session, cancel: () => finish(null) };
 }
 
 const CastContextValue = React.createContext<CastValue | null>(null);
@@ -157,7 +170,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const [track, setTrack] = React.useState<MediaTrack | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [volume, setVolume] = React.useState(0.5);
+  const [volume, setVolumeState] = React.useState(0.5);
   const [muted, setMuted] = React.useState(false);
   const castTrackId = track?.id ?? null;
   const clientRef = React.useRef<CastClient | null>(null);
@@ -251,7 +264,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       const level = levelResult.value;
       if (typeof level === "number" && Number.isFinite(level)) {
         volumeRef.current = level;
-        setVolume(level);
+        setVolumeState(level);
       }
     }
     if (muteResult.status === "fulfilled") {
@@ -331,13 +344,18 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       setBusy(true);
       setError(null);
       let opened = false;
+      let waiter: SessionWaiter | null = null;
       try {
+        // Subscribe and arm the bounded wait BEFORE starting: on the tablet
+        // the receiver announces its session while `startSession` is still
+        // resolving, and that event must not be missed.
+        waiter = waitForSession(chosen.id);
         opened = await CastContext.sessionManager.startSession(id);
         if (!opened) throw new Error("session not started");
         // `startSession` resolves when the route is selected; the SDK session
         // arrives later. Wait for the session that names THIS device — never
         // accept the old one on a switch.
-        const current = await waitForSession(chosen.id);
+        const current = await waiter.session;
         if (!current?.client) throw new Error("session unavailable");
         // The receiver owns the sound from here: silence the tablet at once,
         // without waiting for the sink effect (and without `toggle`, which
@@ -356,6 +374,9 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
         if (switched) setTrack(null);
         return true;
       } catch {
+        // Every failure path settles the waiter and removes its listeners,
+        // even when `startSession` refused or threw before the wait began.
+        waiter?.cancel();
         // A failed SWITCH must not leave the previous receiver live, and a
         // FIRST connect that opened a session but could not reach its client
         // is just as live: end it before clearing, so it cannot keep playing
@@ -543,24 +564,52 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   );
 
   /**
-   * The receiver's own amplifier. `setVolume` is synchronous in the SDK, so
-   * the state updates optimistically; a positive nudge also lifts a mute,
-   * because a family reaching for Volume up expects to hear something.
+   * The receiver's own amplifier, set to an absolute level.
+   *
+   * `setVolume` is synchronous in the SDK, so the state updates optimistically.
+   * The epoch guard discards any in-flight hydration read that belongs to an
+   * older session or predates this action, exactly like `adjustVolume`.
+   *
+   * RAISING the level lifts a mute, because a family reaching for the volume
+   * (the bar, or the + step) expects to hear something. Lowering it never
+   * unmutes: a quiet receiver stays quiet until it is asked for.
    */
-  const adjustVolume = React.useCallback(async (delta: number) => {
+  const setVolume = React.useCallback(async (value: number) => {
+    // A level that is not a number can never reach the receiver: refuse it
+    // before it invalidates a pending hydration.
+    if (!Number.isFinite(value)) return;
     volumeEpochRef.current += 1;
     const active = sessionRef.current;
     if (!active) return;
-    const next = Math.round(Math.min(1, Math.max(0, volumeRef.current + delta)) * 100) / 100;
+    const next = Math.round(Math.min(1, Math.max(0, value)) * 100) / 100;
+    const raised = next > volumeRef.current;
     active.setVolume(next);
     volumeRef.current = next;
-    setVolume(next);
-    if (mutedRef.current && delta > 0) {
+    setVolumeState(next);
+    if (raised && mutedRef.current) {
       active.setMute(false);
       mutedRef.current = false;
       setMuted(false);
     }
   }, []);
+
+  /**
+   * A relative nudge on the receiver's amplifier: read the latest level from
+   * the ref (rapid presses must not see a stale render) and delegate.
+   *
+   * A positive nudge also lifts a mute even when the level is already at the
+   * ceiling — a family reaching for Volume up expects to hear something.
+   */
+  const adjustVolume = React.useCallback(async (delta: number) => {
+    const active = sessionRef.current;
+    if (!active) return;
+    await setVolume(volumeRef.current + delta);
+    if (mutedRef.current && delta > 0) {
+      active.setMute(false);
+      mutedRef.current = false;
+      setMuted(false);
+    }
+  }, [setVolume]);
 
   const toggleMute = React.useCallback(async () => {
     volumeEpochRef.current += 1;
@@ -619,6 +668,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       seek,
       advance,
       previous,
+      setVolume,
       adjustVolume,
       toggleMute,
     }),
@@ -641,6 +691,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
       seek,
       advance,
       previous,
+      setVolume,
       adjustVolume,
       toggleMute,
     ]

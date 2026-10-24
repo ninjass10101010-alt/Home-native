@@ -122,6 +122,7 @@ function idleCast() {
     seek: jest.fn(async () => {}),
     advance: jest.fn(async () => {}),
     previous: jest.fn(async () => {}),
+    setVolume: jest.fn(async () => {}),
     adjustVolume: jest.fn(async () => {}),
     toggleMute: jest.fn(async () => {}),
   };
@@ -484,6 +485,60 @@ describe("the Now Playing stage", () => {
     for (const id of ["np-shuffle", "np-repeat", "np-download"]) {
       expect(getByTestId(id)).toBeTruthy();
     }
+  });
+
+  it("shows the receiver volume row only while casting", async () => {
+    const idle = await renderPlayer();
+    expect(idle.getByTestId("np-stage")).toBeTruthy();
+    expect(idle.queryByTestId("stage-volume")).toBeNull();
+    idle.unmount();
+
+    mockCast = {
+      ...idleCast(),
+      casting: true,
+      target: { id: "tv", name: "Living Room" },
+      volume: 0.4,
+    };
+    const casting = await renderPlayer();
+    expect(casting.getByTestId("stage-volume")).toBeTruthy();
+    expect(casting.getByTestId("stage-volume-percent")).toBeTruthy();
+    expect(casting.getByText("40%")).toBeTruthy();
+  });
+
+  it("the stage volume bar drives the receiver's amplifier", async () => {
+    mockCast = {
+      ...idleCast(),
+      casting: true,
+      target: { id: "tv", name: "Living Room" },
+      volume: 0.4,
+      muted: false,
+    };
+    const { getByTestId } = await renderPlayer();
+    await waitFor(() => expect(getByTestId("stage-volume")).toBeTruthy());
+    const bar = getByTestId("stage-volume-bar");
+    fireEvent(bar, "layout", {
+      nativeEvent: { layout: { width: 200, height: 64, x: 0, y: 0 } },
+    });
+
+    await act(async () => {
+      fireEvent(bar, "responderGrant", { nativeEvent: { locationX: 100 } });
+    });
+    expect(mockCast.setVolume).toHaveBeenCalledWith(0.5);
+
+    await act(async () => {
+      fireEvent(bar, "accessibilityAction", { nativeEvent: { actionName: "decrement" } });
+    });
+    expect(mockCast.adjustVolume).toHaveBeenCalledWith(-0.02);
+
+    await act(async () => {
+      fireEvent(bar, "accessibilityAction", { nativeEvent: { actionName: "increment" } });
+    });
+    expect(mockCast.adjustVolume).toHaveBeenCalledWith(0.02);
+
+    await act(async () => {
+      fireEvent.press(getByTestId("stage-volume-mute"));
+    });
+    expect(mockCast.toggleMute).toHaveBeenCalledTimes(1);
   });
 
   it("the chips on the tinted field wear the DARK scrim, never a white fill", async () => {

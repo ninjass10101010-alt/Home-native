@@ -3,6 +3,8 @@ import React from "react";
 import { act, render, waitFor } from "@testing-library/react-native";
 
 const mockStartSession = jest.fn();
+const mockSessionStartedRemove = jest.fn();
+const mockSessionStartFailedRemove = jest.fn();
 const mockEndCurrentSession = jest.fn();
 const mockGetCurrentCastSession = jest.fn();
 const mockLoadMedia = jest.fn();
@@ -62,11 +64,21 @@ jest.mock("react-native-google-cast", () => ({
       getCurrentCastSession: () => mockGetCurrentCastSession(),
       onSessionStarted: (handler: (session: any) => void) => {
         mockSessionStarted = handler;
-        return { remove: () => { if (mockSessionStarted === handler) mockSessionStarted = null; } };
+        return {
+          remove: () => {
+            if (mockSessionStarted === handler) mockSessionStarted = null;
+            mockSessionStartedRemove();
+          },
+        };
       },
       onSessionStartFailed: (handler: (session: any, error: string) => void) => {
         mockSessionStartFailed = handler;
-        return { remove: () => { if (mockSessionStartFailed === handler) mockSessionStartFailed = null; } };
+        return {
+          remove: () => {
+            if (mockSessionStartFailed === handler) mockSessionStartFailed = null;
+            mockSessionStartFailedRemove();
+          },
+        };
       },
     },
   },
@@ -269,6 +281,38 @@ test("a failed load names the target, pauses local audio and never re-enters the
   expect(api.error).toBe("Couldn't cast to Living Room.");
 });
 
+test("a session event emitted before startSession resolves is not missed", async () => {
+  const earlyLoad = jest.fn(async () => {});
+  const earlyClient = { ...client(), loadMedia: earlyLoad };
+  mockStartSession.mockImplementation(async () => {
+    // The tablet's receiver starts during the startSession call itself: the
+    // event lands before the returned promise resolves.
+    mockSessionStarted?.(sessionFor(device, earlyClient));
+    return true;
+  });
+  mockGetCurrentCastSession.mockResolvedValue(null);
+  mockResolveAudio.mockResolvedValue({ url: "https://rr.example/fresh", mimeType: "audio/mp4", durationSeconds: 295 });
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+
+  let connected = false;
+  await act(async () => { connected = await api.connect("tv"); });
+  expect(connected).toBe(true);
+  expect(api.target?.id).toBe("tv");
+  expect(mockEndCurrentSession).not.toHaveBeenCalled();
+  expect(mockSessionStartedRemove).toHaveBeenCalled();
+  expect(mockSessionStartFailedRemove).toHaveBeenCalled();
+
+  await act(async () => { await api.startCast(track); });
+  expect(earlyLoad).toHaveBeenCalledTimes(1);
+  expect(mockLoadMedia).not.toHaveBeenCalled();
+});
+
 test("connect waits for the receiver and loads on the session that arrives later", async () => {
   const lateLoad = jest.fn(async () => {});
   const lateClient = { ...client(), loadMedia: lateLoad };
@@ -373,6 +417,8 @@ test("connect gives up after the bounded wait and ends the session it opened", a
     await act(async () => { connected = await pending; });
     expect(connected).toBe(false);
     expect(mockEndCurrentSession).toHaveBeenCalledWith(true);
+    expect(mockSessionStartedRemove).toHaveBeenCalled();
+    expect(mockSessionStartFailedRemove).toHaveBeenCalled();
     expect(api.target).toBeNull();
     expect(api.error).toBe("Couldn't cast to Living Room.");
     expect(mockLoadMedia).not.toHaveBeenCalled();
@@ -405,6 +451,30 @@ test("a failed session start ends the session it opened and reports false", asyn
   // `startSession` returned true, so a live session may exist even though the
   // receiver never produced one: end it instead of leaving it running.
   expect(mockEndCurrentSession).toHaveBeenCalledWith(true);
+  expect(mockSessionStartedRemove).toHaveBeenCalled();
+  expect(mockSessionStartFailedRemove).toHaveBeenCalled();
+  expect(api.target).toBeNull();
+  expect(api.error).toBe("Couldn't cast to Living Room.");
+});
+
+test("a refused session start settles the wait and removes its listeners", async () => {
+  mockStartSession.mockResolvedValue(false);
+  mockGetCurrentCastSession.mockResolvedValue(null);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+
+  let connected = true;
+  await act(async () => { connected = await api.connect("tv"); });
+  expect(connected).toBe(false);
+  expect(mockSessionStartedRemove).toHaveBeenCalled();
+  expect(mockSessionStartFailedRemove).toHaveBeenCalled();
+  // Nothing was opened, so there is nothing to tear down.
+  expect(mockEndCurrentSession).not.toHaveBeenCalled();
   expect(api.target).toBeNull();
   expect(api.error).toBe("Couldn't cast to Living Room.");
 });
@@ -1064,6 +1134,60 @@ test("adjustVolume sends a rounded level, not a float artefact", async () => {
   expect(api.volume).toBe(0.6);
 });
 
+test("setVolume clamps to [0,1] and rounds to two decimals", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+
+  await act(async () => { await api.setVolume(-0.5); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0);
+  expect(api.volume).toBe(0);
+
+  await act(async () => { await api.setVolume(0.556); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0.56);
+  expect(api.volume).toBe(0.56);
+
+  await act(async () => { await api.setVolume(2); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(1);
+  expect(api.volume).toBe(1);
+});
+
+test("a stale volume read never overwrites a newer setVolume", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  let resolveVolume!: (value: number) => void;
+  mockGetVolume.mockImplementationOnce(
+    () => new Promise<number>((resolve) => { resolveVolume = resolve; })
+  );
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.busy).toBe(false);
+
+  await act(async () => { await api.setVolume(0.8); });
+  expect(api.volume).toBe(0.8);
+
+  // The old read resolves late: the family's absolute set must win.
+  await act(async () => {
+    resolveVolume(0.1);
+    await Promise.resolve();
+  });
+  expect(api.volume).toBe(0.8);
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0.8);
+});
+
 test("adjusting up while muted also unmutes the receiver", async () => {
   mockStartSession.mockResolvedValue(true);
   mockGetCurrentCastSession.mockResolvedValue(sessionFor());
@@ -1081,6 +1205,48 @@ test("adjusting up while muted also unmutes the receiver", async () => {
   await act(async () => { await api.adjustVolume(0.1); });
   expect(mockSetMute).toHaveBeenCalledWith(false);
   expect(api.muted).toBe(false);
+});
+
+test("raising the level with setVolume lifts a mute", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  mockGetVolume.mockResolvedValue(0.4);
+  mockIsMute.mockResolvedValue(true);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.muted).toBe(true);
+
+  await act(async () => { await api.setVolume(0.6); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0.6);
+  expect(mockSetMute).toHaveBeenCalledWith(false);
+  expect(api.muted).toBe(false);
+});
+
+test("lowering the level with setVolume keeps the receiver muted", async () => {
+  mockStartSession.mockResolvedValue(true);
+  mockGetCurrentCastSession.mockResolvedValue(sessionFor());
+  mockGetVolume.mockResolvedValue(0.6);
+  mockIsMute.mockResolvedValue(true);
+  let api!: ReturnType<typeof useCast>;
+  render(
+    <CastProvider>
+      <Actions onReady={(v) => { api = v; }} />
+    </CastProvider>
+  );
+  await act(async () => {});
+  await act(async () => { await api.connect("tv"); });
+  expect(api.muted).toBe(true);
+
+  await act(async () => { await api.setVolume(0.2); });
+  expect(mockSetVolume).toHaveBeenLastCalledWith(0.2);
+  expect(mockSetMute).not.toHaveBeenCalled();
+  expect(api.muted).toBe(true);
 });
 
 test("toggleMute flips the receiver and the state", async () => {
@@ -1114,6 +1280,7 @@ test("volume controls are a no-op without a session", async () => {
   );
   await act(async () => {});
   await act(async () => {
+    await api.setVolume(0.8);
     await api.adjustVolume(0.1);
     await api.toggleMute();
   });
