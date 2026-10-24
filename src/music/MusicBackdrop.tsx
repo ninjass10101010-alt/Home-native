@@ -1,5 +1,6 @@
 import React from "react";
 import { Image, StyleSheet, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -8,6 +9,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { musicTokensFor } from "../theme/music-tokens";
+import { mix } from "../theme/mix";
 import { kenBurnsScale, kenBurnsTranslate, legibilityTint } from "./backdrop";
 
 /**
@@ -169,6 +171,33 @@ export function MusicBackdrop({
         testID="music-backdrop-grain"
         pointerEvents="none"
         style={[StyleSheet.absoluteFill, { backgroundColor: tokens.grain }]}
+      />
+
+      {/*
+        4. THE TOP SCRIM — the wallpaper's legibility gradient.
+
+        The music screen's own chrome (the masthead, the search button) sits
+        DIRECTLY on the wallpaper, and the wallpaper's colour is UNKNOWN: it
+        is a cover, and a cover's BRIGHT patches can wash the ground out. On
+        the panel, a white photo on a dark sleeve left the white masthead on a
+        washed-out grey — 1.75:1, far under the floor.
+
+        The gradient is the app's own `scrimTop` token, and it points at the
+        theme's OWN ink (dark under a white label, light under a black one),
+        so the ground it paints is the ground the label needs. It holds its
+        strength through the header and FADES OUT below it, so the artwork is
+        never flattened.
+      */}
+      <LinearGradient
+        testID="music-backdrop-scrim-top"
+        pointerEvents="none"
+        colors={[
+          tokens.scrimTop,
+          tokens.scrimTop,
+          mix(tokens.scrimTop, "transparent", 0),
+        ]}
+        locations={[0, 0.38, 1]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: "26%" }}
       />
     </View>
   );

@@ -44,8 +44,86 @@ export async function search(query: string, limit = 20): Promise<SearchOutcome> 
   };
 }
 
+/**
+ * The stream the engine resolved LAST.
+ *
+ * The Now Playing screen labels the stream it is playing — the codec and the
+ * stream's own bitrate — and the resolution happens in the playback provider
+ * (local playback) and in the cast provider (the receiver's load). Both go
+ * through this wrapper, so this is the ONE place that knows what the last
+ * resolution was.
+ *
+ * The track's id travels WITH the format: a chip may only speak for the
+ * track it belongs to, never for whatever resolved last.
+ */
+export interface StreamFormat {
+  /** The track the stream belongs to. */
+  id: string;
+  /** The stream's container (e.g. "audio/mp4"). */
+  mimeType: string | null;
+  /** The stream's average bitrate, in bits per second. */
+  bitrate: number | null;
+  /** The stream's own codec ("mp4a.40.2", "opus", "vorbis"). */
+  codec: string | null;
+}
+
+/** The last resolution, or null when nothing has resolved yet. */
+let lastStream: StreamFormat | null = null;
+
+/** The surfaces that want to know when a stream resolves. */
+const streamListeners = new Set<(format: StreamFormat) => void>();
+
+/**
+ * The stream the engine resolved last — the codec chip's truth.
+ */
+export function lastStreamFormat(): StreamFormat | null {
+  return lastStream;
+}
+
+/**
+ * Subscribe to the stream resolutions.
+ *
+ * The listener is called with every resolution (the local one and the
+ * receiver's), and the returned function unsubscribes it.
+ */
+export function subscribeStreamFormat(
+  listener: (format: StreamFormat) => void
+): () => void {
+  streamListeners.add(listener);
+  return () => {
+    streamListeners.delete(listener);
+  };
+}
+
+/**
+ * The playable URL for one track, and the stream's own truth.
+ *
+ * The shape cannot lie: the bitrate is a number or it is null — a native
+ * answer that carries no rate (or a wrongly typed one) is no rate, never a
+ * made-up value. Every other field is passed through untouched, so the
+ * cast path's media info is byte-identical to what it always was.
+ */
 export async function resolveAudio(id: string): Promise<ResolvedAudio> {
-  return (await native().resolveAudio(id)) as ResolvedAudio;
+  const raw = (await native().resolveAudio(id)) as ResolvedAudio;
+  const answer = raw && typeof raw === "object" ? raw : null;
+  const bitrate =
+    typeof answer?.bitrate === "number" && Number.isFinite(answer.bitrate)
+      ? answer.bitrate
+      : null;
+  const codec =
+    typeof answer?.codec === "string" && answer.codec.length > 0 ? answer.codec : null;
+  const format: StreamFormat = {
+    id,
+    mimeType: typeof answer?.mimeType === "string" ? answer.mimeType : null,
+    bitrate,
+    codec,
+  };
+  lastStream = format;
+  for (const listener of streamListeners) listener(format);
+  // A native answer that is not an answer is passed through untouched: the
+  // caller must see the SAME failure it always saw (no stream at all), never
+  // a half-built one with a missing URL.
+  return answer ? { ...answer, bitrate, codec } : raw;
 }
 
 /**

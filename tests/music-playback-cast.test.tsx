@@ -86,6 +86,9 @@ jest.mock("../modules/youtube-engine", () => ({
   resolveAudio: (id: string) => mockResolve(id),
   search: jest.fn(async () => []),
   related: jest.fn(async () => []),
+  // The last resolution (the codec chip's truth) and its subscription.
+  lastStreamFormat: jest.fn(() => null),
+  subscribeStreamFormat: jest.fn(() => () => {}),
 }));
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: jest.fn() }),

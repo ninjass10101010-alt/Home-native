@@ -91,6 +91,8 @@ jest.mock("../src/music/playback", () => {
         },
         // ...while the LIST itself keeps the terms as the parent typed them.
         denylist: mockDenied.map((term, index) => ({ term, addedAt: index })),
+        // The stream the engine resolved last — the codec chip's truth.
+        streamFormat: mockStreamFormat,
         play: mockPlay, playQueueAt: jest.fn(), toggle: mockToggle, next: mockNext, previous: mockPrevious,
         seek: mockSeek, setRepeat: jest.fn(), cycleRepeatMode: mockCycleRepeat, toggleShuffleMode: mockToggleShuffle,
         addToQueue: jest.fn(), removeFromQueue: mockRemoveFromQueue, moveQueueItem: mockMoveQueueItem,
@@ -171,11 +173,23 @@ let mockArtworkColors: { dominant: string | null; vibrant: string | null } = {
  */
 let mockArtworkBlurred: string | null = null;
 
+/**
+ * The stream the engine resolved last — the codec chip's truth.
+ *
+ * It carries the track's own id, so a resolution belonging to another track
+ * must never reach the chip.
+ */
+let mockStreamFormat: { id: string; mimeType: string | null; bitrate: number | null; codec: string | null } | null =
+  null;
+
 jest.mock("../modules/youtube-engine", () => ({
   search: jest.fn(async () => mockSearchOutcome),
   related: jest.fn(async () => []),
   resolveAudio: jest.fn(async () => ({ url: "https://x.y/audio.m4a", mimeType: "audio/mp4",
-    contentLength: 1, durationSeconds: 1, expiresAt: 0 })),
+    contentLength: 1, durationSeconds: 1, expiresAt: 0, bitrate: 128000, codec: "mp4a.40.2" })),
+  // The last resolution (the codec chip's truth) and its subscription.
+  lastStreamFormat: jest.fn(() => null),
+  subscribeStreamFormat: jest.fn(() => () => {}),
   artworkColors: jest.fn(async () => mockArtworkColors),
   artworkBlurred: jest.fn(async () => mockArtworkBlurred),
 }));
@@ -202,7 +216,7 @@ import { act, fireEvent, render, renderHook, waitFor } from "@testing-library/re
 import { MusicPlayer } from "../src/music/MusicPlayer";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
 import { musicTokensFor } from "../src/theme/music-tokens";
-import { bandStageTint } from "../src/music/tint";
+import { legibilityTint } from "../src/music/backdrop";
 
 const wrap = ({ children }: { children: React.ReactNode }) => <ThemeProvider>{children}</ThemeProvider>;
 
@@ -267,6 +281,8 @@ beforeEach(() => {
   mockDenied = [];
   mockSearchOutcome = { tracks: [CLEAN_TRACK], explicitKnown: true };
   mockArtworkColors = { dominant: null, vibrant: null };
+  mockArtworkBlurred = null;
+  mockStreamFormat = null;
   mockLyrics = null;
   mockCast = idleCast();
   jest.clearAllMocks();
@@ -381,14 +397,17 @@ it("when casting is paused, the play glyph offers Play", async () => {
 });
 
 /**
- * The Now Playing STAGE — the artwork-led, cover-tinted surface (SP2 Task 3).
+ * The Now Playing STAGE — the glass panel ON the living artwork backdrop
+ * (SP3-B task 3).
  *
- * The stage is a full-width tinted field: it wears the COVER's own colour,
- * read on-device and banded so body text stays readable. Every colour comes
- * from the music tokens; the tint is the one colour the artwork supplies.
+ * The stage has no field of its own any more: the BACKDROP paints the
+ * artwork's own colour across the screen, veiled so the label clears 4.5:1
+ * over the blurred art. The stage is the glass layer on top of it — a
+ * translucent panel with a hairline rim — and the transport below it is one
+ * opaque glass pill.
  */
 describe("the Now Playing stage", () => {
-  /** The theme the app resolved — the tint's band depends on it. */
+  /** The theme the app resolved — the ground's band depends on it. */
   const resolved = () => renderHook(() => useTheme(), { wrapper: wrap }).result.current;
 
   it("offers the three modes — Now Playing, Lyrics and Queue", () => {
@@ -408,32 +427,44 @@ describe("the Now Playing stage", () => {
     expect(getByTestId("np-stage")).toBeTruthy();
   });
 
-  it("tints itself from the artwork's own colour", async () => {
+  it("is a GLASS panel — the artwork's colour is the backdrop's, not a field of its own", async () => {
+    mockCurrent = { ...DEFAULT_CURRENT, artworkUrl: "https://img.example/cover.jpg" };
+    mockArtworkColors = { dominant: "#3B82F6", vibrant: null };
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    const { theme, boost } = resolved();
+    const tokens = musicTokensFor(theme, boost);
+    await waitFor(() => expect(getByTestId("np-stage")).toBeTruthy());
+    const style = StyleSheet.flatten(getByTestId("np-stage").props.style);
+    // the panel is glass, so the blurred artwork reads THROUGH it
+    expect(style.backgroundColor).toBe(tokens.glassFill);
+    expect(style.borderColor).toBe(tokens.glassRim);
+    // and the artwork's own colour went to the BACKDROP, which bands it for
+    // its own legibility (the pure maths is checked in music-backdrop.test.ts)
+    const backdrop = getByTestId("music-backdrop");
+    expect(backdrop).toBeTruthy();
+    await waitFor(() => expect(getByTestId("music-backdrop-tint")).toBeTruthy());
+  });
+
+  it("hands the backdrop the cover's own colour, and the neutral veil without one", async () => {
     mockCurrent = { ...DEFAULT_CURRENT, artworkUrl: "https://img.example/cover.jpg" };
     mockArtworkColors = { dominant: "#3B82F6", vibrant: null };
     const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
     const { theme } = resolved();
-    await waitFor(() => {
-      const stage = getByTestId("np-stage");
-      expect(StyleSheet.flatten(stage.props.style).backgroundColor).toBe(
-        bandStageTint("#3B82F6", theme)
-      );
-    });
-  });
-
-  it("falls back to the banded accent when the cover carries no colour", async () => {
-    mockCurrent = { ...DEFAULT_CURRENT, artworkUrl: "https://img.example/cover.jpg" };
-    mockArtworkColors = { dominant: null, vibrant: null };
-    const { artworkColors } = require("../modules/youtube-engine");
-    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
-    const { theme, boost } = resolved();
-    const expected = bandStageTint(musicTokensFor(theme, boost).accent, theme);
-    // the engine WAS asked — and its empty answer is what falls back.
     await waitFor(() =>
-      expect(artworkColors).toHaveBeenCalledWith("https://img.example/cover.jpg")
+      expect(
+        StyleSheet.flatten(getByTestId("music-backdrop-tint").props.style).backgroundColor
+      ).toBe(legibilityTint("#3B82F6", theme))
     );
-    const stage = getByTestId("np-stage");
-    expect(StyleSheet.flatten(stage.props.style).backgroundColor).toBe(expected);
+
+    // A cover with no colour: the backdrop's own neutral veil — never a hue
+    // that pretends to be the artwork's.
+    mockArtworkColors = { dominant: null, vibrant: null };
+    const { getByTestId: again } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() =>
+      expect(
+        StyleSheet.flatten(again("music-backdrop-tint").props.style).backgroundColor
+      ).toBe(legibilityTint("", theme))
+    );
   });
 
   it("never asks the engine for a colour when the track has no artwork", async () => {
@@ -548,34 +579,74 @@ describe("the Now Playing stage", () => {
     expect(mockCast.toggleMute).toHaveBeenCalledTimes(1);
   });
 
-  it("the chips on the tinted field wear the DARK scrim, never a white fill", async () => {
-    // A white fill LIFTS the ground under the chip's own label (the dark
-    // band's brightest tint + white@12% measured 4.06:1 — under the 4.5
-    // floor). The scrim DARKENS that ground instead, in both themes, so the
-    // label clears AA on any tint in the band (tests/music-stage-contrast).
+  it("the transport's controls sit on the OPAQUE pill — no scrim, no white fill", async () => {
+    // The pill is the transport's own surface, and it is OPAQUE: it sits over
+    // a backdrop whose colour is unknown (it is a cover), so only an opaque
+    // fill can guarantee the glyphs' contrast. The shuffle and repeat discs
+    // carry NO fill of their own — the pill is the surface.
     const { theme, boost } = resolved();
     const tokens = musicTokensFor(theme, boost);
     const { getByTestId } = await renderPlayer();
     const styleOf = (id: string) => StyleSheet.flatten(getByTestId(id).props.style);
-    expect(styleOf("np-shuffle").backgroundColor).toBe(tokens.scrim);
-    expect(styleOf("np-repeat").backgroundColor).toBe(tokens.scrim);
-    expect(styleOf("np-download").backgroundColor).toBe(tokens.scrim);
+    expect(styleOf("np-transport-pill").backgroundColor).toBe(tokens.glassStrong);
+    expect(styleOf("np-shuffle").backgroundColor).toBe("transparent");
+    expect(styleOf("np-repeat").backgroundColor).toBe("transparent");
+    // the download control is its own glass button, on the glass panel
+    expect(styleOf("np-download").backgroundColor).toBe(tokens.glassFill);
   });
 
-  it("paints every stage text tier in the FULL label token — no dim tier on the tint", async () => {
-    // The stage's ground is the tinted field, NOT the page ground the tiers
-    // were checked against: on the tint the dim tiers read ~3.4:1 (label2) and
-    // ~2.6:1 (label3). So the stage dims nothing — every tier on the tint
-    // reads the full, opaque `label` token, and the hierarchy comes from the
-    // type steps and weight (see tests/music-stage-contrast.test.ts).
+  it("the pill's actions are the stage's own — shuffle and repeat still drive the provider", async () => {
+    const { getByTestId } = await renderPlayer();
+    fireEvent.press(getByTestId("np-shuffle"));
+    expect(mockToggleShuffle).toHaveBeenCalled();
+    fireEvent.press(getByTestId("np-repeat"));
+    expect(mockCycleRepeat).toHaveBeenCalled();
+  });
+
+  it("the codec chip states the RESOLVED stream — and nothing else", async () => {
+    // The chip is a claim about a measurement: the engine's own resolution
+    // for THIS track. A resolution belonging to another track is ignored.
+    mockStreamFormat = {
+      id: DEFAULT_CURRENT.id,
+      mimeType: "audio/mp4",
+      bitrate: 128000,
+      codec: "mp4a.40.2",
+    };
+    const { getByTestId } = await renderPlayer();
+    expect(getByTestId("np-codec")).toBeTruthy();
+    expect(getByTestId("np-codec-label").props.children).toBe("AAC · 128 kbps");
+
+    // Another track's resolution must never reach this track's chip.
+    mockStreamFormat = {
+      id: "someother123",
+      mimeType: "audio/webm",
+      bitrate: 142000,
+      codec: "opus",
+    };
+    const other = await renderPlayer();
+    expect(other.getByTestId("np-codec-label").props.children).toBe("—");
+  });
+
+  it("the codec chip says nothing when nothing has resolved", async () => {
+    mockStreamFormat = null;
+    const { getByTestId } = await renderPlayer();
+    expect(getByTestId("np-codec-label").props.children).toBe("—");
+  });
+
+  it("paints every stage text tier in the FULL label token — no dim tier on the glass", async () => {
+    // The stage's ground is the glass panel over the tinted artwork, NOT the
+    // page ground the tiers were checked against: on it the dim tiers read
+    // ~3.4:1 (label2) and ~2.6:1 (label3). So the stage dims nothing — every
+    // tier reads the full, opaque `label` token, and the hierarchy comes from
+    // the type steps and weight (see tests/music-stage-contrast.test.ts).
     const { getByTestId, getByText } = render(<MusicPlayer />, { wrapper: darkWrap });
     const tokens = musicTokensFor("dark", false);
     const colorOf = (node: any) => StyleSheet.flatten(node.props.style)?.color;
 
-    // the tree really is in the dark theme: the stage wears the DARK band
+    // the tree really is in the dark theme: the stage wears the DARK glass
     await waitFor(() =>
       expect(StyleSheet.flatten(getByTestId("np-stage").props.style).backgroundColor).toBe(
-        bandStageTint(tokens.accent, "dark")
+        tokens.glassFill
       )
     );
 
@@ -583,9 +654,11 @@ describe("the Now Playing stage", () => {
     expect(colorOf(getByTestId("np-title"))).toBe(tokens.label);
     // the artist — one step under the title
     expect(colorOf(getByText("Artist"))).toBe(tokens.label);
-    // the time labels — the smallest step on the tint
+    // the time labels — the smallest step on the panel
     expect(colorOf(getByText("0:10"))).toBe(tokens.label);
     expect(colorOf(getByText("3:20"))).toBe(tokens.label);
+    // the codec chip — on the glass, in the full tier too
+    expect(colorOf(getByTestId("np-codec-label"))).toBe(tokens.label);
   });
 
   it("keeps the stage's hierarchy in SIZE and WEIGHT, never in colour", () => {

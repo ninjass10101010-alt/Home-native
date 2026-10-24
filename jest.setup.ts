@@ -159,7 +159,13 @@ jest.mock("./modules/youtube-engine", () => ({
     contentLength: 1024,
     durationSeconds: 120,
     expiresAt: 0,
+    bitrate: 128000,
+    codec: "mp4a.40.2",
   })),
+  // The stream the engine resolved last (the codec chip's truth) and the
+  // subscription the playback provider mirrors it through.
+  lastStreamFormat: jest.fn(() => null),
+  subscribeStreamFormat: jest.fn(() => () => {}),
   // The stage's tint: the artwork's own colour, read on-device.
   artworkColors: jest.fn(async () => ({ dominant: "#3B82F6", vibrant: null })),
   // The living backdrop's image: the artwork, blurred on-device.

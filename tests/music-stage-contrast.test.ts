@@ -1,33 +1,29 @@
 /**
- * The stage's contrast contract — the text on the artwork-tinted field.
+ * THE STAGE'S GROUND — the glass panel over the tinted artwork (SP3-B task 3).
  *
- * The Now Playing stage is a field tinted from the ARTWORK's own colour, so
- * its ground luminance is NOT the page ground the Liquid tiers were checked
- * against (see tests/music-tokens.test.ts). A dim tier that clears 4.5:1 on
- * the page ground can be far under it on the tinted field: measured on the
- * dark band, the artist tier (label2) read ~3.4:1 and the time labels
- * (label3) ~2.6:1 — both under the 4.5:1 floor for 14sp+ body text.
+ * The Now Playing stage has no field of its own any more. The BACKDROP paints
+ * the artwork's own colour across the screen, veiled so the label clears 4.5:1
+ * over the blurred art (the pure maths is `legibilityTint`, checked in
+ * tests/music-backdrop.test.ts), and the stage is a GLASS PANEL on top of it.
  *
- * Dim tiers cannot be rescued on ANY tinted field without flattening the tint
- * to near-black, so this is a DESIGN decision, not a bigger scrim:
+ * So the stage's ground is THREE layers deep, and the contract is measured on
+ * the COMPOSITED pixel — the real one — never on a flat colour:
  *
- *   THE RULE (the repo's own): to add emphasis, change weight or size —
- *   never colour.
+ *     the cover's own colour
+ *       → the backdrop's legibility veil   (the artwork's colour, banded)
+ *         → the stage's glass panel         (translucent, toward its own ink)
+ *           → the label                     (the FULL, opaque `label` token)
  *
- * So the stage does NOT dim its text. Every tier on the tinted field reads the
- * FULL `label` token (opaque white in dark, opaque black in light) and the
- * hierarchy comes from the stage's type steps (title 40sp > artist 17sp >
- * times 14sp) and weight. The tint itself stays the artwork's own colour.
+ * WHY THE GLASS IS SAFE: it points at its OWN ink. The dark theme's glass is
+ * near-black, so it DARKENS the ground the white label reads on; the light
+ * theme's glass is white, so it LIGHTENS the ground the black label reads on.
+ * The glass can therefore only ever IMPROVE the label's contrast over the
+ * tinted artwork — never weaken it.
  *
- * THE CONTRACT MEASURED HERE (the composited pixel — the real one):
- *   white on the dark band's WORST ground (its brightest)   >= 5:1 (headroom)
- *   black on the light band's WORST ground (its darkest)   >= 4.5:1
- *   the dim tiers may NOT be used on the tinted field        (they fail there)
- *
- * The band is PROBED here, never copied from the source: the contract is the
- * ground the band can actually hand back, so a band that drifts is caught.
+ * AND THE PILL IS OPAQUE: the transport's glyphs sit on `glassStrong`, so
+ * their contrast does not depend on the artwork at all.
  */
-import { bandStageTint } from "../src/music/tint";
+import { legibilityTint } from "../src/music/backdrop";
 import { musicTokensFor } from "../src/theme/music-tokens";
 
 /* ── WCAG 2.1 colour maths ─────────────────────────────────────────────── */
@@ -85,10 +81,10 @@ function parseColor(c: string): Rgba {
       a: m[4] === undefined ? 1 : parseFloat(m[4]),
     };
   }
-  throw new Error(`unparseable colour: "${c}"`);
+  throw new Error(`unparseable colour: "${v}"`);
 }
 
-/** Resolve an rgba() token over its ground so contrast is measured on the real pixel. */
+/** Resolve an rgba() token over an opaque ground so contrast is measured on the real pixel. */
 function composite(fg: string, bg: string): string {
   const f = parseColor(fg);
   const b = parseColor(bg);
@@ -104,7 +100,7 @@ function composite(fg: string, bg: string): string {
 /* ── The contract under test ────────────────────────────────────────────── */
 
 /**
- * The colours that break a naive tint: the two extremes, and the saturated
+ * The colours that break a naive ground: the two extremes, and the saturated
  * hues a cover can carry (the same adversarial set the banding contract uses).
  */
 const ADVERSARIAL = [
@@ -125,150 +121,169 @@ const ADVERSARIAL = [
 const DARK = musicTokensFor("dark", false);
 /** The stage's text in the light theme — the full tier, opaque. */
 const LIGHT = musicTokensFor("light", false);
+/** The stage's text in the dark theme with boost — the tiers lift. */
+const DARK_BOOST = musicTokensFor("dark", true);
 
 /** The white page ink of the dark stage (the full label token). */
 const WHITE_TEXT = "#FFFFFF";
 /** The black page ink of the light stage (the full label token). */
 const BLACK_TEXT = "#000000";
 
-/** A neutral grey at one byte value — the probe for the band's edges. */
-function grey(byte: number): string {
-  const hex = byte.toString(16).padStart(2, "0");
-  return `#${hex}${hex}${hex}`;
-}
-
 /**
- * The BRIGHTEST ground the dark band can hand back — the band's upper edge,
- * found by probing the band with every grey and keeping the BANDED output.
+ * The ground under one word on the stage: the cover, veiled by the backdrop
+ * and then covered by the glass panel.
  */
-function brightestBandedGround(): string {
-  let best = { hex: grey(0), luminance: -1 };
-  for (let byte = 0; byte <= 255; byte++) {
-    const hex = grey(byte);
-    const banded = bandStageTint(hex, "dark");
-    const lum = luminance(banded);
-    if (lum > best.luminance) best = { hex: banded, luminance: lum };
-  }
-  return best.hex;
+function stageGround(hex: string, theme: "light" | "dark", glass: string): string {
+  const veiled = composite(legibilityTint(hex, theme), hex);
+  return composite(glass, veiled);
 }
 
-/**
- * The DARKEST ground the light band can hand back — the band's lower edge,
- * found the same way.
- */
-function darkestBandedGround(): string {
-  let best = { hex: grey(255), luminance: 2 };
-  for (let byte = 0; byte <= 255; byte++) {
-    const hex = grey(byte);
-    const banded = bandStageTint(hex, "light");
-    const lum = luminance(banded);
-    if (lum < best.luminance) best = { hex: banded, luminance: lum };
-  }
-  return best.hex;
-}
-
-describe("the stage's tinted field — the text contract", () => {
-  it("white clears AA on every banded dark ground", () => {
+describe("the stage's ground — the glass panel over the tinted artwork", () => {
+  it("white clears AA on every cover, through the glass, in the dark theme", () => {
     for (const hex of ADVERSARIAL) {
-      const tint = bandStageTint(hex, "dark");
-      const ratio = contrast(tint, WHITE_TEXT);
+      const ground = stageGround(hex, "dark", DARK.glassFill);
+      const ratio = contrast(ground, WHITE_TEXT);
       expect({ hex, ratio: ratio >= 4.5 }).toEqual({ hex, ratio: true });
     }
   });
 
-  it("black clears AA on every banded light ground", () => {
+  it("black clears AA on every cover, through the glass, in the light theme", () => {
     for (const hex of ADVERSARIAL) {
-      const tint = bandStageTint(hex, "light");
-      const ratio = contrast(tint, BLACK_TEXT);
+      const ground = stageGround(hex, "light", LIGHT.glassFill);
+      const ratio = contrast(ground, BLACK_TEXT);
       expect({ hex, ratio: ratio >= 4.5 }).toEqual({ hex, ratio: true });
     }
   });
 
-  it("the dark band leaves headroom: white on the band's brightest ground clears 5:1", () => {
-    // The band's UPPER edge is the worst case for white text (the higher the
-    // ground's luminance, the lower the ratio). The floor is 5:1, not 4.5:1 —
-    // the stage paints translucent chrome over its ground, so the band needs
-    // headroom above the bare AA floor.
-    const ground = brightestBandedGround();
-    const ratio = contrast(ground, WHITE_TEXT);
-    expect({ ground, clears: ratio >= 5.0 }).toEqual({ ground, clears: true });
-  });
+  it("the glass only ever pushes the ground toward its OWN ink", () => {
+    // The dark theme's glass is near-black, so it DARKENS the ground the
+    // white label reads on; the light theme's glass is white, so it LIGHTENS
+    // the ground the black label reads on. The glass can only help.
+    for (const hex of ADVERSARIAL) {
+      const darkVeiled = composite(legibilityTint(hex, "dark"), hex);
+      const darkGlass = stageGround(hex, "dark", DARK.glassFill);
+      expect(luminance(darkGlass)).toBeLessThan(luminance(darkVeiled));
 
-  it("the light band's darkest ground still clears AA for black", () => {
-    const ground = darkestBandedGround();
-    const ratio = contrast(ground, BLACK_TEXT);
-    expect({ ground, clears: ratio >= 4.5 }).toEqual({ ground, clears: true });
-  });
-
-  it("the dim tiers FAIL on the tinted field — so the stage may not use them", () => {
-    // The WHY behind the design decision: at the dark band's brightest ground
-    // (the worst case for a dim tier) neither the second nor the third tier
-    // clears 4.5:1. No scrim rescues them without flattening the tint.
-    const ground = brightestBandedGround();
-    const label2 = contrast(composite(DARK.label2, ground), ground);
-    const label3 = contrast(composite(DARK.label3, ground), ground);
-    expect({ ground, label2Fails: label2 < 4.5, label3Fails: label3 < 4.5 }).toEqual({
-      ground,
-      label2Fails: true,
-      label3Fails: true,
-    });
+      const lightVeiled = composite(legibilityTint(hex, "light"), hex);
+      const lightGlass = stageGround(hex, "light", LIGHT.glassFill);
+      expect(luminance(lightGlass)).toBeGreaterThan(luminance(lightVeiled));
+    }
   });
 
   it("the stage's own tier is the full, OPAQUE label token", () => {
     // Opaque is the point: the full tier composites to itself on ANY ground,
-    // so the tint's own luminance is the only variable the stage has to trust.
+    // so the ground's luminance is the only variable the stage has to trust.
     expect(parseColor(DARK.label).a).toBe(1);
     expect(parseColor(LIGHT.label).a).toBe(1);
   });
 });
 
 /**
- * The CHIPS on the tinted field — the ground under a chip's OWN label.
+ * THE TOP SCRIM — the wallpaper's legibility gradient.
  *
- * The chips (shuffle, repeat, download) sit ON the artwork's tint, so their
- * fill is part of the ground their label is measured against. The fill they
- * used to wear — white@12% — LIFTS that ground: on the dark band's brightest
- * edge the white label measured 4.06:1, under the 4.5:1 floor.
+ * The page's own chrome (the masthead, the search button) sits DIRECTLY on
+ * the wallpaper, and the wallpaper's colour is unknown: a cover's BRIGHT
+ * patches can wash the ground out. Measured on the panel, a white photo on a
+ * dark sleeve left the white masthead on rgb(194,196,196) — **1.75:1**.
  *
- * A DARK translucent scrim DARKENS the ground instead (and in the light theme
- * it darkens it under the black label), so the label clears AA on any tint in
- * the band WITHOUT flattening the tint — Shiny's poster does the same over
- * its artwork.
+ * The top gradient is the app's own scrim token, and it points at the theme's
+ * ink (dark under a white label, light under a black one), so the ground it
+ * paints is always the ground the label needs.
  */
-describe("the chips on the tinted field", () => {
-  it("the scrim keeps the label AA on the band's worst-case tint", () => {
-    // Dark theme: the band's BRIGHTEST ground is the worst case for white.
-    const darkGround = brightestBandedGround();
-    const darkChip = composite(DARK.scrim, darkGround);
-    const darkRatio = contrast(darkChip, DARK.label);
-
-    // Light theme: the band's DARKEST ground is the worst case for black.
-    const lightGround = darkestBandedGround();
-    const lightChip = composite(LIGHT.scrim, lightGround);
-    const lightRatio = contrast(lightChip, LIGHT.label);
-
-    console.log(
-      `chips on the tint: dark ${darkRatio.toFixed(2)}:1 (ground ${darkGround}), ` +
-        `light ${lightRatio.toFixed(2)}:1 (ground ${lightGround})`
-    );
-    expect(darkRatio).toBeGreaterThanOrEqual(4.5);
-    expect(lightRatio).toBeGreaterThanOrEqual(4.5);
+describe("the top scrim", () => {
+  it("holds the white label over the WORST artwork in the dark theme", () => {
+    // the worst artwork is a white one: the scrim's own alpha is what keeps
+    // the label legal over it.
+    const ground = composite(DARK.scrimTop, "#FFFFFF");
+    const ratio = contrast(ground, DARK.label);
+    expect({ ground, ratio: ratio >= 4.5 }).toEqual({ ground, ratio: true });
   });
 
-  it("the scrim only ever DARKENS the ground — it can never lift it", () => {
-    for (const ground of [brightestBandedGround(), darkestBandedGround()]) {
-      expect(luminance(composite(DARK.scrim, ground))).toBeLessThan(luminance(ground));
-      expect(luminance(composite(LIGHT.scrim, ground))).toBeLessThan(luminance(ground));
+  it("holds the black label over the WORST artwork in the light theme", () => {
+    const ground = composite(LIGHT.scrimTop, "#000000");
+    const ratio = contrast(ground, LIGHT.label);
+    expect({ ground, ratio: ratio >= 4.5 }).toEqual({ ground, ratio: true });
+  });
+});
+
+/**
+ * THE PILL — the transport's own surface.
+ *
+ * The pill carries the transport glyphs over a backdrop whose colour is
+ * UNKNOWN (it is a cover), so it is OPAQUE: its contrast does not depend on
+ * the artwork at all. That is why the token family has `glassStrong` for it.
+ */
+describe("the transport pill", () => {
+  it("the glyphs clear AA on the pill in every variant", () => {
+    for (const tokens of [LIGHT, DARK, DARK_BOOST]) {
+      const ratio = contrast(tokens.glassStrong, tokens.label);
+      expect({ variant: tokens.glassStrong, clears: ratio >= 4.5 }).toEqual({
+        variant: tokens.glassStrong,
+        clears: true,
+      });
     }
   });
 
-  it("the white fill it replaces FAILED — that is why the scrim is dark", () => {
-    // The review's finding, kept as a regression guard: a white@12% fill
-    // lifted the ground under the chip's label below the AA floor.
-    const ground = brightestBandedGround();
-    const whiteChip = composite("rgba(255,255,255,0.12)", ground);
-    const whiteRatio = contrast(whiteChip, DARK.label);
-    console.log(`the old white@12% fill: ${whiteRatio.toFixed(2)}:1 on ${ground}`);
-    expect(whiteRatio).toBeLessThan(4.5);
+  it("the pill is OPAQUE — nothing of the artwork reaches its glyphs", () => {
+    expect(parseColor(DARK.glassStrong).a).toBe(1);
+    expect(parseColor(LIGHT.glassStrong).a).toBe(1);
+    expect(parseColor(DARK_BOOST.glassStrong).a).toBe(1);
+  });
+});
+
+/**
+ * THE CODEC CHIP — the glass chip above the pill.
+ *
+ * The chip is a second glass layer on the panel, so its ground is the glass
+ * over the glass over the veiled artwork. It reads the FULL label token, and
+ * it clears AA over every cover in both themes.
+ */
+describe("the codec chip", () => {
+  it("clears AA over every cover, in both themes", () => {
+    for (const hex of ADVERSARIAL) {
+      const panel = stageGround(hex, "dark", DARK.glassFill);
+      const darkChip = composite(DARK.glassFill, panel);
+      expect({ hex, dark: contrast(darkChip, DARK.label) >= 4.5 }).toEqual({
+        hex,
+        dark: true,
+      });
+
+      const lightPanel = stageGround(hex, "light", LIGHT.glassFill);
+      const lightChip = composite(LIGHT.glassFill, lightPanel);
+      expect({ hex, light: contrast(lightChip, LIGHT.label) >= 4.5 }).toEqual({
+        hex,
+        light: true,
+      });
+    }
+  });
+});
+
+/**
+ * THE CAST VOLUME'S MUTE BUTTON — the one control on the stage that still
+ * wears the dark scrim.
+ *
+ * The scrim is a DARK translucent wash in BOTH themes, so it darkens the
+ * ground under its own label: the white label gains in the dark theme, and
+ * the black label keeps its contrast in the light one (the ground under a
+ * dark scrim is never near-black in the light theme — the glass panel is
+ * light, and the scrim only takes 28% of it away).
+ */
+describe("the cast volume's mute button on the glass", () => {
+  it("the scrim keeps the label AA over every cover, in both themes", () => {
+    for (const hex of ADVERSARIAL) {
+      const darkPanel = stageGround(hex, "dark", DARK.glassFill);
+      const darkButton = composite(DARK.scrim, darkPanel);
+      expect({ hex, dark: contrast(darkButton, DARK.label) >= 4.5 }).toEqual({
+        hex,
+        dark: true,
+      });
+
+      const lightPanel = stageGround(hex, "light", LIGHT.glassFill);
+      const lightButton = composite(LIGHT.scrim, lightPanel);
+      expect({ hex, light: contrast(lightButton, LIGHT.label) >= 4.5 }).toEqual({
+        hex,
+        light: true,
+      });
+    }
   });
 });

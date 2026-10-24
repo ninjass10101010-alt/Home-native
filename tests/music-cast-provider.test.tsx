@@ -90,7 +90,12 @@ jest.mock("react-native-google-cast", () => ({
 }));
 
 jest.mock("../src/music/playback", () => ({ usePlayback: () => mockPlayback }));
-jest.mock("../modules/youtube-engine", () => ({ resolveAudio: (id: string) => mockResolveAudio(id) }));
+jest.mock("../modules/youtube-engine", () => ({
+  resolveAudio: (id: string) => mockResolveAudio(id),
+  // The last resolution (the codec chip's truth) and its subscription.
+  lastStreamFormat: jest.fn(() => null),
+  subscribeStreamFormat: jest.fn(() => () => {}),
+}));
 
 import { CastProvider, useCast } from "../src/music/CastProvider";
 import type { MediaTrack } from "../src/music/types";

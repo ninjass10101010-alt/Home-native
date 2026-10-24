@@ -45,6 +45,9 @@ jest.mock("../modules/youtube-engine", () => ({
   },
   search: jest.fn(async () => []),
   related: jest.fn(async () => []),
+  // The last resolution (the codec chip's truth) and its subscription.
+  lastStreamFormat: jest.fn(() => null),
+  subscribeStreamFormat: jest.fn(() => () => {}),
 }));
 
 /**

@@ -12,7 +12,13 @@
  * Every failure path answers with two nulls, and the stage falls back to the
  * app's accent token.
  */
-import { artworkBlurred, artworkColors } from "./index";
+import {
+  artworkBlurred,
+  artworkColors,
+  lastStreamFormat,
+  resolveAudio,
+  subscribeStreamFormat,
+} from "./index";
 
 // The module under test is mocked GLOBALLY (the test setup fakes the whole
 // engine), so this file asks for the real one. Jest hoists the call above
@@ -24,11 +30,16 @@ jest.unmock("./index");
 // native surface stays exactly as the environment set it up.
 const ExpoModulesCore = jest.requireMock("expo-modules-core");
 
-const native = { artworkColors: jest.fn(), artworkBlurred: jest.fn() };
+const native = {
+  artworkColors: jest.fn(),
+  artworkBlurred: jest.fn(),
+  resolveAudio: jest.fn(),
+};
 
 beforeEach(() => {
   native.artworkColors.mockReset();
   native.artworkBlurred.mockReset();
+  native.resolveAudio.mockReset();
   jest
     .spyOn(ExpoModulesCore, "requireNativeModule")
     .mockReturnValue(native as never);
@@ -166,5 +177,100 @@ describe("artworkBlurred", () => {
       "https://img.invalid/h.jpg",
       48
     );
+  });
+});
+
+/**
+ * THE STREAM RESOLUTION — the codec chip's truth (SP3-B task 3).
+ *
+ * The engine resolves a playable stream for a track; that answer carries the
+ * stream's CONTAINER and its AVERAGE BITRATE. The wrapper's job here is the
+ * same as everywhere else: a shape that cannot lie. A bitrate the native side
+ * did not report (or reported as something other than a number) becomes null
+ * — never a made-up rate — and the chip then says nothing about the rate.
+ *
+ * The wrapper also REMEMBERS the last resolution, so the Now Playing screen
+ * can label the stream it is actually playing (the resolution happens in the
+ * playback provider and in the cast provider — the same stream either way).
+ */
+describe("resolveAudio", () => {
+  const RESOLVED = {
+    url: "https://stream.invalid/audio.m4a",
+    mimeType: "audio/mp4",
+    contentLength: null,
+    durationSeconds: 120,
+    expiresAt: 0,
+  };
+
+  it("answers with the bitrate the native side read", async () => {
+    native.resolveAudio.mockResolvedValue({ ...RESOLVED, bitrate: 128000 });
+    await expect(resolveAudio("abc12345678")).resolves.toEqual(
+      expect.objectContaining({ mimeType: "audio/mp4", bitrate: 128000 })
+    );
+  });
+
+  it("answers with the codec the native side read", async () => {
+    native.resolveAudio.mockResolvedValue({ ...RESOLVED, bitrate: 128000, codec: "mp4a.40.2" });
+    await expect(resolveAudio("abc12345678")).resolves.toEqual(
+      expect.objectContaining({ codec: "mp4a.40.2" })
+    );
+  });
+
+  it("never invents a codec: a missing or wrongly typed one is null", async () => {
+    native.resolveAudio.mockResolvedValue({ ...RESOLVED, codec: 42 });
+    await expect(resolveAudio("abc12345678")).resolves.toEqual(
+      expect.objectContaining({ codec: null })
+    );
+
+    native.resolveAudio.mockResolvedValue({ ...RESOLVED });
+    await expect(resolveAudio("abc12345678")).resolves.toEqual(
+      expect.objectContaining({ codec: null })
+    );
+  });
+
+  it("a native answer that is not an answer stays a failure, never a half-built one", async () => {
+    // The caller must see the SAME failure it always saw (no stream at all),
+    // not an object with a URL that is missing.
+    native.resolveAudio.mockResolvedValue(null);
+    await expect(resolveAudio("abc12345678")).resolves.toBeNull();
+  });
+
+  it("never invents a bitrate: a missing or wrongly typed one is null", async () => {
+    native.resolveAudio.mockResolvedValue({ ...RESOLVED, bitrate: "128000" });
+    await expect(resolveAudio("abc12345678")).resolves.toEqual(
+      expect.objectContaining({ bitrate: null })
+    );
+
+    native.resolveAudio.mockResolvedValue({ ...RESOLVED });
+    await expect(resolveAudio("abc12345678")).resolves.toEqual(
+      expect.objectContaining({ bitrate: null })
+    );
+  });
+
+  it("remembers the last resolution and tells the listeners", async () => {
+    const seen: unknown[] = [];
+    const stop = subscribeStreamFormat((format) => seen.push(format));
+    native.resolveAudio.mockResolvedValue({
+      ...RESOLVED,
+      mimeType: "audio/webm",
+      bitrate: 142000,
+    });
+    await resolveAudio("track000001");
+
+    expect(lastStreamFormat()).toEqual({
+      id: "track000001",
+      mimeType: "audio/webm",
+      bitrate: 142000,
+      codec: null,
+    });
+    expect(seen).toEqual([
+      { id: "track000001", mimeType: "audio/webm", bitrate: 142000, codec: null },
+    ]);
+
+    // a listener that unsubscribes hears nothing more
+    stop();
+    native.resolveAudio.mockResolvedValue({ ...RESOLVED, bitrate: 99000 });
+    await resolveAudio("track000002");
+    expect(seen).toHaveLength(1);
   });
 });

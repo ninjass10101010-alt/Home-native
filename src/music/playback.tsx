@@ -1,7 +1,7 @@
 import React from "react";
 import { Directory, File, Paths } from "expo-file-system";
 import { AudioModule, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { resolveAudio } from "../../modules/youtube-engine";
+import { resolveAudio, subscribeStreamFormat, type StreamFormat } from "../../modules/youtube-engine";
 import { useAuth } from "../state/AuthProvider";
 import {
   appendHistory,
@@ -82,6 +82,15 @@ export interface PlaybackValue {
    * downloads tray and the chrome.
    */
   policy: ContentPolicy;
+  /**
+   * The stream the engine resolved LAST — the codec chip's truth.
+   *
+   * It carries the track's own id, so the chip may only speak for the track
+   * that is playing: a resolution belonging to another track is ignored.
+   * It is null until something has resolved, and the chip then says nothing
+   * rather than guessing.
+   */
+  streamFormat: StreamFormat | null;
   play: (track: MediaTrack, queue?: MediaTrack[]) => Promise<void>;
   playQueueAt: (tracks: MediaTrack[], index: number) => Promise<void>;
   toggle: () => void;
@@ -197,6 +206,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [downloads, setDownloads] = React.useState<DownloadEntry[]>([]);
   const [history, setHistory] = React.useState<MediaTrack[]>([]);
   const [denylist, setDenylist] = React.useState<DenyEntry[]>([]);
+  /**
+   * The stream the engine resolved last.
+   *
+   * The engine module is the ONE place that knows it (the local playback and
+   * the cast load both resolve through it), and this provider mirrors it into
+   * state so the Now Playing screen can label the stream it is playing.
+   */
+  const [streamFormat, setStreamFormat] = React.useState<StreamFormat | null>(null);
   const [settings, setSettings] = React.useState<MusicSettings>({
     repeat: "off",
     shuffle: false,
@@ -281,6 +298,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => { playerRef.current = player; }, [player]);
   React.useEffect(() => { queueRef.current = queue; }, [queue]);
+
+  /**
+   * THE LAST RESOLUTION, mirrored into state.
+   *
+   * The engine module remembers the stream it resolved (with the track's own
+   * id), and the Now Playing screen reads it from here. The subscription is
+   * the only way the chip can learn about a stream that resolved AFTER the
+   * screen mounted — a resolution is a network round trip, and the panel is
+   * already on screen when it lands.
+   */
+  React.useEffect(() => subscribeStreamFormat(setStreamFormat), []);
 
   React.useEffect(() => {
     void AudioModule.setAudioModeAsync({
@@ -873,6 +901,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       settings,
       denylist,
       policy,
+      streamFormat,
       play,
       playQueueAt,
       toggle,
@@ -905,7 +934,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       queue.index,
       queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,
       recordHistory,
-      setCastSink, setExplicitFilter, setRepeat, settings, status?.isBuffering, toggle, toggleShuffleMode,
+      setCastSink, setExplicitFilter, setRepeat, settings, status?.isBuffering, streamFormat, toggle, toggleShuffleMode,
       visibleDownloads, visibleHistory,
     ]
   );

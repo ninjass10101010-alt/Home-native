@@ -17,7 +17,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { artworkBlurred, artworkColors, search as engineSearch } from "../../modules/youtube-engine";
+import { artworkBlurred, artworkColors, search as engineSearch, type StreamFormat } from "../../modules/youtube-engine";
 import { useTheme } from "../theme/ThemeProvider";
 import { FONTS, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
@@ -29,10 +29,11 @@ import { useCast } from "./CastProvider";
 import { CastControl } from "./CastControl";
 import { CastVolume } from "./CastVolume";
 import { MusicBackdrop } from "./MusicBackdrop";
+import { formatCodecChip } from "./codec";
+import { TransportPill } from "./TransportPill";
 import { currentLineIndex, fetchLyrics, followOffset, FOLLOW_PAUSE_MS, type LyricLine } from "./lyrics";
 import { countUnrated, isContentHidden, isDeniedTerm, searchNote, visibleTracks } from "./explicit";
 import { totalDownloadBytes } from "./library";
-import { bandStageTint } from "./tint";
 import { LYRIC_CURRENT_SCALE, LYRIC_TYPE, STAGE_TYPE } from "./stage-type";
 import type { DownloadEntry, MediaTrack, RepeatMode } from "./types";
 
@@ -61,7 +62,7 @@ export function MusicPlayer() {
   // the app's existing theme tokens. Never a literal.
   const tokens = React.useMemo(() => musicTokensFor(theme, boost), [theme, boost]);
   const {
-    current, queue, playing, position, duration, error,
+    current, queue, playing, position, duration, error, streamFormat,
     play, toggle, next, previous, seek, repeat, shuffle,
     cycleRepeatMode, toggleShuffleMode, downloadCurrent, addToQueue,
     removeFromQueue, moveQueueItem,
@@ -149,16 +150,20 @@ export function MusicPlayer() {
   const downloaded = !!visibleCurrent && downloads.some((d) => d.id === visibleCurrent.id);
 
   /**
-   * The stage's tint — the artwork's OWN colour, banded so body text stays AA.
+   * The artwork's OWN colour — read on-device (AndroidX Palette, in the
+   * engine module) and cached BY TRACK (and by theme) so a re-render never
+   * re-reads the cover.
    *
-   * The colour is read on-device (AndroidX Palette, in the engine module) and
-   * banded by the pure `bandStageTint`. The result is cached BY TRACK (and by
-   * theme — the band differs) so a re-render never re-reads the cover.
+   * It is the BACKDROP's tint now, not the stage's field: the wallpaper
+   * paints the cover's own colour across the whole screen, veiled so the
+   * label clears 4.5:1 over the blurred art (the pure maths is in
+   * src/music/backdrop.ts).
    *
    * NO FAKE COLOUR: a track with no artwork, or an extraction that failed,
-   * falls back to the ACCENT banded — never to a random or invented hue.
+   * leaves the colour unknown, and the backdrop then veils with the neutral
+   * band — never with a random or invented hue.
    *
-   * The RAW swatch is what is cached (not the banded colour): the backdrop
+   * The RAW swatch is what is cached (not a banded colour): the backdrop
    * bands it for ITSELF, and a colour that was banded twice would lose the
    * artwork's own brightness — which is exactly what the backdrop's legibility
    * maths has to know.
@@ -169,8 +174,8 @@ export function MusicPlayer() {
   const tintKey = trackId ? `${theme}:${trackId}` : null;
 
   React.useEffect(() => {
-    // No track, or no artwork at all: the banded accent is the honest ground
-    // and the engine is never asked.
+    // No track, or no artwork at all: the backdrop's own neutral veil is the
+    // honest ground and the engine is never asked.
     if (!trackId || !artworkUrl || !tintKey) return;
     // Already resolved for this cover — never read it twice.
     if (tintKey in tintCache) return;
@@ -185,10 +190,9 @@ export function MusicPlayer() {
     return () => { alive = false; };
   }, [trackId, artworkUrl, tintKey, tintCache, theme, tokens.accent]);
 
-  // Until the cover's colour lands, the stage wears the banded accent — the
-  // field is NEVER unpainted.
+  // Until the cover's colour lands, the wallpaper wears the neutral veil —
+  // the field is NEVER unpainted.
   const rawDominant = tintKey && tintKey in tintCache ? tintCache[tintKey] : null;
-  const stageTint = bandStageTint(rawDominant ?? tokens.accent, theme);
 
   /**
    * The BACKDROP's artwork — the cover, blurred on-device.
@@ -458,7 +462,6 @@ export function MusicPlayer() {
             {mode === "stage" ? (
               <NowPlayingStage
                 track={visibleCurrent}
-                tint={stageTint}
                 tokens={tokens}
                 reduceMotion={reduceMotion}
                 playing={casting ? cast.playing : playing}
@@ -468,6 +471,16 @@ export function MusicPlayer() {
                 shuffle={shuffle}
                 downloaded={downloaded}
                 casting={casting}
+                /*
+                 * THE CODEC CHIP may only speak for the track that is
+                 * playing: a resolution belonging to another track is ignored
+                 * (and the chip then says nothing at all).
+                 */
+                streamFormat={
+                  streamFormat && streamFormat.id === visibleCurrent.id
+                    ? streamFormat
+                    : null
+                }
                 onToggle={casting ? (cast.playing ? cast.pause : cast.play) : toggle}
                 onNext={casting ? () => void cast.advance(false) : () => void next()}
                 onPrevious={casting ? () => void cast.previous() : () => void previous()}
@@ -1097,8 +1110,6 @@ function ArtworkLead({
 
 interface StageProps {
   track: MediaTrack;
-  /** The banded tint — the artwork's own colour (or the banded accent). */
-  tint: string;
   tokens: MusicTokens;
   reduceMotion: boolean;
   playing: boolean;
@@ -1108,6 +1119,13 @@ interface StageProps {
   shuffle: boolean;
   downloaded: boolean;
   casting: boolean;
+  /**
+   * The resolved stream's format — the codec chip's truth.
+   *
+   * It is null when the engine has resolved nothing for THIS track, and the
+   * chip then says nothing at all (never a guess).
+   */
+  streamFormat: StreamFormat | null;
   onToggle: () => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -1118,16 +1136,24 @@ interface StageProps {
 }
 
 /**
- * The Now Playing STAGE — the artwork-led, cover-tinted surface.
+ * The Now Playing STAGE — the glass panel ON the living artwork backdrop.
  *
- * The stage is a full-width tinted field: the artwork leads, the field wears
- * the cover's own banded colour, and the chrome (scrubber, transport) recedes
- * under it. Every colour comes from the music tokens; the artwork's colour
- * arrives already banded (see bandStageTint).
+ * THE STAGE HAS NO FIELD OF ITS OWN ANY MORE. It used to be a solid card
+ * tinted with the cover's own colour; the backdrop (Task 2) now paints that
+ * colour across the whole screen, veiled so the label clears 4.5:1 over the
+ * blurred artwork. So the stage is a GLASS PANEL: the blurred art reads
+ * through it, and the text sits on a ground that is measurably legal (the
+ * glass darkens the dark theme's ground and lightens the light theme's —
+ * the same direction as its own ink, so the label only ever gains).
+ *
+ * The transport is ONE glass pill (shuffle · prev · a big play disc · next ·
+ * repeat) and the codec chip sits above it, stating the stream's REAL
+ * format. Every colour comes from the music tokens; the artwork's colour
+ * arrives through the backdrop, already banded (see legibilityTint).
  */
 function NowPlayingStage({
-  track, tint, tokens, reduceMotion,
-  playing, position, duration, repeat, shuffle, downloaded, casting,
+  track, tokens, reduceMotion,
+  playing, position, duration, repeat, shuffle, downloaded, casting, streamFormat,
   onToggle, onNext, onPrevious, onSeek, onToggleShuffle, onCycleRepeat, onDownload,
 }: StageProps) {
   // The artwork's crossfade: on a track change it comes up from 0.96 with a
@@ -1170,10 +1196,24 @@ function NowPlayingStage({
     <View
       testID="np-stage"
       style={{
-        backgroundColor: tint,
+        /*
+         * THE GLASS PANEL — translucent, so the blurred artwork reads through
+         * it. It is the layer between the text and the backdrop, and it is
+         * measured there (see tests/music-stage-contrast.test.ts): the glass
+         * points at its own ink, so it only ever improves the label's
+         * contrast over the tinted artwork.
+         */
+        backgroundColor: tokens.glassFill,
         borderRadius: tokens.panelRadius,
+        borderWidth: 1,
+        borderColor: tokens.glassRim,
         padding: tokens.pageMargin,
         gap: tokens.shelfGap,
+        shadowColor: tokens.shadow,
+        shadowOpacity: 1,
+        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 12 },
+        elevation: 6,
       }}
     >
       {/* The artwork: a soft shadow under a rounded cover. */}
@@ -1218,16 +1258,17 @@ function NowPlayingStage({
         </Text>
         {/*
           THE ARTIST reads the FULL label token, never a dim tier: the ground
-          here is the tinted field, not the page ground, and the dim tier
-          measures ~3.4:1 on it. The hierarchy is carried by the type step and
-          the weight — never by colour (see tests/music-stage-contrast.test.ts).
+          here is the glass panel over the tinted artwork, not the page ground,
+          and the dim tier measures ~3.4:1 on it. The hierarchy is carried by
+          the type step and the weight — never by colour (see
+          tests/music-stage-contrast.test.ts).
         */}
         <Text numberOfLines={1} style={{ color: tokens.label, ...STAGE_TYPE.artist, textAlign: "center" }}>
           {track.artist}
         </Text>
       </View>
 
-      {/* The scrubber: a 6px track over the tint, a 64dp hit area. */}
+      {/* The scrubber: a 6px track over the glass, a 64dp hit area. */}
       <Pressable
         testID="np-seek"
         accessibilityRole="adjustable"
@@ -1236,68 +1277,106 @@ function NowPlayingStage({
         onPress={(e) => { if (seekWidth > 0 && duration > 0) onSeek((e.nativeEvent.locationX / seekWidth) * duration); }}
         style={{ height: 64, justifyContent: "center" }}
       >
-        <View style={{ height: 6, borderRadius: 3, backgroundColor: tokens.panel, overflow: "hidden" }}>
+        {/*
+          THE TRACK is a faint wash of the label's own ink (white in the dark
+          theme, black in the light one), so it reads on the glass in both
+          themes — the old panel fill was invisible over an artwork.
+        */}
+        <View style={{ height: 6, borderRadius: 3, backgroundColor: mix(tokens.label, "transparent", 30), overflow: "hidden" }}>
           <View style={{ width: `${Math.round(progress * 100)}%`, height: 6, backgroundColor: tokens.accent }} />
         </View>
       </Pressable>
       {/*
         THE TIMES read the full label token too — the smallest step on the
-        tinted field, where the dim tier measured ~2.6:1. Size and weight
-        carry the hierarchy; colour never does.
+        panel, where the dim tier measured ~2.6:1. Size and weight carry the
+        hierarchy; colour never does.
       */}
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
         <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}>{clock(position)}</Text>
         <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}>{duration > 0 ? clock(duration) : "--:--"}</Text>
       </View>
 
-      {/* The transport: an 88dp play disc, 72dp skips — all thumb-sized. */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 24 }}>
-        <Pressable testID="np-prev" accessibilityRole="button" accessibilityLabel="Previous track" onPress={onPrevious} style={stageDisc(tokens, 72)}>
-          <Text style={{ color: tokens.label, fontSize: 26 }}>⏮</Text>
-        </Pressable>
-        <Pressable testID="np-play" accessibilityRole="button" accessibilityLabel={playing ? "Pause" : "Play"} onPress={onToggle} style={{ width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center", backgroundColor: tokens.accent }}>
-          <Text style={{ color: tokens.onAccent, fontSize: 32 }}>{playing ? "❚❚" : "▶"}</Text>
-        </Pressable>
-        <Pressable testID="np-next" accessibilityRole="button" accessibilityLabel="Next track" onPress={onNext} style={stageDisc(tokens, 72)}>
-          <Text style={{ color: tokens.label, fontSize: 26 }}>⏭</Text>
-        </Pressable>
+      {/*
+        THE CODEC CHIP — what the stream REALLY is, centred above the pill.
+
+        It is the engine's own resolution (the container, the codec and the
+        stream's average bitrate), so it is a claim about a measurement. When
+        the engine has resolved nothing for THIS track, the chip says "—" —
+        never a guess (see src/music/codec.ts).
+      */}
+      <View
+        testID="np-codec"
+        style={{
+          alignSelf: "center",
+          paddingHorizontal: 14,
+          paddingVertical: 6,
+          borderRadius: 999,
+          backgroundColor: tokens.glassFill,
+          borderWidth: 1,
+          borderColor: tokens.glassRim,
+        }}
+      >
+        <Text
+          testID="np-codec-label"
+          style={{
+            color: tokens.label,
+            fontSize: TYPOGRAPHY.label.fontSize,
+            lineHeight: TYPOGRAPHY.label.lineHeight,
+            fontWeight: "700",
+          }}
+        >
+          {formatCodecChip({
+            mimeType: streamFormat?.mimeType ?? null,
+            bitrate: streamFormat?.bitrate ?? null,
+            codec: streamFormat?.codec ?? null,
+          })}
+        </Text>
       </View>
+
+      {/*
+        THE TRANSPORT PILL — one glass cluster: shuffle · previous · a big
+        circular play/pause · next · repeat. The actions, the labels and the
+        testIDs are the ones the stage always had (see TransportPill.tsx).
+      */}
+      <TransportPill
+        playing={playing}
+        shuffle={shuffle}
+        repeat={repeat}
+        onToggle={onToggle}
+        onNext={onNext}
+        onPrevious={onPrevious}
+        onToggleShuffle={onToggleShuffle}
+        onCycleRepeat={onCycleRepeat}
+      />
 
       {/* The receiver's amplifier — only while a cast session owns the sound. */}
       {casting ? <CastVolume compact /> : null}
 
-      {/* The secondary row: shuffle, repeat, download. */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 }}>
-        <Pressable testID="np-shuffle" accessibilityRole="button" accessibilityLabel={`Shuffle ${shuffle ? "on" : "off"}`} onPress={onToggleShuffle} style={stageDisc(tokens, 64, shuffle ? tokens.accent : undefined)}>
-          <Text style={{ color: tokens.label, fontSize: 20 }}>🔀</Text>
-        </Pressable>
-        <Pressable testID="np-repeat" accessibilityRole="button" accessibilityLabel={`Repeat ${repeat}`} onPress={onCycleRepeat} style={stageDisc(tokens, 64, repeat !== "off" ? tokens.accent : undefined)}>
-          <Text style={{ color: tokens.label, fontSize: 20 }}>{repeat === "one" ? "🔂" : "🔁"}</Text>
-        </Pressable>
-        <Pressable
-          testID="np-download"
-          accessibilityRole="button"
-          accessibilityLabel={downloaded ? "Downloaded" : "Download this track"}
-          disabled={downloaded}
-          onPress={onDownload}
-          style={{
-            flex: 1,
-            minHeight: 64,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: tokens.panelRadius,
-            // The scrim, not a white fill: this control sits on the tint, so
-            // its fill is part of the ground under its own label.
-            backgroundColor: tokens.scrim,
-            borderWidth: 1,
-            borderColor: tokens.panelRim,
-          }}
-        >
-          <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
-            {downloaded ? "Downloaded ✓" : "Download"}
-          </Text>
-        </Pressable>
-      </View>
+      {/*
+        THE DOWNLOAD — the one control outside the pill, on its own row. Its
+        copy is unchanged ("Download" / "Downloaded ✓"); only its surface is
+        glass now, so it reads over the artwork like everything else.
+      */}
+      <Pressable
+        testID="np-download"
+        accessibilityRole="button"
+        accessibilityLabel={downloaded ? "Downloaded" : "Download this track"}
+        disabled={downloaded}
+        onPress={onDownload}
+        style={{
+          minHeight: 64,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: tokens.panelRadius,
+          backgroundColor: tokens.glassFill,
+          borderWidth: 1,
+          borderColor: tokens.glassRim,
+        }}
+      >
+        <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+          {downloaded ? "Downloaded ✓" : "Download"}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -1313,30 +1392,6 @@ function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 MB";
   const mb = (bytes / (1024 * 1024));
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
-}
-
-/**
- * A round stage control: the disc's fill is the scrim (a DARK translucent
- * wash), and an active control (shuffle on, repeat on) wears the accent.
- *
- * WHY THE SCRIM AND NOT A WHITE FILL: the chip sits on the artwork's tint,
- * so its fill IS part of the ground its own label is measured against. A
- * white fill lifts that ground — on the dark band's brightest edge the
- * white label read 4.06:1, under the 4.5:1 floor. A dark scrim lowers it
- * instead, in both themes, without flattening the tint (see
- * tests/music-stage-contrast.test.ts).
- */
-function stageDisc(tokens: MusicTokens, size: number, active?: string) {
-  return {
-    width: size,
-    height: size,
-    borderRadius: size / 2,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    backgroundColor: active ? mix(active, "transparent", 18) : tokens.scrim,
-    borderWidth: 1,
-    borderColor: tokens.panelRim,
-  };
 }
 
 interface LyricsPaneProps {

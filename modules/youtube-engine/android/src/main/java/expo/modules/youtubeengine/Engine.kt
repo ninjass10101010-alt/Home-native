@@ -21,6 +21,21 @@ import java.io.File
 
 private val AUDIO_ITAG_PREFERENCE = listOf(140, 251, 139, 249)
 
+/**
+ * The stream's average bitrate in BITS per second.
+ *
+ * NewPipe reports a stream's average bitrate in KILOBITS per second (its itag
+ * table says "128" for the 128 kbps AAC stream), while the codec chip states
+ * bits per second — so the conversion happens HERE, at the boundary that owns
+ * the units. A rate that was not scaled reads as "0 kbps" on the panel, which
+ * is exactly the kind of wrong-but-plausible number this repo refuses to show.
+ *
+ * A stream that reports NO rate (0, or NewPipe's unknown -1) reports none:
+ * the chip then names the codec alone and never invents a number.
+ */
+internal fun audioBitrateBitsPerSecond(averageBitrateKbps: Int): Long? =
+  if (averageBitrateKbps > 0) averageBitrateKbps.toLong() * 1000L else null
+
 object Engine {
   private const val TAG = "YoutubeEngine"
   private const val ERROR_CODE = "ERR_YOUTUBE_ENGINE"
@@ -380,6 +395,19 @@ object Engine {
       .take(25)
   }
 
+  /**
+   * Resolves one track's playable audio stream.
+   *
+   * The answer carries the stream's OWN truth — the container, the codec and
+   * the average bitrate — so the Now Playing screen's codec chip can state
+   * what is really playing instead of guessing. The bitrate and the codec are
+   * the stream's own readings (NewPipe's `averageBitrate` and `codec`), and
+   * either may be null: a stream that reports none reports none, and the chip
+   * then stays quiet rather than inventing a number.
+   *
+   * The container stays EXACTLY as it was: the cast path sends it to the
+   * receiver, and that contract is byte-identical to what it always was.
+   */
   fun resolveAudio(id: String): Map<String, Any?> {
     ensureInit()
     val info = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=$id")
@@ -390,7 +418,9 @@ object Engine {
       "mimeType" to (chosen.format?.mimeType ?: "audio/mp4").substringBefore(";").trim(),
       "contentLength" to null,
       "durationSeconds" to info.duration.takeIf { it >= 0L },
-      "expiresAt" to (System.currentTimeMillis() + 6 * 60 * 60 * 1000L)
+      "expiresAt" to (System.currentTimeMillis() + 6 * 60 * 60 * 1000L),
+      "bitrate" to audioBitrateBitsPerSecond(chosen.averageBitrate),
+      "codec" to chosen.codec
     )
   }
 }

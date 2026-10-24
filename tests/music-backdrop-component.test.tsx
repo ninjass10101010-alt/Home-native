@@ -82,6 +82,22 @@ describe("MusicBackdrop", () => {
     expect(grain.backgroundColor).toBe(musicTokensFor("dark", false).grain);
   });
 
+  it("paints the TOP legibility gradient — the page's own chrome needs a ground", () => {
+    // The wallpaper's colour is UNKNOWN (it is a cover), and a cover's BRIGHT
+    // patches can wash the ground out: a white photo on a dark sleeve
+    // measured 1.75:1 against the white masthead. The top gradient is the
+    // app's own scrim token, and it points at the theme's ink.
+    const { getByTestId } = renderBackdrop();
+    const scrim = getByTestId("music-backdrop-scrim-top");
+    const tokens = musicTokensFor("dark", false);
+    const colors = scrim.props.colors as string[];
+    expect(colors[0]).toBe(tokens.scrimTop);
+    // and it FADES OUT — a flat wash would flatten the artwork
+    expect(colors[colors.length - 1]).not.toBe(tokens.scrimTop);
+    const style = StyleSheet.flatten(scrim.props.style);
+    expect(style.height).toBe("26%");
+  });
+
   it("the drift is the position's: the artwork is scaled and moved", () => {
     const { getByTestId } = renderBackdrop({ positionMs: 10000 });
     const style = StyleSheet.flatten(getByTestId("music-backdrop-art").props.style);

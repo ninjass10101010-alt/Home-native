@@ -27,6 +27,24 @@ export interface ResolvedAudio {
   contentLength: number | null;
   durationSeconds: number | null;
   expiresAt: number;
+  /**
+   * The stream's AVERAGE bitrate, in bits per second.
+   *
+   * The engine's own reading of the audio stream it picked (NewPipe's
+   * `averageBitrate`), so the codec chip states the REAL stream's rate. It
+   * may be null: a stream that reports no rate reports none, and the chip
+   * then names the codec alone rather than inventing a number.
+   */
+  bitrate: number | null;
+  /**
+   * The stream's OWN codec, as the engine read it off the stream it picked
+   * ("mp4a.40.2", "opus", "vorbis").
+   *
+   * It may be null: the codec chip then reads the container instead. The
+   * container alone is a weaker claim (a webm stream may be Opus or Vorbis),
+   * so this one wins when it is there.
+   */
+  codec: string | null;
 }
 
 /**
