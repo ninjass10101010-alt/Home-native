@@ -352,6 +352,20 @@ describe("BriefingWidget", () => {
     await findByText(/Sign in with your PIN to see the family's data/);
     expect(api).not.toHaveBeenCalled();
   });
+
+  it("the acknowledgement control keeps the wall's 64dp target floor", async () => {
+    route({
+      "/api/consuela/briefing": briefingBody({
+        events: [{ icon: "📅", title: "Piano", time: "5:30 PM" }],
+        tasks: [],
+        meals: [],
+        suggestions: [],
+      }),
+    });
+    const { findByTestId } = render(<BriefingWidget />, { wrapper: wrap });
+    const ack = await findByTestId("briefing-ack");
+    expect(ack.props.style.minHeight).toBeGreaterThanOrEqual(64);
+  });
 });
 
 describe("TodayEventsWidget — Google not-connected honesty (Wave-2 critic fix)", () => {
