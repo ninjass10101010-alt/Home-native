@@ -166,7 +166,7 @@ describe("TasksWidget (shared snapshot — no widget fetch)", () => {
       { id: 4, title: "Task 4", assignee: "Aurora", due: "Today", points: 1, completed: false },
       { id: 5, title: "Task 5", assignee: "Aurora", due: "Today", points: 1, completed: false },
     ]);
-    const { findByText, getByText, queryByText } = render(
+    const { findByText, getByText, getByTestId, queryByText } = render(
       <TasksWidget span={2} />,
       { wrapper: wrap },
     );
@@ -177,6 +177,7 @@ describe("TasksWidget (shared snapshot — no widget fetch)", () => {
     expect(getByText("Task 4")).toBeTruthy();
     expect(queryByText("Task 5")).toBeNull();
     expect(getByText("+1 more · See all →")).toBeTruthy();
+    expect(getByTestId("tasks-more-footer").props.style.minHeight).toBeGreaterThanOrEqual(64);
   });
 
   it("keeps the two-row budget in a compact cell", async () => {

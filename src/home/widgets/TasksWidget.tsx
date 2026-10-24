@@ -3,7 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
-import { TYPOGRAPHY } from "../../theme/tokens";
+import { TYPOGRAPHY, MIN_TARGET_DP } from "../../theme/tokens";
 import { mix } from "../../theme/mix";
 import { EmptyState } from "../../ui/EmptyState";
 import { ListRow } from "../../ui/ListRow";
@@ -336,7 +336,7 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
               accessibilityLabel={`${pendingApprovalCount} need approval. Open tasks`}
               hitSlop={16}
               onPress={() => router.push("/tasks")}
-              style={{ minHeight: 28, justifyContent: "center", marginTop: 2 }}
+              style={{ minHeight: MIN_TARGET_DP, justifyContent: "center", marginTop: 2 }}
             >
               <Text
                 style={{
@@ -356,7 +356,7 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
               accessibilityLabel={`${hidden} more tasks. Open tasks`}
               hitSlop={16}
               onPress={() => router.push("/tasks")}
-              style={{ minHeight: 28, justifyContent: "center", marginTop: 2 }}
+              style={{ minHeight: MIN_TARGET_DP, justifyContent: "center", marginTop: 2 }}
             >
               <Text
                 style={{

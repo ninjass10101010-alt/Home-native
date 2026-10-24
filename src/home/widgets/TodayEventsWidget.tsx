@@ -6,7 +6,7 @@ import type { DbListEnvelope } from "../../api/types";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { mix } from "../../theme/mix";
-import { TYPOGRAPHY } from "../../theme/tokens";
+import { TYPOGRAPHY, MIN_TARGET_DP } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
 import { ListRow } from "../../ui/ListRow";
 import { WidgetFrame } from "./WidgetFrame";
@@ -371,7 +371,7 @@ export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
                 accessibilityLabel={`${hidden} more events. Open calendar`}
                 hitSlop={16}
                 onPress={() => router.push("/calendar")}
-                style={{ minHeight: 28, justifyContent: "center", marginTop: 2 }}
+                style={{ minHeight: MIN_TARGET_DP, justifyContent: "center", marginTop: 2 }}
               >
                 <Text
                   style={{

@@ -317,6 +317,7 @@ describe("TodayEventsWidget — the visible-row budget follows the wall span", (
     expect(getByTestId("todayEvents-more-footer").props.accessibilityLabel).toBe(
       "1 more events. Open calendar",
     );
+    expect(getByTestId("todayEvents-more-footer").props.style.minHeight).toBeGreaterThanOrEqual(64);
   });
 
   it("keeps the two-row budget in a compact cell", async () => {
