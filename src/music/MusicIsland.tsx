@@ -6,6 +6,7 @@ import { useCast } from "./CastProvider";
 import { useOutputVolume } from "./output-volume";
 import { useTheme } from "../theme/ThemeProvider";
 import { musicTokensFor } from "../theme/music-tokens";
+import { DOCK_TOP_OFFSET } from "../nav/CapsuleDock";
 
 export function MusicIsland() {
   const { current, position, duration, playing, toggle, next, previous, stopAndClear, player } = usePlayback();
@@ -99,11 +100,11 @@ export function MusicIsland() {
       {expanded && (
         <Pressable
           testID="music-island-backdrop"
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, { bottom: DOCK_TOP_OFFSET }]}
           onPress={handleCollapse}
         />
       )}
-      <View testID="music-island" style={styles.container}>
+      <View testID="music-island" style={styles.container} pointerEvents="box-none">
         {!expanded ? (
           <Pressable
             testID="music-island-collapsed"
