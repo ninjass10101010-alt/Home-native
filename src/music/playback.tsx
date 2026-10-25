@@ -160,7 +160,7 @@ export interface PlaybackValue {
   /** Adds a term to the family's deny-list (persisted; live at once). */
   addDenied: (term: string) => Promise<void>;
   /** Removes every entry whose term matches (persisted; live at once). */
-  removeDenied: (term: string) => void;
+  removeDenied: (term: string) => Promise<void>;
   /** Stops playback (local + cast), clears current + queue, drops lock-screen. */
   stopAndClear: () => void;
 }

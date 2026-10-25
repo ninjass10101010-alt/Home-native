@@ -106,7 +106,7 @@ const KID = { id: "c1", name: "Kid", role: "child", emoji: "🐯", color: "green
 const PARENT = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" };
 
 function Probe() {
-  const { current, queue, play, playQueueAt, addToQueue, downloadCurrent, policy, denylist, addDenied, removeDenied } = usePlayback();
+  const { current, queue, play, playQueueAt, addToQueue, downloadCurrent, policy, denylist, addDenied, removeDenied, stopAndClear } = usePlayback();
   return (
     <>
       <Text testID="title">{current?.title ?? "none"}</Text>
@@ -119,6 +119,7 @@ function Probe() {
       <Text testID="download" onPress={() => void downloadCurrent()}>download</Text>
       <Text testID="play-denied" onPress={() => void play(denied)}>play denied</Text>
       <Text testID="play-denied-pair" onPress={() => void play(clean, [clean, denied])}>play denied pair</Text>
+      <Text testID="stop-and-clear" onPress={() => stopAndClear?.()}>stop and clear</Text>
       {/* The policy's normalized deny-list terms — the rule every surface reads. */}
       <Text testID="policy-denied">{(policy?.denied ?? []).join("|")}</Text>
       <Text testID="denylist">{(denylist ?? []).map((e: { term: string }) => e.term).join("|")}</Text>
@@ -466,6 +467,40 @@ it("an early add wins over the stored copy of the SAME term", async () => {
   await waitFor(async () => {
     const raw = await AsyncStorage.getItem("music.denylist");
     expect(JSON.parse(raw as string)).toHaveLength(1);
+  });
+});
+
+describe("stopAndClear", () => {
+  it("stops playback, clears current and queue, and hides lock-screen", async () => {
+    mockMember = PARENT;
+    const { getByTestId } = render(tree());
+    
+    // Set up a playing track with a queue
+    await act(async () => { getByTestId("play-pair").props.onPress(); });
+    await waitFor(() => expect(getByTestId("title").props.children).toBe("Clean Song"));
+    
+    expect(getByTestId("queue").props.children).toBe("clean11111,exp11111111");
+    
+    // Stop and clear - need to add a button to Probe
+    // This test will fail until we add stopAndClear to the provider and Probe
+    await act(async () => { getByTestId("stop-and-clear").props.onPress(); });
+    
+    expect(getByTestId("title").props.children).toBe("none");
+    expect(getByTestId("queue").props.children).toBe("empty");
+    expect(mockLock).toHaveBeenCalledWith(false);
+  });
+  
+  it("is idempotent when already empty", async () => {
+    const { getByTestId } = render(tree());
+    
+    expect(getByTestId("title").props.children).toBe("none");
+    expect(getByTestId("queue").props.children).toBe("empty");
+    
+    // Should not throw or error when called on empty state
+    await act(async () => { getByTestId("stop-and-clear").props.onPress(); });
+    
+    expect(getByTestId("title").props.children).toBe("none");
+    expect(getByTestId("queue").props.children).toBe("empty");
   });
 });
 
