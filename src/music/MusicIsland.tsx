@@ -130,7 +130,7 @@ export function MusicIsland() {
               {current.title}
             </Text>
             {cast.casting && (
-              <Text testID="music-island-cast" style={[styles.cast, { color: tokens.label2 }]}>
+              <Text testID="music-island-cast" style={[styles.cast, { color: tokens.label2, fontSize: 14 }]}>
                 Casting
               </Text>
             )}
@@ -198,9 +198,36 @@ export function MusicIsland() {
             </View>
 
             <View style={styles.volumeRow}>
-              <Text style={{ color: tokens.label2, fontSize: 12 }}>
+              <Text style={{ color: tokens.label2, fontSize: 14 }}>
                 Volume ({volume.target})
               </Text>
+              <Pressable
+                testID="music-island-volume-bar"
+                onPress={(e) => {
+                  const { locationX } = e.nativeEvent;
+                  // Approximate: bar width ~200dp
+                  const fraction = Math.min(1, Math.max(0, locationX / 200));
+                  volume.setValue(fraction);
+                }}
+                style={[styles.volumeBar, { backgroundColor: tokens.glassRim }]}
+              >
+                <View
+                  style={[
+                    styles.volumeFill,
+                    { backgroundColor: tokens.accent, width: `${volume.value * 100}%` },
+                  ]}
+                />
+              </Pressable>
+              <Pressable
+                testID="music-island-mute"
+                onPress={() => volume.toggleMute()}
+                style={styles.muteButton}
+                accessibilityLabel={volume.muted ? "Unmute" : "Mute"}
+              >
+                <Text style={{ color: tokens.label, fontSize: 14 }}>
+                  {volume.muted ? "🔇" : "🔊"}
+                </Text>
+              </Pressable>
             </View>
 
             <Pressable
@@ -321,11 +348,33 @@ const styles = StyleSheet.create({
   },
   volumeRow: {
     marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  volumeBar: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  volumeFill: {
+    height: 8,
+    borderRadius: 4,
+  },
+  muteButton: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
   stopButton: {
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
     alignItems: "center",
+    minHeight: 64,
+    minWidth: 64,
+    justifyContent: "center",
   },
 });
