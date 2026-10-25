@@ -4,6 +4,16 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-24 — feat(music): Music Island — top-mounted Dynamic-Island-style player (replaces the bottom MiniPlayer pill).
+  **What changed:** the family wall tablet gains a top-mounted music island that collapses to show what's playing at a glance and expands to quick controls. It closes two real gaps: no volume control at all, and no way to stop and clear the player.
+  - **PROVIDER GAINS `stopAndClear()`** (`src/music/playback.tsx`): stops local playback + lock screen, clears current + queue, drops lock-screen. Idempotent. Cast disconnect handled by the UI layer.
+  - **CONTEXTUAL VOLUME** (`src/music/output-volume.ts`): one control follows the output — cast/receiver volume while casting, local `expo-audio` `player.volume` otherwise (persisted in AsyncStorage). `useOutputVolume()` returns `{ value, muted, setValue, nudge, toggleMute, target }`.
+  - **MUSIC ISLAND** (`src/music/MusicIsland.tsx`): global component mounted in `app/_layout.tsx` (replaces `<MiniPlayer/>`). Collapsed: 40dp art + truncated title + 2dp progress. Expanded: prev/play/next (≥64dp), volume bar + mute, two-tap-confirm stop. Tap album art → /music. Auto-collapse after 5s; tap outside collapses. Reduced motion honored.
+  - **PLAYER EXPOSED** from the provider (`player: AudioPlayer`) for volume control.
+  **Tests:** `tests/music-island.test.tsx` (11 tests), `tests/music-output-volume.test.tsx` (4 tests), `tests/music-playback.test.tsx` (extended with stopAndClear). Full suite green. Device-verified on ApoloSign: 6/7 acceptance criteria PASS (local volume, playback controls, stop/clear, contrast 16.29:1, no errors). Cast volume path code-reviewed only (device signed out).
+  **Verified:** `npx jest --watchAll=false` → all pass; `npx tsc --noEmit` → 0; `npx eslint` → 0; `npm run tokens:check` → CLEAN; `npm run a11y:audit` → CLEAN. Build: `:app:assembleRelease` BUILD SUCCESSFUL (JDK 21). Installed on tablet.
+
+
 - 2026-10-24 — feat(music): the glass queue, the floating MiniPlayer pill and the floating glass dock (SP3-B task 5).
   **What changed:** the music surface's last three surfaces adopt the Yuma-inspired glass language, and the app's bottom bar is confirmed as the fixed floating glass dock. The design reference is YumaPlayer (credited in `NOTICE`; no Yuma code or assets were copied — a re-implementation on our own tokens).
   - **THE QUEUE IS A GLASS SHEET** (`src/music/MusicPlayer.tsx`): the "Playing Next" panel swaps its faint `panel` fill for the glass family (`glassFill` + `glassRim`), so the blurred artwork reads THROUGH the list, exactly like the Now Playing stage.
