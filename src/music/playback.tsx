@@ -1,6 +1,7 @@
 import React from "react";
 import { Directory, File, Paths } from "expo-file-system";
 import { AudioModule, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import type { AudioPlayer } from "expo-audio";
 import { resolveAudio, subscribeStreamFormat, type StreamFormat } from "../../modules/youtube-engine";
 import { useAuth } from "../state/AuthProvider";
 import {
@@ -91,6 +92,8 @@ export interface PlaybackValue {
    * rather than guessing.
    */
   streamFormat: StreamFormat | null;
+  /** The local audio player (expo-audio). Exposed for volume control. */
+  player: AudioPlayer;
   play: (track: MediaTrack, queue?: MediaTrack[]) => Promise<void>;
   playQueueAt: (tracks: MediaTrack[], index: number) => Promise<void>;
   toggle: () => void;
@@ -949,6 +952,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       addDenied,
       removeDenied,
       stopAndClear,
+      player,
     }),
     [
       addDenied, addToQueue, advanceForCast, current, cycleRepeatMode, downloadCurrent, duration,
@@ -959,7 +963,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,
       recordHistory,
       setCastSink, setExplicitFilter, setRepeat, settings, status?.isBuffering, streamFormat, toggle, toggleShuffleMode,
-      visibleDownloads, visibleHistory, stopAndClear,
+      visibleDownloads, visibleHistory, stopAndClear, player,
     ]
   );
   /* eslint-enable react-hooks/refs */

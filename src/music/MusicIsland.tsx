@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   cast: {
-    fontSize: 12,
+    fontSize: 14,
     marginLeft: 8,
   },
   progress: {
