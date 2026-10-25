@@ -3,12 +3,17 @@ import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { MusicIsland } from "../src/music/MusicIsland";
 import { usePlayback } from "../src/music/playback";
 import { useCast } from "../src/music/CastProvider";
-import { usePathname } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { useTheme } from "../src/theme/ThemeProvider";
+import { useOutputVolume } from "../src/music/output-volume";
 
 jest.mock("../src/music/playback");
 jest.mock("../src/music/CastProvider");
-jest.mock("expo-router");
+jest.mock("../src/music/output-volume");
+jest.mock("expo-router", () => ({
+  usePathname: jest.fn(() => "/"),
+  useRouter: jest.fn(() => ({ push: jest.fn() })),
+}));
 jest.mock("../src/theme/ThemeProvider");
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -32,6 +37,15 @@ describe("MusicIsland", () => {
     (useCast as jest.Mock).mockReturnValue({ casting: false });
     (usePathname as jest.Mock).mockReturnValue("/");
     (useTheme as jest.Mock).mockReturnValue({ theme: "dark", boost: false, reduceMotion: false });
+    (useOutputVolume as jest.Mock).mockReturnValue({
+      value: 0.5,
+      muted: false,
+      setValue: jest.fn(),
+      nudge: jest.fn(),
+      toggleMute: jest.fn(),
+      target: "local",
+    });
+    (useRouter as jest.Mock).mockReturnValue({ push: jest.fn() });
   });
 
   it("renders null when no current track", () => {
@@ -117,5 +131,94 @@ describe("MusicIsland", () => {
     const { getByTestId } = render(<MusicIsland />);
 
     expect(getByTestId("music-island-cast")).toBeTruthy();
+  });
+
+  it("prev/play/next buttons drive playback", () => {
+    const mockToggle = jest.fn();
+    const mockNext = jest.fn();
+    const mockPrevious = jest.fn();
+
+    (usePlayback as jest.Mock).mockReturnValue({
+      current: mockTrack,
+      playing: false,
+      toggle: mockToggle,
+      next: mockNext,
+      previous: mockPrevious,
+    });
+
+    const { getByTestId } = render(<MusicIsland />);
+
+    fireEvent.press(getByTestId("music-island-collapsed"));
+
+    fireEvent.press(getByTestId("music-island-prev"));
+    expect(mockPrevious).toHaveBeenCalled();
+
+    fireEvent.press(getByTestId("music-island-play"));
+    expect(mockToggle).toHaveBeenCalled();
+
+    fireEvent.press(getByTestId("music-island-next"));
+    expect(mockNext).toHaveBeenCalled();
+  });
+
+  it("tap art navigates to music screen", () => {
+    const mockPush = jest.fn();
+    (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
+    (usePlayback as jest.Mock).mockReturnValue({ current: mockTrack });
+
+    const { getByTestId } = render(<MusicIsland />);
+
+    fireEvent.press(getByTestId("music-island-collapsed"));
+    fireEvent.press(getByTestId("music-island-art-expanded"));
+
+    expect(mockPush).toHaveBeenCalledWith("/music");
+  });
+
+  it("stop arms on first tap, clears on second", async () => {
+    jest.useFakeTimers();
+    const mockStopAndClear = jest.fn();
+    (usePlayback as jest.Mock).mockReturnValue({
+      current: mockTrack,
+      stopAndClear: mockStopAndClear,
+    });
+
+    const { getByTestId, getByText } = render(<MusicIsland />);
+
+    fireEvent.press(getByTestId("music-island-collapsed"));
+
+    expect(getByText("Stop")).toBeTruthy();
+
+    const stopButton = getByTestId("music-island-stop");
+    fireEvent.press(stopButton);
+    expect(getByText("Confirm")).toBeTruthy();
+    expect(mockStopAndClear).not.toHaveBeenCalled();
+
+    fireEvent.press(stopButton);
+    expect(mockStopAndClear).toHaveBeenCalled();
+
+    jest.useRealTimers();
+  });
+
+  it("stop arm resets after 5s", async () => {
+    jest.useFakeTimers();
+    (usePlayback as jest.Mock).mockReturnValue({
+      current: mockTrack,
+      stopAndClear: jest.fn(),
+    });
+
+    const { getByTestId, getByText } = render(<MusicIsland />);
+
+    fireEvent.press(getByTestId("music-island-collapsed"));
+
+    const stopButton = getByTestId("music-island-stop");
+    fireEvent.press(stopButton);
+    expect(getByText("Confirm")).toBeTruthy();
+
+    jest.advanceTimersByTime(5000);
+
+    await waitFor(() => {
+      expect(getByText("Stop")).toBeTruthy();
+    });
+
+    jest.useRealTimers();
   });
 });
