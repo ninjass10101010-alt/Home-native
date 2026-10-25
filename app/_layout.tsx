@@ -12,7 +12,7 @@ import { AuthProvider, useAuth } from "../src/state/AuthProvider";
 import { SyncManager } from "../src/state/SyncManager";
 import { PlaybackProvider } from "../src/music/playback";
 import { CastProvider } from "../src/music/CastProvider";
-import { MiniPlayer } from "../src/music/MiniPlayer";
+import { MusicIsland } from "../src/music/MusicIsland";
 import { ToastProvider } from "../src/ui/Toast";
 import { hydrateBaseUrl } from "../src/api/config";
 import { configureNotifications } from "../src/native/notifications";
@@ -83,7 +83,7 @@ export default function RootLayout() {
                       was tried and reverted: on Fabric Android that layer
                       swallowed the dock's taps.
                     */}
-                    <MiniPlayer />
+                    <MusicIsland />
                   </PokeBoundary>
                 </ToastProvider>
               </SyncManager>
