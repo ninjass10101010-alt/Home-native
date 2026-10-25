@@ -157,6 +157,44 @@ describe("TasksWidget (shared snapshot — no widget fetch)", () => {
     await findByText("All caught up");
     expect(getByText(/saved copy/i)).toBeTruthy();
   });
+
+  it("shows four rows in a double cell and keeps the overflow honest", async () => {
+    mockSnapshot = syncSnapshot([
+      { id: 1, title: "Task 1", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 2, title: "Task 2", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 3, title: "Task 3", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 4, title: "Task 4", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 5, title: "Task 5", assignee: "Aurora", due: "Today", points: 1, completed: false },
+    ]);
+    const { findByText, getByText, getByTestId, queryByText } = render(
+      <TasksWidget span={2} />,
+      { wrapper: wrap },
+    );
+    await findByText("5 pending for the family");
+    expect(getByText("Task 1")).toBeTruthy();
+    expect(getByText("Task 2")).toBeTruthy();
+    expect(getByText("Task 3")).toBeTruthy();
+    expect(getByText("Task 4")).toBeTruthy();
+    expect(queryByText("Task 5")).toBeNull();
+    expect(getByText("+1 more · See all →")).toBeTruthy();
+    expect(getByTestId("tasks-more-footer").props.style.minHeight).toBeGreaterThanOrEqual(64);
+  });
+
+  it("keeps the two-row budget in a compact cell", async () => {
+    mockSnapshot = syncSnapshot([
+      { id: 1, title: "Task 1", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 2, title: "Task 2", assignee: "Aurora", due: "Today", points: 1, completed: false },
+      { id: 3, title: "Task 3", assignee: "Aurora", due: "Today", points: 1, completed: false },
+    ]);
+    const { findByText, getByText, queryByText } = render(
+      <TasksWidget span={1} />,
+      { wrapper: wrap },
+    );
+    await findByText("3 pending for the family");
+    expect(getByText("Task 1")).toBeTruthy();
+    expect(getByText("Task 2")).toBeTruthy();
+    expect(queryByText("Task 3")).toBeNull();
+  });
 });
 
 describe("TodayEventsWidget", () => {
@@ -260,6 +298,23 @@ describe("CurrentMealWidget", () => {
     await findByText("No meal planned yet");
     expect(await findByText("Plan dinner in the Kitchen tab")).toBeTruthy();
   });
+
+  it("guest planned meal without a schedule reads the schedule gate, not the no-schedule hint", async () => {
+    mockMember = null;
+    route({
+      "/api/db/schedules": { items: [] },
+      "/api/db/meal_plan_entries": {
+        items: [{ id: "m1", name: "Chicken wings with white rice", emoji: "🍗", time: "Sat", mealType: "dinner", tags: [], weekOf: "2026-10-05" }],
+      },
+    });
+    const { findByText, queryByText } = render(
+      <CurrentMealWidget now={now} />,
+      { wrapper: wrap },
+    );
+    await findByText("Chicken wings with white rice");
+    expect(await findByText("Sign in to see the schedule")).toBeTruthy();
+    expect(queryByText("Set a meal schedule to see times")).toBeNull();
+  });
 });
 
 describe("BriefingWidget", () => {
@@ -314,6 +369,20 @@ describe("BriefingWidget", () => {
     const { findByText } = render(<BriefingWidget />, { wrapper: wrap });
     await findByText(/Sign in with your PIN to see the family's data/);
     expect(api).not.toHaveBeenCalled();
+  });
+
+  it("the acknowledgement control keeps the wall's 64dp target floor", async () => {
+    route({
+      "/api/consuela/briefing": briefingBody({
+        events: [{ icon: "📅", title: "Piano", time: "5:30 PM" }],
+        tasks: [],
+        meals: [],
+        suggestions: [],
+      }),
+    });
+    const { findByTestId } = render(<BriefingWidget />, { wrapper: wrap });
+    const ack = await findByTestId("briefing-ack");
+    expect(ack.props.style.minHeight).toBeGreaterThanOrEqual(64);
   });
 });
 

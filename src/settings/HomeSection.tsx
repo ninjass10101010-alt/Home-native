@@ -5,15 +5,13 @@ import { TYPOGRAPHY } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { Chip } from "../ui/Chip";
 import { Toggle } from "../ui/Toggle";
-import { ALL_WIDGETS, WALL_DEFAULT_WIDGETS, type WidgetId } from "../home/widgets";
+import { ALL_WIDGETS, WALL_CONFIGURABLE_WIDGETS, type WidgetId, type WallSpan } from "../home/widgets";
 import {
-  DEFAULT_WALL_LAYOUT,
   layoutCells,
   layoutSpan,
   useWallLayout,
   WALL_CELLS,
   type WallLayout,
-  type WallSpan,
 } from "../home/wallLayout";
 
 /**
@@ -47,7 +45,7 @@ function widgetEmoji(id: WidgetId): string {
 
 export function HomeSection() {
   const { colors } = useTheme();
-  const { layout, setLayout } = useWallLayout();
+  const { layout, setLayout, reset: resetLayout } = useWallLayout();
   const cells = layoutCells(layout);
 
   /** Apply a new layout, and say why it was refused when it does not fit. */
@@ -65,9 +63,7 @@ export function HomeSection() {
   };
 
   const reset = () => {
-    // The default layout is what the board ships with; restoring it is a
-    // full-body write of the known-good default.
-    apply(DEFAULT_WALL_LAYOUT);
+    resetLayout();
   };
 
   return (
@@ -120,7 +116,7 @@ export function HomeSection() {
         </Text>
 
         <View style={{ gap: 10 }}>
-          {WALL_DEFAULT_WIDGETS.map((id) => {
+          {WALL_CONFIGURABLE_WIDGETS.map((id) => {
             const hidden = layout.hidden.includes(id);
             const span = layoutSpan(layout, id);
             // A size change is only offered when the board can carry it.

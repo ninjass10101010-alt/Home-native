@@ -11,6 +11,7 @@ import { Modal } from "../ui/Modal";
 import { SoftButton } from "../ui/SoftButton";
 import { READ_COPY_STALE, useWidgetData, type ReadFailure } from "../home/widgets/data";
 import { WidgetFrame } from "../home/widgets/WidgetFrame";
+import type { WallSpan } from "../home/widgets";
 import { AmbientBob } from "./useAmbient";
 import {
   ChevronGlyph,
@@ -84,6 +85,7 @@ function titleCaseCondition(text: string): string {
 export interface WeatherPosterProps {
   size: "cell" | "full";
   data: WeatherSnapshot;
+  span?: WallSpan;
 }
 
 // ─── The wall card's type ramp ────────────────────────────────────────
@@ -105,6 +107,13 @@ const CELL_TYPE: Record<"place" | "details" | "condition" | "meta", TextStyle> =
   meta: { fontSize: 14, fontWeight: "500" },
 };
 
+const ROOMY_CELL_TYPE: Record<"place" | "details" | "condition" | "meta", TextStyle> = {
+  place: { fontSize: 18, fontWeight: "500" },
+  details: { fontSize: 18, fontWeight: "600" },
+  condition: { fontSize: 20, fontWeight: "500" },
+  meta: { fontSize: 16, fontWeight: "500" },
+};
+
 const FULL_TYPE: Record<"place" | "details" | "condition" | "meta", TextStyle> = {
   place: { fontSize: 26, fontWeight: "500" },
   details: { fontSize: 22, fontWeight: "600" },
@@ -118,6 +127,9 @@ const CELL_CHIPS_H = 44;
 const CELL_ART_MAX = 124;
 /** The digits' box — the art row never shrinks past the digits. */
 const CELL_ART_MIN = 96;
+const ROOMY_CELL_ART_MAX = 160;
+const ROOMY_CELL_ART_MIN = 120;
+const ROOMY_CELL_CHIPS_H = 52;
 /** The air the text block keeps above the footer on a short cell. */
 const CELL_SLACK = 8;
 
@@ -135,18 +147,21 @@ const CELL_SLACK = 8;
  * to the bottom with the reference's air under it, so the card's own edge
  * can never cut the last line.
  */
-export function cellRhythm(height: number) {
-  const roomy = height >= 300; // the reference card is 330
-  const top = roomy ? 16 : 14;
-  const bottom = 26; // the reference's ~30 of air under the footer's last line
-  const gapArt = roomy ? 8 : 6;
-  const gapCond = roomy ? 4 : 2;
-  const gapLine = roomy ? 4 : 1;
-  const line = roomy ? 18 : 16;
+export function cellRhythm(height: number, spacious = false) {
+  const roomy = spacious || height >= 300;
+  const top = spacious ? 20 : roomy ? 16 : 14;
+  const bottom = spacious ? 28 : 26;
+  const gapArt = spacious ? 14 : roomy ? 8 : 6;
+  const gapCond = spacious ? 6 : roomy ? 4 : 2;
+  const gapLine = spacious ? 6 : roomy ? 4 : 1;
+  const line = spacious ? 24 : roomy ? 18 : 16;
+  const chipsH = spacious ? ROOMY_CELL_CHIPS_H : CELL_CHIPS_H;
+  const artMax = spacious ? ROOMY_CELL_ART_MAX : CELL_ART_MAX;
+  const artMin = spacious ? ROOMY_CELL_ART_MIN : CELL_ART_MIN;
   const fixed =
-    top + CELL_CHIPS_H + gapArt + gapCond + line + gapLine + line + gapLine + line + line + bottom;
-  const art = Math.max(CELL_ART_MIN, Math.min(CELL_ART_MAX, height - fixed - CELL_SLACK));
-  return { top, bottom, gapArt, gapCond, gapLine, line, art };
+    top + chipsH + gapArt + gapCond + line + gapLine + line + gapLine + line + line + bottom;
+  const art = Math.max(artMin, Math.min(artMax, height - fixed - CELL_SLACK));
+  return { top, bottom, gapArt, gapCond, gapLine, line, chipsH, art };
 }
 
 /**
@@ -165,7 +180,7 @@ export function cellRhythm(height: number) {
  * Digit heights: cell=96dp, full=220dp.
  * Creature size: cell=124dp (the web's wall scale), full=180dp.
  */
-export function WeatherPoster({ size, data }: WeatherPosterProps) {
+export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
   const { colors, boost } = useTheme();
   const router = useRouter();
   const code = conditionCode(data.code ?? undefined, data.isDay);
@@ -175,6 +190,7 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
   const [flatTop, flatBottom] = useSceneSky(scene);
   const [posterTop, posterBottom] = posterSkyColors(colors, posterSkyWash(code, data.isDay));
   const isPoster = size === "full";
+  const spacious = !isPoster && span === 2;
   const skyTop = isPoster ? posterTop : flatTop;
   const skyBottom = isPoster ? posterBottom : flatBottom;
   // The ink rides the field: the wall card's flat washes carry the web's
@@ -199,10 +215,10 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
   // light scene family (the web's WeatherWidget.tsx:970).
   const soft = mix(washInk, "transparent", boost ? 90 : 92);
   const pinInk = colors["color-accent-coral"] ?? colors["color-accent-rose"];
-  const digitsHeight = size === "full" ? 220 : 96; // the web's wall hero digits (xl:text-[96px])
-  const iconSize = size === "full" ? 180 : CREATURE_SIZE;
+  const digitsHeight = size === "full" ? 220 : spacious ? 128 : 96;
+  const iconSize = size === "full" ? 180 : spacious ? 160 : CREATURE_SIZE;
   const phase = moonPhase(data.updatedAt).phase;
-  const type = isPoster ? FULL_TYPE : CELL_TYPE;
+  const type = isPoster ? FULL_TYPE : spacious ? ROOMY_CELL_TYPE : CELL_TYPE;
 
   // The card's own box — the wall shell owns the cell, so the card measures
   // itself and the scene (the night moon) is placed from that box.
@@ -211,12 +227,12 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
     const { width, height } = e.nativeEvent.layout;
     setCell((c) => (c.w === width && c.h === height ? c : { w: width, h: height }));
   };
-  const rhythm = cellRhythm(cell.h || 300);
-  const padH = isPoster ? 28 : 20; // the web's px-5
+  const rhythm = cellRhythm(cell.h || (spacious ? 574 : 300), spacious);
+  const padH = isPoster ? 28 : spacious ? 24 : 20;
   const padT = isPoster ? 28 : rhythm.top;
   const padB = isPoster ? 28 : rhythm.bottom;
   const gap = isPoster ? 12 : 0;
-  const chipsH = isPoster ? undefined : CELL_CHIPS_H;
+  const chipsH = isPoster ? undefined : rhythm.chipsH;
   // The glass sheen over the whole card (web WeatherWidget.tsx:1166).
   const sheenFill: [string, string, string] = [
     mix(glint, "transparent", 15),
@@ -318,14 +334,14 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
             style={{ borderRadius: RADII.full }}
             contentStyle={{
               gap: 6,
-              paddingHorizontal: isPoster ? 14 : 12,
-              paddingVertical: isPoster ? 9 : 4,
+              paddingHorizontal: isPoster ? 14 : spacious ? 14 : 12,
+              paddingVertical: isPoster ? 9 : spacious ? 6 : 4,
             }}
           >
-            <MapPinGlyph color={pinInk} size={isPoster ? 20 : 14} />
+            <MapPinGlyph color={pinInk} size={isPoster ? 20 : spacious ? 16 : 14} />
             <Text
               numberOfLines={1}
-              style={{ color: washInk, ...type.place, lineHeight: isPoster ? 32 : 20 }}
+              style={{ color: washInk, ...type.place, lineHeight: isPoster ? 32 : spacious ? 24 : 20 }}
             >
               {data.place}
             </Text>
@@ -341,7 +357,7 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
               contentStyle={{
                 gap: 4,
                 justifyContent: "center",
-                minHeight: CELL_CHIPS_H,
+                minHeight: rhythm.chipsH,
                 paddingHorizontal: 12,
               }}
             >
@@ -463,7 +479,7 @@ export function WeatherPoster({ size, data }: WeatherPosterProps) {
  * WidgetFrame header disc or marginTop gap). WidgetFrame is kept only for
  * loading/error states when data === null.
  */
-export function WeatherHeroCell() {
+export function WeatherHeroCell({ span = 1 }: { span?: WallSpan }) {
   const { colors } = useTheme();
   const { status, data, failure, stale, retry } = useWidgetData<WeatherSnapshot>(fetchWeather, {
     guestVisible: true, // Open-Meteo is public; the guest wall sees weather (reference parity)
@@ -473,7 +489,7 @@ export function WeatherHeroCell() {
   if (data) {
     return (
       <View style={{ flex: 1 }}>
-        <WeatherPoster size="cell" data={data} />
+        <WeatherPoster size="cell" data={data} span={span} />
         {stale ? (
           <Text testID="wx-stale" style={{ color: colors["color-accent-ink-amber"] ?? colors["color-accent-amber"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
             {READ_COPY_STALE}

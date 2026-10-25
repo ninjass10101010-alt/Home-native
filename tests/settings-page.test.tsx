@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { act, fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
@@ -351,6 +351,86 @@ describe("SettingsPage — Safety", () => {
     fireEvent.press(getByTestId("settings-section-safety"));
     expect(await findByText("Sign in with your PIN to see the family's emergency contacts.")).toBeTruthy();
     expect(api).not.toHaveBeenCalled();
+  });
+});
+
+describe("SettingsPage — Home uses the balanced v2 layout", () => {
+  it("offers configurable home controls and never offers deferred widgets", async () => {
+    const { getByTestId, findByText, queryByText } = render(
+      <SettingsPage />,
+      { wrapper: wrap },
+    );
+    fireEvent.press(getByTestId("settings-section-home"));
+    expect(await findByText("Home Security")).toBeTruthy();
+    expect(getByTestId("wall-layout-row-homeSecurity")).toBeTruthy();
+    expect(getByTestId("wall-layout-row-homeClimate")).toBeTruthy();
+    expect(getByTestId("wall-layout-row-homeLights")).toBeTruthy();
+    expect(queryByText("AI Quick Ask")).toBeNull();
+    expect(queryByText("Daily Schedule")).toBeNull();
+    expect(queryByText("Consuela's Suggestions")).toBeNull();
+    expect(queryByText("The Ledger")).toBeNull();
+  });
+
+  it("shows the balanced default as twelve of twelve cells", async () => {
+    const { getByTestId, findByText } = render(
+      <SettingsPage />,
+      { wrapper: wrap },
+    );
+    fireEvent.press(getByTestId("settings-section-home"));
+    await findByText("Widget layout");
+    const children = getByTestId("wall-layout-cells").props.children;
+    const copy = Array.isArray(children) ? children.join("") : String(children);
+    expect(copy).toContain("12 of 12");
+  });
+
+  it("Reset restores the approved v2 default", async () => {
+    await AsyncStorage.setItem(
+      "consuela-wall-layout",
+      JSON.stringify({
+        version: 2,
+        spans: { weather: 1 },
+        hidden: ["music", "homeClimate", "homeLights"],
+      }),
+    );
+    const { getByTestId, findByText } = render(
+      <SettingsPage />,
+      { wrapper: wrap },
+    );
+    fireEvent.press(getByTestId("settings-section-home"));
+    await findByText("Widget layout");
+    await waitFor(() => {
+      expect(
+        getByTestId("wall-layout-size-weather-1").props.accessibilityState
+          ?.selected,
+      ).toBe(true);
+    });
+    fireEvent.press(getByTestId("wall-layout-reset"));
+    await waitFor(async () => {
+      const stored = JSON.parse(
+        (await AsyncStorage.getItem("consuela-wall-layout")) ?? "null",
+      );
+      expect(stored?.version).toBe(2);
+      expect(stored?.hidden).toEqual([
+        "homeSecurity",
+        "homeClimate",
+        "homeLights",
+      ]);
+      expect(stored?.spans?.weather).toBe(2);
+    });
+  });
+
+  it("refuses a size change that would exceed twelve cells", async () => {
+    const { getByTestId, findByText } = render(
+      <SettingsPage />,
+      { wrapper: wrap },
+    );
+    fireEvent.press(getByTestId("settings-section-home"));
+    await findByText("Widget layout");
+    expect(
+      getByTestId("wall-layout-size-morningBriefing-2").props.accessibilityState
+        ?.disabled,
+    ).toBe(true);
+    expect(getByTestId("wall-layout-hint")).toBeTruthy();
   });
 });
 

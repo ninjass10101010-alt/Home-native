@@ -6,7 +6,7 @@ import type { DbListEnvelope } from "../../api/types";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { mix } from "../../theme/mix";
-import { TYPOGRAPHY } from "../../theme/tokens";
+import { TYPOGRAPHY, MIN_TARGET_DP } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
 import { ListRow } from "../../ui/ListRow";
 import { WidgetFrame } from "./WidgetFrame";
@@ -28,8 +28,8 @@ import {
 } from "../../calendar/events-merge";
 import { publishWallStats, publishWallStatsUnknown } from "../wall-stats";
 import { DayLine } from "./DayLine";
+import { wallRowBudget, type WallSpan } from "../widgets";
 
-const WALL_ROW_BUDGET = 2; // the wall reads at a glance — more rows live on /calendar
 const GOOGLE_MEMBER = "Google";
 const GOOGLE_PILL_CONNECTED = "Google Calendar isn't connected.";
 const GOOGLE_PILL_PIN = "Google Calendar: Sign in with your PIN to see the family's data.";
@@ -175,10 +175,11 @@ interface TodayPayload {
  * household clock (DayLine) rides above the rows, and every row paints the
  * web's per-event rail + tinted member chip.
  */
-export function TodayEventsWidget() {
+export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
   const { colors } = useTheme();
   const router = useRouter();
   const { member, hydrated } = useAuth();
+  const rowBudget = wallRowBudget(span);
   /** Belt-and-braces guest gate: a signed-out wall must land on the PIN copy
    *  with ZERO doomed fetches, even if a future read-path change stops
    *  short-circuiting before the load runs. */
@@ -281,7 +282,7 @@ export function TodayEventsWidget() {
 
   const events = data?.events ?? [];
   const googleFailure = data?.googleFailure ?? null;
-  const visible = events.slice(0, WALL_ROW_BUDGET);
+  const visible = events.slice(0, rowBudget);
   const hidden = events.length - visible.length;
   /**
    * The description may only assert a COUNT the card actually read.
@@ -370,7 +371,7 @@ export function TodayEventsWidget() {
                 accessibilityLabel={`${hidden} more events. Open calendar`}
                 hitSlop={16}
                 onPress={() => router.push("/calendar")}
-                style={{ minHeight: 28, justifyContent: "center", marginTop: 2 }}
+                style={{ minHeight: MIN_TARGET_DP, justifyContent: "center", marginTop: 2 }}
               >
                 <Text
                   style={{

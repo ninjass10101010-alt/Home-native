@@ -163,4 +163,17 @@ describe("PhotosWidget (wall hero)", () => {
     const { findByText } = render(<PhotosWidget />, { wrapper: wrap });
     expect(await findByText("No photos yet")).toBeTruthy(); // web copy: no trailing period
   });
+
+  it("guest wall reads the public photo feed instead of an outage state", async () => {
+    mockMember = null;
+    api.mockImplementation((path: string) => {
+      if (path.startsWith("/api/photos?")) return Promise.resolve({ ok: true, photos: photos(2) });
+      if (path.startsWith("/api/photos/settings"))
+        return Promise.resolve({ ok: true, settings: { rotateSeconds: 75, transition: "cut", order: "shuffle", showCaption: true } });
+      return Promise.reject(new Error("unmapped"));
+    });
+    const { findByTestId, queryByText } = render(<PhotosWidget />, { wrapper: wrap });
+    expect(await findByTestId("photos-hero-image")).toBeTruthy();
+    expect(queryByText("Photos unavailable")).toBeNull();
+  });
 });

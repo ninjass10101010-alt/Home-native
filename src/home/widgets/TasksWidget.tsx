@@ -3,7 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
-import { TYPOGRAPHY } from "../../theme/tokens";
+import { TYPOGRAPHY, MIN_TARGET_DP } from "../../theme/tokens";
 import { mix } from "../../theme/mix";
 import { EmptyState } from "../../ui/EmptyState";
 import { ListRow } from "../../ui/ListRow";
@@ -14,6 +14,7 @@ import { classifyFailure, type ReadFailure } from "./data";
 import { WidgetFrame } from "./WidgetFrame";
 import { publishWallStats, publishWallStatsUnknown } from "../wall-stats";
 import { DayLine } from "./DayLine";
+import { wallRowBudget, type WallSpan } from "../widgets";
 
 /** Snapshot task row per Home-ai src/types/tasks.ts (subset read by the wall). */
 interface WallTask {
@@ -37,8 +38,6 @@ interface GuestChore {
   assignee?: string;
   done?: boolean;
 }
-
-const WALL_ROW_BUDGET = 2;
 
 /**
  * The family's own task titles carry the household's shorthand — "Feeding
@@ -72,10 +71,11 @@ function readableTitle(title: string): string {
  * Sync failure keeps the shared honest error/stale vocabulary with a real
  * retry.
  */
-export function TasksWidget() {
+export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
   const { colors, accentColor } = useTheme();
   const router = useRouter();
   const { role, hydrated } = useAuth();
+  const rowBudget = wallRowBudget(span);
   // The CAPABILITY role, never the cached display profile: a stale cached
   // parent must not unlock the approval footer, and a cached profile has no
   // live session to read the family's tasks with.
@@ -165,7 +165,7 @@ export function TasksWidget() {
   );
 
   const rowCount = guest ? guestRows.length : pending.length;
-  const visible = (guest ? guestRows : pending).slice(0, WALL_ROW_BUDGET);
+  const visible = (guest ? guestRows : pending).slice(0, rowBudget);
   const hidden = rowCount - visible.length;
 
   // U5.1 taxonomy: transport down is OFFLINE ("unreachable"); a NAS that
@@ -336,7 +336,7 @@ export function TasksWidget() {
               accessibilityLabel={`${pendingApprovalCount} need approval. Open tasks`}
               hitSlop={16}
               onPress={() => router.push("/tasks")}
-              style={{ minHeight: 28, justifyContent: "center", marginTop: 2 }}
+              style={{ minHeight: MIN_TARGET_DP, justifyContent: "center", marginTop: 2 }}
             >
               <Text
                 style={{
@@ -356,7 +356,7 @@ export function TasksWidget() {
               accessibilityLabel={`${hidden} more tasks. Open tasks`}
               hitSlop={16}
               onPress={() => router.push("/tasks")}
-              style={{ minHeight: 28, justifyContent: "center", marginTop: 2 }}
+              style={{ minHeight: MIN_TARGET_DP, justifyContent: "center", marginTop: 2 }}
             >
               <Text
                 style={{

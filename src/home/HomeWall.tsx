@@ -8,8 +8,16 @@ import { mix } from "../theme/mix";
 import { MemberRail, type RailMember } from "../ui/MemberRail";
 import { useAuth } from "../state/AuthProvider";
 import { EmergencyShield } from "./EmergencyShield";
-import { visibleOnWall, WidgetId, WidgetPlaceholder, WIDGET_TONES, wallColumns } from "./widgets";
-import { layoutSpan, layoutWidgets, useWallLayout, type WallSpan } from "./wallLayout";
+import {
+  visibleOnWall,
+  WidgetId,
+  WidgetPlaceholder,
+  WIDGET_TONES,
+  wallColumns,
+  type WallSpan,
+  type WallWidgetProps,
+} from "./widgets";
+import { layoutSpan, layoutWidgets, useWallLayout } from "./wallLayout";
 import { WallStatStrip, ThisWeekCard } from "./WallStatsStrip";
 
 /* ── The wall's frame ──────────────────────────────────────────────────────────
@@ -329,7 +337,7 @@ export interface HomeWallProps {
   onSelectMember: (m: RailMember) => void;
   onSignOut?: () => void;
   /** id → component; ids absent from the registry render a placeholder cell. */
-  widgets?: Partial<Record<WidgetId, React.ComponentType>>;
+  widgets?: Partial<Record<WidgetId, React.ComponentType<WallWidgetProps>>>;
   greetingNow?: Date;
   /** The "This Week" strip's destination (/meals?day=). Absent = read-only. */
   onSelectDay?: (dayId: string) => void;
@@ -393,9 +401,14 @@ export function HomeWall({
   // The board's sizes and visibility are the family's per-device choice
   // (src/home/wallLayout.ts) - the wall reads the layout, not a constant.
   const { layout } = useWallLayout();
-  const defs = visibleOnWall().filter((w) => layoutWidgets(layout).includes(w.id));
+  const defs = useMemo(() => {
+    const visibleIds = layoutWidgets(layout);
+    return visibleOnWall(layout.hidden).filter((widget) =>
+      visibleIds.includes(widget.id),
+    );
+  }, [layout]);
   const spans = useMemo(() => {
-    const out: Partial<Record<WidgetId, number>> = {};
+    const out: Partial<Record<WidgetId, WallSpan>> = {};
     for (const id of layoutWidgets(layout)) out[id] = layoutSpan(layout, id);
     return out;
   }, [layout]);
@@ -588,7 +601,7 @@ export function HomeWall({
                         padding: isFullBleed ? 0 : 14,
                       }}
                     >
-                      {Cell ? <Cell /> : <WidgetPlaceholder def={def} />}
+                      {Cell ? <Cell span={span} /> : <WidgetPlaceholder def={def} />}
                     </Material>
                   </View>
                 );

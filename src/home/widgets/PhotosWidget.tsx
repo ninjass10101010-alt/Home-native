@@ -93,7 +93,7 @@ function fallbackCaption(takenAt?: string): string | null {
 export function PhotosWidget() {
   const { colors, theme, reduceMotion } = useTheme();
   const router = useRouter();
-  const { status, data: batch, failure, stale, retry } = useWidgetData<PhotosState>(() => loadPhotos());
+  const { status, data: batch, failure, stale, retry } = useWidgetData<PhotosState>(() => loadPhotos(), { guestVisible: true });
 
   const [override, setOverride] = React.useState<PhotosState | null>(null);
   const data = override ?? batch;

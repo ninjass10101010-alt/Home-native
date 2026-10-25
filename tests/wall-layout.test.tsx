@@ -1,97 +1,196 @@
-jest.mock("@react-native-async-storage/async-storage", () =>
-  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
-);
+import { act, renderHook, waitFor } from "@testing-library/react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
   DEFAULT_WALL_LAYOUT,
+  WALL_LAYOUT_STORAGE_KEY,
+  WALL_LAYOUT_VERSION,
   layoutCells,
   layoutFits,
   layoutSpan,
   layoutWidgets,
   normalizeWallLayout,
   resetWallLayout,
-  WALL_CELLS,
+  useWallLayout,
   type WallLayout,
 } from "../src/home/wallLayout";
-import { wallColumns, visibleOnWall, WALL_DEFAULT_WIDGETS } from "../src/home/widgets";
+import {
+  WALL_CONFIGURABLE_WIDGETS,
+  WALL_DEFAULT_HIDDEN_WIDGETS,
+  WALL_LOCKED_HIDDEN_WIDGETS,
+  WALL_SPANS,
+  wallColumns,
+  wallRowBudget,
+  visibleOnWall,
+  type WidgetId,
+  type WallSpan,
+} from "../src/home/widgets";
 
-const L = (patch: Partial<WallLayout>): WallLayout => ({ ...DEFAULT_WALL_LAYOUT, ...patch });
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
 
-describe("wall layout — the board's cell budget", () => {
-  it("the default layout fills the board exactly", () => {
-    const cells = layoutCells(DEFAULT_WALL_LAYOUT);
-    expect(cells.used).toBe(WALL_CELLS);
-    expect(cells.free).toBe(0);
+const L = (
+  spans: Partial<Record<WidgetId, WallSpan>> = {},
+  hidden: WidgetId[] = [],
+): WallLayout => ({ version: WALL_LAYOUT_VERSION, spans, hidden });
+
+beforeEach(async () => {
+  resetWallLayout();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await AsyncStorage.clear();
+});
+
+describe("wall manifest — the balanced reading order", () => {
+  it("uses the approved configurable order and locks deferred widgets off", () => {
+    expect(WALL_CONFIGURABLE_WIDGETS).toEqual([
+      "photos",
+      "weather",
+      "todayEvents",
+      "tasks",
+      "morningBriefing",
+      "music",
+      "currentMeal",
+      "leaderboard",
+      "homeSecurity",
+      "homeClimate",
+      "homeLights",
+    ]);
+    expect(WALL_DEFAULT_HIDDEN_WIDGETS).toEqual([
+      "homeSecurity",
+      "homeClimate",
+      "homeLights",
+    ]);
+    expect(WALL_LOCKED_HIDDEN_WIDGETS).toEqual([
+      "aiQuickAsk",
+      "schedule",
+      "consuelaSuggestions",
+      "financeLedger",
+    ]);
   });
 
-  it("a widget's size is the family's choice, defaulting to the board's own", () => {
-    expect(layoutSpan(DEFAULT_WALL_LAYOUT, "photos")).toBe(2);
-    expect(layoutSpan(DEFAULT_WALL_LAYOUT, "tasks")).toBe(1);
-  });
-
-  it("enlarging a widget frees nothing and can overflow the board", () => {
-    const grown = L({ spans: { ...DEFAULT_WALL_LAYOUT.spans, tasks: 2 } });
-    expect(layoutCells(grown).used).toBe(WALL_CELLS + 1);
-    expect(layoutFits(grown)).toBe(false);
-  });
-
-  it("hiding a widget frees its cells so another can take them", () => {
-    const swapped = L({
-      hidden: [...DEFAULT_WALL_LAYOUT.hidden, "homeLights"],
-      spans: { ...DEFAULT_WALL_LAYOUT.spans, weather: 2 },
+  it("gives Photos, Weather, Today, and Tasks two cells", () => {
+    expect(WALL_SPANS).toEqual({
+      photos: 2,
+      weather: 2,
+      todayEvents: 2,
+      tasks: 2,
     });
-    const cells = layoutCells(swapped);
-    expect(cells.used).toBe(WALL_CELLS);
-    expect(cells.free).toBe(0);
-    expect(layoutFits(swapped)).toBe(true);
+    expect(wallRowBudget(1)).toBe(2);
+    expect(wallRowBudget(2)).toBe(4);
   });
 
-  it("the visible set follows the board's order, minus the hidden widgets", () => {
-    const shown = layoutWidgets(L({ hidden: [...DEFAULT_WALL_LAYOUT.hidden, "music"] }));
-    expect(shown).not.toContain("music");
-    // the order is the board's own order, not the layout's
-    const order = WALL_DEFAULT_WIDGETS.filter((id) => shown.includes(id));
-    expect(layoutWidgets(L({ hidden: [...DEFAULT_WALL_LAYOUT.hidden, "music"] }))).toEqual(order);
+  it("shows eight daily essentials and fills exactly twelve cells", () => {
+    expect(visibleOnWall().map((widget) => widget.id)).toEqual([
+      "photos",
+      "weather",
+      "todayEvents",
+      "tasks",
+      "morningBriefing",
+      "music",
+      "currentMeal",
+      "leaderboard",
+    ]);
+    expect(layoutCells(DEFAULT_WALL_LAYOUT)).toEqual({ used: 12, free: 0 });
+    expect(layoutFits(DEFAULT_WALL_LAYOUT)).toBe(true);
+  });
+
+  it("places the four anchors across the top and the compact block lower right", () => {
+    expect(wallColumns().map((column) => column.map((widget) => widget.id))).toEqual([
+      ["photos", "tasks"],
+      ["weather", "morningBriefing", "currentMeal"],
+      ["todayEvents", "music", "leaderboard"],
+    ]);
   });
 });
 
-describe("wall layout — a stored layout is repaired, never trusted", () => {
-  it("rejects a junk span, an unknown widget and a duplicate hide", () => {
-    const out = normalizeWallLayout({
-      spans: { photos: 7, notAWidget: 2, tasks: 2 },
-      hidden: ["music", "music", "nope"],
+describe("wall layout — v1 resets once and v2 customizations persist", () => {
+  it("treats an unversioned payload as v1 and replaces it with the v2 default", () => {
+    const v1 = { spans: { photos: 1 }, hidden: ["music"] };
+    expect(normalizeWallLayout(v1)).toEqual(DEFAULT_WALL_LAYOUT);
+  });
+
+  it("keeps a valid v2 custom layout", () => {
+    const custom = L({ weather: 1 }, ["music", "homeClimate", "homeLights"]);
+    expect(normalizeWallLayout(custom)).toEqual(custom);
+    expect(layoutWidgets(custom)).toContain("homeSecurity");
+  });
+
+  it("makes the v2 hidden list authoritative for configurable default-off widgets", () => {
+    const enabledSecurity = L({}, ["music", "homeClimate", "homeLights"]);
+    expect(layoutWidgets(enabledSecurity)).toContain("homeSecurity");
+    expect(layoutWidgets(enabledSecurity)).not.toContain("homeClimate");
+    expect(layoutWidgets(enabledSecurity)).not.toContain("homeLights");
+  });
+
+  it("repairs unknown ids, invalid spans, and duplicate hides", () => {
+    const invalidSpans = {
+      photos: 3,
+      notAWidget: 2,
+    } as unknown as Partial<Record<WidgetId, WallSpan>>;
+    const invalidHidden = [
+      "music",
+      "homeSecurity",
+      "homeClimate",
+      "homeLights",
+      "notAWidget",
+    ] as unknown as WidgetId[];
+    const repaired = normalizeWallLayout(L(invalidSpans, invalidHidden));
+    expect(layoutSpan(repaired, "photos")).toBe(2);
+    expect((repaired.spans as Record<string, unknown>).notAWidget).toBeUndefined();
+    expect(repaired.hidden).toEqual([
+      "music",
+      "homeSecurity",
+      "homeClimate",
+      "homeLights",
+    ]);
+  });
+
+  it("keeps deferred widgets locked off", () => {
+    const custom = L({}, ["music", "homeClimate", "homeLights", "aiQuickAsk"]);
+    expect(layoutWidgets(custom)).not.toContain("aiQuickAsk");
+    expect(layoutWidgets(custom)).not.toContain("schedule");
+    expect(layoutWidgets(custom)).not.toContain("consuelaSuggestions");
+    expect(layoutWidgets(custom)).not.toContain("financeLedger");
+  });
+
+  it("refuses a repaired layout over twelve cells", () => {
+    const overBudget = L({ homeSecurity: 2 }, []);
+    expect(layoutFits(overBudget)).toBe(false);
+    expect(normalizeWallLayout(overBudget)).toEqual(DEFAULT_WALL_LAYOUT);
+  });
+
+  it("persists the one-time v1 migration as v2", async () => {
+    await AsyncStorage.setItem(
+      WALL_LAYOUT_STORAGE_KEY,
+      JSON.stringify({ spans: { photos: 1 }, hidden: ["music"] }),
+    );
+    const { result } = renderHook(() => useWallLayout());
+    await waitFor(() => expect(result.current.layout.version).toBe(2));
+    const stored = JSON.parse(
+      (await AsyncStorage.getItem(WALL_LAYOUT_STORAGE_KEY)) ?? "null",
+    );
+    expect(stored.version).toBe(2);
+    expect(stored.hidden).toEqual(WALL_DEFAULT_HIDDEN_WIDGETS);
+  });
+
+  it("reloads a valid v2 custom layout without losing it", async () => {
+    const custom = L({ weather: 1 }, ["music", "homeClimate", "homeLights"]);
+    await AsyncStorage.setItem(WALL_LAYOUT_STORAGE_KEY, JSON.stringify(custom));
+    const { result } = renderHook(() => useWallLayout());
+    await waitFor(() => expect(result.current.layout.spans.weather).toBe(1));
+    expect(result.current.layout.hidden).toEqual(custom.hidden);
+    expect(layoutWidgets(result.current.layout)).toContain("homeSecurity");
+  });
+
+  it("returns false and keeps the current layout when a change exceeds twelve cells", async () => {
+    const { result } = renderHook(() => useWallLayout());
+    await waitFor(() => expect(result.current.layout.version).toBe(2));
+    let accepted = false;
+    act(() => {
+      accepted = result.current.setLayout(L({ homeSecurity: 2 }, []));
     });
-    // a junk span falls back to the board's own size, an unknown widget is dropped
-    expect(out.spans.photos).toBe(2);
-    expect((out.spans as Record<string, unknown>).notAWidget).toBeUndefined();
-    expect(out.spans.tasks).toBe(2);
-    // a duplicate hide is collapsed, and the board's shipped-off widgets stay off
-    expect(out.hidden).toEqual([...DEFAULT_WALL_LAYOUT.hidden, "music"]);
-  });
-
-  it("a non-object store falls back to the default", () => {
-    expect(normalizeWallLayout("nope").spans.photos).toBe(2);
-    expect(normalizeWallLayout(null).hidden).toEqual(DEFAULT_WALL_LAYOUT.hidden);
-  });
-});
-
-describe("the grid honours the layout's sizes", () => {
-  afterEach(() => resetWallLayout());
-
-  it("a two-cell widget occupies two rows of one column", () => {
-    const spans = { photos: 2, tasks: 1 };
-    const cols = wallColumns(visibleOnWall(), spans);
-    const flat = cols.flat();
-    // every widget is placed exactly once
-    expect(flat.length).toBe(visibleOnWall().length);
-    // the photo hero is the first widget of the first column and takes two rows
-    expect(cols[0][0].id).toBe("photos");
-  });
-
-  it("a widget the family turned off is not on the board", () => {
-    const hidden = new Set([...DEFAULT_WALL_LAYOUT.hidden, "music"]);
-    const shown = visibleOnWall().filter((w) => !hidden.has(w.id));
-    const cols = wallColumns(shown, {});
-    expect(cols.flat().map((c) => c.id)).not.toContain("music");
+    expect(accepted).toBe(false);
+    expect(result.current.layout).toEqual(DEFAULT_WALL_LAYOUT);
   });
 });

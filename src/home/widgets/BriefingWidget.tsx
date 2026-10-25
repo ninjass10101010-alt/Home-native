@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { api } from "../../api/client";
 import { useTheme } from "../../theme/ThemeProvider";
-import { TYPOGRAPHY } from "../../theme/tokens";
+import { TYPOGRAPHY, MIN_TARGET_DP } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
 import { ListRow } from "../../ui/ListRow";
 import { Chip } from "../../ui/Chip";
@@ -304,7 +304,7 @@ export function BriefingWidget() {
               onPress={() => void handleAck()}
               style={{
                 marginTop: 6,
-                minHeight: 36,
+                minHeight: MIN_TARGET_DP,
                 borderRadius: 12,
                 paddingHorizontal: 16,
                 paddingVertical: 6,
@@ -346,7 +346,7 @@ export function BriefingWidget() {
                 disabled={ackBusy}
                 onPress={() => void handleAck()}
                 style={{
-                  minHeight: 36,
+                  minHeight: MIN_TARGET_DP,
                   borderRadius: 12,
                   paddingHorizontal: 16,
                   paddingVertical: 6,
