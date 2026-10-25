@@ -160,7 +160,9 @@ export interface PlaybackValue {
   /** Adds a term to the family's deny-list (persisted; live at once). */
   addDenied: (term: string) => Promise<void>;
   /** Removes every entry whose term matches (persisted; live at once). */
-  removeDenied: (term: string) => Promise<void>;
+  removeDenied: (term: string) => void;
+  /** Stops playback (local + cast), clears current + queue, drops lock-screen. */
+  stopAndClear: () => void;
 }
 
 const Ctx = React.createContext<PlaybackValue | null>(null);
@@ -869,6 +871,27 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
+   * Stop playback (local engine + lock screen), clear the current track and
+   * the queue, and drop the lock-screen session. Idempotent: a no-op when
+   * nothing is playing. Cast disconnect is handled by the UI layer (which has
+   * access to useCast()); this clears the provider's view of the playback.
+   */
+  const stopAndClear = React.useCallback(() => {
+    try {
+      playerRef.current.pause();
+    } catch {
+      // A native throw must not escape.
+    }
+    try {
+      playerRef.current.setActiveForLockScreen?.(false);
+    } catch {
+      // A native throw must not escape.
+    }
+    setQueue(createQueue([], -1));
+    setError(null);
+  }, []);
+
+  /**
    * What the provider HANDS OUT is what the viewer may see: the downloads
    * tray and the history are device-global, so they are filtered against
    * the policy here — a kid never receives a row they may not see.
@@ -925,6 +948,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setExplicitFilter,
       addDenied,
       removeDenied,
+      stopAndClear,
     }),
     [
       addDenied, addToQueue, advanceForCast, current, cycleRepeatMode, downloadCurrent, duration,
@@ -935,7 +959,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,
       recordHistory,
       setCastSink, setExplicitFilter, setRepeat, settings, status?.isBuffering, streamFormat, toggle, toggleShuffleMode,
-      visibleDownloads, visibleHistory,
+      visibleDownloads, visibleHistory, stopAndClear,
     ]
   );
   /* eslint-enable react-hooks/refs */
