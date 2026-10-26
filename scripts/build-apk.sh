@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 export ANDROID_HOME="${ANDROID_HOME:-/usr/local/share/android-commandlinetools}"
 export JAVA_HOME="${JAVA_HOME:-$HOME/Library/Java/JavaVirtualMachines/jdk-21.0.12.1+1/Contents/Home}"
 export PATH="$ANDROID_HOME/platform-tools:$PATH"
+export ADB_USB=0
 
 npx expo prebuild --platform android
 
