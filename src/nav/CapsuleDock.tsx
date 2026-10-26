@@ -141,6 +141,8 @@ export function CapsuleDock({ role, hydrated, pathname, onNavigate, style, testI
           right: CAP_EDGE,
           bottom: CAP_EDGE,
           alignItems: "stretch",
+          zIndex: 50,
+          elevation: 10,
         },
         style,
       ]}

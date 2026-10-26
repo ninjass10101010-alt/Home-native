@@ -341,13 +341,13 @@ export default function HomePlaceholder() {
         role={navRole}
         hydrated={hydrated}
         pathname={pathname}
-        onNavigate={(p) => router.push(p as never)}
+        onNavigate={(p) => { poke(); router.push(p as never); }}
       />
       <MoreSheet
         visible={moreOpen}
         onClose={() => setMoreOpen(false)}
         role={navRole}
-        onNavigate={(p) => router.push(p as never)}
+        onNavigate={(p) => { poke(); router.push(p as never); }}
       />
 
       <Modal visible={!!pinTarget} onClose={() => !busy && setPinTarget(null)} title="Sign in" dismissable={!busy}>

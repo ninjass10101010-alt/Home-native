@@ -19,6 +19,8 @@ import {
 } from "./widgets";
 import { layoutSpan, layoutWidgets, useWallLayout } from "./wallLayout";
 import { WallStatStrip, ThisWeekCard } from "./WallStatsStrip";
+import { useWallStats } from "./wall-stats";
+import { scoreWidgets, dynamicSpans, activityOrder } from "./wallActivity";
 
 /* ── The wall's frame ──────────────────────────────────────────────────────────
    Every number below is MEASURED against the production web wall captured at
@@ -401,17 +403,37 @@ export function HomeWall({
   // The board's sizes and visibility are the family's per-device choice
   // (src/home/wallLayout.ts) - the wall reads the layout, not a constant.
   const { layout } = useWallLayout();
-  const defs = useMemo(() => {
-    const visibleIds = layoutWidgets(layout);
-    return visibleOnWall(layout.hidden).filter((widget) =>
-      visibleIds.includes(widget.id),
-    );
-  }, [layout]);
+  const wallStats = useWallStats();
+
+  // Activity-based dynamic layout: the wall scores every widget by its
+  // current activity (tasks pending, events today, meals planned) and
+  // adjusts both ORDER (busiest rise) and SIZE (active → span 2, empty →
+  // span 1). Photos keeps its locked span as the visual anchor.
+  const isAutoArrange = Boolean(layout.autoArrange);
+  const visibleIds = useMemo(() => layoutWidgets(layout), [layout]);
+  const activities = useMemo(() => scoreWidgets(wallStats), [wallStats]);
+
   const spans = useMemo(() => {
-    const out: Partial<Record<WidgetId, WallSpan>> = {};
-    for (const id of layoutWidgets(layout)) out[id] = layoutSpan(layout, id);
-    return out;
-  }, [layout]);
+    if (!isAutoArrange) {
+      const out: Partial<Record<WidgetId, WallSpan>> = {};
+      for (const id of visibleIds) out[id] = layoutSpan(layout, id);
+      return out;
+    }
+    return dynamicSpans(layout, activities, visibleIds);
+  }, [isAutoArrange, layout, activities, visibleIds]);
+
+  const defs = useMemo(() => {
+    const allVisible = visibleOnWall(layout.hidden);
+    if (!isAutoArrange) {
+      return allVisible.filter((widget) => visibleIds.includes(widget.id));
+    }
+    const sortedVisibleIds = activityOrder(visibleIds, activities, spans);
+    const idToWidget = new Map(allVisible.map((w) => [w.id, w]));
+    return sortedVisibleIds
+      .map((id) => idToWidget.get(id))
+      .filter((w): w is NonNullable<typeof w> => !!w);
+  }, [isAutoArrange, layout.hidden, visibleIds, activities, spans]);
+
   const columns = wallColumns(defs, spans);
   const { width: winW, height: winH } = useWindowDimensions();
   const effectiveWallH =
@@ -451,7 +473,7 @@ export function HomeWall({
     // inset. The roster badge app/index.tsx paints at the same corner sits in
     // a SIBLING of this frame, so it needs a z-index of its own to stay
     // visible — see the note there.
-    <View style={{ flex: 1, zIndex: 1 }}>
+    <View style={{ flex: 1 }}>
       {/* Emergency shield: 64dp, top-right of the wall — the web's fixed
           Emergency button, 16px in from the corner. */}
       <EmergencyShield style={{ top: SHIELD_INSET, right: SHIELD_INSET, zIndex: 30 }} />

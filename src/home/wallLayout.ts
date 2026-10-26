@@ -19,6 +19,7 @@ export interface WallLayout {
   version: number;
   spans: Partial<Record<WidgetId, WallSpan>>;
   hidden: WidgetId[];
+  autoArrange?: boolean;
 }
 
 const ALL_IDS = new Set<WidgetId>(ALL_WIDGETS.map((widget) => widget.id));
@@ -95,10 +96,14 @@ function repairLayout(raw: unknown): WallLayout | null {
     }
   }
 
+  const hasAutoArrange = typeof (candidate as { autoArrange?: unknown }).autoArrange === "boolean";
+  const autoArrange = hasAutoArrange ? (candidate as { autoArrange: boolean }).autoArrange : undefined;
+
   const layout: WallLayout = {
     version: WALL_LAYOUT_VERSION,
     spans,
     hidden: WALL_CONFIGURABLE_WIDGETS.filter((id) => hiddenIds.has(id)),
+    ...(hasAutoArrange ? { autoArrange } : {}),
   };
   return layoutFits(layout) ? layout : null;
 }

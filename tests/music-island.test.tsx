@@ -1,5 +1,5 @@
 import React from "react";
-import { render, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, fireEvent, act } from "@testing-library/react-native";
 import { MusicIsland } from "../src/music/MusicIsland";
 import { usePlayback } from "../src/music/playback";
 import { useCast } from "../src/music/CastProvider";
@@ -93,7 +93,7 @@ describe("MusicIsland", () => {
     expect(getByTestId("music-island-expanded")).toBeTruthy();
   });
 
-  it("auto-collapses after 5 seconds", async () => {
+  it("auto-collapses after 5 seconds", () => {
     jest.useFakeTimers();
     (usePlayback as jest.Mock).mockReturnValue({ current: mockTrack });
 
@@ -102,11 +102,11 @@ describe("MusicIsland", () => {
     fireEvent.press(getByTestId("music-island-collapsed"));
     expect(getByTestId("music-island-expanded")).toBeTruthy();
 
-    jest.advanceTimersByTime(5000);
-
-    await waitFor(() => {
-      expect(queryByTestId("music-island-expanded")).toBeNull();
+    act(() => {
+      jest.advanceTimersByTime(5000);
     });
+
+    expect(queryByTestId("music-island-expanded")).toBeNull();
 
     jest.useRealTimers();
   });
@@ -198,7 +198,7 @@ describe("MusicIsland", () => {
     jest.useRealTimers();
   });
 
-  it("stop arm resets after 5s", async () => {
+  it("stop arm resets after 5s", () => {
     jest.useFakeTimers();
     (usePlayback as jest.Mock).mockReturnValue({
       current: mockTrack,
@@ -213,11 +213,11 @@ describe("MusicIsland", () => {
     fireEvent.press(stopButton);
     expect(getByText("Confirm")).toBeTruthy();
 
-    jest.advanceTimersByTime(5000);
-
-    await waitFor(() => {
-      expect(getByText("Stop")).toBeTruthy();
+    act(() => {
+      jest.advanceTimersByTime(5000);
     });
+
+    expect(getByText("Stop")).toBeTruthy();
 
     jest.useRealTimers();
   });

@@ -4,6 +4,14 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-26 — feat(home): activity-based wall auto-arrange, music island polish, robust session persistence.
+  **What changed:**
+  - **WALL AUTO-ARRANGE BY ACTIVITY** (`src/home/wallActivity.ts`, `src/home/HomeWall.tsx`, `src/home/wallLayout.ts`, `src/settings/HomeSection.tsx`): dynamic scoring for the 3×4 wall grid based on live family activity (tasks pending, events today, planned meals). High-activity widgets earn span 2 (tall cards) while idle widgets step down to span 1 (compact), packing cleanly into the 12-cell frame without exceeding column budgets. Toggleable in Settings → Home ("Auto-arrange by activity").
+  - **MUSIC ISLAND POLISH & A11Y CONFORMANCE** (`src/music/MusicIsland.tsx`): refined expanded card design with device badges, scrubber track, sleek controls, and 14sp type floor compliance across all labels. Auto-collapse timing wrapped in act in unit tests (`tests/music-island.test.tsx`).
+  - **ROBUST SESSION PERSISTENCE** (`src/api/session.ts`): session cookie now dual-persists to `AsyncStorage` alongside `SecureStore`. Resolves session drops on custom Android wall panels where SecureStore/KeyStore fails or drops keys on device reboot.
+  - **DOCK ELEVATION & KEEP-ALIVE** (`src/nav/CapsuleDock.tsx`, `app/index.tsx`): elevated dock zIndex to 50 / elevation 10 and added activity poke on navigation taps so ambient screensaver doesn't trigger while tapping nav caps.
+  **Tests:** `tests/wall-activity.test.ts` (10 tests), full test suite passing (77/77 suites, 1272 tests), `tokens:check` CLEAN, `a11y:audit` CLEAN, `npx tsc --noEmit` CLEAN, `eslint` 0 errors.
+
 - 2026-10-24 — feat(music): Music Island — top-mounted Dynamic-Island-style player (replaces the bottom MiniPlayer pill).
   **What changed:** the family wall tablet gains a top-mounted music island that collapses to show what's playing at a glance and expands to quick controls. It closes two real gaps: no volume control at all, and no way to stop and clear the player.
   - **PROVIDER GAINS `stopAndClear()`** (`src/music/playback.tsx`): stops local playback + lock screen, clears current + queue, drops lock-screen. Idempotent. Cast disconnect handled by the UI layer.

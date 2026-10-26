@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { Material } from "../theme/Material";
 import { TYPOGRAPHY } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
+import { mix } from "../theme/mix";
 import { Chip } from "../ui/Chip";
 import { Toggle } from "../ui/Toggle";
 import { ALL_WIDGETS, WALL_CONFIGURABLE_WIDGETS, type WidgetId, type WallSpan } from "../home/widgets";
@@ -114,6 +115,53 @@ export function HomeSection() {
             ? "The board is full. Turn a widget off to give another one more room."
             : `${cells.free} ${cells.free === 1 ? "cell is" : "cells are"} free — a widget can grow into it.`}
         </Text>
+
+        {/* Dynamic Activity Layout Toggle */}
+        <View
+          testID="wall-layout-auto-arrange"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            paddingVertical: 14,
+            paddingHorizontal: 16,
+            borderRadius: 20,
+            backgroundColor: mix(colors["color-accent-selected"] ?? colors["color-text-primary"], "transparent", 8),
+            borderWidth: 1,
+            borderColor: mix(colors["color-accent-selected"] ?? colors["color-text-primary"], "transparent", 20),
+          }}
+        >
+          <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ fontSize: 18 }}>⚡</Text>
+              <Text
+                style={{
+                  color: colors["color-text-primary"],
+                  fontSize: TYPOGRAPHY.body.fontSize,
+                  fontWeight: "700",
+                }}
+              >
+                Auto-arrange by activity
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: colors["color-text-secondary"],
+                fontSize: TYPOGRAPHY.label.fontSize,
+                lineHeight: 18,
+              }}
+            >
+              Automatically expand active widgets (like pending tasks or upcoming events) and shrink idle ones to keep the most important things in view.
+            </Text>
+          </View>
+          <Toggle
+            testID="wall-layout-auto-arrange-toggle"
+            value={Boolean(layout.autoArrange)}
+            onChange={(enabled) => apply({ ...layout, autoArrange: enabled })}
+            accessibilityLabel="Auto-arrange widgets by activity"
+          />
+        </View>
 
         <View style={{ gap: 10 }}>
           {WALL_CONFIGURABLE_WIDGETS.map((id) => {

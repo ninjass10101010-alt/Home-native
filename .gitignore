@@ -42,6 +42,8 @@ yarn-error.*
 
 # generated native folders (modules)
 modules/**/android/build/
+.gradle/
+**/.gradle/
 
 # Home-native: NEVER commit these (family data / local env / secrets)
 .env

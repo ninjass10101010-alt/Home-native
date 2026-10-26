@@ -13,7 +13,10 @@ export function getSessionCookie(): string | null {
 /** Persist only the session cookie value (SecureStore is encrypted, device-local). */
 export async function saveSessionCookie(value: string): Promise<void> {
   inMemory = value;
-  await SecureStore.setItemAsync(KEY, value).catch(() => {});
+  await Promise.all([
+    SecureStore.setItemAsync(KEY, value).catch(() => {}),
+    AsyncStorage.setItem(KEY, value).catch(() => {}),
+  ]);
 }
 
 export async function loadSessionCookie(): Promise<string | null> {
@@ -23,7 +26,7 @@ export async function loadSessionCookie(): Promise<string | null> {
   } catch {
     inMemory = null;
   }
-  if (!inMemory && typeof __DEV__ !== "undefined" && __DEV__ && typeof jest === "undefined") {
+  if (!inMemory) {
     try {
       inMemory = await AsyncStorage.getItem(KEY);
     } catch {
@@ -35,10 +38,10 @@ export async function loadSessionCookie(): Promise<string | null> {
 
 export async function clearSessionCookie(): Promise<void> {
   inMemory = null;
-  await SecureStore.deleteItemAsync(KEY).catch(() => {});
-  if (typeof __DEV__ !== "undefined" && __DEV__ && typeof jest === "undefined") {
-    await AsyncStorage.removeItem(KEY).catch(() => {});
-  }
+  await Promise.all([
+    SecureStore.deleteItemAsync(KEY).catch(() => {}),
+    AsyncStorage.removeItem(KEY).catch(() => {}),
+  ]);
 }
 
 /** Parse the consuela_session value out of a response's Set-Cookie header(s).
