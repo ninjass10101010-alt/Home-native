@@ -4,10 +4,12 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
-- 2026-10-27 — feat(music): dynamic animated equalizer on island, off-state when paused, and unified contextual stage sound control.
+- 2026-10-27 — feat(music): animated equalizer on left of island, Apple squircle artwork, and unified contextual stage sound control.
   **What changed:**
-  - **ANIMATED ISLAND EQUALIZER & ACTIVE PLAYING INDICATOR** (`src/music/MusicIsland.tsx`):
-    - Redesigned `WaveformBars` with 4 animated equalizer bars that bounce rhythmically during music playback. When playback is paused ("off"), the bars smoothly drop to a flat 2dp minimal baseline with dimmed opacity (0.35), clearly indicating the inactive state.
+  - **ANIMATED EQUALIZER ON LEFT & APPLE-INSPIRED SQUIRCLE STYLING** (`src/music/MusicIsland.tsx`):
+    - Positioned the animated 4-bar equalizer (`WaveformBars`) on the **left** side of the collapsed Dynamic Island, ensuring audio activity is immediately visible from the leading edge. When playing, the bars actively jump and bounce; when paused, they drop to a 2dp flat baseline with dimmed 35% opacity.
+    - Updated album artwork thumbnail to an authentic Apple-inspired squircle (`borderRadius: 8`) rather than a circular avatar, preserving squircle geometry across iOS-style dark glass surfaces.
+    - Exported `WaveformBars` with customizable `testID` prop and connected it to the `np-codec` chip on `NowPlayingStage` (`src/music/MusicPlayer.tsx`), providing live moving equalizer bars on the left of the codec label during active playback.
     - Added an active accent glow (`shadowColor: tokens.accent`, `borderColor: mix(tokens.accent, tokens.glassRim, 40)`) and artwork status indicator badge on the collapsed Dynamic Island pill during active playback.
     - Mounted the animated waveform bars on the expanded island card beside the device badge, and added accent glow to the transport play button when playing.
     - Honors `reduceMotion` (and tests) by setting static heights instead of running continuous animation loops.

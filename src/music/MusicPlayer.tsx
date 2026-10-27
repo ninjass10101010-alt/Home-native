@@ -31,6 +31,7 @@ import { CastVolume } from "./CastVolume";
 import { MusicBackdrop } from "./MusicBackdrop";
 import { formatCodecChip } from "./codec";
 import { TransportPill } from "./TransportPill";
+import { WaveformBars } from "./MusicIsland";
 import { currentLineIndex, fetchLyrics, followOffset, FOLLOW_PAUSE_MS, lyricSegments, type LyricLine } from "./lyrics";
 import { countUnrated, isContentHidden, isDeniedTerm, searchNote, visibleTracks } from "./explicit";
 import { totalDownloadBytes } from "./library";
@@ -1323,11 +1324,7 @@ function NowPlayingStage({
         }}
       >
         {playing ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 2.5 }}>
-            <View style={{ width: 3, height: 8, borderRadius: 1.5, backgroundColor: tokens.accent }} />
-            <View style={{ width: 3, height: 13, borderRadius: 1.5, backgroundColor: tokens.accent }} />
-            <View style={{ width: 3, height: 7, borderRadius: 1.5, backgroundColor: tokens.accent }} />
-          </View>
+          <WaveformBars playing={playing} color={tokens.accent} testID="np-codec-waveform" />
         ) : null}
         <Text
           testID="np-codec-label"

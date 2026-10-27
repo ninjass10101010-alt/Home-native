@@ -35,7 +35,15 @@ function formatTime(sec: number): string {
   return `${m}:${s < 10 ? "0" : ""}${s}`;
 }
 
-function WaveformBars({ playing, color }: { playing: boolean; color: string }) {
+export function WaveformBars({
+  playing,
+  color,
+  testID = "music-island-waveform",
+}: {
+  playing: boolean;
+  color: string;
+  testID?: string;
+}) {
   const { reduceMotion } = useTheme();
   const [bar1] = useState(() => new Animated.Value(playing ? 14 : 2));
   const [bar2] = useState(() => new Animated.Value(playing ? 18 : 2));
@@ -110,7 +118,7 @@ function WaveformBars({ playing, color }: { playing: boolean; color: string }) {
   }, [playing, reduceMotion, bar1, bar2, bar3, bar4]);
 
   return (
-    <View style={styles.equalizer} testID="music-island-waveform">
+    <View style={styles.equalizer} testID={testID}>
       <Animated.View style={[styles.eqBar, { height: bar1, backgroundColor: color, opacity: playing ? 1 : 0.35 }]} />
       <Animated.View style={[styles.eqBar, { height: bar2, backgroundColor: color, opacity: playing ? 1 : 0.35 }]} />
       <Animated.View style={[styles.eqBar, { height: bar3, backgroundColor: color, opacity: playing ? 1 : 0.35 }]} />
@@ -270,21 +278,9 @@ export function MusicIsland() {
               },
             ]}
           >
-            {/* Left: mini artwork with active playing badge */}
-            <View style={styles.artContainer}>
-              <Image
-                testID="music-island-art"
-                source={{ uri: current.artworkUrl ?? undefined }}
-                style={styles.art}
-              />
-              {playing && (
-                <View
-                  style={[
-                    styles.activeDot,
-                    { backgroundColor: tokens.accent, borderColor: tokens.glassStrong },
-                  ]}
-                />
-              )}
+            {/* Left: Sound Wave Equalizer (dancing when playing, flat off when paused) */}
+            <View style={styles.leftWaveform}>
+              <WaveformBars playing={playing} color={tokens.accent} />
             </View>
 
             {/* Middle: Title & optional Cast badge */}
@@ -303,8 +299,22 @@ export function MusicIsland() {
               )}
             </View>
 
-            {/* Right: Sound Wave Equalizer (dancing when playing, flat off when paused) */}
-            <WaveformBars playing={playing} color={tokens.accent} />
+            {/* Right: mini artwork with Apple squircle radius */}
+            <View style={styles.artContainer}>
+              <Image
+                testID="music-island-art"
+                source={{ uri: current.artworkUrl ?? undefined }}
+                style={styles.art}
+              />
+              {playing && (
+                <View
+                  style={[
+                    styles.activeDot,
+                    { backgroundColor: tokens.accent, borderColor: tokens.glassStrong },
+                  ]}
+                />
+              )}
+            </View>
 
             {/* Bottom: Hairline progress indicator */}
             <View
@@ -505,14 +515,18 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     overflow: "hidden",
   },
+  leftWaveform: {
+    marginRight: 10,
+    justifyContent: "center",
+  },
   artContainer: {
     position: "relative",
-    marginRight: 10,
+    marginLeft: 6,
   },
   art: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 8,
   },
   activeDot: {
     position: "absolute",
