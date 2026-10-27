@@ -225,6 +225,8 @@ export function MonsterDigit({
   const eyeTop = eye ? ((eye.y - DIGIT_BOX_Y - 22) / DIGIT_BOX_H) * height : 0;
   const eyeBox = 44 * k;
 
+  const hasAnimatedPupil = Boolean(eye && expression === "open" && height >= 72);
+
   return (
     <View style={{ width, height, position: "relative" }}>
       <Svg
@@ -339,29 +341,29 @@ export function MonsterDigit({
                     strokeWidth={4.5}
                     strokeLinecap="round"
                   />
-                ) : (
+                ) : !hasAnimatedPupil ? (
                   <Circle cx={eye.x + 3} cy={eye.y + 2} r={10.5} fill={ink.pupil} />
-                )}
+                ) : null}
               </>
             )}
           </G>
         ) : null}
       </Svg>
       {/* Animated blinking & pupil-glancing overlay on open hero digits (Mobbin video 00:15–00:19) */}
-      {eye && expression === "open" && height >= 72 ? (
+      {hasAnimatedPupil ? (
         <View
           pointerEvents="none"
           style={{
             position: "absolute",
-            left: eyeLeft,
-            top: eyeTop,
+            left: eyeLeft + 3 * k,
+            top: eyeTop + 2 * k,
             width: eyeBox,
             height: eyeBox,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <AmbientEyePulse delayMs={(Number(digit) || 0) * 420}>
+          <AmbientEyePulse delayMs={0}>
             <View
               style={{
                 width: Math.max(6, Math.round(21 * k)),
