@@ -272,7 +272,7 @@ export function BriefingWidget() {
           style={{ flex: 1 }}
         />
       ) : !expanded ? (
-        // Collapsed teaser (web parity) — the badge above opens the plan.
+        // Collapsed teaser (web parity) — category breakdown chips + the badge above opens the plan.
         <View style={{ flex: 1, justifyContent: "center", gap: 6, paddingHorizontal: 4 }}>
           {note ? (
             <Text
@@ -285,6 +285,25 @@ export function BriefingWidget() {
             >
               {note}
             </Text>
+          ) : null}
+          {total > 0 ? (
+            <View
+              testID="briefing-category-pills"
+              style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 }}
+            >
+              {counts.events > 0 ? (
+                <Chip as="span" size="sm" tone="cyan" label={`📅 ${counts.events}`} />
+              ) : null}
+              {counts.tasks > 0 ? (
+                <Chip as="span" size="sm" tone="success" label={`✅ ${counts.tasks}`} />
+              ) : null}
+              {counts.meals > 0 ? (
+                <Chip as="span" size="sm" tone="warning" label={`🍽️ ${counts.meals}`} />
+              ) : null}
+              {counts.suggestions > 0 ? (
+                <Chip as="span" size="sm" tone="violet" label={`✨ ${counts.suggestions}`} />
+              ) : null}
+            </View>
           ) : null}
           <Text
             style={{

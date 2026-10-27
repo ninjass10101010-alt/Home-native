@@ -60,6 +60,7 @@ export const WIDGET_ICON_MOTION: Partial<Record<HomeWidgetIconVariant, WidgetIco
   climate: { kind: "mercury", duration: 5_200 },
   leaderboard: { kind: "sweep", duration: 5_400 },
   ask: { kind: "type", duration: 1_500 },
+  music: { kind: "pop", duration: 3_600 },
 };
 
 /**

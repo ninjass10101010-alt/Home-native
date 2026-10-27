@@ -4,9 +4,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../theme/ThemeProvider";
 import { FONTS, TYPOGRAPHY } from "../theme/tokens";
 import { accentDeepened, mix } from "../theme/mix";
+import { SPECULAR_AT } from "../theme/materials";
 import { Material } from "../theme/Material";
 import { HomeWidgetIcon, widgetIconVariantFor } from "../ui/HomeWidgetIcon";
 import { AnimatedEmoji } from "../ui/AnimatedEmoji";
+import { MoreButton } from "../nav/CapsuleDock";
 import { useWallStats, weekSkeletonFor, type WallDayCell } from "./wall-stats";
 
 /**
@@ -179,7 +181,18 @@ function StatTile({ label, detail, value, pending, stale, icon, widgetId, tone, 
             flat sticker, not a disc). The chip BOX is the web's 28px
             `h-7 w-7` — the 32px artwork overflows it by 2px a side,
             exactly as it does on the web. */}
-        <View style={{ width: KPI_ICON_PX, height: KPI_ICON_PX, alignItems: "center", justifyContent: "center" }}>
+        <View
+          style={{
+            width: KPI_ICON_PX,
+            height: KPI_ICON_PX,
+            borderRadius: 10,
+            backgroundColor: mix(toneColor, "transparent", 12),
+            borderWidth: 1,
+            borderColor: mix(toneColor, "transparent", 24),
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           {variant ? (
             <HomeWidgetIcon variant={variant} size="sm" />
           ) : (
@@ -420,8 +433,8 @@ interface ThisWeekCardProps {
   onOpenMore?: () => void;
 }
 
-export function ThisWeekCard({ onSelectDay }: ThisWeekCardProps) {
-  const { colors, accentColor } = useTheme();
+export function ThisWeekCard({ onSelectDay, onOpenMore }: ThisWeekCardProps) {
+  const { colors, theme, accentColor } = useTheme();
   const { weekCells } = useWallStats();
   const fraction = useWeekFraction();
   // The tail's tone (critic round 4, L1): the web's tail card wears emerald
@@ -498,71 +511,77 @@ export function ThisWeekCard({ onSelectDay }: ThisWeekCardProps) {
 
         {/* Day strip: a week-at-a-glance row of the web's portrait day pills
             (the web's DayStrip `compact`). Seven of them, hugging the left —
-            the web's `flex snap-x` row, not a stretched grid. */}
-        <View style={{ flexDirection: "row", gap: DAY_CHIP_GAP, marginTop: TAIL_CHIPS_GAP }} testID="wall-week-strip">
-          {(weekCells ?? weekSkeletonFor(new Date())).map((cell: WallDayCell) => {
-            const label = cell.label.toUpperCase();
-            return (
-              <Pressable
-                key={cell.label}
-                testID={`wall-week-${cell.label}`}
-                disabled={!onSelectDay}
-                accessibilityRole="button"
-                accessibilityLabel={`${label} ${cell.date}${cell.planned ? " · meals planned" : ""}`}
-                onPress={onSelectDay ? () => onSelectDay(cell.label) : undefined}
-                // The reference's pill is 55px wide — narrower than the
-                // app's 64dp tap floor — so the TOUCH target is widened to
-                // the floor without moving a pixel of the artwork.
-                hitSlop={{ left: 5, right: 5 }}
-                style={{
-                  width: DAY_CHIP_W,
-                  height: DAY_CHIP_H,
-                  // A full pill: the measured chip's corner arc is its own
-                  // half-WIDTH (27.5px), not half its height — a taller
-                  // radius would draw an ellipse, not the web's stadium.
-                  borderRadius: DAY_CHIP_W / 2,
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  paddingTop: 4,
-                  gap: 8,
-                  borderWidth: 1,
-                  borderColor: cell.isToday ? isTodayFill : colors["color-border"],
-                  backgroundColor: cell.isToday
-                    ? isTodayFill
-                    : mix(colors["color-surface-0"] ?? "", "transparent", 30),
-                }}
-              >
-                <Text
+            the web's `flex snap-x` row, not a stretched grid — with the
+            optional More… button right-aligned on the same 74dp row so the
+            More sheet is reachable from the wall without adding vertical
+            height. */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: TAIL_CHIPS_GAP }}>
+          <View style={{ flexDirection: "row", gap: DAY_CHIP_GAP }} testID="wall-week-strip">
+            {(weekCells ?? weekSkeletonFor(new Date())).map((cell: WallDayCell) => {
+              const label = cell.label.toUpperCase();
+              return (
+                <Pressable
+                  key={cell.label}
+                  testID={`wall-week-${cell.label}`}
+                  disabled={!onSelectDay}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label} ${cell.date}${cell.planned ? " · meals planned" : ""}`}
+                  onPress={onSelectDay ? () => onSelectDay(cell.label) : undefined}
+                  // The reference's pill is 55px wide — narrower than the
+                  // app's 64dp tap floor — so the TOUCH target is widened to
+                  // the floor without moving a pixel of the artwork.
+                  hitSlop={{ left: 5, right: 5 }}
                   style={{
-                    color: cell.isToday ? colors["color-primary-foreground"] : colors["color-text-primary"],
-                    fontSize: 14,
-                    lineHeight: 20,
-                    fontWeight: "600",
-                    letterSpacing: DAY_CHIP_TRACKING,
+                    width: DAY_CHIP_W,
+                    height: DAY_CHIP_H,
+                    // A full pill: the measured chip's corner arc is its own
+                    // half-WIDTH (27.5px), not half its height — a taller
+                    // radius would draw an ellipse, not the web's stadium.
+                    borderRadius: DAY_CHIP_W / 2,
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                    paddingTop: 4,
+                    gap: 8,
+                    borderWidth: 1,
+                    borderColor: cell.isToday ? isTodayFill : colors["color-border"],
+                    backgroundColor: cell.isToday
+                      ? isTodayFill
+                      : mix(colors["color-surface-0"] ?? "", "transparent", 30),
                   }}
                 >
-                  {label}
-                </Text>
-                <Text
-                  style={{
-                    color: cell.isToday ? colors["color-primary-foreground"] : colors["color-text-primary"],
-                    // The web's DayStrip date is `font-bold display-numeral` —
-                    // the BODY face at 30px, tabular, -0.04em. It is not the
-                    // app's rounded numeral register (the KPI band's), and on
-                    // the wall the difference reads: a chunky rounded "2" is
-                    // not the reference's numeral.
-                    fontSize: 30,
-                    lineHeight: 34,
-                    fontWeight: "700",
-                    letterSpacing: DAY_CHIP_DATE_TRACKING,
-                    fontVariant: ["tabular-nums"],
-                  }}
-                >
-                  {String(cell.date)}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <Text
+                    style={{
+                      color: cell.isToday ? colors["color-primary-foreground"] : colors["color-text-primary"],
+                      fontSize: 14,
+                      lineHeight: 20,
+                      fontWeight: "600",
+                      letterSpacing: DAY_CHIP_TRACKING,
+                    }}
+                  >
+                    {label}
+                  </Text>
+                  <Text
+                    style={{
+                      color: cell.isToday ? colors["color-primary-foreground"] : colors["color-text-primary"],
+                      // The web's DayStrip date is `font-bold display-numeral` —
+                      // the BODY face at 30px, tabular, -0.04em. It is not the
+                      // app's rounded numeral register (the KPI band's), and on
+                      // the wall the difference reads: a chunky rounded "2" is
+                      // not the reference's numeral.
+                      fontSize: 30,
+                      lineHeight: 34,
+                      fontWeight: "700",
+                      letterSpacing: DAY_CHIP_DATE_TRACKING,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {String(cell.date)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {onOpenMore ? <MoreButton onPress={onOpenMore} /> : null}
         </View>
 
         {/* Week-mode DayLine: fill = (mondayIndex + dayFraction)/7, one marker
@@ -668,6 +687,18 @@ export function ThisWeekCard({ onSelectDay }: ThisWeekCardProps) {
             start={{ x: 0, y: 0 }}
             end={{ x: 0.35, y: 1 }}
             style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: 1,
+              left: 10,
+              right: 10,
+              height: 1.5,
+              borderRadius: 1,
+              backgroundColor: SPECULAR_AT(theme === "dark" ? 0.3 : 0.65),
+            }}
           />
         </View>
         <View

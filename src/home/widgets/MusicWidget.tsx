@@ -7,6 +7,8 @@ import { useTheme } from "../../theme/ThemeProvider";
 import { ACCENTS, TYPOGRAPHY } from "../../theme/tokens";
 import { mix } from "../../theme/mix";
 import { musicTokensFor } from "../../theme/music-tokens";
+import { SPECULAR_AT } from "../../theme/materials";
+import { HomeWidgetIcon } from "../../ui/HomeWidgetIcon";
 import { WidgetFrame, HEADER_BAND_H } from "./WidgetFrame";
 import { usePlayback } from "../../music/playback";
 import { useCast } from "../../music/CastProvider";
@@ -31,22 +33,11 @@ const DISC_SIZE = 56;
 const DISC_ART = 64;
 const DISC_OFFSET = -10;
 
-/**
- * The Music card's badge artwork.
- *
- * The 🎵 emoji is a NEAR-BLACK note in both the web's emoji font and Android's
- * Noto Color Emoji, so on the violet badge wash it read as a smudge (the
- * critic: "a near-black note on a violet ring — low contrast inside the
- * badge"). The beamed note U+266B is a TEXT-presentation glyph, so it takes
- * the ink it is painted with: the violet accent-ink token clears 5.1:1 on the
- * dark wash and 5.6:1 on the light one.
- */
 const MUSIC_GLYPH = "♫";
 
 function MusicBadge() {
   const { colors, theme, accentColor } = useTheme();
   const tone = ACCENTS[theme]?.violet ?? accentColor;
-  const ink = colors["color-accent-ink-violet"] ?? colors["color-text-primary"];
   return (
     <View
       testID="music-icon-disc"
@@ -87,6 +78,18 @@ function MusicBadge() {
           end={{ x: 0.35, y: 1 }}
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
         />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 1,
+            left: 10,
+            right: 10,
+            height: 1.5,
+            borderRadius: 1,
+            backgroundColor: SPECULAR_AT(theme === "dark" ? 0.3 : 0.65),
+          }}
+        />
       </View>
       <View
         style={{
@@ -100,7 +103,7 @@ function MusicBadge() {
         }}
         pointerEvents="none"
       >
-        <Text style={{ fontSize: 34, lineHeight: 40, color: ink }}>{MUSIC_GLYPH}</Text>
+        <HomeWidgetIcon variant="music" size={DISC_ART} title="Music" />
       </View>
     </View>
   );
@@ -267,9 +270,7 @@ export function MusicWidget() {
               {showTrack && current?.artworkUrl ? (
                 <Image testID="music-widget-art" source={{ uri: current.artworkUrl }} style={{ width: ART - 2, height: ART - 2 }} resizeMode="cover" />
               ) : (
-                <Text style={{ fontSize: 26, lineHeight: 30, color: tokens.label2 }}>
-                  {MUSIC_GLYPH}
-                </Text>
+                <HomeWidgetIcon variant="music" size={40} />
               )}
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>

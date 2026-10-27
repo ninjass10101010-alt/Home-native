@@ -335,6 +335,9 @@ describe("BriefingWidget", () => {
     const { findByText, getByTestId, queryByText } = render(<BriefingWidget />, { wrapper: wrap });
     await findByText("Morning Briefing");
     expect(await findByText("2 items")).toBeTruthy();
+    expect(getByTestId("briefing-category-pills")).toBeTruthy();
+    expect(await findByText("📅 1")).toBeTruthy();
+    expect(await findByText("✅ 1")).toBeTruthy();
     expect(queryByText("Piano")).toBeNull(); // collapsed — no rows yet
     expect(await findByText("Tap the badge above to see today's plan.")).toBeTruthy();
     expect(api).toHaveBeenCalledWith(expect.stringContaining("/api/consuela/briefing?scopeDate="));

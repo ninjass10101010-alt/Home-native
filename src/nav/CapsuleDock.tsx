@@ -3,6 +3,7 @@ import { Pressable, Text, View, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
+import { SPECULAR_AT } from "../theme/materials";
 import { accentDeepened, mix } from "../theme/mix";
 import { MOTION, TYPOGRAPHY } from "../theme/tokens";
 import { NavIcon } from "../ui/NavIcon";
@@ -283,10 +284,25 @@ function DockCap({
             backgroundColor: active ? activeDiscBg : idleDiscBg,
             borderWidth: 1,
             borderColor: active ? activeDiscBorder : idleDiscBorder,
+            overflow: "hidden",
             // The circle must not shrink when the row is tight: it IS the cap.
             flexShrink: 0,
           }}
         >
+          {active ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: 2,
+                left: 16,
+                right: 16,
+                height: 1.5,
+                borderRadius: 1,
+                backgroundColor: SPECULAR_AT(0.35),
+              }}
+            />
+          ) : null}
           <NavIcon
             iconKey={iconKey}
             active={active}

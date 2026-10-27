@@ -6,6 +6,7 @@ import { ACCENTS, RADII, TYPOGRAPHY } from "../../theme/tokens";
 import { useTheme } from "../../theme/ThemeProvider";
 import { useAuth } from "../../state/AuthProvider";
 import { mix } from "../../theme/mix";
+import { SPECULAR_AT } from "../../theme/materials";
 import { Material } from "../../theme/Material";
 import { AnimatedEmoji } from "../../ui/AnimatedEmoji";
 import { mixAlpha } from "../../ui/SoftButton";
@@ -301,6 +302,18 @@ export function WidgetFrame({
           start={{ x: 0, y: 0 }}
           end={{ x: 0.35, y: 1 }}
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 1,
+            left: 10,
+            right: 10,
+            height: 1.5,
+            borderRadius: 1,
+            backgroundColor: SPECULAR_AT(theme === "dark" ? 0.3 : 0.65),
+          }}
         />
       </View>
       {/* The wash is OPAQUE, and on react-native-web a positioned descendant

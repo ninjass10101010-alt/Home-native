@@ -6,7 +6,8 @@ import { render } from "@testing-library/react-native";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { WidgetFrame, HEADER_BAND_H, pendingSurface } from "../src/home/widgets/WidgetFrame";
 import { READ_COPY, READ_COPY_STALE } from "../src/home/widgets/data";
-import { MATERIALS } from "../src/theme/materials";
+import { HOME_WIDGET_ICON_PALETTES, HOME_WIDGET_ICON_VARIANTS, MATERIALS } from "../src/theme/materials";
+import { HomeWidgetIcon, widgetIconVariantFor } from "../src/ui/HomeWidgetIcon";
 import { TOKENS } from "../src/theme/tokens";
 import { contrastRatio, toRgb } from "../src/lib/contrast";
 
@@ -265,6 +266,24 @@ describe("WidgetFrame pending surface (D-14.1)", () => {
       const after = contrastRatio(pendingSurface(colors, theme), cellBody);
       expect(after).toBeGreaterThan(before);
       expect(after).toBeLessThanOrEqual(1.4);
+    }
+  });
+});
+
+describe("HomeWidgetIcon 3D clay volume & Music variant", () => {
+  it("resolves music to the 3D clay music variant", () => {
+    expect(widgetIconVariantFor("music")).toBe("music");
+    expect(HOME_WIDGET_ICON_VARIANTS).toContain("music");
+  });
+
+  it("renders multi-layer 3D clay geometry (lo base, mid body, hi/shine highlights, ink keyline) for every variant", () => {
+    for (const variant of HOME_WIDGET_ICON_VARIANTS) {
+      const p = HOME_WIDGET_ICON_PALETTES[variant];
+      const { toJSON } = render(<HomeWidgetIcon variant={variant} size="lg" title={variant} />, { wrapper: wrap });
+      const raw = JSON.stringify(toJSON()).toUpperCase();
+      expect(raw).toContain(p.lo.toUpperCase());
+      expect(raw).toContain(p.mid.toUpperCase());
+      expect(raw).toContain(p.ink.toUpperCase());
     }
   });
 });

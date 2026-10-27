@@ -185,6 +185,7 @@ describe("Leaderboard (shared snapshot — no widget fetch)", () => {
     expect(getByText("20 pts")).toBeTruthy();
     expect(getByText(/🥈 Bailey/)).toBeTruthy();
     expect(getByText("12 pts")).toBeTruthy();
+    expect(getByText("See all →")).toBeTruthy();
     expect(api).not.toHaveBeenCalled(); // reads the SHARED snapshot, no fetch
   });
 

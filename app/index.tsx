@@ -45,7 +45,7 @@ const WALL_WIDGETS: Partial<
   homeSecurity: () => <HomeSecurityWidget />,
   homeClimate: HomeClimateWidget,
   homeLights: HomeLightsWidget,
-  leaderboard: () => <LeaderboardWidget />,
+  leaderboard: LeaderboardWidget,
   music: MusicWidget,
 };
 
@@ -110,8 +110,8 @@ export default function HomePlaceholder() {
     () => {
       return ({
       ...WALL_WIDGETS,
-      leaderboard: () => (
-        <LeaderboardWidget members={wallRoster.map((m) => ({ name: m.name, emoji: m.emoji }))} />
+      leaderboard: ({ span }: WallWidgetProps) => (
+        <LeaderboardWidget span={span} members={wallRoster.map((m) => ({ name: m.name, emoji: m.emoji }))} />
       ),
       // House's own footer route: resolveRoute keeps the manifest's honest
       // /soon fallback (dock alive) instead of a toast dead end.

@@ -1,8 +1,10 @@
 import React from "react";
-import { Image, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
+import { mix } from "../../theme/mix";
 import { useSync, type WeekData } from "../../state/SyncManager";
 import { displayEmoji } from "../../tasks/claim";
 import { isPhotoUri } from "../../ui/MemberRail";
@@ -10,6 +12,7 @@ import { weekStartMondayISO } from "./data";
 import { WidgetFrame } from "./WidgetFrame";
 import { AnimatedEmoji } from "../../ui/AnimatedEmoji";
 import { EmptyState } from "../../ui/EmptyState";
+import type { WallSpan } from "../widgets";
 
 const EMPTY_LEADERBOARD = "Be the first!";
 const EMPTY_PRIZES = "New week — prizes up for grabs 🥇🥈🥉";
@@ -95,13 +98,21 @@ export function daysUntilReset(now: Date = new Date()): number {
  * week-reset line (populated weeks only); sync failure surfaces the shared
  * read copy with a real retry (refreshNow).
  */
-export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMember[] }) {
-  const { colors } = useTheme();
+export function LeaderboardWidget({
+  members = [],
+  span = 1,
+}: {
+  members?: LeaderboardMember[];
+  span?: WallSpan;
+}) {
+  const { colors, accentColor } = useTheme();
+  const router = useRouter();
   const { member, hydrated } = useAuth();
   const { snapshot, stale: syncStale, syncError, refreshNow } = useSync();
 
   const weekData = snapshot?.weekData as WeekData | undefined;
   const ranked = rankWeek(weekData);
+  const visibleLimit = span === 2 ? 5 : VISIBLE_RANKS;
 
   // Roster row by first name (the rail's matching convention)
   const memberFor = (fullName: string): LeaderboardMember | undefined => {
@@ -146,8 +157,10 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
         height: LEADERBOARD_HEADER_H,
         paddingTop: LEADERBOARD_TITLE_PAD_TOP,
         paddingLeft: LEADERBOARD_TITLE_PAD_LEFT,
-        paddingRight: 16,
-        justifyContent: "flex-start",
+        paddingRight: 4,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
         borderBottomWidth: 1,
         borderBottomColor: colors["color-border"],
       }}
@@ -156,6 +169,7 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
         numberOfLines={1}
         accessibilityRole="header"
         style={{
+          flex: 1,
           color: colors["color-text-primary"],
           fontSize: CARD_TITLE_SIZE,
           fontWeight: "700",
@@ -165,6 +179,20 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
       >
         This Week&apos;s Leaderboard
       </Text>
+      {!guest ? (
+        <Pressable
+          testID="leaderboard-see-all"
+          accessibilityRole="link"
+          accessibilityLabel="Open leaderboard in tasks"
+          hitSlop={{ top: 18, bottom: 18, left: 12, right: 12 }}
+          onPress={() => router.push("/tasks" as never)}
+          style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+        >
+          <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+            See all →
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 
@@ -189,9 +217,15 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
           <RaceState title={EMPTY_LEADERBOARD} />
         ) : (
           <View style={{ gap: 4, alignSelf: "stretch" }}>
-            {ranked.slice(0, VISIBLE_RANKS).map((r) => {
+            {ranked.slice(0, visibleLimit).map((r) => {
               const m = memberFor(r.name);
               const photo = m?.emoji ? isPhotoUri(m.emoji) : false;
+              const podiumTone =
+                r.rank === 0
+                  ? colors["color-accent-amber"] ?? accentColor
+                  : r.rank === 1
+                    ? colors["color-accent-cyan"] ?? accentColor
+                    : colors["color-accent-rose"] ?? accentColor;
               return (
                 <View key={r.name} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <View
@@ -201,7 +235,9 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
                       borderRadius: 20,
                       alignItems: "center",
                       justifyContent: "center",
-                      backgroundColor: colors["color-surface-2"],
+                      backgroundColor: mix(podiumTone, colors["color-surface-2"] ?? "", 22),
+                      borderWidth: 1,
+                      borderColor: mix(podiumTone, "transparent", 45),
                       overflow: "hidden",
                     }}
                   >
@@ -217,9 +253,20 @@ export function LeaderboardWidget({ members = [] }: { members?: LeaderboardMembe
                   >
                     {medal(r.rank)} {r.name.split(" ")[0]}
                   </Text>
-                  <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
-                    {r.points} pts
-                  </Text>
+                  <View
+                    style={{
+                      borderRadius: 999,
+                      paddingHorizontal: 9,
+                      paddingVertical: 2,
+                      backgroundColor: mix(podiumTone, "transparent", 18),
+                      borderWidth: 1,
+                      borderColor: mix(podiumTone, "transparent", 36),
+                    }}
+                  >
+                    <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                      {r.points} pts
+                    </Text>
+                  </View>
                 </View>
               );
             })}

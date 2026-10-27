@@ -159,6 +159,7 @@ export const HOME_WIDGET_ICON_VARIANTS = [
   "climate",
   "lights",
   "ledger",
+  "music",
 ] as const;
 
 export type HomeWidgetIconVariant = (typeof HOME_WIDGET_ICON_VARIANTS)[number];
@@ -191,6 +192,7 @@ export const HOME_WIDGET_ICON_PALETTES: Record<HomeWidgetIconVariant, HomeWidget
   climate:     { hi: "#DFF3FF", mid: "#60A5FA", lo: "#1E40AF", detail: "#F87171", ink: "#0C2A52", glow: "#BFDBFE" },
   lights:      { hi: "#FFF6CC", mid: "#FBBF24", lo: "#B45309", detail: "#FDE68A", ink: "#5F3A06", glow: "#FDE68A" },
   ledger:      { hi: "#C6F3D6", mid: "#22A55E", lo: "#14663A", detail: "#FBBF24", ink: "#0B3D22", glow: "#86EFAC" },
+  music:       { hi: "#FBCFE8", mid: "#EC4899", lo: "#9D174D", detail: "#FDE68A", ink: "#500724", glow: "#F472B6" },
 };
 
 export const HOME_WIDGET_ICON_SHINE = "#FFFFFF";

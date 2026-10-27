@@ -4,6 +4,23 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-27 — feat(home,ui): 3D clay HomeWidgetIcon sculpture pass, first-class Music 3D icon, badge & dock specular highlights, and Home Wall parity polish.
+  **What changed:**
+  - **14-VARIANT 3D CLAY `HomeWidgetIcon` SCULPTURE PASS** (`src/ui/HomeWidgetIcon.tsx`, `src/theme/materials.ts`, `src/ui/widgetIconMotion.tsx`):
+    - Rebuilt every `HomeWidgetIcon` variant (`briefing`, `ask`, `suggestions`, `leaderboard`, `events`, `schedule`, `meal`, `tasks`, `week`, `security`, `climate`, `lights`, `ledger`, and new `music`) with true multi-layer 3D clay volume: ground drop shadow (`HOME_WIDGET_ICON_SHADOW`), dark shaded base silhouette (`p.lo`), sculpted main body (`p.mid`), lit top/upper-left bevel (`p.hi`), crisp specular shine (`HOME_WIDGET_ICON_SHINE`), and `p.ink` keylines. Built with pure layered `<Path>`/`<Circle>`/`<Rect>`/`<Ellipse>` geometry (no `<Defs>` gradients) so `react-native-web` and native SVG render identically.
+    - Added a first-class `"music"` 3D clay icon variant (`HOME_WIDGET_ICON_PALETTES.music`, `WIDGET_ICON_MOTION.music = { kind: "pop", duration: 3_600 }`, `widgetIconVariantFor("music")`) featuring a 3D vinyl record disc, sculpted studio headphone arch, and floating eighth note.
+    - Wired `<HomeWidgetIcon variant="music" />` into `MusicWidget.tsx` (`MusicBadge` `music-icon-disc` and `music-widget-art-chip` fallback artwork tile), replacing the flat text `♫` glyph with a living 3D badge that shares the same ambient motion wrapper as the rest of the wall.
+  - **SPECULAR INNER HIGHLIGHTS ON BADGE DISCS & CAPSULE DOCK** (`src/home/widgets/WidgetFrame.tsx`, `src/home/WallStatsStrip.tsx`, `src/home/widgets/MusicWidget.tsx`, `src/nav/CapsuleDock.tsx`, `src/ui/NavIcon.tsx`):
+    - Added top inner specular highlight arcs (`SPECULAR_AT`) inside the 56dp corner badge discs (`WidgetFrame`, `ThisWeekCard`, `MusicBadge`) and the active 72dp capsule dock button (`CapsuleDock`), giving badge medallions and active dock caps a tactile glass-button rim.
+    - Upgraded `NavIcon.tsx` with duotone inner fill volume (`fillOpacity={active ? 0.24 : 0.1}`) across all 9 dock icons and replaced `.01` path dot workarounds on `calendar` with crisp `<Circle>` elements.
+  - **HOME WALL PARITY & VISUAL POLISH** (`src/home/WallStatsStrip.tsx`, `src/home/widgets/LeaderboardWidget.tsx`, `src/home/widgets/BriefingWidget.tsx`, `src/home/widgets/TasksWidget.tsx`, `app/index.tsx`):
+    - **KPI Strip Frosted Icon Wells** (`WallStatsStrip.tsx`): wrapped each `StatTile` glyph in a 28×28 frosted, tone-ringed squircle well (`mix(toneColor, "transparent", 12)` fill + `mix(toneColor, "transparent", 24)` border).
+    - **`More…` Launcher on `ThisWeekCard`** (`WallStatsStrip.tsx`): wired `onOpenMore` in `ThisWeekCard` to render `<MoreButton onPress={onOpenMore} />` right-aligned on the 74dp day-strip row, restoring one-tap access to `MoreSheet` from the adult/guest Home Wall without adding vertical height (`THIS_WEEK_H = 190`).
+    - **Leaderboard Widget Upgrade** (`LeaderboardWidget.tsx`, `app/index.tsx`): added header `See all →` navigation (`testID="leaderboard-see-all"` → `/tasks`), forwarded `span` from `app/index.tsx`, and added podium-toned avatar rings + point pills (`warning` gold #1, `info` silver #2, `accent` bronze #3).
+    - **Morning Briefing Category Breakdown** (`BriefingWidget.tsx`): added compact category count chips (`testID="briefing-category-pills"` for `📅` events, `✅` tasks, `🍽️` dinner, `✨` suggestions) to the collapsed briefing teaser.
+    - **Priority-Tinted Task Row Borders** (`TasksWidget.tsx`): tinted signed-in task row borders by point tier (`mix(pointsColor, colors["color-border"], 34)`).
+  **Tests:** `tests/widget-frame.test.tsx`, `tests/music-widget.test.tsx`, `tests/home-wall.test.tsx`, `tests/widgets-data.test.tsx`, `tests/ha-leaderboard.test.tsx`, `tests/today-events-widget.test.tsx`, `tests/capsule-dock.test.tsx`. Full suite passing (81/81 suites, 1303 tests), `tokens:check` CLEAN, `a11y:audit` CLEAN, `npx tsc --noEmit` 0 errors, `npm run lint` 0 errors.
+
 - 2026-10-27 — feat(music): animated equalizer on left of island, Apple squircle artwork, and unified contextual stage sound control.
   **What changed:**
   - **ANIMATED EQUALIZER ON LEFT & APPLE-INSPIRED SQUIRCLE STYLING** (`src/music/MusicIsland.tsx`):

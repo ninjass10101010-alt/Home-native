@@ -288,7 +288,11 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
             return (
               <ListRow
                 key={String(task.id)}
-                style={{ minHeight: 52, paddingVertical: 8 }}
+                style={{
+                  minHeight: 52,
+                  paddingVertical: 8,
+                  borderColor: mix(pointsColor, colors["color-border"] ?? "transparent", 34),
+                }}
                 title={readableTitle(task.title)}
                 subtitle={awaiting ? `Waiting for approval${subtitle ? ` · ${subtitle}` : ""}` : subtitle || undefined}
                 leftRailColor={pointsColor}

@@ -261,6 +261,18 @@ describe("HomeWall KPI band + This Week tail", () => {
     expect(onSelectDay).toHaveBeenCalledWith("Sat");
   });
 
+  it("renders the More… button on the This Week row when onOpenMore is provided", () => {
+    const onOpenMore = jest.fn();
+    const { getByTestId } = render(
+      <HomeWall members={members} onSelectMember={() => {}} onOpenMore={onOpenMore} />,
+      { wrapper: wrap }
+    );
+    const moreBtn = getByTestId("home-more");
+    expect(moreBtn).toBeTruthy();
+    fireEvent.press(moreBtn);
+    expect(onOpenMore).toHaveBeenCalledTimes(1);
+  });
+
   it("height budget: the RESERVED rows fit the panel, so the wall never scrolls", () => {
     // The reservation — not the "measured" estimate — is what must fit: a
     // budget that only fits because each row measures under its reservation

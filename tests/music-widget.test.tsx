@@ -250,6 +250,10 @@ describe("the wall card's geometry", () => {
     expect(style.height).toBe(64);
     expect(style.top).toBe(-10);
     expect(style.left).toBe(-10);
+    const svg = getByTestId("music-icon-disc", { includeHiddenElements: true }).findAll((n: any) => n.type === "Svg")[0];
+    expect(svg).toBeTruthy();
+    expect(svg.props.width).toBe(64);
+    expect(svg.props.height).toBe(64);
   });
 
   it("keeps the header band at the shared height — the row's rule does not move", () => {
