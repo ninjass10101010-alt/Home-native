@@ -541,10 +541,11 @@ describe("the Now Playing stage", () => {
     }
   });
 
-  it("shows the receiver volume row only while casting", async () => {
+  it("shows the stage volume row for playback (contextual: local or receiver)", async () => {
     const idle = await renderPlayer();
     expect(idle.getByTestId("np-stage")).toBeTruthy();
-    expect(idle.queryByTestId("stage-volume")).toBeNull();
+    expect(idle.getByTestId("stage-volume")).toBeTruthy();
+    expect(idle.getByTestId("stage-volume-percent")).toBeTruthy();
     idle.unmount();
 
     mockCast = {

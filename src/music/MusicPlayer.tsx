@@ -62,7 +62,7 @@ export function MusicPlayer() {
   // the app's existing theme tokens. Never a literal.
   const tokens = React.useMemo(() => musicTokensFor(theme, boost), [theme, boost]);
   const {
-    current, queue, playing, position, duration, error, streamFormat,
+    current, queue, playing, position, duration, error, streamFormat, player,
     play, toggle, next, previous, seek, repeat, shuffle,
     cycleRepeatMode, toggleShuffleMode, downloadCurrent, addToQueue,
     removeFromQueue, moveQueueItem,
@@ -471,6 +471,7 @@ export function MusicPlayer() {
                 shuffle={shuffle}
                 downloaded={downloaded}
                 casting={casting}
+                player={player}
                 /*
                  * THE CODEC CHIP may only speak for the track that is
                  * playing: a resolution belonging to another track is ignored
@@ -1120,6 +1121,7 @@ interface StageProps {
   shuffle: boolean;
   downloaded: boolean;
   casting: boolean;
+  player?: any;
   /**
    * The resolved stream's format — the codec chip's truth.
    *
@@ -1154,7 +1156,7 @@ interface StageProps {
  */
 function NowPlayingStage({
   track, tokens, reduceMotion,
-  playing, position, duration, repeat, shuffle, downloaded, casting, streamFormat,
+  playing, position, duration, repeat, shuffle, downloaded, casting, player, streamFormat,
   onToggle, onNext, onPrevious, onSeek, onToggleShuffle, onCycleRepeat, onDownload,
 }: StageProps) {
   // The artwork's crossfade: on a track change it comes up from 0.96 with a
@@ -1309,14 +1311,24 @@ function NowPlayingStage({
         testID="np-codec"
         style={{
           alignSelf: "center",
-          paddingHorizontal: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          paddingHorizontal: 16,
           paddingVertical: 6,
           borderRadius: 999,
           backgroundColor: tokens.glassFill,
           borderWidth: 1,
-          borderColor: tokens.glassRim,
+          borderColor: playing ? mix(tokens.accent, tokens.glassRim, 30) : tokens.glassRim,
         }}
       >
+        {playing ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 2.5 }}>
+            <View style={{ width: 3, height: 8, borderRadius: 1.5, backgroundColor: tokens.accent }} />
+            <View style={{ width: 3, height: 13, borderRadius: 1.5, backgroundColor: tokens.accent }} />
+            <View style={{ width: 3, height: 7, borderRadius: 1.5, backgroundColor: tokens.accent }} />
+          </View>
+        ) : null}
         <Text
           testID="np-codec-label"
           style={{
@@ -1350,8 +1362,8 @@ function NowPlayingStage({
         onCycleRepeat={onCycleRepeat}
       />
 
-      {/* The receiver's amplifier — only while a cast session owns the sound. */}
-      {casting ? <CastVolume compact /> : null}
+      {/* Sound control — contextual: receiver amplifier while casting, tablet volume otherwise. */}
+      <CastVolume compact player={player} />
 
       {/*
         THE DOWNLOAD — the one control outside the pill, on its own row. Its

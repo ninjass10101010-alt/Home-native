@@ -221,4 +221,19 @@ describe("MusicIsland", () => {
 
     jest.useRealTimers();
   });
+
+  it("renders waveform bars indicating playback state and passes player to useOutputVolume", () => {
+    const mockPlayer = { volume: 0.8 };
+    (usePlayback as jest.Mock).mockReturnValue({
+      current: mockTrack,
+      playing: true,
+      position: 10,
+      duration: 100,
+      player: mockPlayer,
+    });
+
+    const { getByTestId } = render(<MusicIsland />);
+    expect(getByTestId("music-island-waveform")).toBeTruthy();
+    expect(useOutputVolume).toHaveBeenCalledWith(mockPlayer);
+  });
 });

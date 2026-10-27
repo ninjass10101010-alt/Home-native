@@ -4,6 +4,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../theme/tokens";
 import { musicTokensFor } from "../theme/music-tokens";
 import { useCast } from "./CastProvider";
+import { useOutputVolume } from "./output-volume";
 
 /** One accessibility step moves the receiver this far (2%). */
 const VOLUME_STEP = 0.02;
@@ -29,29 +30,36 @@ export interface CastVolumeProps {
    * bar/percentage row with the mute button beneath it.
    */
   compact?: boolean;
+  /**
+   * The local audio player for contextual volume when not casting.
+   */
+  player?: { volume: number } | null;
 }
 
 /**
  * The receiver's volume and mute, shared by the cast sheet and the stage.
  *
- * The controls read the SAME provider the cast session drives; the level is
- * the receiver's own, never a local guess. The horizontal bar is a responder:
- * a tap anywhere sets the tapped fraction, and a drag reports every move.
+ * When casting is active or a cast target is connected, controls the receiver.
+ * Otherwise, seamlessly controls the local tablet audio output via useOutputVolume.
+ * The horizontal bar is a responder: a tap anywhere sets the tapped fraction,
+ * and a drag reports every move.
  * Tokens only, and the touch area is on the 64dp wall floor.
  */
-export function CastVolume({ compact = false }: CastVolumeProps) {
+export function CastVolume({ compact = false, player = null }: CastVolumeProps) {
   const { theme, boost } = useTheme();
   const tokens = React.useMemo(() => musicTokensFor(theme, boost), [theme, boost]);
   const cast = useCast();
-  const busy = cast.busy;
+  const volume = useOutputVolume(player);
+  const isCast = volume.target === "cast";
+  const busy = isCast ? cast.busy : false;
   const [barWidth, setBarWidth] = React.useState(0);
 
-  const percent = Math.min(100, Math.max(0, Math.round(cast.volume * 100)));
+  const percent = Math.min(100, Math.max(0, Math.round(volume.value * 100)));
 
   const setLevel = async (value: number) => {
     if (busy) return;
     try {
-      await cast.setVolume(value);
+      volume.setValue(value);
     } catch {
       // The provider owns receiver failures; a rejecting method must not
       // escape through `void`.
@@ -61,7 +69,7 @@ export function CastVolume({ compact = false }: CastVolumeProps) {
   const nudgeVolume = async (delta: number) => {
     if (busy) return;
     try {
-      await cast.adjustVolume(delta);
+      volume.nudge(delta);
     } catch {
       // The provider owns receiver failures; a rejecting method must not
       // escape through `void`.
@@ -71,7 +79,7 @@ export function CastVolume({ compact = false }: CastVolumeProps) {
   const flipMute = async () => {
     if (busy) return;
     try {
-      await cast.toggleMute();
+      volume.toggleMute();
     } catch {
       // The provider owns receiver failures; a rejecting method must not
       // escape through `void`.
@@ -113,14 +121,22 @@ export function CastVolume({ compact = false }: CastVolumeProps) {
     <Pressable
       testID={ids.mute}
       accessibilityRole="button"
-      accessibilityLabel={cast.muted ? "Unmute cast device" : "Mute cast device"}
-      accessibilityState={{ disabled: busy, checked: cast.muted }}
+      accessibilityLabel={
+        isCast
+          ? volume.muted
+            ? "Unmute cast device"
+            : "Mute cast device"
+          : volume.muted
+          ? "Unmute"
+          : "Mute"
+      }
+      accessibilityState={{ disabled: busy, checked: volume.muted }}
       disabled={busy}
       onPress={() => void flipMute()}
       style={muteStyle}
     >
       <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
-        {cast.muted ? "Unmute" : "Mute"}
+        {volume.muted ? "Unmute" : "Mute"}
       </Text>
     </Pressable>
   );
@@ -142,11 +158,14 @@ export function CastVolume({ compact = false }: CastVolumeProps) {
           flex: compact ? 1 : undefined,
         }}
       >
+        <Text style={{ fontSize: 16 }}>
+          {volume.muted ? "🔇" : percent === 0 ? "🔈" : percent < 50 ? "🔉" : "🔊"}
+        </Text>
         <View
           testID={ids.bar}
           accessible
           accessibilityRole="adjustable"
-          accessibilityLabel="Cast volume"
+          accessibilityLabel={isCast ? "Cast volume" : "Volume"}
           accessibilityValue={{ min: 0, max: 100, now: percent, text: `${percent}%` }}
           accessibilityState={{ disabled: busy }}
           accessibilityActions={[
@@ -185,7 +204,7 @@ export function CastVolume({ compact = false }: CastVolumeProps) {
                 width: `${percent}%`,
                 height: "100%",
                 borderRadius: TRACK_HEIGHT / 2,
-                backgroundColor: tokens.accent,
+                backgroundColor: volume.muted ? tokens.label3 : tokens.accent,
               }}
             />
           </View>

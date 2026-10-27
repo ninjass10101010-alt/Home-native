@@ -4,6 +4,21 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-27 — feat(music): dynamic animated equalizer on island, off-state when paused, and unified contextual stage sound control.
+  **What changed:**
+  - **ANIMATED ISLAND EQUALIZER & ACTIVE PLAYING INDICATOR** (`src/music/MusicIsland.tsx`):
+    - Redesigned `WaveformBars` with 4 animated equalizer bars that bounce rhythmically during music playback. When playback is paused ("off"), the bars smoothly drop to a flat 2dp minimal baseline with dimmed opacity (0.35), clearly indicating the inactive state.
+    - Added an active accent glow (`shadowColor: tokens.accent`, `borderColor: mix(tokens.accent, tokens.glassRim, 40)`) and artwork status indicator badge on the collapsed Dynamic Island pill during active playback.
+    - Mounted the animated waveform bars on the expanded island card beside the device badge, and added accent glow to the transport play button when playing.
+    - Honors `reduceMotion` (and tests) by setting static heights instead of running continuous animation loops.
+  - **CONTEXTUAL SOUND CONTROL ON NOW PLAYING STAGE** (`src/music/CastVolume.tsx`, `src/music/MusicPlayer.tsx`, `src/music/output-volume.ts`):
+    - Fixed missing sound control on the Music page during local playback: `NowPlayingStage` now renders `<CastVolume compact player={player} />` unconditionally, restoring sound control on the music stage regardless of whether casting or playing locally on the tablet.
+    - Connected `useOutputVolume(player)` inside `CastVolume`: routes to Cast receiver volume when casting (or target connected), and routes to the local `expo-audio` player (`player.volume`) during local playback with AsyncStorage persistence (`music.localVolume`).
+    - Added dynamic speaker volume icon (🔇 / 🔈 / 🔉 / 🔊) and muted track fill state (`tokens.label3` vs `tokens.accent`).
+    - Wired `player` from `usePlayback()` into `MusicIsland.tsx` (`useOutputVolume(player)` instead of `null`), ensuring touch/drag volume and mute on the Dynamic Island properly control local audio output.
+    - Added mini active waveform indicator to the codec chip (`np-codec`) on `NowPlayingStage` when playing.
+  **Tests:** `tests/music-island.test.tsx` (12 tests), `tests/music-player.test.tsx` (99 tests), `tests/music-cast-volume.test.tsx` (5 tests), `tests/music-output-volume.test.tsx` (4 tests). Full suite passing (81/81 suites, 1300 tests), `tokens:check` CLEAN, `a11y:audit` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-26 — feat(routines,rewards,more): interactive Daily Routines checklists, upgraded Rewards shop & pass wallet, and live Skill Tree, Insights, Money Mountain, Time Capsule & Family Memory surfaces.
   **What changed:**
   - **INTERACTIVE DAILY ROUTINES** (`src/tasks/routines-api.ts`, `src/tasks/RoutinesPanel.tsx`, `src/tasks/TasksPage.tsx`): adds a `Routines` view to the Tasks segmented control (`Tasks` · `Routines` · `Leaderboard`). Includes 4 time-of-day routine tracks (`☀️ Morning Launchpad`, `🎒 After-School Reset`, `🌙 Evening Wind-Down`, `🧹 Saturday Power Hour`), step-by-step interactive checkboxes (`routine-step-<routineId>-<stepId>`), progress bars, one-tap `Finish (+pts)` completion, time-of-day slot filtering, and a `New Family Routine` composer modal (`routine-composer-modal`). Persists to `AsyncStorage` (`@consuela/routines_v1`, `@consuela/routine_progress_v1:<date>`) and syncs with `/api/schedules`.

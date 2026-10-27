@@ -11,6 +11,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Animated,
   GestureResponderEvent,
   Image,
   Pressable,
@@ -25,6 +26,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { musicTokensFor } from "../theme/music-tokens";
 import { useOutputVolume } from "./output-volume";
 import { DOCK_TOP_OFFSET } from "../nav/CapsuleDock";
+import { mix } from "../theme/mix";
 
 function formatTime(sec: number): string {
   if (!sec || isNaN(sec)) return "0:00";
@@ -34,12 +36,85 @@ function formatTime(sec: number): string {
 }
 
 function WaveformBars({ playing, color }: { playing: boolean; color: string }) {
+  const { reduceMotion } = useTheme();
+  const [bar1] = useState(() => new Animated.Value(playing ? 14 : 2));
+  const [bar2] = useState(() => new Animated.Value(playing ? 18 : 2));
+  const [bar3] = useState(() => new Animated.Value(playing ? 11 : 2));
+  const [bar4] = useState(() => new Animated.Value(playing ? 16 : 2));
+
+  useEffect(() => {
+    if (reduceMotion || process.env.NODE_ENV === "test") {
+      bar1.setValue(playing ? 14 : 2);
+      bar2.setValue(playing ? 18 : 2);
+      bar3.setValue(playing ? 11 : 2);
+      bar4.setValue(playing ? 16 : 2);
+      return;
+    }
+
+    if (!playing) {
+      // Off state: smoothly drop to flat minimal baseline
+      Animated.parallel([
+        Animated.timing(bar1, { toValue: 2, duration: 180, useNativeDriver: false }),
+        Animated.timing(bar2, { toValue: 2, duration: 180, useNativeDriver: false }),
+        Animated.timing(bar3, { toValue: 2, duration: 180, useNativeDriver: false }),
+        Animated.timing(bar4, { toValue: 2, duration: 180, useNativeDriver: false }),
+      ]).start();
+      return;
+    }
+
+    // Active state: lively, rhythmic jumping equalizer bars
+    const anim1 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bar1, { toValue: 18, duration: 320, useNativeDriver: false }),
+        Animated.timing(bar1, { toValue: 5, duration: 280, useNativeDriver: false }),
+        Animated.timing(bar1, { toValue: 14, duration: 300, useNativeDriver: false }),
+        Animated.timing(bar1, { toValue: 4, duration: 240, useNativeDriver: false }),
+      ])
+    );
+    const anim2 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bar2, { toValue: 6, duration: 240, useNativeDriver: false }),
+        Animated.timing(bar2, { toValue: 20, duration: 340, useNativeDriver: false }),
+        Animated.timing(bar2, { toValue: 9, duration: 270, useNativeDriver: false }),
+        Animated.timing(bar2, { toValue: 17, duration: 310, useNativeDriver: false }),
+      ])
+    );
+    const anim3 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bar3, { toValue: 16, duration: 290, useNativeDriver: false }),
+        Animated.timing(bar3, { toValue: 4, duration: 300, useNativeDriver: false }),
+        Animated.timing(bar3, { toValue: 12, duration: 260, useNativeDriver: false }),
+        Animated.timing(bar3, { toValue: 7, duration: 250, useNativeDriver: false }),
+      ])
+    );
+    const anim4 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bar4, { toValue: 8, duration: 250, useNativeDriver: false }),
+        Animated.timing(bar4, { toValue: 19, duration: 330, useNativeDriver: false }),
+        Animated.timing(bar4, { toValue: 5, duration: 270, useNativeDriver: false }),
+        Animated.timing(bar4, { toValue: 15, duration: 290, useNativeDriver: false }),
+      ])
+    );
+
+    anim1.start();
+    anim2.start();
+    anim3.start();
+    anim4.start();
+
+    return () => {
+      anim1.stop();
+      anim2.stop();
+      anim3.stop();
+      anim4.stop();
+    };
+  }, [playing, reduceMotion, bar1, bar2, bar3, bar4]);
+
   return (
     <View style={styles.equalizer} testID="music-island-waveform">
-      <View style={[styles.eqBar, { height: playing ? 14 : 4, backgroundColor: color }]} />
-      <View style={[styles.eqBar, { height: playing ? 18 : 6, backgroundColor: color }]} />
-      <View style={[styles.eqBar, { height: playing ? 11 : 4, backgroundColor: color }]} />
-      <View style={[styles.eqBar, { height: playing ? 16 : 5, backgroundColor: color }]} />
+      <Animated.View style={[styles.eqBar, { height: bar1, backgroundColor: color, opacity: playing ? 1 : 0.35 }]} />
+      <Animated.View style={[styles.eqBar, { height: bar2, backgroundColor: color, opacity: playing ? 1 : 0.35 }]} />
+      <Animated.View style={[styles.eqBar, { height: bar3, backgroundColor: color, opacity: playing ? 1 : 0.35 }]} />
+      <Animated.View style={[styles.eqBar, { height: bar4, backgroundColor: color, opacity: playing ? 1 : 0.35 }]} />
     </View>
   );
 }
@@ -47,9 +122,9 @@ function WaveformBars({ playing, color }: { playing: boolean; color: string }) {
 export function MusicIsland() {
   const router = useRouter();
   const pathname = usePathname();
-  const { current, playing, position, duration, toggle, next, previous, stopAndClear } = usePlayback();
+  const { current, playing, position, duration, toggle, next, previous, stopAndClear, player } = usePlayback();
   const cast = useCast();
-  const volume = useOutputVolume(null);
+  const volume = useOutputVolume(player);
   const { theme, boost } = useTheme();
   const tokens = React.useMemo(() => musicTokensFor(theme, boost), [theme, boost]);
 
@@ -188,17 +263,29 @@ export function MusicIsland() {
               styles.collapsed,
               {
                 backgroundColor: tokens.glassStrong,
-                borderColor: tokens.glassRim,
-                shadowColor: tokens.shadow,
+                borderColor: playing ? mix(tokens.accent, tokens.glassRim, 40) : tokens.glassRim,
+                shadowColor: playing ? tokens.accent : tokens.shadow,
+                shadowOpacity: playing ? 0.5 : 0.25,
+                shadowRadius: playing ? 14 : 8,
               },
             ]}
           >
-            {/* Left: mini artwork */}
-            <Image
-              testID="music-island-art"
-              source={{ uri: current.artworkUrl ?? undefined }}
-              style={styles.art}
-            />
+            {/* Left: mini artwork with active playing badge */}
+            <View style={styles.artContainer}>
+              <Image
+                testID="music-island-art"
+                source={{ uri: current.artworkUrl ?? undefined }}
+                style={styles.art}
+              />
+              {playing && (
+                <View
+                  style={[
+                    styles.activeDot,
+                    { backgroundColor: tokens.accent, borderColor: tokens.glassStrong },
+                  ]}
+                />
+              )}
+            </View>
 
             {/* Middle: Title & optional Cast badge */}
             <View style={styles.collapsedMeta}>
@@ -216,8 +303,8 @@ export function MusicIsland() {
               )}
             </View>
 
-            {/* Right: Sound Wave Equalizer */}
-            <WaveformBars playing={playing} color={tokens.accent || tokens.green} />
+            {/* Right: Sound Wave Equalizer (dancing when playing, flat off when paused) */}
+            <WaveformBars playing={playing} color={tokens.accent} />
 
             {/* Bottom: Hairline progress indicator */}
             <View
@@ -259,10 +346,13 @@ export function MusicIsland() {
                 <Text style={[styles.artist, { color: tokens.label2 }]} numberOfLines={1}>
                   {current.artist || "Unknown Artist"}
                 </Text>
-                <View style={[styles.deviceBadge, { backgroundColor: tokens.panel }]}>
-                  <Text style={[styles.deviceBadgeText, { color: tokens.label2 }]}>
-                    {cast.casting ? "📡 Casting" : "🔊 Local Speaker"}
-                  </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 }}>
+                  <View style={[styles.deviceBadge, { backgroundColor: tokens.panel }]}>
+                    <Text style={[styles.deviceBadgeText, { color: tokens.label2 }]}>
+                      {cast.casting ? "📡 Casting" : "🔊 Local Speaker"}
+                    </Text>
+                  </View>
+                  <WaveformBars playing={playing} color={tokens.accent} />
                 </View>
               </View>
             </View>
@@ -300,7 +390,12 @@ export function MusicIsland() {
                 onPress={() => (cast.casting ? (cast.playing ? cast.pause() : cast.play()) : toggle())}
                 style={({ pressed }) => [
                   styles.playButton,
-                  { backgroundColor: tokens.accent, shadowColor: tokens.shadow },
+                  {
+                    backgroundColor: tokens.accent,
+                    shadowColor: playing ? tokens.accent : tokens.shadow,
+                    shadowOpacity: playing ? 0.6 : 0.3,
+                    shadowRadius: playing ? 10 : 6,
+                  },
                   pressed && { opacity: 0.8 },
                 ]}
                 accessibilityLabel={playing ? "Pause" : "Play"}
@@ -410,11 +505,23 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     overflow: "hidden",
   },
+  artContainer: {
+    position: "relative",
+    marginRight: 10,
+  },
   art: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    marginRight: 10,
+  },
+  activeDot: {
+    position: "absolute",
+    bottom: -1,
+    right: -1,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
   },
   collapsedMeta: {
     flex: 1,

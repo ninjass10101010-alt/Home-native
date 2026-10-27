@@ -17,12 +17,21 @@ export function useOutputVolume(player: { volume: number } | null) {
         if (v) {
           const parsed = parseFloat(v);
           if (!isNaN(parsed)) {
-            setLocalVolume(Math.max(0, Math.min(1, parsed)));
+            const vol = Math.max(0, Math.min(1, parsed));
+            setLocalVolume(vol);
+            const p = player as any;
+            if (p) {
+              try {
+                p.volume = localMuted ? 0 : vol;
+              } catch (e) {
+                console.warn("Local volume hydration failed", e);
+              }
+            }
           }
         }
       })
       .catch(() => {});
-  }, []);
+  }, [player, localMuted]);
 
   // Local volume setters (always called, regardless of casting state)
   const setValueLocal = useCallback(
@@ -67,10 +76,11 @@ export function useOutputVolume(player: { volume: number } | null) {
     }
   }, [localMuted, localVolume, player]);
 
-  const target = cast.casting ? "cast" : "local";
+  const isCast = cast.casting || Boolean(cast.target);
+  const target = isCast ? "cast" : "local";
 
   // Cast path
-  if (cast.casting) {
+  if (isCast) {
     return {
       value: cast.volume,
       muted: cast.muted,
