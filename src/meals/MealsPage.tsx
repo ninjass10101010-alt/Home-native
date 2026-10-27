@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -39,24 +39,48 @@ import {
   type ParsedMeal,
 } from "./plan-grid";
 import { currentSlotFor, type SlotScheduleRow } from "./slot";
+import {
+  CURATED_MEAL_TEMPLATES,
+  computeMissingIngredients,
+  deleteMealEntry,
+  mergeMealsWithLocal,
+  readAttendanceMap,
+  readGroceryItems,
+  readPantryItems,
+  saveMealEntry,
+  writeAttendanceMap,
+  writeGroceryItems,
+  writePantryItems,
+  type GroceryCategory,
+  type GroceryItem,
+  type MealDraft,
+  type PantryItem,
+  type PantryStatus,
+} from "./api";
+import { MealComposer } from "./MealComposer";
+import { ShopStockTabs } from "./ShopStockTabs";
+import { AiSuggestModal } from "./AiSuggestModal";
 
 /**
- * The wall's Meals / Kitchen surface (WS-6) — 2-column Kitchen architecture:
+ * The wall's Meals / Kitchen surface (WS-6 & Wave 2 Interactive Kitchen):
  * - Top amber SignedOutBanner for guests with entire page mounted
  * - PageHeader with uppercase eyebrow, 44sp editorial serif "Kitchen" title, AI Suggest action
- * - KitchenFlowCard workflow explainer with collapsible toggle
+ * - KitchenFlowCard workflow explainer with collapsible toggle & interactive step navigation
  * - Filter pills (All, Breakfast, Lunch, Snack, Dinner)
  * - 2-Column Split:
- *   Left: Week navigation, 7-day strip (Mon–Sun), selected day slot cards (breakfast/lunch/snack/dinner)
- *   Right: Tonight's Dinner, Family Fuel Today with circular SVG calorie ring, Who's Eating Tonight
- * - Bottom full-width Recipe box card
+ *   Left: Interactive week navigation (< / >, Today reset, ✨ Generate), 7-day strip (Mon–Sun),
+ *         selected day slot cards (breakfast/lunch/snack/dinner) + "+ Plan <Slot>" & "+ Add a meal"
+ *   Right: Tonight's Dinner (with Cook Mode / Edit actions), Family Fuel Today with circular SVG
+ *          calorie ring, interactive Who's Eating Tonight attendance toggles & dynamic serving scaling
+ * - Bottom full-width Recipe box card with curated templates + planned meals
+ * - Interactive Archive drawer for browsing & cloning previous weeks
+ * - Live Shop (Grocery list) & Stock (Pantry inventory) tabs with missing-ingredient sync
  */
 
 const GUEST_COPY = "Sign in with your PIN to see the family's meals.";
 const LOADING_COPY = "Loading the family's meals…";
 const EMPTY_WEEK_COPY = "No meals planned yet — Plan dinner in the Kitchen tab.";
 const READONLY_COPY = "Adding meals from the wall arrives with the next wave — ask a parent on the phone.";
-const SHOP_STOCK_COPY = "The grocery list and pantry arrive with the Groceries surface in the next wave.";
 const SIGNED_OUT_BANNER = "🔐 Signed out — showing your saved copy. Every change stays on this device until you sign in.";
 
 const CELL_MIN_DP = 96;
@@ -77,7 +101,8 @@ function formatWeekRange(startIso: string): string {
 
 export function MealsPage({ now = new Date() }: { now?: Date }) {
   const { colors, accentColor } = useTheme();
-  const { member } = useAuth();
+  const { member, role } = useAuth();
+  const isParent = role === "parent";
   const { stale: syncStale } = useSync();
   const router = useRouter();
 
@@ -95,6 +120,26 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
   const [recipeBoxOpen, setRecipeBoxOpen] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<{ name: string; emoji?: string }[]>([]);
 
+  // Interactive Week Offset (0 = current week, -1 = last week, +1 = next week)
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  // Composer & AI Suggest & Archive Modals
+  const [composerState, setComposerState] = useState<{
+    open: boolean;
+    day: string;
+    slot: MealSlotId;
+    editingMeal: ParsedMeal | null;
+  }>({ open: false, day: "Mon", slot: "dinner", editingMeal: null });
+  const [composerSaving, setComposerSaving] = useState(false);
+  const [aiSuggestOpen, setAiSuggestOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+
+  // Local interactive stores
+  const [localMealsOverride, setLocalMealsOverride] = useState<ParsedMeal[] | null>(null);
+  const [groceryItems, setGroceryItems] = useState<GroceryItem[]>([]);
+  const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     let alive = true;
     void readCachedMembers().then((rows) => {
@@ -105,26 +150,52 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
         .map((r: any) => ({ name: r.name, emoji: r.emoji }));
       setFamilyMembers(filtered);
     });
+    void Promise.all([readGroceryItems(), readPantryItems(), readAttendanceMap()]).then(
+      ([groc, pant, att]) => {
+        if (!alive) return;
+        setGroceryItems(groc);
+        setPantryItems(pant);
+        setAttendanceMap(att);
+      }
+    );
     return () => {
       alive = false;
     };
   }, []);
 
-  const { status, data, failure, stale: dataStale, retry } = useWidgetData<{ meals: ParsedMeal[]; schedules: SlotScheduleRow[] }>(async () => {
+  const { status, data, failure, stale: dataStale, retry } = useWidgetData<{
+    meals: ParsedMeal[];
+    schedules: SlotScheduleRow[];
+  }>(async () => {
     const [mealsRes, schedulesRes] = await Promise.all([
       api<DbListEnvelope<MealRow>>("/api/db/meal_plan_entries"),
       api<DbListEnvelope<SlotScheduleRow>>("/api/db/schedules").catch(() => null),
     ]);
+    const rawItems = Array.isArray(mealsRes?.items) ? mealsRes.items : [];
+    const merged = await mergeMealsWithLocal(rawItems);
     return {
-      meals: mapMealRows(Array.isArray(mealsRes?.items) ? mealsRes.items : []),
+      meals: merged.length > 0 ? merged : mapMealRows(rawItems),
       schedules: Array.isArray(schedulesRes?.items) ? schedulesRes.items : [],
     };
   });
 
-  const meals = useMemo(() => data?.meals ?? [], [data]);
+  // Reset local override when server data refreshes
+  useEffect(() => {
+    if (data?.meals) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset local override when fresh server truth lands (PhotosPage parity)
+      setLocalMealsOverride(null);
+    }
+  }, [data]);
+
+  const meals = useMemo(() => localMealsOverride ?? data?.meals ?? [], [localMealsOverride, data]);
   const schedules = useMemo(() => data?.schedules ?? [], [data]);
   const stale = dataStale || syncStale;
-  const weekMonday = weekStartMondayISO(now);
+
+  const baseWeekMonday = weekStartMondayISO(now);
+  const weekMonday = useMemo(
+    () => (weekOffset === 0 ? baseWeekMonday : addDaysISO(baseWeekMonday, weekOffset * 7)),
+    [baseWeekMonday, weekOffset]
+  );
   const weekRangeLabel = formatWeekRange(weekMonday);
 
   const days = useMemo(
@@ -137,15 +208,282 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
   const selectedDay = userSelectedDay ?? (focusDay ?? todayShort);
 
   const currentSlot = schedules.length === 0 ? null : currentSlotFor(schedules, now);
-  const todaysMeals = meals.filter((m) => m.time === todayShort && (m.weekOf ?? weekMonday) === weekMonday);
+  const weekMeals = useMemo(
+    () => meals.filter((m) => (m.weekOf ?? baseWeekMonday) === weekMonday),
+    [meals, weekMonday, baseWeekMonday]
+  );
+  const todaysMeals = useMemo(
+    () => meals.filter((m) => m.time === todayShort && (m.weekOf ?? baseWeekMonday) === weekMonday),
+    [meals, todayShort, weekMonday, baseWeekMonday]
+  );
   const todayKcal = todaysMeals.reduce((a, m) => a + (m.calories || 0), 0);
   const todayProtein = todaysMeals.reduce((a, m) => a + (m.protein || 0), 0);
   const todayCarbs = todaysMeals.reduce((a, m) => a + (m.carbs || 0), 0);
   const todayFat = todaysMeals.reduce((a, m) => a + (m.fat || 0), 0);
 
   const tonightDinner = useMemo(() => {
-    return meals.find((m) => m.time === todayShort && m.mealType === "dinner" && (m.weekOf ?? weekMonday) === weekMonday) ?? null;
-  }, [meals, todayShort, weekMonday]);
+    return (
+      meals.find(
+        (m) => m.time === todayShort && m.mealType === "dinner" && (m.weekOf ?? baseWeekMonday) === weekMonday
+      ) ?? null
+    );
+  }, [meals, todayShort, weekMonday, baseWeekMonday]);
+
+  const missingFromPlan = useMemo(
+    () => computeMissingIngredients(weekMeals, pantryItems),
+    [weekMeals, pantryItems]
+  );
+
+  // Attendance calculation for Tonight's Dinner
+  const eatingTonightMembers = useMemo(
+    () => familyMembers.filter((m) => attendanceMap[m.name] !== false),
+    [familyMembers, attendanceMap]
+  );
+
+  const toggleMemberAttendance = useCallback(
+    (name: string) => {
+      setAttendanceMap((prev) => {
+        const current = prev[name] !== false;
+        const next = { ...prev, [name]: !current };
+        void writeAttendanceMap(next);
+        return next;
+      });
+    },
+    []
+  );
+
+  // Meal CRUD handlers
+  const openAddMeal = useCallback(
+    (day: string, slot: MealSlotId) => {
+      setComposerState({ open: true, day, slot, editingMeal: null });
+    },
+    []
+  );
+
+  const openEditMeal = useCallback((meal: ParsedMeal, slot: MealSlotId) => {
+    setDetail(null);
+    setComposerState({
+      open: true,
+      day: meal.time || selectedDay,
+      slot,
+      editingMeal: meal,
+    });
+  }, [selectedDay]);
+
+  const handleSaveMeal = useCallback(
+    async (draft: MealDraft) => {
+      setComposerSaving(true);
+      try {
+        const saved = await saveMealEntry(draft);
+        setLocalMealsOverride((prev) => {
+          const base = prev ?? meals;
+          const withoutReplaced = base.filter(
+            (m) =>
+              String(m.id) !== String(saved.id) &&
+              String(m.id) !== String(draft.id ?? "") &&
+              !((m.weekOf || draft.weekOf) === draft.weekOf && m.time === draft.time && m.mealType === draft.mealType)
+          );
+          return [...withoutReplaced, saved];
+        });
+        setComposerState((s) => ({ ...s, open: false, editingMeal: null }));
+      } finally {
+        setComposerSaving(false);
+      }
+    },
+    [meals]
+  );
+
+  const handleDeleteMeal = useCallback(
+    async (id: string | number) => {
+      await deleteMealEntry(id);
+      setLocalMealsOverride((prev) => (prev ?? meals).filter((m) => String(m.id) !== String(id)));
+      setComposerState((s) => ({ ...s, open: false, editingMeal: null }));
+      setDetail(null);
+    },
+    [meals]
+  );
+
+  const handleApplyAiMeals = useCallback(
+    async (drafts: MealDraft[]) => {
+      const savedList: ParsedMeal[] = [];
+      for (const d of drafts) {
+        const s = await saveMealEntry(d);
+        savedList.push(s);
+      }
+      setLocalMealsOverride((prev) => {
+        let next = [...(prev ?? meals)];
+        for (const saved of savedList) {
+          next = next.filter(
+            (m) =>
+              String(m.id) !== String(saved.id) &&
+              !((m.weekOf || saved.weekOf) === saved.weekOf && m.time === saved.time && m.mealType === saved.mealType)
+          );
+          next.push(saved);
+        }
+        return next;
+      });
+      setAiSuggestOpen(false);
+    },
+    [meals]
+  );
+
+  // Shop & Stock handlers
+  const handleToggleGrocery = useCallback((id: string) => {
+    setGroceryItems((prev) => {
+      const next = prev.map((g) => (g.id === id ? { ...g, checked: !g.checked } : g));
+      void writeGroceryItems(next);
+      return next;
+    });
+  }, []);
+
+  const handleAddGrocery = useCallback(
+    (item: { name: string; category: GroceryCategory; quantity: string; fromMeal?: string }) => {
+      setGroceryItems((prev) => {
+        const exists = prev.some((g) => g.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+        if (exists) return prev;
+        const next: GroceryItem[] = [
+          ...prev,
+          {
+            id: `g-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            name: item.name,
+            category: item.category,
+            quantity: item.quantity,
+            checked: false,
+            fromMeal: item.fromMeal,
+          },
+        ];
+        void writeGroceryItems(next);
+        return next;
+      });
+    },
+    []
+  );
+
+  const handleClearCheckedGrocery = useCallback(() => {
+    setGroceryItems((prev) => {
+      const next = prev.filter((g) => !g.checked);
+      void writeGroceryItems(next);
+      return next;
+    });
+  }, []);
+
+  const handleSyncMissingToGrocery = useCallback(() => {
+    setGroceryItems((prev) => {
+      const existingNames = new Set(prev.map((g) => g.name.trim().toLowerCase()));
+      const additions: GroceryItem[] = missingFromPlan
+        .filter((m) => !existingNames.has(m.name.trim().toLowerCase()))
+        .map((m, i) => ({
+          id: `g-plan-${Date.now()}-${i}`,
+          name: m.name,
+          category: m.category,
+          quantity: "1",
+          checked: false,
+          fromMeal: m.fromMeal,
+        }));
+      const next = [...prev, ...additions];
+      void writeGroceryItems(next);
+      return next;
+    });
+  }, [missingFromPlan]);
+
+  const handleMoveCheckedToPantry = useCallback(() => {
+    const checked = groceryItems.filter((g) => g.checked);
+    if (checked.length === 0) return;
+
+    setPantryItems((prev) => {
+      const next = [...prev];
+      for (const item of checked) {
+        const idx = next.findIndex((p) => p.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+        if (idx >= 0) {
+          next[idx] = { ...next[idx], status: "stocked", quantity: item.quantity || next[idx].quantity };
+        } else {
+          next.push({
+            id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            name: item.name,
+            category: item.category,
+            quantity: item.quantity || "1",
+            status: "stocked",
+          });
+        }
+      }
+      void writePantryItems(next);
+      return next;
+    });
+
+    setGroceryItems((prev) => {
+      const next = prev.filter((g) => !g.checked);
+      void writeGroceryItems(next);
+      return next;
+    });
+  }, [groceryItems]);
+
+  const handleCyclePantryStatus = useCallback((id: string) => {
+    const order: PantryStatus[] = ["stocked", "low", "out"];
+    setPantryItems((prev) => {
+      const next = prev.map((p) => {
+        if (p.id !== id) return p;
+        const nextStatus = order[(order.indexOf(p.status) + 1) % order.length];
+        return { ...p, status: nextStatus };
+      });
+      void writePantryItems(next);
+      return next;
+    });
+  }, []);
+
+  const handleAddPantry = useCallback(
+    (item: { name: string; category: GroceryCategory; quantity: string; status: PantryStatus }) => {
+      setPantryItems((prev) => {
+        const next: PantryItem[] = [
+          ...prev,
+          {
+            id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            name: item.name,
+            category: item.category,
+            quantity: item.quantity,
+            status: item.status,
+          },
+        ];
+        void writePantryItems(next);
+        return next;
+      });
+    },
+    []
+  );
+
+  const handleSendLowPantryToGrocery = useCallback(() => {
+    const lowItems = pantryItems.filter((p) => p.status === "low" || p.status === "out");
+    if (lowItems.length === 0) return;
+    setGroceryItems((prev) => {
+      const existing = new Set(prev.map((g) => g.name.trim().toLowerCase()));
+      const additions: GroceryItem[] = lowItems
+        .filter((p) => !existing.has(p.name.trim().toLowerCase()))
+        .map((p, i) => ({
+          id: `g-low-${Date.now()}-${i}`,
+          name: p.name,
+          category: p.category,
+          quantity: p.quantity || "1",
+          checked: false,
+          fromMeal: "Pantry restock",
+        }));
+      const next = [...prev, ...additions];
+      void writeGroceryItems(next);
+      return next;
+    });
+    setTab("shop");
+  }, [pantryItems]);
+
+  // Archived weeks list (distinct weekOf values outside current weekMonday)
+  const archivedWeeks = useMemo(() => {
+    const map = new Map<string, ParsedMeal[]>();
+    for (const m of meals) {
+      const wk = m.weekOf || baseWeekMonday;
+      if (wk === weekMonday) continue;
+      const list = map.get(wk) ?? [];
+      list.push(m);
+      map.set(wk, list);
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [meals, baseWeekMonday, weekMonday]);
 
   const renderCell = (day: (typeof days)[number], slot: MealSlotId) => {
     const meal = mealForCell(meals, day.short, slot, weekMonday);
@@ -260,15 +598,27 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
               </Text>
             ) : null}
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 }}>
             <SoftButton
               variant="secondary"
               size="sm"
-              onPress={() => {}}
+              testID="meals-ai-suggest-btn"
+              onPress={() => setAiSuggestOpen(true)}
               style={{ paddingHorizontal: 16 }}
             >
               AI Suggest
             </SoftButton>
+            {member ? (
+              <SoftButton
+                variant="primary"
+                size="sm"
+                testID="meals-header-add-btn"
+                onPress={() => openAddMeal(selectedDay, "dinner")}
+                style={{ paddingHorizontal: 18 }}
+              >
+                + Plan Meal
+              </SoftButton>
+            ) : null}
           </View>
         </View>
 
@@ -287,9 +637,29 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
               onChange={(id) => setTab(id as KitchenTab)}
             />
           </View>
-          <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
-            🗄️ Archived weeks
-          </Text>
+          <Pressable
+            testID="meals-archive-trigger"
+            accessibilityRole="button"
+            accessibilityLabel="Archived weeks"
+            onPress={() => setArchiveOpen(true)}
+            style={{
+              minHeight: MIN_TARGET_DP,
+              paddingHorizontal: 16,
+              borderRadius: 16,
+              backgroundColor: colors["color-surface-2"],
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+            }}
+          >
+            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+              🗄️ Archived weeks
+            </Text>
+            {archivedWeeks.length > 0 ? (
+              <Chip as="span" size="sm" tone="neutral" label={String(archivedWeeks.length)} />
+            ) : null}
+          </Pressable>
         </View>
 
         {/* KitchenFlowCard: Emerald workflow explainer */}
@@ -318,17 +688,41 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                   <Text style={{ fontSize: 26 }}>🍽️</Text>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <View style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, backgroundColor: mix(colors["color-accent-mint"] ?? accentColor, "transparent", 25) }}>
+                  <Pressable
+                    onPress={() => setTab("plan")}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 999,
+                      backgroundColor: tab === "plan" ? mix(colors["color-accent-mint"] ?? accentColor, "transparent", 25) : colors["color-surface-2"],
+                    }}
+                  >
                     <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>🍽️ Plan</Text>
-                  </View>
+                  </Pressable>
                   <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>→</Text>
-                  <View style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, backgroundColor: colors["color-surface-2"] }}>
+                  <Pressable
+                    onPress={() => setTab("shop")}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 999,
+                      backgroundColor: tab === "shop" ? mix(colors["color-accent-mint"] ?? accentColor, "transparent", 25) : colors["color-surface-2"],
+                    }}
+                  >
                     <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>🛒 Shop</Text>
-                  </View>
+                  </Pressable>
                   <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>→</Text>
-                  <View style={{ paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, backgroundColor: colors["color-surface-2"] }}>
+                  <Pressable
+                    onPress={() => setTab("stock")}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 999,
+                      backgroundColor: tab === "stock" ? mix(colors["color-accent-mint"] ?? accentColor, "transparent", 25) : colors["color-surface-2"],
+                    }}
+                  >
                     <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>🥫 Stock</Text>
-                  </View>
+                  </Pressable>
                 </View>
               </View>
               <Pressable onPress={() => setFlowHidden(true)} hitSlop={12}>
@@ -342,7 +736,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                 {"Pick this week's meals, and missing ingredients become your shopping list."}
               </Text>
               <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
-                {`${meals.length} meals planned · ${meals.length > 0 ? "18" : "0"} ingredients missing`}
+                {`${weekMeals.length} meals planned · ${missingFromPlan.length} ingredients missing`}
               </Text>
             </View>
           </Material>
@@ -397,14 +791,18 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
         ) : tab === "plan" ? (
           <View style={{ gap: 16 }}>
             {/* Filter Pills */}
-            <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
               {FILTER_OPTIONS.map((f) => {
                 const isSelected = mealFilter === f.id;
                 return (
                   <Pressable
                     key={f.id}
+                    testID={`meals-filter-${f.id}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
                     onPress={() => setMealFilter(f.id)}
                     style={{
+                      minHeight: 48,
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 6,
@@ -442,26 +840,85 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
               <View style={{ flex: 1, gap: 14 }}>
                 {/* Week navigation bar */}
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <Pressable
-                      onPress={() => {}}
-                      style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors["color-surface-2"], alignItems: "center", justifyContent: "center" }}
+                      testID="meals-week-prev"
+                      accessibilityRole="button"
+                      accessibilityLabel="Previous week"
+                      onPress={() => setWeekOffset((w) => w - 1)}
+                      style={{
+                        width: MIN_TARGET_DP,
+                        height: MIN_TARGET_DP,
+                        borderRadius: 20,
+                        backgroundColor: colors["color-surface-2"],
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
                     >
-                      <Text style={{ color: colors["color-text-primary"], fontSize: 18, fontWeight: "700" }}>‹</Text>
+                      <Text style={{ color: colors["color-text-primary"], fontSize: 22, fontWeight: "700" }}>‹</Text>
                     </Pressable>
-                    <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                    <Text
+                      testID="meals-week-label"
+                      style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}
+                    >
                       {weekRangeLabel}
                     </Text>
-                    <View style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: mix(accentColor, "transparent", 20), borderWidth: 1, borderColor: mix(accentColor, "transparent", 35) }}>
+                    {weekOffset !== 0 ? (
+                      <Pressable
+                        testID="meals-week-today"
+                        accessibilityRole="button"
+                        accessibilityLabel="Return to this week"
+                        onPress={() => setWeekOffset(0)}
+                        style={{
+                          minHeight: 44,
+                          paddingHorizontal: 12,
+                          borderRadius: 999,
+                          backgroundColor: colors["color-surface-2"],
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                          This week
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      testID="meals-generate-btn"
+                      accessibilityRole="button"
+                      accessibilityLabel="Generate meals for the week"
+                      onPress={() => setAiSuggestOpen(true)}
+                      style={{
+                        minHeight: 48,
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: 999,
+                        backgroundColor: mix(accentColor, "transparent", 20),
+                        borderWidth: 1,
+                        borderColor: mix(accentColor, "transparent", 35),
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
                       <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
                         ✨ Generate
                       </Text>
-                    </View>
+                    </Pressable>
                     <Pressable
-                      onPress={() => {}}
-                      style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors["color-surface-2"], alignItems: "center", justifyContent: "center" }}
+                      testID="meals-week-next"
+                      accessibilityRole="button"
+                      accessibilityLabel="Next week"
+                      onPress={() => setWeekOffset((w) => w + 1)}
+                      style={{
+                        width: MIN_TARGET_DP,
+                        height: MIN_TARGET_DP,
+                        borderRadius: 20,
+                        backgroundColor: colors["color-surface-2"],
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
                     >
-                      <Text style={{ color: colors["color-text-primary"], fontSize: 18, fontWeight: "700" }}>›</Text>
+                      <Text style={{ color: colors["color-text-primary"], fontSize: 22, fontWeight: "700" }}>›</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -539,22 +996,37 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
 
                     return (
                       <View key={slot} testID={`meals-slot-${slot}`} style={{ gap: 6 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                          <Text style={{ fontSize: 18 }}>{meta.icon}</Text>
-                          <Text
-                            style={{
-                              color: accentInk(slotAccent, colors["color-text-primary"]),
-                              fontSize: TYPOGRAPHY.body.fontSize,
-                              fontWeight: "700",
-                            }}
-                          >
-                            {meta.label}
-                          </Text>
-                          <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
-                            {`· ${meta.time}`}
-                          </Text>
-                          {isCurrent ? (
-                            <Chip as="span" size="sm" tone="accent" label="Now" testID="meals-now-chip" />
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Text style={{ fontSize: 18 }}>{meta.icon}</Text>
+                            <Text
+                              style={{
+                                color: accentInk(slotAccent, colors["color-text-primary"]),
+                                fontSize: TYPOGRAPHY.body.fontSize,
+                                fontWeight: "700",
+                              }}
+                            >
+                              {meta.label}
+                            </Text>
+                            <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                              {`· ${meta.time}`}
+                            </Text>
+                            {isCurrent ? (
+                              <Chip as="span" size="sm" tone="accent" label="Now" testID="meals-now-chip" />
+                            ) : null}
+                          </View>
+                          {!meal && member ? (
+                            <Pressable
+                              testID={`meals-quick-plan-${selectedDay}-${slot}`}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Plan ${meta.label} on ${selectedDay}`}
+                              onPress={() => openAddMeal(selectedDay, slot)}
+                              hitSlop={10}
+                            >
+                              <Text style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                                + Plan
+                              </Text>
+                            </Pressable>
                           ) : null}
                         </View>
 
@@ -576,7 +1048,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                             }}
                           >
                             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
                                 <View
                                   style={{
                                     width: 44,
@@ -589,7 +1061,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                                 >
                                   <Text style={{ fontSize: 24 }}>{meal.emoji || "🍽️"}</Text>
                                 </View>
-                                <View>
+                                <View style={{ flex: 1 }}>
                                   <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
                                     {`${meta.label.toUpperCase()} · ${meta.time}`}
                                   </Text>
@@ -612,7 +1084,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                           <View
                             testID={cellTestId}
                             style={{
-                              minHeight: 56,
+                              minHeight: MIN_TARGET_DP,
                               borderRadius: 16,
                               borderWidth: 1.5,
                               borderStyle: "dashed",
@@ -624,7 +1096,10 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                             }}
                           >
                             <Text style={{ fontSize: 16 }}>{meta.icon}</Text>
-                            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+                            <Text
+                              onPress={() => openAddMeal(selectedDay, slot)}
+                              style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}
+                            >
                               {`Plan ${meta.label}`}
                             </Text>
                           </View>
@@ -634,8 +1109,12 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                   })}
 
                   <Pressable
+                    testID="meals-add-day-btn"
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add a meal to ${DAY_FULL_NAMES[selectedDay] ?? selectedDay}`}
+                    onPress={() => openAddMeal(selectedDay, mealFilter === "all" ? "dinner" : mealFilter)}
                     style={{
-                      minHeight: 48,
+                      minHeight: MIN_TARGET_DP,
                       borderRadius: 16,
                       borderWidth: 1.5,
                       borderStyle: "dashed",
@@ -672,7 +1151,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                   style={{ borderRadius: 24, padding: 18, gap: 12 }}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
                       <View
                         style={{
                           width: 44,
@@ -685,7 +1164,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                       >
                         <Text style={{ fontSize: 22 }}>🌙</Text>
                       </View>
-                      <View>
+                      <View style={{ flex: 1 }}>
                         <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", letterSpacing: 1.5 }}>
                           {"TONIGHT'S DINNER"}
                         </Text>
@@ -694,16 +1173,43 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                         </Text>
                       </View>
                     </View>
-                    <Text style={{ fontSize: 24 }}>🍽️</Text>
+                    <Text style={{ fontSize: 24 }}>{tonightDinner?.emoji || "🍽️"}</Text>
                   </View>
                   {tonightDinner ? (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 56 }}>
-                      <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
-                        ⏱️ {tonightDinner.prepTime || "30 min"}
-                      </Text>
-                      <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
-                        👥 {tonightDinner.servings || 7}
-                      </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingLeft: 56 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                          ⏱️ {tonightDinner.prepTime || "30 min"}
+                        </Text>
+                        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                          👥 {eatingTonightMembers.length > 0 ? eatingTonightMembers.length : tonightDinner.servings || 7}
+                        </Text>
+                      </View>
+                      <Pressable
+                        testID="meals-tonight-view"
+                        accessibilityRole="button"
+                        accessibilityLabel="View tonight's dinner recipe"
+                        onPress={() => setDetail({ meal: tonightDinner, slot: "dinner" })}
+                        hitSlop={10}
+                      >
+                        <Text style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                          View recipe →
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : member ? (
+                    <View style={{ paddingLeft: 56 }}>
+                      <Pressable
+                        testID="meals-tonight-plan-btn"
+                        accessibilityRole="button"
+                        accessibilityLabel="Plan tonight's dinner"
+                        onPress={() => openAddMeal(todayShort, "dinner")}
+                        hitSlop={10}
+                      >
+                        <Text style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                          + Plan dinner for tonight →
+                        </Text>
+                      </Pressable>
                     </View>
                   ) : null}
                 </Material>
@@ -817,7 +1323,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                   ) : null}
                 </Material>
 
-                {/* Who's Eating Tonight Card */}
+                {/* Who's Eating Tonight Card (Interactive Attendance Toggles) */}
                 <Material
                   tier="regular"
                   tone={colors["color-accent-violet"] ?? accentColor}
@@ -837,26 +1343,53 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                       >
                         <Text style={{ fontSize: 22 }}>👥</Text>
                       </View>
-                      <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", letterSpacing: 1.5 }}>
-                        {"WHO'S EATING TONIGHT"}
-                      </Text>
+                      <View>
+                        <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700", letterSpacing: 1.5 }}>
+                          {"WHO'S EATING TONIGHT"}
+                        </Text>
+                        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                          Tap a family member to toggle attendance
+                        </Text>
+                      </View>
                     </View>
-                    <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
-                      {`${familyMembers.length} / ${familyMembers.length}`}
+                    <Text
+                      testID="meals-attendance-count"
+                      style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}
+                    >
+                      {`${eatingTonightMembers.length} / ${familyMembers.length}`}
                     </Text>
                   </View>
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, paddingLeft: 4 }}>
                     {familyMembers.map((m) => {
                       const isPhoto = m.emoji ? isPhotoUri(m.emoji) : false;
                       const firstName = m.name.split(" ")[0] || m.name;
+                      const attending = attendanceMap[m.name] !== false;
                       return (
-                        <View key={m.name} style={{ alignItems: "center", gap: 4, minWidth: 60, paddingHorizontal: 2 }}>
+                        <Pressable
+                          key={m.name}
+                          testID={`meals-attendee-${firstName.toLowerCase()}`}
+                          accessibilityRole="checkbox"
+                          accessibilityLabel={`${firstName} eating tonight`}
+                          accessibilityState={{ checked: attending }}
+                          onPress={() => toggleMemberAttendance(m.name)}
+                          style={{
+                            alignItems: "center",
+                            gap: 4,
+                            minWidth: MIN_TARGET_DP,
+                            minHeight: MIN_TARGET_DP,
+                            justifyContent: "center",
+                            paddingHorizontal: 4,
+                            opacity: attending ? 1 : 0.45,
+                          }}
+                        >
                           <View
                             style={{
                               width: 44,
                               height: 44,
                               borderRadius: 22,
                               backgroundColor: colors["color-surface-2"],
+                              borderWidth: attending ? 2 : 1,
+                              borderColor: attending ? colors["color-accent-mint"] ?? accentColor : colors["color-border"] ?? "transparent",
                               alignItems: "center",
                               justifyContent: "center",
                               overflow: "hidden",
@@ -871,7 +1404,7 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                           <Text numberOfLines={1} style={{ color: colors["color-text-primary"], fontSize: 14, fontWeight: "600", textAlign: "center" }}>
                             {firstName}
                           </Text>
-                        </View>
+                        </Pressable>
                       );
                     })}
                   </View>
@@ -886,8 +1419,11 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
               style={{ borderRadius: 24, padding: 18, gap: 12, marginTop: 4 }}
             >
               <Pressable
+                testID="meals-recipe-box-toggle"
+                accessibilityRole="button"
+                accessibilityLabel="Toggle Recipe box"
                 onPress={() => setRecipeBoxOpen((v) => !v)}
-                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+                style={{ minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                   <View
@@ -902,9 +1438,14 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                   >
                     <Text style={{ fontSize: 22 }}>📖</Text>
                   </View>
-                  <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
-                    Recipe box
-                  </Text>
+                  <View>
+                    <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                      Recipe box
+                    </Text>
+                    <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                      {`${CURATED_MEAL_TEMPLATES.length} family classics · Tap to plan onto ${DAY_FULL_NAMES[selectedDay] ?? selectedDay}`}
+                    </Text>
+                  </View>
                 </View>
                 <Text style={{ color: colors["color-text-muted"], fontSize: 18, fontWeight: "700" }}>
                   {recipeBoxOpen ? "⌃" : "⌄"}
@@ -914,8 +1455,8 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                 <View style={{ gap: 10, marginTop: 8 }}>
                   {meals.map((m) => (
                     <Pressable
-                      key={m.id}
-                      onPress={() => setDetail({ meal: m, slot: m.mealType as MealSlotId })}
+                      key={`planned-${m.id}`}
+                      onPress={() => setDetail({ meal: m, slot: (m.mealType as MealSlotId) || "dinner" })}
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
@@ -936,6 +1477,61 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                       </View>
                     </Pressable>
                   ))}
+
+                  {CURATED_MEAL_TEMPLATES.map((tpl) => (
+                    <View
+                      key={`tpl-${tpl.name}`}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        padding: 12,
+                        borderRadius: 16,
+                        backgroundColor: colors["color-surface-0"],
+                        borderWidth: 1,
+                        borderColor: colors["color-border"] ?? "transparent",
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+                        <Text style={{ fontSize: 24 }}>{tpl.emoji}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                            {tpl.name}
+                          </Text>
+                          <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                            {`${tpl.mealType} · ⏱️ ${tpl.prepTime} · 🔥 ${tpl.calories} kcal`}
+                          </Text>
+                        </View>
+                      </View>
+                      {member ? (
+                        <SoftButton
+                          variant="secondary"
+                          size="sm"
+                          onPress={() =>
+                            void handleSaveMeal({
+                              name: tpl.name,
+                              emoji: tpl.emoji,
+                              time: selectedDay,
+                              mealType: tpl.mealType,
+                              prepTime: tpl.prepTime,
+                              servings: tpl.servings,
+                              calories: tpl.calories,
+                              protein: tpl.protein,
+                              carbs: tpl.carbs,
+                              fat: tpl.fat,
+                              tags: [...tpl.tags],
+                              ingredients: [...tpl.ingredients],
+                              instructions: tpl.instructions,
+                              weekOf: weekMonday,
+                            })
+                          }
+                        >
+                          {`+ ${selectedDay}`}
+                        </SoftButton>
+                      ) : null}
+                    </View>
+                  ))}
                 </View>
               ) : null}
             </Material>
@@ -948,17 +1544,26 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
             </Text>
           </View>
         ) : (
-          <View style={{ marginTop: 16 }}>
-            <EmptyState
-              icon={tab === "shop" ? "🛒" : "🥫"}
-              title={tab === "shop" ? "Shop" : "Stock"}
-              body={SHOP_STOCK_COPY}
+          <View style={{ marginTop: 8 }}>
+            <ShopStockTabs
+              mode={tab}
+              groceryItems={groceryItems}
+              pantryItems={pantryItems}
+              missingFromPlan={missingFromPlan}
+              onToggleGrocery={handleToggleGrocery}
+              onAddGrocery={handleAddGrocery}
+              onClearCheckedGrocery={handleClearCheckedGrocery}
+              onSyncMissingToGrocery={handleSyncMissingToGrocery}
+              onMoveCheckedToPantry={handleMoveCheckedToPantry}
+              onCyclePantryStatus={handleCyclePantryStatus}
+              onAddPantry={handleAddPantry}
+              onSendLowPantryToGrocery={handleSendLowPantryToGrocery}
             />
           </View>
         )}
       </ScrollView>
 
-      {/* Read-only meal detail modal */}
+      {/* Meal Detail & Cook Mode Modal */}
       <Modal
         visible={detail !== null}
         onClose={() => setDetail(null)}
@@ -967,7 +1572,23 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
           detail && detailSlot ? `${DAY_FULL_NAMES[detail.meal.time] ?? detail.meal.time} ${detailSlot.label} · ${detailSlot.time}` : undefined
         }
         testID="meals-detail"
-        footer={<SoftButton onPress={() => setDetail(null)}>Close</SoftButton>}
+        footer={
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flex: 1, gap: 12 }}>
+            {detail && (isParent || member) ? (
+              <SoftButton
+                variant="secondary"
+                size="sm"
+                testID="meals-detail-edit"
+                onPress={() => openEditMeal(detail.meal, detail.slot)}
+              >
+                ✎ Edit Meal
+              </SoftButton>
+            ) : (
+              <View />
+            )}
+            <SoftButton onPress={() => setDetail(null)}>Close</SoftButton>
+          </View>
+        }
       >
         {detail && detailSlot ? (
           <View style={{ gap: 16 }}>
@@ -1004,11 +1625,34 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
 
             {detail.meal.ingredients.length > 0 ? (
               <View style={{ gap: 8 }}>
-                <Text
-                  style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}
-                >
-                  Ingredients
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text
+                    style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}
+                  >
+                    Ingredients
+                  </Text>
+                  <Pressable
+                    testID="meals-detail-send-grocery"
+                    accessibilityRole="button"
+                    accessibilityLabel="Add all ingredients to shopping list"
+                    onPress={() => {
+                      for (const ing of detail.meal.ingredients) {
+                        handleAddGrocery({
+                          name: ing,
+                          category: "Other",
+                          quantity: "1",
+                          fromMeal: detail.meal.name,
+                        });
+                      }
+                      setDetail(null);
+                      setTab("shop");
+                    }}
+                  >
+                    <Text style={{ color: accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                      🛒 Add to Shop
+                    </Text>
+                  </Pressable>
+                </View>
                 {detail.meal.ingredients.map((ing) => (
                   <View key={ing} style={{ flexDirection: "row", gap: 8 }}>
                     <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.body.fontSize }}>•</Text>
@@ -1019,8 +1663,114 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                 ))}
               </View>
             ) : null}
+
+            {detail.meal.instructions ? (
+              <View style={{ gap: 6 }}>
+                <Text
+                  style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}
+                >
+                  Cooking Instructions
+                </Text>
+                <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, lineHeight: 24 }}>
+                  {detail.meal.instructions}
+                </Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
+      </Modal>
+
+      {/* Meal Composer Modal (Add / Edit / Delete) */}
+      <MealComposer
+        visible={composerState.open}
+        initialDay={composerState.day}
+        initialSlot={composerState.slot}
+        weekMonday={weekMonday}
+        editingMeal={composerState.editingMeal}
+        saving={composerSaving}
+        onClose={() => setComposerState((s) => ({ ...s, open: false, editingMeal: null }))}
+        onSave={(draft) => void handleSaveMeal(draft)}
+        onDelete={(id) => void handleDeleteMeal(id)}
+      />
+
+      {/* AI Suggest / Week Generator Modal */}
+      <AiSuggestModal
+        visible={aiSuggestOpen}
+        weekMonday={weekMonday}
+        selectedDay={selectedDay}
+        existingMeals={meals}
+        onClose={() => setAiSuggestOpen(false)}
+        onApplyMeals={(drafts) => void handleApplyAiMeals(drafts)}
+      />
+
+      {/* Archived Weeks Modal */}
+      <Modal
+        visible={archiveOpen}
+        onClose={() => setArchiveOpen(false)}
+        title="🗄️ Archived Weeks"
+        description="Browse previous meal plans or jump to any week."
+        testID="meals-archive-modal"
+        footer={<SoftButton onPress={() => setArchiveOpen(false)}>Close</SoftButton>}
+      >
+        <View style={{ gap: 12 }}>
+          {archivedWeeks.length === 0 ? (
+            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, textAlign: "center", paddingVertical: 16 }}>
+              No archived meal plans from other weeks yet. Use the ‹ and › arrows to plan ahead or browse past weeks.
+            </Text>
+          ) : (
+            archivedWeeks.map(([wkIso, wkMeals]) => (
+              <Material
+                key={wkIso}
+                tier="thin"
+                style={{
+                  borderRadius: 20,
+                  padding: 16,
+                  gap: 8,
+                  borderWidth: 1,
+                  borderColor: colors["color-border"] ?? "transparent",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View>
+                    <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                      {`Week of ${formatWeekRange(wkIso)}`}
+                    </Text>
+                    <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                      {wkMeals.map((m) => `${m.emoji || "🍽️"} ${m.name}`).join(" · ")}
+                    </Text>
+                  </View>
+                  <SoftButton
+                    variant="secondary"
+                    size="sm"
+                    testID={`meals-archive-copy-${wkIso}`}
+                    onPress={() => {
+                      const drafts: MealDraft[] = wkMeals.map((m) => ({
+                        name: m.name,
+                        emoji: m.emoji || "🍽️",
+                        time: m.time,
+                        mealType: (m.mealType as MealSlotId) || "dinner",
+                        prepTime: m.prepTime || "25 min",
+                        servings: m.servings || 6,
+                        calories: m.calories || 0,
+                        protein: m.protein || 0,
+                        carbs: m.carbs || 0,
+                        fat: m.fat || 0,
+                        tags: [...m.tags],
+                        ingredients: [...m.ingredients],
+                        instructions: m.instructions,
+                        weekOf: weekMonday,
+                      }));
+                      void handleApplyAiMeals(drafts);
+                      setArchiveOpen(false);
+                    }}
+                  >
+                    Copy to this week
+                  </SoftButton>
+                </View>
+              </Material>
+            ))
+          )}
+        </View>
       </Modal>
     </View>
   );

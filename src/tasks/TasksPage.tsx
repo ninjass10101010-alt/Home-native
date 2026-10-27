@@ -48,6 +48,7 @@ import {
   type WallTask,
   newOperationId,
 } from "./claim";
+import { RoutinesPanel } from "./RoutinesPanel";
 
 /**
  * The wall's Tasks surface (WS-7). The board reads ONE shared SyncManager
@@ -588,7 +589,7 @@ export function TasksPage() {
   const tasks = useMemo(() => normalizeSnapshotTasks(snapshot?.tasks), [snapshot]);
   const weekData = (snapshot?.weekData ?? undefined) as WeekData | undefined;
 
-  const [activeTab, setActiveTab] = useState<"tasks" | "leaderboard">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "routines" | "leaderboard">("tasks");
   const [showCompleted, setShowCompleted] = useState(false);
   const [pinIntent, setPinIntent] = useState<PinIntent | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
@@ -1177,6 +1178,16 @@ export function TasksPage() {
        );
      }
 
+    if (activeTab === "routines") {
+      return (
+        <RoutinesPanel
+          activeMemberFilter={activeFilter}
+          rosterNames={cachedRoster.map((r) => r.name)}
+          isParent={isParent}
+        />
+      );
+    }
+
     return (
       <View style={{ gap: 20 }}>
         {/* ── Open board (web SectionCard: 🫳 Open) ─────────────────────── */}
@@ -1661,15 +1672,16 @@ export function TasksPage() {
           accessibilityLabel="Tasks view"
           emphasize
           value={activeTab}
-          onChange={(id) => setActiveTab(id as "tasks" | "leaderboard")}
+          onChange={(id) => setActiveTab(id as "tasks" | "routines" | "leaderboard")}
           options={[
             { id: "tasks", label: "Tasks" },
+            { id: "routines", label: "Routines" },
             { id: "leaderboard", label: "Leaderboard" },
           ]}
         />
 
-        {/* Member filter tiles (web member-tile row — Tasks tab only) */}
-        {activeTab === "tasks" ? (
+        {/* Member filter tiles (web member-tile row — Tasks & Routines tabs) */}
+        {activeTab === "tasks" || activeTab === "routines" ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}

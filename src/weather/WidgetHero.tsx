@@ -12,12 +12,10 @@ import { SoftButton } from "../ui/SoftButton";
 import { READ_COPY_STALE, useWidgetData, type ReadFailure } from "../home/widgets/data";
 import { WidgetFrame } from "../home/widgets/WidgetFrame";
 import type { WallSpan } from "../home/widgets";
-import { AmbientBob } from "./useAmbient";
+import { AmbientBob, AmbientDigitPop } from "./useAmbient";
 import {
   ChevronGlyph,
   ConditionIcon,
-  CREATURE_SIZE,
-  GlassChip,
   MapPinGlyph,
   MonsterDigit,
   PosterScrim,
@@ -183,25 +181,24 @@ export function cellRhythm(height: number, spacious = false) {
 export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
   const { colors, boost } = useTheme();
   const router = useRouter();
-  const code = conditionCode(data.code ?? undefined, data.isDay);
-  // The clock picks the sky, the condition picks the glyph (web parity:
-  // wmoToScene collapses the clear/cloudy skies to night after dark).
-  const scene = sceneFor(code, data.isDay);
-  const [flatTop, flatBottom] = useSceneSky(scene);
-  const [posterTop, posterBottom] = posterSkyColors(colors, posterSkyWash(code, data.isDay));
+  const [scrubIdx, setScrubIdx] = useState(0);
   const isPoster = size === "full";
   const spacious = !isPoster && span === 2;
+  const activeHour = isPoster && scrubIdx > 0 && data.hours[scrubIdx] ? data.hours[scrubIdx] : null;
+  const activeIsDay = activeHour ? activeHour.isDay : data.isDay;
+  const activeTempF = activeHour ? activeHour.tempF : data.tempF;
+  const code = conditionCode(data.code ?? undefined, activeIsDay);
+  // The clock picks the sky, the condition picks the glyph (web parity:
+  // wmoToScene collapses the clear/cloudy skies to night after dark).
+  const scene = sceneFor(code, activeIsDay);
+  const [flatTop, flatBottom] = useSceneSky(scene);
+  const [posterTop, posterBottom] = posterSkyColors(colors, posterSkyWash(code, activeIsDay));
   const skyTop = isPoster ? posterTop : flatTop;
   const skyBottom = isPoster ? posterBottom : flatBottom;
-  // The ink rides the field: the wall card's flat washes carry the web's
-  // INK table ink — slate-800, a COOL dark — while the poster page carries
-  // white on its night skin, and the storm field is the one dark wall wash,
-  // so it flips to white too.
-  const darkField = isPoster ? !data.isDay : scene === "storm";
+  // The ink rides the field: saturated night electric blue and storm washes carry crisp white;
+  // daytime fields carry slate-800.
+  const darkField = !activeIsDay || scene === "storm" || scene === "night";
   const glint = colors["color-monster-glint"] ?? colors["color-text-primary"];
-  // The web's slate-800 (#1E293B) ink, composed from the monster palette:
-  // the monster's own ink blue and its warm day ink, lifted a hair. The
-  // reference capture measures exactly this ink on the card's text.
   const slateInk = mix(
     glint,
     mix(colors["color-monster-ink-blue"], colors["color-monster-ink-day"], 60),
@@ -210,15 +207,14 @@ export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
   const washInk = darkField
     ? colors["color-monster-glint"] ?? colors["color-text-primary"]
     : slateInk;
-  // The web's inkSoft: slate-800 at 0.92 (0.9 in boost) — tuned so the H/L,
-  // outlook and footer lines clear 4.5:1 on the worst painted stop of every
-  // light scene family (the web's WeatherWidget.tsx:970).
   const soft = mix(washInk, "transparent", boost ? 90 : 92);
   const pinInk = colors["color-accent-coral"] ?? colors["color-accent-rose"];
   const digitsHeight = size === "full" ? 220 : spacious ? 128 : 96;
-  const iconSize = size === "full" ? 180 : spacious ? 160 : CREATURE_SIZE;
+  const iconSize = size === "full" ? 180 : spacious ? 160 : 124;
   const phase = moonPhase(data.updatedAt).phase;
   const type = isPoster ? FULL_TYPE : spacious ? ROOMY_CELL_TYPE : CELL_TYPE;
+  const expression: "open" | "sleepy" | "storm" =
+    !activeIsDay || scene === "night" ? "sleepy" : scene === "storm" ? "storm" : "open";
 
   // The card's own box — the wall shell owns the cell, so the card measures
   // itself and the scene (the night moon) is placed from that box.
@@ -227,13 +223,11 @@ export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
     const { width, height } = e.nativeEvent.layout;
     setCell((c) => (c.w === width && c.h === height ? c : { w: width, h: height }));
   };
-  const rhythm = cellRhythm(cell.h || (spacious ? 574 : 300), spacious);
-  const padH = isPoster ? 28 : spacious ? 24 : 20;
-  const padT = isPoster ? 28 : rhythm.top;
-  const padB = isPoster ? 28 : rhythm.bottom;
+  const padH = isPoster ? 28 : spacious ? 22 : 18;
+  const padT = isPoster ? 28 : 16;
+  const padB = isPoster ? 28 : 14;
   const gap = isPoster ? 12 : 0;
-  const chipsH = isPoster ? undefined : rhythm.chipsH;
-  // The glass sheen over the whole card (web WeatherWidget.tsx:1166).
+  // The glass sheen over the whole card on the full poster page only.
   const sheenFill: [string, string, string] = [
     mix(glint, "transparent", 15),
     mix(glint, "transparent", 0),
@@ -241,19 +235,21 @@ export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
   ];
 
   const temperature =
-    data.tempF == null ? (
+    activeTempF == null ? (
       <Text testID="wx-temp-empty" style={{ fontSize: digitsHeight, lineHeight: digitsHeight * 1.05, color: washInk, fontWeight: "700" }}>
         —
       </Text>
     ) : (
-      <View style={{ flexDirection: "row", alignItems: "flex-start" }} testID="wx-temp-digits">
-        {String(Math.round(data.tempF)).split("").map((d, i) => (
-          <MonsterDigit key={`${d}-${i}`} digit={d} height={digitsHeight} />
-        ))}
-        <Text style={{ color: soft, fontSize: digitsHeight * 0.26, lineHeight: digitsHeight * 0.3, fontWeight: "300", marginLeft: 2, marginTop: digitsHeight * 0.07 }}>
-          °
-        </Text>
-      </View>
+      <AmbientDigitPop triggerKey={`${scrubIdx}-${activeTempF}`}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "center" }} testID="wx-temp-digits">
+          {String(Math.round(activeTempF)).split("").map((d, i) => (
+            <MonsterDigit key={`${d}-${i}`} digit={d} height={digitsHeight} expression={expression} />
+          ))}
+          <Text style={{ color: soft, fontSize: digitsHeight * 0.28, lineHeight: digitsHeight * 0.32, fontWeight: "300", marginLeft: 2, marginTop: digitsHeight * 0.05 }}>
+            °
+          </Text>
+        </View>
+      </AmbientDigitPop>
     );
 
   const hlLine =
@@ -276,8 +272,7 @@ export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
         backgroundColor: skyTop,
       }}
     >
-      {/* 1 — the sky: the wall card's flat per-scene wash falls straight down
-          (web bg-gradient-to-b); the poster page's skin runs corner to corner. */}
+      {/* 1 — flat background (pure solid color, or poster gradient on full page) */}
       <LinearGradient
         testID="wx-poster"
         colors={[skyTop, skyBottom]}
@@ -296,158 +291,294 @@ export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
         cardH={cell.h}
       />
 
-      {/* 3 — the scrim: a soft bloom that lifts the hero off the sky */}
-      <PosterScrim scene={scene} />
+      {/* 3 — on full poster page only: scrim and sheen */}
+      {isPoster ? <PosterScrim scene={scene} /> : null}
+      {isPoster ? (
+        <LinearGradient
+          colors={sheenFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      ) : null}
 
-      {/* 4 — the glass sheen: light glancing off the card surface */}
-      <LinearGradient
-        colors={sheenFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-
-      {/* 5 — the content. The scene layers are absolutely positioned, so the
-          content needs its own stacking rung (the web uses z-20 for exactly
-          this: the glass chips sit OVER the moon character, not under it). */}
+      {/* 4 — Card Content */}
       <View style={{ flex: 1, paddingHorizontal: padH, paddingTop: padT, paddingBottom: padB, gap, zIndex: 20 }}>
-        {/* Row 1 — place pill (left) + details pill (right). Both are the web's
-            ONE glass recipe: the 135° white gradient, the specular top-half
-            sheen and the white hairline — so the pane LIFTS the sky instead
-            of cutting a hole in it. */}
+        {/* Header Row: Flat Place Chip (Left) + Flat Details Pill (Right) */}
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 8,
-            height: chipsH,
+            height: isPoster ? undefined : 28,
           }}
         >
-          <GlassChip
+          <View
             testID="wx-place-pill"
-            night={scene === "storm"}
-            boost={boost}
-            backdropTop={skyTop}
-            backdropBottom={skyBottom}
-            style={{ borderRadius: RADII.full }}
-            contentStyle={{
-              gap: 6,
-              paddingHorizontal: isPoster ? 14 : spacious ? 14 : 12,
-              paddingVertical: isPoster ? 9 : spacious ? 6 : 4,
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 5,
             }}
           >
-            <MapPinGlyph color={pinInk} size={isPoster ? 20 : spacious ? 16 : 14} />
+            <MapPinGlyph color={pinInk} size={isPoster ? 18 : 14} />
             <Text
               numberOfLines={1}
-              style={{ color: washInk, ...type.place, lineHeight: isPoster ? 32 : spacious ? 24 : 20 }}
+              style={{
+                color: washInk,
+                fontFamily: isPoster ? undefined : "Oswald",
+                fontSize: isPoster ? type.place.fontSize : 14,
+                fontWeight: isPoster ? "500" : "600",
+                letterSpacing: isPoster ? undefined : 1.2,
+                textTransform: isPoster ? "none" : "uppercase",
+                opacity: 0.9,
+              }}
             >
               {data.place}
             </Text>
-          </GlassChip>
-          {size === "cell" ? (
-            <GlassChip
-              testID="wx-details-pill"
-              night={scene === "storm"}
-              boost={boost}
-              backdropTop={skyTop}
-              backdropBottom={skyBottom}
-              style={{ borderRadius: RADII.full }}
-              contentStyle={{
-                gap: 4,
-                justifyContent: "center",
-                minHeight: rhythm.chipsH,
-                paddingHorizontal: 12,
-              }}
-            >
-              <Text style={{ color: washInk, ...type.details }}>Details</Text>
-              <ChevronGlyph color={washInk} size={14} />
-            </GlassChip>
-          ) : null}
-        </View>
-
-        {/* Row 2 — side-by-side: Monster digits (left) + the creature (right).
-            The web's hero icon lives in a 124px box; the native keeps that box
-            so the digits sit in the same place on the card, and the box gives
-            up its slack first when the cell is short. */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            marginTop: isPoster ? 2 : rhythm.gapArt,
-            height: isPoster ? undefined : rhythm.art,
-          }}
-        >
-          <View style={{ flexShrink: 1 }}>{temperature}</View>
-          <View
-            style={{
-              width: isPoster ? undefined : rhythm.art,
-              height: isPoster ? undefined : rhythm.art,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <AmbientBob>
-              <ConditionIcon code={code} size={iconSize} />
-            </AmbientBob>
           </View>
-        </View>
-
-        {/* Row 3 — condition + H/L + feels + outlook (centered) */}
-        <View style={{ alignItems: "center", marginTop: isPoster ? 2 : rhythm.gapCond }}>
-          <Text
-            testID="wx-condition"
-            style={{
-              color: washInk,
-              ...type.condition,
-              lineHeight: isPoster ? 32 : rhythm.line,
-            }}
-          >
-            {titleCaseCondition(data.condition)}
-          </Text>
-          {hlLine ? (
-            <Text
+          {size === "cell" ? (
+            <View
+              testID="wx-details-pill"
               style={{
-                color: soft,
-                ...type.meta,
-                lineHeight: isPoster ? 28 : rhythm.line,
-                marginTop: isPoster ? 2 : rhythm.gapLine,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 3,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: RADII.full,
+                backgroundColor: mix(washInk, "transparent", 12),
               }}
             >
-              {hlLine}{feels}
-            </Text>
-          ) : null}
-          {data.outlook ? (
-            <Text
-              testID="wx-outlook"
-              style={{
-                color: soft,
-                ...type.meta,
-                lineHeight: isPoster ? 28 : rhythm.line,
-                marginTop: isPoster ? 2 : rhythm.gapLine,
-                textAlign: "center",
-              }}
-            >
-              {data.outlook}
-            </Text>
+              <Text
+                style={{
+                  color: washInk,
+                  fontFamily: "Oswald",
+                  fontSize: 14,
+                  fontWeight: "600",
+                  letterSpacing: 0.8,
+                  textTransform: "uppercase",
+                }}
+              >
+                Details
+              </Text>
+              <ChevronGlyph color={washInk} size={11} />
+            </View>
           ) : null}
         </View>
 
-        {/* Row 4 — Updated footer (right-aligned, pushed to the card's bottom
-            edge the way the web's `mt-auto` footer sits). The card's own
-            padding keeps the reference's ~30 of air under the last line, so
-            the card's edge can never cut the footer's descenders. */}
-        <View style={{ alignItems: "flex-end", marginTop: "auto" }}>
-          <Text
-            testID="wx-updated"
-            style={{ color: soft, ...type.meta, lineHeight: isPoster ? 28 : rhythm.line }}
-          >
-            Updated {relativeUpdated(data.updatedAt)}
-          </Text>
-        </View>
+        {isPoster ? (
+          /* Full page poster: side-by-side or large layout */
+          <>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                marginTop: 2,
+              }}
+            >
+              <View style={{ flexShrink: 1 }}>{temperature}</View>
+              <View
+                style={{
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <AmbientBob>
+                  <ConditionIcon code={code} size={iconSize} />
+                </AmbientBob>
+              </View>
+            </View>
+            <View style={{ alignItems: "center", marginTop: 2 }}>
+              <Text testID="wx-condition" style={{ color: washInk, ...type.condition, lineHeight: 32 }}>
+                {titleCaseCondition(data.condition)}
+              </Text>
+              {hlLine ? (
+                <Text style={{ color: soft, ...type.meta, lineHeight: 28, marginTop: 2 }}>
+                  {hlLine}{feels}
+                </Text>
+              ) : null}
+              {data.outlook ? (
+                <Text testID="wx-outlook" style={{ color: soft, ...type.meta, lineHeight: 28, marginTop: 2, textAlign: "center" }}>
+                  {data.outlook}
+                </Text>
+              ) : null}
+            </View>
+            {/* Interactive Not Boring Monsters Capsule Hour Scrubber (Mobbin video 00:15–00:23) */}
+            {data.hours.length >= 2 ? (
+              <View testID="wx-capsule-scrubber" style={{ marginTop: 8, gap: 6 }}>
+                {activeHour ? (
+                  <View style={{ alignSelf: "center", paddingHorizontal: 14, paddingVertical: 4, borderRadius: RADII.full, backgroundColor: colors["color-monster-teal"] ?? washInk }}>
+                    <Text style={{ fontFamily: "Oswald", fontSize: 16, fontWeight: "700", color: colors["color-monster-ink-blue"] ?? washInk }}>
+                      {activeHour.label}
+                    </Text>
+                  </View>
+                ) : null}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    borderRadius: RADII.full,
+                    paddingHorizontal: 14,
+                    paddingVertical: 4,
+                    backgroundColor: mix(washInk, "transparent", 18),
+                    gap: 6,
+                  }}
+                >
+                  <Text style={{ fontFamily: "Oswald", fontSize: 18, fontWeight: "700", color: washInk }}>
+                    {data.highF ?? "—"}
+                  </Text>
+                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-around" }}>
+                    {data.hours.slice(0, 6).map((h, i) => {
+                      const active = scrubIdx === i;
+                      return (
+                        <Pressable
+                          key={`${h.label}-${i}`}
+                          testID={`wx-scrub-hour-${i}`}
+                          onPress={() => setScrubIdx(i)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Preview weather for ${i === 0 ? "Now" : h.label}`}
+                          style={{
+                            minWidth: 64,
+                            minHeight: 64,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderRadius: RADII.md,
+                            paddingHorizontal: 8,
+                            backgroundColor: active ? (colors["color-monster-teal"] ?? washInk) : "transparent",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontFamily: "Oswald",
+                              fontSize: 14,
+                              fontWeight: "700",
+                              color: active ? (colors["color-monster-ink-blue"] ?? washInk) : washInk,
+                            }}
+                          >
+                            {i === 0 ? "NOW" : h.label}
+                          </Text>
+                          <Text
+                            style={{
+                              fontFamily: "Oswald",
+                              fontSize: 16,
+                              fontWeight: "700",
+                              color: active ? (colors["color-monster-ink-blue"] ?? washInk) : soft,
+                            }}
+                          >
+                            {h.tempF}°
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <Text style={{ fontFamily: "Oswald", fontSize: 18, fontWeight: "700", color: washInk }}>
+                    {data.lowF ?? "—"}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+            <View style={{ alignItems: "flex-end", marginTop: "auto" }}>
+              <Text testID="wx-updated" style={{ color: soft, ...type.meta, lineHeight: 28 }}>
+                Updated {relativeUpdated(data.updatedAt)}
+              </Text>
+            </View>
+          </>
+        ) : (
+          /* Wall card: Not Boring Monsters signature vertical stack + 5-day strip! */
+          <View style={{ flex: 1, justifyContent: "space-between" }}>
+            {/* Creature + Big Digits + Condition */}
+            <View style={{ alignItems: "center", justifyContent: "center", marginTop: 4 }}>
+              <AmbientBob>
+                <ConditionIcon code={code} size={iconSize} />
+              </AmbientBob>
+              <View style={{ marginTop: 2 }}>
+                {temperature}
+              </View>
+              <Text
+                testID="wx-condition"
+                style={{
+                  color: washInk,
+                  fontFamily: "Oswald",
+                  letterSpacing: 2,
+                  textTransform: "uppercase",
+                  textAlign: "center",
+                  marginTop: 2,
+                  ...type.condition,
+                }}
+              >
+                {data.condition}
+              </Text>
+              {data.outlook ? (
+                <Text
+                  testID="wx-outlook"
+                  style={{
+                    color: soft,
+                    textAlign: "center",
+                    marginTop: 2,
+                    ...type.meta,
+                  }}
+                >
+                  {data.outlook}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* 5-Day Forecast Row directly on the card! */}
+            {data.days && data.days.length > 0 ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "flex-end",
+                  width: "100%",
+                  paddingTop: 8,
+                  paddingBottom: 2,
+                  borderTopWidth: 1,
+                  borderTopColor: mix(washInk, "transparent", 18),
+                }}
+              >
+                {data.days.slice(0, 5).map((d) => (
+                  <View key={d.key} style={{ alignItems: "center", flex: 1, gap: 3 }}>
+                    <Text
+                      style={{
+                        fontFamily: "Oswald",
+                        fontSize: 14,
+                        letterSpacing: 1,
+                        color: washInk,
+                        opacity: 0.82,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {d.label.slice(0, 3)}
+                    </Text>
+                    <ConditionIcon code={conditionCode(d.code ?? undefined, true)} size={18} />
+                    <Text
+                      style={{
+                        fontFamily: "Oswald",
+                        fontSize: 14,
+                        fontWeight: "700",
+                        color: washInk,
+                      }}
+                    >
+                      {d.highF != null ? `${d.highF}°` : "—"}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={{ alignItems: "flex-end", marginTop: "auto" }}>
+              <Text testID="wx-updated" style={{ color: soft, ...type.meta }}>
+                Updated {relativeUpdated(data.updatedAt)}
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
     </View>
   );

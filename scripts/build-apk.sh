@@ -11,7 +11,9 @@ export JAVA_HOME="${JAVA_HOME:-$HOME/Library/Java/JavaVirtualMachines/jdk-21.0.1
 export PATH="$ANDROID_HOME/platform-tools:$PATH"
 export ADB_USB=0
 
-npx expo prebuild --platform android
+if [ ! -d android ] || [ "${PREBUILD:-0}" = "1" ]; then
+  npx expo prebuild --platform android
+fi
 
 if [ ! -f android/local.properties ]; then
   printf "sdk.dir=%s\n" "$ANDROID_HOME" > android/local.properties
@@ -23,7 +25,27 @@ if [ -f "$MANIFEST" ] && ! grep -q 'android:usesCleartextTraffic="true"' "$MANIF
   sed -i '' 's/<application /<application android:usesCleartextTraffic="true" /' "$MANIFEST"
 fi
 
-cd android && ./gradlew :app:assembleRelease
+# Ensure sufficient Gradle heap for dex merging and native packaging
+if [ -f android/gradle.properties ]; then
+  sed -i '' 's/org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx5120m -XX:MaxMetaspaceSize=1024m -Djava.util.concurrent.ForkJoinPool.common.parallelism=2/' android/gradle.properties
+  sed -i '' 's/org.gradle.parallel=true/org.gradle.parallel=false/' android/gradle.properties
+  if ! grep -q 'org.gradle.workers.max' android/gradle.properties; then
+    printf "org.gradle.workers.max=2\n" >> android/gradle.properties
+  fi
+fi
+
+ARCHS="${ARCHS:-arm64-v8a}"
+cd android
+./gradlew --stop
+./gradlew :app:assembleRelease "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Djava.util.concurrent.ForkJoinPool.common.parallelism=2" "-PreactNativeArchitectures=$ARCHS" --max-workers=2 -x lintVitalAnalyzeRelease -x lint
 APK="$(pwd)/app/build/outputs/apk/release/app-release.apk"
 echo "built: $APK"
-adb install -r "$APK" && echo "installed OK" || echo "install skipped (no device attached)"
+
+TARGET_DEVICE="${DEVICE_ID:-192.168.0.112:34229}"
+if adb devices | grep -q "$TARGET_DEVICE"; then
+  adb -s "$TARGET_DEVICE" install -r "$APK" && echo "installed OK on $TARGET_DEVICE"
+  adb -s "$TARGET_DEVICE" shell am force-stop com.garciafam.consuela
+  adb -s "$TARGET_DEVICE" shell am start -n com.garciafam.consuela/.MainActivity
+else
+  adb install -r "$APK" && echo "installed OK" || echo "install skipped (no device attached)"
+fi

@@ -43,8 +43,9 @@ export const ACCENTS_RGB = GENERATED.accentsRgb as {
   light: Record<string, string>;
 };
 
-export const RADII = { sm: 10, md: 16, lg: 20, xl: 28, xxl: 36, full: 9999 } as const;
+export const RADII = { sm: 10, md: 16, lg: 20, xl: 28, xxl: 36, full: 9999, pill: 9999 } as const;
 export const MOTION = { fast: 150, base: 240, slow: 400, glide: 600 } as const;
+export const SPACING = { xs: 8, sm: 12, md: 16, lg: 20, xl: 24, xxl: 32 } as const;
 
 /**
  * Bundled faces (assets/fonts/, loaded in app/_layout.tsx). `display` is the
@@ -53,7 +54,7 @@ export const MOTION = { fast: 150, base: 240, slow: 400, glide: 600 } as const;
  * weather label register. Never fall back to the generic "serif": on the wall
  * that is Noto Serif, and the reference set is set in Instrument.
  */
-export const FONTS = { display: "Instrument Serif", rounded: "Fredoka" } as const;
+export const FONTS = { display: "Instrument Serif", rounded: "Fredoka", condensed: "Oswald" } as const;
 
 /**
  * Wall-scale type ramp (14sp floor — single-device contract, spec decision 7).
@@ -68,6 +69,7 @@ export const TYPOGRAPHY = {
   body: { fontSize: 16, lineHeight: 24 },
   /** In-card heading level (component titles, dialog titles). */
   title: { fontSize: 20, lineHeight: 28 },
+  cardTitle: { fontSize: 20, lineHeight: 28 },
   /** Page/section masthead — web `.text-display` (serif, 400, -3% tracking)
    *  wall-scaled ~2.3× from the web's 2rem. */
   display: {
@@ -109,3 +111,4 @@ export const Typography = TYPOGRAPHY;
 export const Radii = RADII;
 export const Motion = MOTION;
 export const Accents = ACCENTS;
+export const Spacing = SPACING;

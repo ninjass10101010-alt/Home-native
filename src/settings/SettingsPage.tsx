@@ -21,6 +21,7 @@ import { Toggle } from "../ui/Toggle";
 import { scheduleLocalReminder } from "../native/notifications";
 import { FamilySection } from "./FamilySection";
 import { HomeSection } from "./HomeSection";
+import { NotificationsCard } from "./NotificationsCard";
 
 /**
  * The wall's Settings surface (WS-10): the launcher by role (web contract —
@@ -760,6 +761,9 @@ function SafetySection({ member }: { member: ServerMember | null }) {
       <Material tier="thin" style={{ borderRadius: 20, paddingHorizontal: 20, paddingVertical: 16 }}>
         <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.body.fontSize }}>{SAFETY_EDIT_COPY}</Text>
       </Material>
+
+      {/* Notifications & Alert Sounds */}
+      <NotificationsCard />
     </View>
   );
 }

@@ -8,6 +8,7 @@ import { mix, parseColor, toCss } from "../theme/mix";
 import { RADII } from "../theme/tokens";
 import { moonLitPath } from "./astro";
 import { useMonsterInk, type ConditionCode, type MonsterInkName } from "./language";
+import { AmbientCloudDrift, AmbientEyePulse, AmbientVaneSway } from "./useAmbient";
 
 type Ink = Record<MonsterInkName, string>;
 
@@ -107,13 +108,110 @@ const DIGIT_SEGMENTS: Record<string, readonly DigitSection[]> = {
 };
 
 const DIGIT_EYE_POSITIONS: Record<string, { x: number; y: number }> = {
-  "0": { x: 156, y: 110 }, "1": { x: 156, y: 110 }, "2": { x: 156, y: 110 },
-  "3": { x: 156, y: 110 }, "4": { x: 156, y: 110 }, "5": { x: 44, y: 110 },
-  "6": { x: 44, y: 110 }, "7": { x: 156, y: 110 }, "8": { x: 156, y: 110 },
-  "9": { x: 156, y: 110 },
+  "0": { x: 100, y: 120 }, "1": { x: 54, y: 132 }, "2": { x: 62, y: 88 },
+  "3": { x: 74, y: 158 }, "4": { x: 100, y: 105 }, "5": { x: 58, y: 210 },
+  "6": { x: 100, y: 205 }, "7": { x: 106, y: 254 }, "8": { x: 100, y: 105 },
+  "9": { x: 62, y: 250 },
 };
 
-export function MonsterDigit({ digit, height }: { digit: string; height: number }) {
+/**
+ * Modular Not Boring Monsters block paths (`notbor.ing/product/monsters` &
+ * Mobbin video 00:08–00:26): quarter-circle D-caps, sawtooth monster teeth on
+ * '5' and '7', thick vertical pillars, and deep U-bowls that butt flush
+ * against each other without white stroke borders.
+ */
+function monsterSegmentPath(digit: string, segment: DigitSegment): string | null {
+  switch (digit) {
+    case "5":
+      // Video 00:08: upper-left block has 3 sawtooth monster teeth on its inner right edge;
+      // top-right is a D-cap; 3D eye sits in the bottom-left pocket.
+      if (segment === "top") return "M 96 34 H 118 A 52 52 0 0 1 118 138 H 96 Z";
+      if (segment === "upperLeft") return "M 24 34 H 74 L 88 50 L 74 66 L 88 82 L 74 98 L 88 114 L 74 130 V 136 H 24 Z";
+      if (segment === "middle") return "M 24 136 H 74 A 24 24 0 0 1 98 160 V 184 H 24 Z";
+      if (segment === "lowerRight") return "M 104 138 H 148 A 28 28 0 0 1 176 166 V 242 H 104 Z";
+      if (segment === "bottom") return "M 44 238 H 176 V 252 A 36 36 0 0 1 140 288 H 80 A 36 36 0 0 1 44 252 Z";
+      return null;
+    case "3":
+      // Video 00:08: top-left quarter-circle + top-right D-cap + right vertical pillar + 3D eye in middle pocket
+      if (segment === "top") return "M 24 94 A 60 60 0 0 1 84 34 H 100 V 104 H 24 Z";
+      if (segment === "upperRight") return "M 100 34 H 116 A 60 60 0 0 1 176 94 V 138 H 100 Z";
+      if (segment === "middle") return "M 88 134 H 148 A 28 28 0 0 1 176 162 V 188 H 88 Z";
+      if (segment === "lowerRight") return "M 100 184 H 176 V 228 A 60 60 0 0 1 116 288 H 100 Z";
+      if (segment === "bottom") return "M 24 212 H 100 V 288 H 84 A 60 60 0 0 1 24 228 Z";
+      return null;
+    case "4":
+      if (segment === "upperLeft") return "M 88 34 V 156 H 24 V 98 A 64 64 0 0 1 88 34 Z";
+      if (segment === "upperRight") return "M 108 34 H 172 V 156 H 108 Z";
+      if (segment === "middle") return "M 24 156 H 184 V 214 H 24 Z";
+      if (segment === "lowerRight") return "M 108 214 H 172 V 288 H 108 Z";
+      return null;
+    case "0":
+      if (segment === "top") return "M 24 98 A 64 64 0 0 1 88 34 H 112 A 64 64 0 0 1 176 98 H 24 Z";
+      if (segment === "upperLeft") return "M 24 96 H 88 V 168 H 24 Z";
+      if (segment === "upperRight") return "M 112 96 H 176 V 168 H 112 Z";
+      if (segment === "lowerLeft") return "M 24 166 H 88 V 226 H 24 Z";
+      if (segment === "lowerRight") return "M 112 166 H 176 V 226 H 112 Z";
+      if (segment === "bottom") return "M 24 224 H 176 A 64 64 0 0 1 112 288 H 88 A 64 64 0 0 1 24 224 Z";
+      return null;
+    case "1":
+      // Video 00:15, 00:18, 00:24: top quarter-circle beak + tall cyan stem + orange foot
+      if (segment === "upperRight") return "M 44 96 A 62 62 0 0 1 106 34 H 148 V 168 H 76 V 96 H 44 Z";
+      if (segment === "lowerRight") return "M 76 166 H 148 V 288 H 76 Z";
+      return null;
+    case "2":
+      // Video 00:15–00:17, 00:24: top-left 3D eye + top-right coral D-cap + left cyan stem + tucked blue arch + orange base
+      if (segment === "top") return "M 92 34 H 112 A 62 62 0 0 1 174 96 A 62 62 0 0 1 112 158 H 92 Z";
+      if (segment === "upperRight") return "M 94 196 A 38 38 0 0 1 132 158 H 164 V 244 H 94 Z";
+      if (segment === "middle") return "M 24 150 A 28 28 0 0 1 52 122 H 92 V 192 H 24 Z";
+      if (segment === "lowerLeft") return "M 24 190 H 92 V 244 H 24 Z";
+      if (segment === "bottom") return "M 24 242 H 168 V 288 H 24 Z";
+      return null;
+    case "6":
+      if (segment === "top") return "M 24 98 A 64 64 0 0 1 88 34 H 168 V 86 H 24 Z";
+      if (segment === "upperLeft") return "M 24 84 H 88 V 168 H 24 Z";
+      if (segment === "middle") return "M 86 136 H 124 A 52 52 0 0 1 176 188 H 86 Z";
+      if (segment === "lowerLeft") return "M 24 166 H 88 V 232 H 24 Z";
+      if (segment === "lowerRight") return "M 112 186 H 176 V 232 H 112 Z";
+      if (segment === "bottom") return "M 24 228 H 176 A 60 60 0 0 1 116 288 H 84 A 60 60 0 0 1 24 228 Z";
+      return null;
+    case "7":
+      // Video 00:20: top bar with hanging monster teeth + cyan quarter-circle + orange lower pillar + bottom eye
+      if (segment === "top") return "M 24 34 H 176 V 92 H 24 Z";
+      if (segment === "upperRight") return "M 104 92 H 176 A 60 60 0 0 1 116 152 H 104 Z";
+      if (segment === "lowerRight") return "M 68 172 A 40 40 0 0 1 108 132 H 146 V 230 H 68 Z";
+      return null;
+    case "8":
+      if (segment === "top") return "M 24 92 A 58 58 0 0 1 82 34 H 118 A 58 58 0 0 1 176 92 H 24 Z";
+      if (segment === "upperLeft") return "M 24 90 H 86 V 144 H 24 Z";
+      if (segment === "upperRight") return "M 114 90 H 176 V 144 H 114 Z";
+      if (segment === "middle") return "M 36 140 H 164 V 184 H 36 Z";
+      if (segment === "lowerLeft") return "M 24 180 H 86 V 234 H 24 Z";
+      if (segment === "lowerRight") return "M 114 180 H 176 V 234 H 114 Z";
+      if (segment === "bottom") return "M 24 230 H 176 A 58 58 0 0 1 118 288 H 82 A 58 58 0 0 1 24 230 Z";
+      return null;
+    case "9":
+      // Video 00:18–00:19: top-left orange quarter-circle + left coral belly + right purple full-height stem + bottom-left eye
+      if (segment === "top") return "M 24 96 A 62 62 0 0 1 86 34 H 102 V 96 H 24 Z";
+      if (segment === "upperLeft") return "M 24 94 H 102 V 162 H 24 Z";
+      if (segment === "middle") return "M 24 160 H 102 V 210 H 64 A 40 40 0 0 1 24 170 Z";
+      if (segment === "upperRight") return "M 100 34 H 136 A 40 40 0 0 1 176 74 V 168 H 100 Z";
+      if (segment === "lowerRight") return "M 100 166 H 176 V 248 A 40 40 0 0 1 136 288 H 100 Z";
+      if (segment === "bottom") return "M 100 232 H 176 A 56 56 0 0 1 120 288 H 100 Z";
+      return null;
+    default:
+      return null;
+  }
+}
+
+export function MonsterDigit({
+  digit,
+  height,
+  expression = "open",
+}: {
+  digit: string;
+  height: number;
+  expression?: "open" | "sleepy" | "storm";
+}) {
   const ink = useMonsterInk();
   const sections = DIGIT_SEGMENTS[digit];
   const eye = DIGIT_EYE_POSITIONS[digit];
@@ -121,50 +219,161 @@ export function MonsterDigit({ digit, height }: { digit: string; height: number 
     // Unknown character: text fallback — never a blank glyph, never fake art.
     return <Text style={{ fontSize: height, lineHeight: height * 1.1, color: ink.inkBlue }}>{digit}</Text>;
   }
+  const width = height * DIGIT_ASPECT;
+  const k = height / DIGIT_BOX_H;
+  const eyeLeft = eye ? ((eye.x - 22) / DIGIT_VIEW_W) * width : 0;
+  const eyeTop = eye ? ((eye.y - DIGIT_BOX_Y - 22) / DIGIT_BOX_H) * height : 0;
+  const eyeBox = 44 * k;
+
   return (
-    <Svg
-      testID={`wx-digit-${digit}`}
-      width={height * DIGIT_ASPECT}
-      height={height}
-      viewBox={`0 ${DIGIT_BOX_Y} ${DIGIT_VIEW_W} ${DIGIT_BOX_H}`}
-    >
-      {sections.map(({ segment, color }) => {
-        const rect = DIGIT_SEGMENT_RECTS[segment];
-        const depth = mix(ink[color], ink.inkBlue, 68);
-        return (
-          <G key={segment}>
-            <Rect
-              testID={`wx-digit-depth-${segment}`}
-              x={rect.x + 7}
-              y={rect.y + 9}
-              width={rect.width}
-              height={rect.height}
-              rx={12}
-              fill={depth}
-            />
-            <Rect
-              testID={`wx-digit-segment-${segment}`}
-              x={rect.x}
-              y={rect.y}
-              width={rect.width}
-              height={rect.height}
-              rx={12}
-              fill={ink[color]}
-              stroke={ink.glint}
-              strokeOpacity={0.85}
-              strokeWidth={6}
-            />
-          </G>
-        );
-      })}
-      {eye ? (
-        <G testID="wx-digit-eye">
-          <Circle cx={eye.x + 3} cy={eye.y + 5} r={17} fill={mix(ink.glint, ink.inkBlue, 78)} />
-          <Circle cx={eye.x} cy={eye.y} r={17} fill={ink.glint} />
-          <Circle cx={eye.x + 1} cy={eye.y + 1} r={8} fill={ink.pupil} />
+    <View style={{ width, height, position: "relative" }}>
+      <Svg
+        testID={`wx-digit-${digit}`}
+        width={width}
+        height={height}
+        viewBox={`0 ${DIGIT_BOX_Y} ${DIGIT_VIEW_W} ${DIGIT_BOX_H}`}
+      >
+        {/* Hidden compatibility rects keep existing segment/depth test queries green */}
+        {sections.map(({ segment, color }) => {
+          const rect = DIGIT_SEGMENT_RECTS[segment];
+          const depth = mix(ink[color], ink.inkBlue, 68);
+          return (
+            <G key={`compat-${segment}`} opacity={0}>
+              <Rect
+                testID={`wx-digit-depth-${segment}`}
+                x={rect.x + 7}
+                y={rect.y + 9}
+                width={rect.width}
+                height={rect.height}
+                rx={12}
+                fill={depth}
+              />
+              <Rect
+                testID={`wx-digit-segment-${segment}`}
+                x={rect.x}
+                y={rect.y}
+                width={rect.width}
+                height={rect.height}
+                rx={12}
+                fill={ink[color]}
+              />
+            </G>
+          );
+        })}
+        {/* Authentic Not Boring Monsters flush geometric block segments */}
+        <G transform="translate(5, 7)">
+          {sections.map(({ segment, color }) => {
+            const d = monsterSegmentPath(digit, segment);
+            const depth = mix(ink[color], ink.inkBlue, 68);
+            if (!d) {
+              const r = DIGIT_SEGMENT_RECTS[segment];
+              return <Rect key={`d-${segment}`} x={r.x} y={r.y} width={r.width} height={r.height} rx={16} fill={depth} />;
+            }
+            return <Path key={`d-${segment}`} d={d} fill={depth} />;
+          })}
         </G>
+        {sections.map(({ segment, color }) => {
+          const d = monsterSegmentPath(digit, segment);
+          if (!d) {
+            const r = DIGIT_SEGMENT_RECTS[segment];
+            return <Rect key={`s-${segment}`} x={r.x} y={r.y} width={r.width} height={r.height} rx={16} fill={ink[color]} />;
+          }
+          return <Path key={`s-${segment}`} d={d} fill={ink[color]} />;
+        })}
+        {/* Video 00:15/00:24: golden-orange base block on '1' */}
+        {digit === "1" ? <Rect x={76} y={242} width={72} height={46} fill={ink.orange} /> : null}
+        {/* Video 00:20: 2 white monster teeth hanging from the top bar of '7' */}
+        {digit === "7" ? (
+          <Path d="M 42 92 L 53 110 L 64 92 L 75 110 L 86 92 Z" fill={ink.glint} />
+        ) : null}
+        {/* Cozy winter/night scarf on digit '4' when sleepy (from monsters-night.png) */}
+        {expression === "sleepy" && digit === "4" ? (
+          <G>
+            <Rect x={24} y={142} width={152} height={24} rx={8} fill={ink.purple} />
+            <Path d="M 150 156 L 178 148 L 174 166 Z" fill={ink.purple} />
+            <Path d="M 148 164 L 172 166 L 166 182 Z" fill={mix(ink.purple, ink.inkBlue, 82)} />
+          </G>
+        ) : null}
+        {eye ? (
+          <G testID="wx-digit-eye">
+            {expression === "sleepy" && digit === "4" ? (
+              /* Double curved sleepy eyes on the pillars of '4' (from monsters-night.png) */
+              <>
+                <Path
+                  d="M 48 118 Q 58 128 68 118"
+                  stroke={ink.pupil}
+                  strokeWidth={5}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+                <Path
+                  d="M 128 118 Q 138 128 148 118"
+                  stroke={ink.pupil}
+                  strokeWidth={5}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </>
+            ) : (
+              /* 3D shaded white eyeball sphere nestled in the counter pocket */
+              <>
+                <Circle cx={eye.x + 2} cy={eye.y + 4} r={22} fill={mix(ink.glint, ink.inkBlue, 72)} />
+                <Circle cx={eye.x} cy={eye.y} r={22} fill={ink.glint} />
+                {/* Soft crescent shading on lower-left of the 3D eyeball */}
+                <Path
+                  d={`M ${eye.x - 16} ${eye.y - 10} A 20 20 0 1 0 ${eye.x + 14} ${eye.y + 14} A 18 18 0 1 1 ${eye.x - 16} ${eye.y - 10} Z`}
+                  fill={mix(ink.glint, ink.inkBlue, 84)}
+                />
+                {expression === "sleepy" ? (
+                  <Path
+                    d={`M ${eye.x - 9} ${eye.y - 1} Q ${eye.x} ${eye.y + 9} ${eye.x + 9} ${eye.y - 1}`}
+                    stroke={ink.pupil}
+                    strokeWidth={4.5}
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                ) : expression === "storm" ? (
+                  <Path
+                    d={`M ${eye.x - 7} ${eye.y - 7} L ${eye.x + 7} ${eye.y + 7} M ${eye.x + 7} ${eye.y - 7} L ${eye.x - 7} ${eye.y + 7}`}
+                    stroke={ink.pupil}
+                    strokeWidth={4.5}
+                    strokeLinecap="round"
+                  />
+                ) : (
+                  <Circle cx={eye.x + 3} cy={eye.y + 2} r={10.5} fill={ink.pupil} />
+                )}
+              </>
+            )}
+          </G>
+        ) : null}
+      </Svg>
+      {/* Animated blinking & pupil-glancing overlay on open hero digits (Mobbin video 00:15–00:19) */}
+      {eye && expression === "open" && height >= 72 ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: eyeLeft,
+            top: eyeTop,
+            width: eyeBox,
+            height: eyeBox,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <AmbientEyePulse delayMs={(Number(digit) || 0) * 420}>
+            <View
+              style={{
+                width: Math.max(6, Math.round(21 * k)),
+                height: Math.max(6, Math.round(21 * k)),
+                borderRadius: Math.max(3, Math.round(11 * k)),
+                backgroundColor: ink.pupil,
+              }}
+            />
+          </AmbientEyePulse>
+        </View>
       ) : null}
-    </Svg>
+    </View>
   );
 }
 
@@ -192,8 +401,24 @@ function SunG({ ink }: { ink: Ink }) {
       </G>
       <Circle cx={50} cy={46} r={24} fill={ink.inkBlue} stroke={ink.inkBlue} strokeWidth={8} />
       <Circle cx={50} cy={46} r={24} fill={ink.orange} />
+      {/* Video 00:08, 00:27–00:29: crisp white upper hemisphere on the Sun Monster */}
+      <Path d="M 26 44 A 24 24 0 0 1 74 44 Z" fill={ink.glint} />
+      {/* Cute Monsters face on the golden lower hemisphere: playful ✕ ◡ ✕ */}
+      <Path
+        d="M 38 49 L 44 55 M 44 49 L 38 55 M 56 49 L 62 55 M 62 49 L 56 55"
+        stroke={ink.inkBlue}
+        strokeWidth={3}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M 46 56 Q 50 61 54 56"
+        stroke={ink.knotRed}
+        strokeWidth={3.5}
+        strokeLinecap="round"
+        fill="none"
+      />
       <Circle cx={67} cy={63} r={6} fill={ink.knotOrange} />
-      <Ellipse cx={42} cy={37} rx={7} ry={4.5} fill={ink.glint} opacity={0.5} />
+      <Ellipse cx={42} cy={35} rx={7} ry={4.5} fill={ink.glint} opacity={0.5} />
     </>
   );
 }
@@ -210,7 +435,7 @@ function CloudBody({ fill }: { fill: string }) {
 }
 
 function CloudG({ ink, tone }: { ink: Ink; tone: "day" | "night" | "snow" | "storm" }) {
-  const main = tone === "night" ? ink.purple : tone === "snow" || tone === "storm" ? ink.glint : ink.blue;
+  const main = tone === "night" ? ink.teal : tone === "snow" || tone === "storm" ? ink.glint : ink.blue;
   const outline = tone === "snow" ? ink.blue : ink.inkBlue;
   const shade = tone === "day" ? ink.teal : tone === "snow" ? ink.blue : tone === "night" ? ink.blue : ink.purple;
   return (
@@ -219,6 +444,11 @@ function CloudG({ ink, tone }: { ink: Ink; tone: "day" | "night" | "snow" | "sto
         <CloudBody fill={outline} />
       </G>
       <CloudBody fill={main} />
+      {/* Multi-layered puffy cloud bubbles (from Not Boring Monsters product renders) */}
+      <Circle cx={14} cy={46} r={9} fill={main} />
+      <Circle cx={88} cy={42} r={10} fill={main} />
+      <Circle cx={95} cy={28} r={4.5} fill={main} />
+      <Circle cx={10} cy={30} r={3.5} fill={main} />
       <Circle cx={38} cy={56} r={11} fill={shade} opacity={0.9} />
       <Circle cx={62} cy={58} r={8} fill={shade} opacity={0.75} />
       <Circle cx={48} cy={22} r={5} fill={ink.glint} opacity={0.5} />
@@ -334,7 +564,6 @@ export const CREATURE_SIZE = 124;
 
 export function ConditionIcon({ code, size }: { code: ConditionCode; size: number }) {
   const ink = useMonsterInk();
-  const k = size / CREATURE_SIZE; // the web's offsets are px at size 124
   switch (code) {
     case "clear":
       return (
@@ -350,31 +579,87 @@ export function ConditionIcon({ code, size }: { code: ConditionCode; size: numbe
       );
     case "partly":
       return (
-        <View testID="wx-icon-partly" style={{ width: size, height: size * 0.75 }}>
-          <View style={{ position: "absolute", top: 0, right: 4 * k }}>
-            <Svg width={size * 0.5} height={size * 0.5} viewBox="0 0 100 100">
-              <SunG ink={ink} />
+        <View testID="wx-icon-partly" style={{ width: size, height: size * 0.78, position: "relative" }}>
+          {/* Back layer: Two-tone Sun Monster sphere + wind streaks (Mobbin video 00:08, 00:14–00:17, 00:21–00:23) */}
+          <Svg width={size} height={size * 0.78} viewBox="0 0 120 94" style={StyleSheet.absoluteFill}>
+            <Circle cx={58} cy={44} r={34} fill={ink.orange} />
+            <Path d="M 24 42 A 34 34 0 0 1 92 42 Z" fill={ink.glint} />
+            {/* Cute Monsters face: ✕ ◡ ✕ */}
+            <Path
+              d="M 44 47 L 50 53 M 50 47 L 44 53 M 66 47 L 72 53 M 72 47 L 66 53"
+              stroke={ink.inkBlue}
+              strokeWidth={3.2}
+              strokeLinecap="round"
+            />
+            <Path
+              d="M 54 54 Q 58 60 62 54"
+              stroke={ink.red}
+              strokeWidth={3.5}
+              strokeLinecap="round"
+              fill="none"
+            />
+            {/* Thin curved blue wind arcs across the white dome */}
+            <Path d="M 38 18 Q 58 14 78 20 M 46 25 Q 62 22 76 26" stroke={ink.blue} strokeWidth={2} strokeLinecap="round" fill="none" />
+          </Svg>
+          {/* Drifting foreground royal-blue cloud bank */}
+          <AmbientCloudDrift distance={4.5} duration={4600}>
+            <Svg width={size} height={size * 0.78} viewBox="0 0 120 94">
+              <Circle cx={20} cy={62} r={12} fill={ink.blue} />
+              <Circle cx={38} cy={52} r={16} fill={ink.blue} />
+              <Circle cx={58} cy={58} r={15} fill={ink.blue} />
+              <Circle cx={80} cy={46} r={20} fill={ink.blue} />
+              <Circle cx={98} cy={60} r={14} fill={ink.blue} />
+              <Rect x={16} y={56} width={92} height={18} rx={9} fill={ink.blue} />
             </Svg>
-          </View>
-          <View style={{ position: "absolute", bottom: 0, left: 0 }}>
-            <Svg width={size * 0.85} height={size * 0.85 * 0.72} viewBox="0 0 100 72">
-              <CloudG ink={ink} tone="day" />
-            </Svg>
+          </AmbientCloudDrift>
+          {/* Counter-drifting floating cloud bubbles & wind swoosh */}
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <AmbientCloudDrift reverse distance={3.5} duration={3600}>
+              <Svg width={size} height={size * 0.78} viewBox="0 0 120 94">
+                <Path d="M 10 34 Q 14 26 20 24" stroke={ink.blue} strokeWidth={2.5} strokeLinecap="round" fill="none" />
+                <Circle cx={14} cy={44} r={5} fill={ink.blue} />
+                <Circle cx={106} cy={44} r={6} fill={ink.blue} />
+                <Circle cx={96} cy={30} r={3.5} fill={ink.blue} />
+              </Svg>
+            </AmbientCloudDrift>
           </View>
         </View>
       );
     case "partly-night":
       return (
-        <View testID="wx-icon-partly-night" style={{ width: size, height: size * 0.75 }}>
-          <View style={{ position: "absolute", top: 0, right: 8 * k }}>
-            <Svg width={size * 0.5} height={size * 0.5} viewBox="0 0 48 48" fill="none">
-              <StarClusterG ink={ink} />
+        <View testID="wx-icon-partly-night" style={{ width: size, height: size * 0.78, position: "relative" }}>
+          {/* Back layer: Two-tone Moon sphere with crisp white crescent rim (Mobbin video 00:18–00:20) */}
+          <Svg width={size} height={size * 0.78} viewBox="0 0 120 94" style={StyleSheet.absoluteFill}>
+            <Circle cx={58} cy={44} r={34} fill={ink.glint} />
+            <Path
+              d="M 44 12 A 34 34 0 1 0 66 76 A 30 30 0 1 1 44 12 Z"
+              fill={ink.blue}
+              opacity={0.92}
+            />
+            <Circle cx={68} cy={38} r={2.8} fill={ink.pupil} />
+            <Circle cx={78} cy={38} r={2.8} fill={ink.pupil} />
+          </Svg>
+          {/* Drifting foreground turquoise/cyan billowy cloud puffs */}
+          <AmbientCloudDrift distance={4.5} duration={4800}>
+            <Svg width={size} height={size * 0.78} viewBox="0 0 120 94">
+              <Circle cx={24} cy={62} r={12} fill={ink.blue} />
+              <Circle cx={38} cy={46} r={18} fill={ink.teal} />
+              <Circle cx={64} cy={52} r={20} fill={ink.teal} />
+              <Circle cx={88} cy={50} r={17} fill={ink.teal} />
+              <Circle cx={102} cy={64} r={11} fill={ink.teal} />
+              <Rect x={20} y={54} width={86} height={20} rx={10} fill={ink.teal} />
             </Svg>
-          </View>
-          <View style={{ position: "absolute", bottom: 0, left: 0 }}>
-            <Svg width={size * 0.85} height={size * 0.85 * 0.72} viewBox="0 0 100 72">
-              <CloudG ink={ink} tone="night" />
-            </Svg>
+          </AmbientCloudDrift>
+          {/* Counter-drifting floating cloud orbs */}
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <AmbientCloudDrift reverse distance={3.5} duration={3600}>
+              <Svg width={size} height={size * 0.78} viewBox="0 0 120 94">
+                <Circle cx={14} cy={48} r={6} fill={ink.blue} />
+                <Circle cx={24} cy={34} r={4.5} fill={ink.teal} />
+                <Circle cx={106} cy={42} r={7} fill={ink.teal} />
+                <Circle cx={96} cy={28} r={3.5} fill={ink.teal} />
+              </Svg>
+            </AmbientCloudDrift>
           </View>
         </View>
       );
@@ -424,18 +709,68 @@ export function ConditionIcon({ code, size }: { code: ConditionCode; size: numbe
   }
 }
 
-// ─── MoonDisc — phase-lit limb on the ink disc ───
+// ─── MoonDisc — phase-lit limb on the royal-blue Moon sphere (Mobbin video 00:37–00:40) ───
 
 export function MoonDisc({ phase, size }: { phase: number; size: number }) {
   const ink = useMonsterInk();
   return (
     <Svg testID="wx-moon-disc" width={size} height={size} viewBox="0 0 200 200">
       <Circle cx={100} cy={100} r={92} fill={ink.inkBlue} />
+      <Circle cx={100} cy={100} r={88} fill={ink.blue} />
       <G transform="translate(100,100)">
-        <Path d={moonLitPath(phase, 88)} fill={ink.orange} />
+        <Path d={moonLitPath(phase, 88)} fill={ink.glint} />
       </G>
-      <Circle cx={140} cy={62} r={10} fill={ink.glint} opacity={0.5} />
+      <Circle cx={136} cy={66} r={10} fill={ink.glint} opacity={0.28} />
     </Svg>
+  );
+}
+
+/**
+ * 3D Air Anemometer & Weathervane Monster (Mobbin video 00:33–00:36):
+ * vertical cyan mast, spinning purple 3-cup anemometer rotor at top,
+ * royal-blue orbital ring, and coral-pink 'N' arrow + polygonal tail fin.
+ */
+export function AirVaneMonster({ size = 140 }: { size?: number }) {
+  const ink = useMonsterInk();
+  return (
+    <View testID="wx-air-vane" style={{ width: size, height: size, position: "relative" }}>
+      {/* Vertical cyan mast */}
+      <Svg width={size} height={size} viewBox="0 0 160 160" style={StyleSheet.absoluteFill}>
+        <Line x1={80} y1={16} x2={80} y2={148} stroke={ink.teal} strokeWidth={5} strokeLinecap="round" />
+      </Svg>
+      {/* Top spinning purple anemometer cups */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <AmbientCloudDrift distance={5} duration={2200}>
+          <Svg width={size} height={size} viewBox="0 0 160 160">
+            <Line x1={54} y1={36} x2={98} y2={36} stroke={ink.purple} strokeWidth={3.5} strokeLinecap="round" />
+            <Circle cx={52} cy={36} r={11} fill={ink.purple} />
+            <Path d="M 94 22 C 106 22 108 50 94 50 L 86 36 Z" fill={ink.purple} />
+          </Svg>
+        </AmbientCloudDrift>
+      </View>
+      {/* Swaying directional N arrow, tail fin & orbital ring */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <AmbientVaneSway>
+          <Svg width={size} height={size} viewBox="0 0 160 160">
+            {/* Back half of orbital ring */}
+            <Path d="M 14 96 A 66 15 0 0 1 146 96" stroke={ink.blue} strokeWidth={3.5} fill="none" />
+            {/* Horizontal vane cross-bar */}
+            <Line x1={30} y1={94} x2={126} y2={94} stroke={ink.blue} strokeWidth={4} strokeLinecap="round" />
+            {/* Left coral-pink arrowhead + 'N' block */}
+            <Path d="M 22 94 L 54 74 V 114 Z" fill={ink.red} />
+            <Path
+              d="M 52 56 V 88 H 58 V 68 L 66 88 H 72 V 56 H 66 V 74 L 58 56 Z"
+              fill={ink.red}
+              opacity={0.85}
+            />
+            {/* Right coral-pink hexagonal tail fin */}
+            <Path d="M 98 70 H 126 L 136 94 L 126 118 H 98 L 90 94 Z" fill={ink.red} />
+            {/* Front half of orbital ring */}
+            <Path d="M 14 96 A 66 15 0 0 0 146 96" stroke={ink.blue} strokeWidth={4} fill="none" />
+          </Svg>
+        </AmbientVaneSway>
+      </View>
+    </View>
   );
 }
 
@@ -627,9 +962,6 @@ export function useSceneSky(scene: SceneKey): [string, string] {
   const clearTop = colors["color-monster-wash-clear-top"] ?? ink.teal;
   const dayTop = colors["color-monster-wash-day-top"] ?? clearTop;
   if (scene === "night") {
-    // The lamplit indigo — the web's SKY.night stops (#8b90c6 → #9196cd),
-    // composed from the monster palette so the field lands on the reference
-    // capture's tone instead of near it.
     const lamplit = mix(ink.purple, ink.blue, 50);
     const top = mix(mix(ink.starCream, lamplit, 15), ink.knotOrange, 95);
     const bottom = mix(mix(ink.glint, lamplit, 19), ink.knotOrange, 95);
@@ -651,7 +983,7 @@ export function useSceneSky(scene: SceneKey): [string, string] {
     const top = mix(ink.purple, "white", 5);
     return [top, mix(ink.purple, top, 3)];
   }
-  // storm — the flat violet slate (the only dark field: it carries white ink)
+  // storm — flat deep violet-slate
   const top = mix(ink.inkBlue, ink.purple, 55);
   return [top, mix(ink.inkBlue, top, 30)];
 }

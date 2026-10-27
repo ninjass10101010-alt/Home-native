@@ -16,6 +16,7 @@ import { MusicIsland } from "../src/music/MusicIsland";
 import { ToastProvider } from "../src/ui/Toast";
 import { hydrateBaseUrl } from "../src/api/config";
 import { configureNotifications } from "../src/native/notifications";
+import { NotificationMonitor } from "../src/native/useNotificationMonitor";
 import { View } from "react-native";
 
 /**
@@ -38,6 +39,7 @@ function PokeBoundary({ children }: { children: React.ReactNode }) {
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Fredoka: require("../assets/fonts/Fredoka.ttf"),
+    Oswald: require("../assets/fonts/Oswald-SemiBold.ttf"),
     // The web's --font-display (Home-ai layout.tsx:28-33, weight 400). Bundled
     // rather than falling back to the generic "serif": the review set is set in
     // Instrument, and the greeting / display mastheads depend on its shapes.
@@ -66,6 +68,7 @@ export default function RootLayout() {
                 <ToastProvider>
                   <StatusBar hidden />
                   <NavigationBar hidden />
+                  <NotificationMonitor />
                   <PokeBoundary>
                     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }} />
                     {/*

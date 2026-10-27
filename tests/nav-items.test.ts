@@ -137,7 +137,13 @@ describe("nav manifest (port of Home-ai nav-items contracts)", () => {
         expect(resolved).toBe(`/soon?label=${encodeURIComponent(item.label)}`);
       }
     }
-    // A manifest path with no file MUST take the /soon fallback.
-    expect(resolveRoute("/grocery", "Grocery")).toMatch(/^\/soon\?label=/);
+    // Every manifest destination now has a live route file; unknown paths still take the /soon fallback.
+    expect(resolveRoute("/grocery", "Grocery")).toBe("/grocery");
+    expect(resolveRoute("/skill-tree", "Skill Tree")).toBe("/skill-tree");
+    expect(resolveRoute("/time-capsule", "Time Capsule")).toBe("/time-capsule");
+    expect(resolveRoute("/analytics", "Insights")).toBe("/analytics");
+    expect(resolveRoute("/money-mountain", "Money Mountain")).toBe("/money-mountain");
+    expect(resolveRoute("/memory", "Family Memory")).toBe("/memory");
+    expect(resolveRoute("/unknown-wave-route", "Future")).toMatch(/^\/soon\?label=/);
   });
 });

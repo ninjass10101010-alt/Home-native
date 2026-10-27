@@ -233,6 +233,12 @@ const LIVE_ROUTES: ReadonlySet<string> = new Set([
   "/ha",
   "/chat",
   "/rewards",
+  "/grocery",
+  "/skill-tree",
+  "/time-capsule",
+  "/analytics",
+  "/money-mountain",
+  "/memory",
 ]);
 
 /**

@@ -426,6 +426,106 @@ describe("Meals route", () => {
   });
 });
 
+describe("MealsPage — interactive kitchen capabilities", () => {
+  it("supports week-to-week navigation (prev / next / return to This week) and shows archived weeks", async () => {
+    fullRoute();
+    const { getByTestId, findByText, queryByText } = render(<MealsPage now={NOW} />, { wrapper: wrap });
+    await findByText("Taco Night");
+
+    // Navigate back 1 week (to 2026-09-28 where Last Week Chili lives)
+    await act(async () => {
+      fireEvent.press(getByTestId("meals-week-prev"));
+      await Promise.resolve();
+    });
+    expect(await findByText("Last Week Chili")).toBeTruthy();
+    expect(getByTestId("meals-week-today")).toBeTruthy();
+
+    // Return to current week
+    await act(async () => {
+      fireEvent.press(getByTestId("meals-week-today"));
+      await Promise.resolve();
+    });
+    expect(queryByText("Last Week Chili")).toBeNull();
+    expect(await findByText("Taco Night")).toBeTruthy();
+  });
+
+  it("opens the MealComposer modal, applies a quick recipe starter, and saves it onto the plan", async () => {
+    fullRoute();
+    const { getByTestId, findByTestId, findByText } = render(<MealsPage now={NOW} />, { wrapper: wrap });
+    await findByText("Taco Night");
+
+    await act(async () => {
+      fireEvent.press(getByTestId("meals-header-add-btn"));
+      await Promise.resolve();
+    });
+    expect(await findByTestId("meal-composer")).toBeTruthy();
+
+    // Pick a quick starter
+    await act(async () => {
+      fireEvent.press(getByTestId("meal-tpl-honey-garlic-salmon-bowls"));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId("meal-composer-save"));
+      await Promise.resolve();
+    });
+    expect(await findByText("Honey Garlic Salmon Bowls")).toBeTruthy();
+  });
+
+  it("opens AI Suggest modal and fills open dinner slots for the week", async () => {
+    fullRoute();
+    const { getByTestId, findByTestId, findByText } = render(<MealsPage now={NOW} />, { wrapper: wrap });
+    await findByText("Taco Night");
+
+    await act(async () => {
+      fireEvent.press(getByTestId("meals-ai-suggest-btn"));
+      await Promise.resolve();
+    });
+    expect(await findByTestId("meals-ai-modal")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(getByTestId("meals-ai-apply-all"));
+      await Promise.resolve();
+    });
+    // Monday dinner should now be populated with the first curated template
+    expect(getByTestId("meals-cell-Mon-dinner").props.accessibilityLabel).toContain("Sheet Pan Fajitas");
+  });
+
+  it("syncs missing meal ingredients into the Shop tab and restocks bought items into Stock", async () => {
+    fullRoute();
+    const { getByTestId, findByText, getByText } = render(<MealsPage now={NOW} />, { wrapper: wrap });
+    await findByText("Taco Night");
+
+    await act(async () => {
+      fireEvent.press(getByText("Shop"));
+      await Promise.resolve();
+    });
+
+    // Sync missing ingredients from Taco Night & Pancakes into shopping list
+    const syncBtn = await findByText(/\+ Add \d+ from Plan/);
+    await act(async () => {
+      fireEvent.press(syncBtn);
+      await Promise.resolve();
+    });
+    expect(await findByText("Ground beef")).toBeTruthy();
+    expect(getByTestId("meals-shop-view")).toBeTruthy();
+  });
+
+  it("toggles Who's Eating Tonight attendance and updates the count", async () => {
+    fullRoute();
+    const { getByTestId, findByText } = render(<MealsPage now={NOW} />, { wrapper: wrap });
+    await findByText("Taco Night");
+
+    const momTile = getByTestId("meals-attendee-mom");
+    expect(momTile.props.accessibilityState?.checked).toBe(true);
+    await act(async () => {
+      fireEvent.press(momTile);
+      await Promise.resolve();
+    });
+    expect(getByTestId("meals-attendee-mom").props.accessibilityState?.checked).toBe(false);
+  });
+});
+
 describe("MealsPage — malformed payloads (never crash)", () => {
   it("malformed payload never crashes the grid (parseArrayField → []+fallbacks)", async () => {
     route({
