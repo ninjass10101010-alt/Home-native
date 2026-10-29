@@ -4,6 +4,18 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — fix(perf,anr): eliminate continuous SVG transform animations on Android to prevent UI thread event flooding and ANR crashes (`widgetIconMotion.tsx`, `useAmbient.tsx`, `AnimatedEmoji.tsx`).
+  **What changed:**
+  - **ROOT CAUSE DIAGNOSED VIA ANDROID DROPBOX / SYSTEM_SERVER**:
+    - The tablet reported `Input dispatching timed out (waited 5000ms for MotionEvent)` resulting in an ANR kill (`ActivityManager: Killing 20125: user request after error`).
+    - CPU telemetry showed `com.garciafam.consuela` running at 152% CPU and SurfaceFlinger at 22% CPU.
+    - Stack trace analysis revealed `VirtualView.setClientRect` -> `FabricEventDispatcher.dispatchEvent` -> `Reanimated.NodesManager.onEventDispatch` firing thousands of times per second across all 10 widget icons and weather ambient loops, congesting the Android main thread's message queue so touch inputs could not be acknowledged within 5s.
+  - **REMEDIATION**:
+    - `src/ui/widgetIconMotion.tsx`: Disabled continuous floating translate/scale Reanimated loop on Android; widget icons now render as static, crisp 3D clay artwork.
+    - `src/weather/useAmbient.tsx`: Disabled infinite continuous `withRepeat` loops (`AmbientBob`, `AmbientCloudDrift`, `AmbientEyePulse`, `AmbientMonsterIdle`, `AmbientVaneSway`) on Android, preventing full-screen SVG transform recalculations every frame.
+    - `src/ui/AnimatedEmoji.tsx`: Disabled continuous `popBounce` Reanimated loop on Android; renders static emoji text.
+  **Tests:** `tests/weather/hero.test.tsx`, `tests/primitives-b.test.tsx`, `tests/home-wall.test.tsx` green. `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-29 — feat(home): greeting shows "Garcia Family" when signed out and active member's name when signed in (`HomeWall.tsx`).
   **What changed:**
   - **HOME WALL HEADER GREETING**:

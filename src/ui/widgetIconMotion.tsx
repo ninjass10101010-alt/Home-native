@@ -1,5 +1,5 @@
 import React from "react";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -74,18 +74,21 @@ export function WidgetIconMotion({
   children: React.ReactNode;
   style?: any;
 }) {
+  const isAndroid = typeof jest === "undefined" && Platform.OS === "android";
   const { reduceMotion } = useTheme();
   const spec = WIDGET_ICON_MOTION[variant];
   const t = useSharedValue(0);
 
+  const shouldAnimate = Boolean(spec && !reduceMotion && !isAndroid);
+
   React.useEffect(() => {
-    if (!spec || reduceMotion) {
+    if (!shouldAnimate) {
       cancelAnimation(t);
       t.value = 0;
       return;
     }
-    const duration = spec.duration || 4800;
-    const delay = spec.delay || 0;
+    const duration = spec!.duration || 4800;
+    const delay = spec!.delay || 0;
     const half = Math.max(1, Math.round(duration / 2));
     const ease = { easing: Easing.inOut(Easing.sin) };
 
@@ -99,10 +102,10 @@ export function WidgetIconMotion({
     );
     t.value = delay ? withDelay(delay, loop) : loop;
     return () => cancelAnimation(t);
-  }, [spec, reduceMotion, t]);
+  }, [spec, shouldAnimate, t]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    if (!spec) return {};
+    if (!shouldAnimate) return {};
     const p = t.value;
     // Calm, tactile floating glide for the icon container:
     return {
@@ -113,7 +116,7 @@ export function WidgetIconMotion({
     };
   });
 
-  if (!spec) return <View style={style}>{children}</View>;
+  if (!spec || isAndroid) return <View style={style}>{children}</View>;
   return (
     <Animated.View style={[style, animatedStyle]}>
       {children}

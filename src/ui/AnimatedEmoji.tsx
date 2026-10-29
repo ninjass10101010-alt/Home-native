@@ -1,5 +1,5 @@
 import React from "react";
-import { Text } from "react-native";
+import { Platform, Text } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -30,8 +30,9 @@ export function AnimatedEmoji({
   style?: any;
   testID?: string;
 }) {
+  const isAndroid = typeof jest === "undefined" && Platform.OS === "android";
   const { reduceMotion } = useTheme();
-  const doAnim = animated && !reduceMotion;
+  const doAnim = animated && !reduceMotion && !isAndroid;
   const t = useSharedValue(0);
 
   React.useEffect(() => {
@@ -55,6 +56,14 @@ export function AnimatedEmoji({
     // The web's popBounce: a 0.9→1.06 scale with a small lift.
     transform: [{ translateY: -1.5 * t.value }, { scale: 0.9 + 0.16 * t.value }],
   }));
+
+  if (isAndroid || !animated) {
+    return (
+      <Text testID={testID} style={[{ fontSize: size, lineHeight: size * 1.15 }, style]}>
+        {emoji}
+      </Text>
+    );
+  }
 
   return (
     <Animated.View style={animatedStyle}>

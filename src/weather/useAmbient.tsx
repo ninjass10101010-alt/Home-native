@@ -1,5 +1,6 @@
 // Home-native/src/weather/useAmbient.tsx
 import React, { useEffect } from "react";
+import { Platform } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -19,11 +20,13 @@ export function ambientAllowed(reduceMotion: boolean, tier: PerfTier): boolean {
   return !reduceMotion && tier !== "reduced";
 }
 
+const IS_ANDROID = typeof jest === "undefined" && Platform.OS === "android";
+
 /** Gentle ±3dp vertical bob (MOTION.glide cadence). Pauses under
  *  reduced-motion or the reduced perf tier — a wall panel is always-on. */
 export function AmbientBob({ children }: { children: React.ReactNode }) {
   const { reduceMotion } = useTheme();
-  const reduced = !ambientAllowed(reduceMotion, perfTier());
+  const reduced = IS_ANDROID || !ambientAllowed(reduceMotion, perfTier());
   const t = useSharedValue(0);
   useEffect(() => {
     if (reduced) return;
@@ -31,6 +34,7 @@ export function AmbientBob({ children }: { children: React.ReactNode }) {
     return () => cancelAnimation(t);
   }, [reduced, t]);
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: (t.value - 0.5) * 6 }] }));
+  if (IS_ANDROID) return <>{children}</>;
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 
@@ -51,7 +55,7 @@ export function AmbientCloudDrift({
   duration?: number;
 }) {
   const { reduceMotion } = useTheme();
-  const reduced = !ambientAllowed(reduceMotion, perfTier());
+  const reduced = IS_ANDROID || !ambientAllowed(reduceMotion, perfTier());
   const t = useSharedValue(0);
   useEffect(() => {
     if (reduced) return;
@@ -71,6 +75,7 @@ export function AmbientCloudDrift({
       ],
     };
   });
+  if (IS_ANDROID) return <>{children}</>;
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 
@@ -86,7 +91,7 @@ export function AmbientEyePulse({
   delayMs?: number;
 }) {
   const { reduceMotion } = useTheme();
-  const reduced = !ambientAllowed(reduceMotion, perfTier());
+  const reduced = IS_ANDROID || !ambientAllowed(reduceMotion, perfTier());
   const scaleY = useSharedValue(1);
   const shiftX = useSharedValue(0);
 
@@ -128,6 +133,7 @@ export function AmbientEyePulse({
       { scaleY: scaleY.value },
     ],
   }));
+  if (IS_ANDROID) return <>{children}</>;
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 
@@ -143,7 +149,7 @@ export function AmbientMonsterIdle({
   index?: number;
 }) {
   const { reduceMotion } = useTheme();
-  const reduced = !ambientAllowed(reduceMotion, perfTier());
+  const reduced = IS_ANDROID || !ambientAllowed(reduceMotion, perfTier());
   const breath = useSharedValue(0);
   const tilt = useSharedValue(0);
 
@@ -183,6 +189,7 @@ export function AmbientMonsterIdle({
       { rotate: `${tilt.value * 1.6 * dir}deg` },
     ],
   }));
+  if (IS_ANDROID) return <>{children}</>;
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 
@@ -234,7 +241,7 @@ export function AmbientDigitPop({
  */
 export function AmbientVaneSway({ children }: { children: React.ReactNode }) {
   const { reduceMotion } = useTheme();
-  const reduced = !ambientAllowed(reduceMotion, perfTier());
+  const reduced = IS_ANDROID || !ambientAllowed(reduceMotion, perfTier());
   const t = useSharedValue(0);
   useEffect(() => {
     if (reduced) return;
@@ -251,5 +258,6 @@ export function AmbientVaneSway({ children }: { children: React.ReactNode }) {
       { rotate: `${(t.value - 0.5) * 5}deg` },
     ],
   }));
+  if (IS_ANDROID) return <>{children}</>;
   return <Animated.View style={style}>{children}</Animated.View>;
 }
