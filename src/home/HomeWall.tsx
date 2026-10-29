@@ -423,8 +423,8 @@ export function HomeWall({
       for (const id of visibleIds) out[id] = layoutSpan(layout, id);
       return out;
     }
-    return dynamicSpans(layout, activities, visibleIds);
-  }, [isAutoArrange, layout, activities, visibleIds]);
+    return dynamicSpans(layout, activities, visibleIds, wallStats);
+  }, [isAutoArrange, layout, activities, visibleIds, wallStats]);
 
   const defs = useMemo(() => {
     const allVisible = visibleOnWall(layout.hidden);

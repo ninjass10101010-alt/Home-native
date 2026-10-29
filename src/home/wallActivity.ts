@@ -48,37 +48,45 @@ export function scoreWidgets(stats: WallStats): Map<WidgetId, WidgetActivity> {
 
   // Tasks: more pending = more important.
   // 0 pending = score 5 (demote to compact).
+  // 1 pending = score 20 (compact 1-cell card).
+  // 2+ pending = more content (can expand to 2 cells).
   const taskScore =
     stats.openTasks === null
       ? { score: 50, settled: false }
       : stats.openTasks === 0
         ? { score: 5, settled: true } // 0 tasks → compact span 1
-        : stats.openTasks <= 2
-          ? { score: 65, settled: true }
-          : stats.openTasks <= 5
-            ? { score: 80, settled: true }
-            : { score: 95, settled: true }; // 6+ tasks → critical
+        : stats.openTasks <= 1
+          ? { score: 20, settled: true } // 1 task → compact span 1
+          : stats.openTasks <= 3
+            ? { score: 70, settled: true }
+            : stats.openTasks <= 5
+              ? { score: 85, settled: true }
+              : { score: 95, settled: true }; // 6+ tasks → critical
   scores.set("tasks", { id: "tasks", ...taskScore });
 
-  // Today's events: more events = show more
+  // Today's events: more events = show more.
+  // 0 or 1 event = compact span 1 (fits cleanly in 1 cell with DayLine).
+  // 2+ events = more content (can expand to 2 cells).
   const eventScore =
     stats.eventsToday === null
       ? { score: 50, settled: false }
       : stats.eventsToday === 0
         ? { score: 5, settled: true } // 0 events → compact span 1
-        : stats.eventsToday <= 2
-          ? { score: 65, settled: true }
-          : stats.eventsToday <= 4
-            ? { score: 80, settled: true }
-            : { score: 95, settled: true };
+        : stats.eventsToday <= 1
+          ? { score: 20, settled: true } // 1 event → compact span 1
+          : stats.eventsToday <= 3
+            ? { score: 70, settled: true }
+            : stats.eventsToday <= 5
+              ? { score: 85, settled: true }
+              : { score: 95, settled: true };
   scores.set("todayEvents", { id: "todayEvents", ...eventScore });
 
   // Planned meals (week)
   const mealScore =
     stats.plannedDays === null
       ? { score: 40, settled: false }
-      : stats.plannedDays === 0
-        ? { score: 10, settled: true }
+      : stats.plannedDays <= 1
+        ? { score: 15, settled: true }
         : stats.plannedDays <= 3
           ? { score: 45, settled: true }
           : { score: 60, settled: true };
@@ -111,21 +119,54 @@ export function scoreWidgets(stats: WallStats): Map<WidgetId, WidgetActivity> {
 const LOCKED_SPAN_WIDGETS = new Set<WidgetId>(["photos"]);
 
 /**
- * Compute dynamic spans that perfectly fit the 12-cell grid budget.
+ * Check if a widget has multi-item or rich content that justifies expanding to a large 2-cell card.
  *
- * For N visible widgets (usually 8), exactly (12 - N) widgets must be span-2
- * so that 2 * (12 - N) + 1 * (2N - 12) = 12 cells.
- * For N = 8, exactly 4 widgets are span-2 (photos + top 3 flexible widgets).
+ * If a widget has small content (0 or 1 event, 0 or 1 task, 0 or 1 planned meal, or compact controls),
+ * it must remain small (span 1) to keep the board clean without empty voids.
+ */
+export function hasMoreContent(id: WidgetId, stats: WallStats): boolean {
+  switch (id) {
+    case "photos":
+      return true; // Fixed visual anchor
+    case "todayEvents":
+      // 0 or 1 event = small content (fits cleanly in 1 cell with DayLine)
+      // 2+ events = more content, needs 2 cells for full schedule
+      return stats.eventsToday !== null && stats.eventsToday >= 2;
+    case "tasks":
+      // 0 or 1 task = small content (single chore or caught-up state)
+      // 2+ tasks = more content, needs 2 cells for chore list and assignees
+      return stats.openTasks !== null && stats.openTasks >= 2;
+    case "currentMeal":
+      // 0 or 1 planned day = small content
+      // 2+ planned days = more content
+      return stats.plannedDays !== null && stats.plannedDays >= 2;
+    case "weather":
+      // Weather has a rich 5-day forecast row directly on the card
+      return true;
+    default:
+      // Other widgets (music, briefing, leaderboard, home controls) are compact 1-cell cards
+      return false;
+  }
+}
+
+/**
+ * Compute dynamic spans that smartly size cards based on actual content volume:
+ * - Widgets with small content (<= 1 item) stay small (span 1).
+ * - Widgets with more content (2+ items, rich forecast) can expand to span 2,
+ *   up to the board's 12-cell budget.
+ * - Explicit user layout preferences (e.g. setting calendar to 1 cell in Settings)
+ *   are ALWAYS respected and never overridden by auto-arrange.
  */
 export function dynamicSpans(
   layout: WallLayout,
   activities: Map<WidgetId, WidgetActivity>,
   visibleIds: WidgetId[],
+  stats?: WallStats,
 ): Partial<Record<WidgetId, WallSpan>> {
   const spans: Partial<Record<WidgetId, WallSpan>> = {};
   const totalCells = 12;
 
-  // Lock fixed widgets (photos is locked at span 2)
+  // 1. Lock fixed widgets (photos is locked at span 2)
   let lockedSpanTotal = 0;
   for (const id of visibleIds) {
     if (LOCKED_SPAN_WIDGETS.has(id)) {
@@ -139,22 +180,39 @@ export function dynamicSpans(
   const flexibleCount = flexibleIds.length;
   const remainingCells = totalCells - lockedSpanTotal;
 
-  // Calculate target number of span-2 flexible widgets:
-  // 2 * k + 1 * (flexibleCount - k) = remainingCells
-  // k + flexibleCount = remainingCells => k = remainingCells - flexibleCount
-  const targetSpan2 = Math.max(0, Math.min(flexibleCount, remainingCells - flexibleCount));
+  // Max extra cells available to expand eligible widgets from 1 to 2 cells
+  const maxSpan2 = Math.max(0, Math.min(flexibleCount, remainingCells - flexibleCount));
 
-  // Sort flexible widgets by activity score descending
-  const sorted = [...flexibleIds].sort((a, b) => {
+  // Determine which flexible widgets are eligible to expand to span 2:
+  // A widget can be span 2 ONLY IF:
+  //   a) The user did NOT explicitly configure it as 1 cell in layout.spans (user choice respected!), AND
+  //   b) It has multi-item or rich content (hasMoreContent), NOT small content (<= 1 item).
+  const eligibleIds = flexibleIds.filter((id) => {
+    // If the user explicitly set 1 cell in Settings, honor their choice: never expand to 2
+    if (layout.spans[id] === 1) return false;
+
+    if (stats) {
+      return hasMoreContent(id, stats);
+    }
+    // Fallback when stats is omitted (e.g. early tests): check settled score threshold
+    const act = activities.get(id);
+    if (!act || !act.settled) return (layout.spans[id] ?? WALL_SPANS[id]) === 2;
+    return act.score >= 50;
+  });
+
+  // Sort eligible widgets by activity score descending (busiest first)
+  const sortedEligible = [...eligibleIds].sort((a, b) => {
     const sa = activities.get(a)?.score ?? 0;
     const sb = activities.get(b)?.score ?? 0;
     return sb - sa;
   });
 
-  // Top targetSpan2 flexible widgets get span 2; the rest get span 1
-  sorted.forEach((id, index) => {
-    spans[id] = index < targetSpan2 ? 2 : 1;
-  });
+  const span2Set = new Set<WidgetId>(sortedEligible.slice(0, maxSpan2));
+
+  // Top eligible widgets get span 2; small-content and 1-cell widgets stay at span 1
+  for (const id of flexibleIds) {
+    spans[id] = span2Set.has(id) ? 2 : 1;
+  }
 
   return spans;
 }

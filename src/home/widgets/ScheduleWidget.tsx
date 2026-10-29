@@ -150,12 +150,12 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
                   {/* 12-hour formatted time */}
                   <Text
                     style={{
-                      fontSize: 13,
-                      lineHeight: 18,
+                      fontSize: TYPOGRAPHY.label.fontSize,
+                      lineHeight: TYPOGRAPHY.label.lineHeight,
                       fontFamily: "SpaceGrotesk-Medium",
                       fontVariant: ["tabular-nums"],
                       color: colors["color-text-primary"],
-                      width: 62,
+                      width: 66,
                     }}
                     numberOfLines={1}
                   >
@@ -191,7 +191,7 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
                     >
                       <Text
                         style={{
-                          fontSize: 11,
+                          fontSize: TYPOGRAPHY.label.fontSize,
                           fontWeight: "600",
                           color: colors["color-text-primary"],
                         }}
@@ -220,7 +220,7 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
           >
             <Text
               style={{
-                fontSize: 12,
+                fontSize: TYPOGRAPHY.label.fontSize,
                 fontWeight: "600",
                 color: colors["color-accent-cyan"],
               }}

@@ -4,6 +4,23 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — fix(home,layout): content-aware smart widget sizing & strict honoring of user 1-cell settings (`wallActivity.ts`, `HomeWall.tsx`, `ScheduleWidget.tsx`).
+  **What changed:**
+  - **CONTENT-AWARE SMART SIZING (`wallActivity.ts`)**:
+    - Added `hasMoreContent(id, stats)` helper and refined scoring so cards with small content remain compact (span 1) and only cards with multi-item or rich content expand to 2 cells.
+    - `todayEvents`: 0 or 1 event is recognized as small content (fits cleanly in a 1-cell card alongside DayLine) and stays at span 1; only days with 2+ events qualify to expand to a large 2-cell card.
+    - `tasks`: 0 or 1 pending task stays compact at span 1; 2+ active tasks expand to 2 cells so the chores list and avatars are visible.
+    - `currentMeal`: 0 or 1 planned day stays compact at span 1; 2+ planned days can expand to 2 cells.
+    - `weather`: Rich 5-day forecast hero qualifies for 2 cells if room permits.
+  - **HONOR EXPLICIT USER SPAN CONSTRAINTS**:
+    - Fixed an issue where switching a widget to 1 cell in Settings (`layout.spans[id] === 1`) remained 2 cells on the wall because `dynamicSpans` forcibly assigned span 2 based on activity score quota.
+    - `dynamicSpans` now strictly respects `layout.spans[id] === 1`, guaranteeing that an explicit user choice for a compact 1-cell card is never overridden.
+  - **WALL WIRING (`HomeWall.tsx`)**:
+    - Passed live `wallStats` into `dynamicSpans(layout, activities, visibleIds, wallStats)` so the dynamic layout dynamically responds to live content volume.
+  - **A11Y TYPE FLOOR (`ScheduleWidget.tsx`)**:
+    - Fixed fontSize in ScheduleWidget to strictly honor the 14sp type floor (`TYPOGRAPHY.label.fontSize`).
+  **Tests:** `tests/wall-activity.test.ts` (16 tests green), `tests/home-wall.test.tsx` (22 tests green), `tests/wall-layout.test.tsx` + `tests/settings-page.test.tsx` (45 tests green). Full suite: 82 suites, 1326 tests green. `npm run tokens:check` CLEAN, `npm run a11y:audit` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-29 — feat(photos): active wall display preview, live transition demonstration & settings controls (crossfade, dissolve, slide, cut) (`PhotosPage.tsx`, `PhotosWidget.tsx`, `library.ts`).
   **What changed:**
   - **ACTIVE WALL DISPLAY & PREVIEW ("Now on the Wall")** (`src/photos/PhotosPage.tsx`):

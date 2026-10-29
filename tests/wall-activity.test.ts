@@ -1,5 +1,5 @@
-import { scoreWidgets, dynamicSpans, activityOrder } from "../src/home/wallActivity";
-import { DEFAULT_WALL_LAYOUT } from "../src/home/wallLayout";
+import { scoreWidgets, dynamicSpans, activityOrder, hasMoreContent } from "../src/home/wallActivity";
+import { DEFAULT_WALL_LAYOUT, type WallLayout } from "../src/home/wallLayout";
 import type { WallStats } from "../src/home/wall-stats";
 import type { WidgetId } from "../src/home/widgets";
 
@@ -114,6 +114,51 @@ describe("wallActivity — dynamicSpans", () => {
     // Default for tasks is span-2, but it shouldn't be promoted via activity
     // The default span should be respected since it's not settled
     expect(tasksSpan).toBeDefined();
+  });
+
+  it("keeps widgets with small content at span-1", () => {
+    // 1 event is small content: should stay at span-1
+    const singleEventStats: WallStats = {
+      eventsToday: 1,
+      openTasks: 6,
+      openTasksStale: false,
+      plannedDays: 1,
+      weekCells: null,
+    };
+    const activities = scoreWidgets(singleEventStats);
+    const result = dynamicSpans(DEFAULT_WALL_LAYOUT, activities, DEFAULT_VISIBLE, singleEventStats);
+    expect(result.todayEvents).toBe(1); // Small content: 1 event stays small!
+    expect(result.tasks).toBe(2); // More content: 6 tasks gets 2 cells!
+  });
+
+  it("always respects explicit user 1-cell layout setting", () => {
+    const layoutWith1CellEvents: WallLayout = {
+      ...DEFAULT_WALL_LAYOUT,
+      spans: {
+        ...DEFAULT_WALL_LAYOUT.spans,
+        todayEvents: 1,
+      },
+    };
+    // Even when calendar is busy (5 events), explicit 1-cell user setting is honored
+    const activities = scoreWidgets(BUSY_STATS);
+    const result = dynamicSpans(layoutWith1CellEvents, activities, DEFAULT_VISIBLE, BUSY_STATS);
+    expect(result.todayEvents).toBe(1);
+  });
+});
+
+describe("wallActivity — hasMoreContent", () => {
+  it("treats 0 and 1 event as small content, 2+ as more content", () => {
+    expect(hasMoreContent("todayEvents", { ...QUIET_STATS, eventsToday: 0 })).toBe(false);
+    expect(hasMoreContent("todayEvents", { ...QUIET_STATS, eventsToday: 1 })).toBe(false);
+    expect(hasMoreContent("todayEvents", { ...QUIET_STATS, eventsToday: 2 })).toBe(true);
+    expect(hasMoreContent("todayEvents", { ...QUIET_STATS, eventsToday: 5 })).toBe(true);
+  });
+
+  it("treats 0 and 1 task as small content, 2+ as more content", () => {
+    expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 0 })).toBe(false);
+    expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 1 })).toBe(false);
+    expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 2 })).toBe(true);
+    expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 10 })).toBe(true);
   });
 });
 
