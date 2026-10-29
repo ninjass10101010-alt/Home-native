@@ -4,8 +4,10 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
-- 2026-10-29 — feat(settings,notifications): dual-timing alert tones (15-min heads-up vs event start) & 6 new synthesized notification tones (`NotificationsCard.tsx`, `soundEffects.ts`, `notificationPrefs.ts`, `useNotificationMonitor.ts`, `notifications.ts`).
+- 2026-10-29 — feat(settings,notifications): dual-timing alert tones (15-min heads-up vs event start) & 6 new synthesized notification tones (`NotificationsCard.tsx`, `soundEffects.ts`, `notificationPrefs.ts`, `useNotificationMonitor.ts`, `notifications.ts`, `EmergencyFlow.tsx`).
   **What changed:**
+  - **EMBEDDED NOTIFICATIONS ON BOTH SAFETY SURFACES (`EmergencyFlow.tsx`, `SettingsPage.tsx`)**:
+    - Embedded `<NotificationsCard />` directly on the primary Emergency/Safety screen (`/emergency`) as well as in Settings → Safety (`/settings`), so users tapping the 🚨 Emergency Shield on the Home wall see all alert tone options and timing selectors immediately without having to navigate into Settings.
   - **DUAL-STAGE TIMING TONES FOR CALENDAR & ROUTINES (`NotificationsCard.tsx`, `notificationPrefs.ts`)**:
     - Expanded notification configuration so time-based categories (Calendar Reminders and Daily Routines) support independent tone, volume, preview, and test triggers for both the **15-minute advance reminder** and the **event start / routine due alert**.
     - Integrated an interactive `SegmentedControl` (`[ ⏰ 15-Min Reminder ]` / `[ 🔔 Starting Now ]`) inside both cards, with contextual helper copy explaining each stage's timing.
