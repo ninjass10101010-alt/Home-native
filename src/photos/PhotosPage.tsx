@@ -6,16 +6,11 @@ import {
   Text,
   View,
 } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { api, ApiError } from "../api/client";
 import { useTheme } from "../theme/ThemeProvider";
-import { MOTION, RADII, TYPOGRAPHY } from "../theme/tokens";
+import { RADII, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
 import { useAuth } from "../state/AuthProvider";
 import { useSync } from "../state/SyncManager";
@@ -58,13 +53,13 @@ function fallbackCaption(takenAt?: string): string | null {
 }
 
 export function PhotosPage() {
-  const { colors, accentColor, reduceMotion } = useTheme();
+  const { colors, accentColor } = useTheme();
   const toast = useToast();
   const router = useRouter();
   const { member, role } = useAuth();
   const { stale: syncStale } = useSync();
 
-  // Load photos and settings
+  // Load photos and settings in parallel
   const { status, data, failure, stale: dataStale, retry } = useWidgetData<{
     photos: WallPhoto[];
     settings: PhotoSettings;
@@ -83,19 +78,8 @@ export function PhotosPage() {
   const [pendingIds, setPendingIds] = React.useState<ReadonlySet<string>>(new Set());
   const [settingsOverride, setSettingsOverride] = React.useState<PhotoSettings | null>(null);
   const [savingSettings, setSavingSettings] = React.useState(false);
-  const [filterMode, setFilterMode] = React.useState<"all" | "wall" | "hidden">("all");
   const [previewIndex, setPreviewIndex] = React.useState(0);
-  const [animTrigger, setAnimTrigger] = React.useState(0);
-
-  // Reanimated values for live transition demonstration
-  const previewFade = useSharedValue(1);
-  const previewSlideX = useSharedValue(0);
-
-  React.useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset overrides on data reload (server truth wins)
-    setOverrides({});
-    setSettingsOverride(null);
-  }, [data]);
+  const [filterMode, setFilterMode] = React.useState<"all" | "wall" | "hidden">("all");
 
   const isParent = role === "parent";
   const photos = React.useMemo(() => data?.photos ?? [], [data?.photos]);
@@ -120,43 +104,10 @@ export function PhotosPage() {
     ? wallPhotos[previewIndex % wallPhotos.length]
     : null;
 
-  // Run transition animation
-  React.useEffect(() => {
-    if (reduceMotion) {
-      previewFade.value = 1;
-      previewSlideX.value = 0;
-      return;
-    }
-    const transitionType = settings.transition;
-    if (transitionType === "cut") {
-      previewFade.value = 1;
-      previewSlideX.value = 0;
-      return;
-    }
-    if (transitionType === "slide") {
-      const dur = MOTION.glide;
-      previewSlideX.value = 80;
-      previewSlideX.value = withTiming(0, { duration: dur });
-      previewFade.value = 0.2;
-      previewFade.value = withTiming(1, { duration: dur });
-      return;
-    }
-    const dur = transitionType === "dissolve" ? 850 : MOTION.glide;
-    previewSlideX.value = 0;
-    previewFade.value = 0;
-    previewFade.value = withTiming(1, { duration: dur });
-  }, [animTrigger, settings.transition, reduceMotion, previewFade, previewSlideX]);
-
-  const animPreviewStyle = useAnimatedStyle(() => ({
-    opacity: previewFade.value,
-    transform: [{ translateX: previewSlideX.value }],
-  }));
-
   const handleSelectTransition = (trans: PhotoTransition) => {
     if (!isParent || savingSettings) return;
     const nextSettings = { ...settings, transition: trans };
     setSettingsOverride(nextSettings);
-    setAnimTrigger((t) => t + 1);
     setSavingSettings(true);
     void (async () => {
       try {
@@ -479,13 +430,13 @@ export function PhotosPage() {
               </View>
             </View>
 
-            {/* Live Preview & Transition Box */}
+            {/* Live Preview Frame & Transition Controls */}
             <View style={{ flexDirection: "row", gap: 20, alignItems: "stretch" }}>
-              {/* Photo preview frame */}
+              {/* Photo preview frame - stable fixed dimensions */}
               <View
                 style={{
-                  width: 260,
-                  height: 340,
+                  width: 240,
+                  height: 320,
                   borderRadius: RADII.xl,
                   overflow: "hidden",
                   backgroundColor: colors["color-surface-0"],
@@ -495,14 +446,12 @@ export function PhotosPage() {
               >
                 {activePreviewPhoto ? (
                   <>
-                    <Animated.View style={[{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }, animPreviewStyle]}>
-                      <Image
-                        testID="photo-preview-image"
-                        source={photoSource(activePreviewPhoto)}
-                        style={{ flex: 1 }}
-                        resizeMode="cover"
-                      />
-                    </Animated.View>
+                    <Image
+                      testID="photo-preview-image"
+                      source={photoSource(activePreviewPhoto)}
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode="cover"
+                    />
                     {settings.showCaption ? (
                       <>
                         <LinearGradient
@@ -677,7 +626,7 @@ export function PhotosPage() {
                   </View>
                 </View>
 
-                {/* Captions Toggle & Preview Trigger */}
+                {/* Captions Toggle & Preview Navigation */}
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
                   <Toggle
                     value={settings.showCaption}
@@ -693,7 +642,6 @@ export function PhotosPage() {
                       disabled={wallPhotos.length < 2}
                       onPress={() => {
                         setPreviewIndex((i) => (i - 1 + wallPhotos.length) % wallPhotos.length);
-                        setAnimTrigger((t) => t + 1);
                       }}
                       style={{
                         paddingHorizontal: 14,
@@ -712,7 +660,6 @@ export function PhotosPage() {
                       disabled={wallPhotos.length < 2}
                       onPress={() => {
                         setPreviewIndex((i) => (i + 1) % wallPhotos.length);
-                        setAnimTrigger((t) => t + 1);
                       }}
                       style={{
                         paddingHorizontal: 14,
@@ -725,62 +672,10 @@ export function PhotosPage() {
                         Next ▶
                       </Text>
                     </Pressable>
-
-                    <Pressable
-                      testID="preview-transition-btn"
-                      onPress={() => setAnimTrigger((t) => t + 1)}
-                      style={{
-                        paddingHorizontal: 16,
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                        backgroundColor: accentColor,
-                      }}
-                    >
-                      <Text style={{ color: colors["color-primary-foreground"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
-                        Test {settings.transition}
-                      </Text>
-                    </Pressable>
                   </View>
                 </View>
               </View>
             </View>
-
-            {/* Rotation Queue Thumbnail Strip */}
-            {wallPhotos.length > 0 ? (
-              <View style={{ gap: 8, marginTop: 4 }}>
-                <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
-                  Active in rotation queue ({wallPhotos.length}):
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                  {wallPhotos.map((p, idx) => {
-                    const isSelected = (previewIndex % wallPhotos.length) === idx;
-                    return (
-                      <Pressable
-                        key={`strip-${p.id}`}
-                        onPress={() => {
-                          setPreviewIndex(idx);
-                          setAnimTrigger((t) => t + 1);
-                        }}
-                        style={{
-                          width: 64,
-                          height: 64,
-                          borderRadius: 12,
-                          overflow: "hidden",
-                          borderWidth: isSelected ? 2.5 : 1,
-                          borderColor: isSelected ? accentColor : colors["color-border"],
-                        }}
-                      >
-                        <Image
-                          source={photoSource(p)}
-                          style={{ width: "100%", height: "100%" }}
-                          resizeMode="cover"
-                        />
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            ) : null}
           </Material>
 
           {/* Section 2: Library Curation & All Photos Grid */}
