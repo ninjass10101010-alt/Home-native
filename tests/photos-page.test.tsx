@@ -122,6 +122,15 @@ const PHOTOS = [
 const fullRoute = () =>
   route({
     "/api/photos?all=1": { ok: true, photos: PHOTOS },
+    "/api/photos/settings": {
+      ok: true,
+      settings: {
+        rotateSeconds: 75,
+        transition: "crossfade",
+        order: "shuffle",
+        showCaption: true,
+      },
+    },
     "/api/photos": { ok: true },
   });
 
@@ -288,6 +297,74 @@ describe("PhotosPage — upload honesty", () => {
       await Promise.resolve();
     });
     expect(await findByText("Uploads from the wall arrive with the next wave — use the phone.")).toBeTruthy();
+  });
+});
+
+describe("PhotosPage — active display and transition settings", () => {
+  it("displays which photos are active in rotation and the current transition", async () => {
+    fullRoute();
+    const { findByText, getByText, findByTestId } = render(<PhotosPage />, { wrapper: wrap });
+    expect(await findByText("Now on the Wall")).toBeTruthy();
+    expect(getByText("1 photo currently in active wall rotation")).toBeTruthy();
+    expect(getByText("Transition: CROSSFADE")).toBeTruthy();
+    expect(await findByTestId("photo-preview-image")).toBeTruthy();
+  });
+
+  it("parent can select a different transition (e.g. slide) and it sends PATCH /api/photos/settings", async () => {
+    fullRoute();
+    const { findByTestId, getByText, getByTestId } = render(<PhotosPage />, { wrapper: wrap });
+    await findByTestId("photo-cell-ph1");
+    expect(getByText("Transition: CROSSFADE")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(getByTestId("transition-opt-slide"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const calls = api.mock.calls.filter((c) => c[0] === "/api/photos/settings" && c[1]?.method === "PATCH");
+    expect(calls).toHaveLength(1);
+    expect(calls[0][1].body).toEqual({ transition: "slide" });
+    expect(getByText("Transition: SLIDE")).toBeTruthy();
+  });
+
+  it("parent can change rotation cadence preset and order", async () => {
+    fullRoute();
+    const { findByTestId, getByTestId } = render(<PhotosPage />, { wrapper: wrap });
+    await findByTestId("photo-cell-ph1");
+
+    await act(async () => {
+      fireEvent.press(getByTestId("rotate-preset-30"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    let calls = api.mock.calls.filter((c) => c[0] === "/api/photos/settings" && c[1]?.method === "PATCH");
+    expect(calls[0][1].body).toEqual({ rotateSeconds: 30 });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("order-opt-newest"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    calls = api.mock.calls.filter((c) => c[0] === "/api/photos/settings" && c[1]?.method === "PATCH");
+    expect(calls[1][1].body).toEqual({ order: "newest" });
+  });
+
+  it("kids cannot change transition settings", async () => {
+    mockMember = kid;
+    fullRoute();
+    const { findByTestId, getByTestId } = render(<PhotosPage />, { wrapper: wrap });
+    await findByTestId("photo-cell-ph1");
+
+    await act(async () => {
+      fireEvent.press(getByTestId("transition-opt-slide"));
+      await Promise.resolve();
+    });
+
+    const calls = api.mock.calls.filter((c) => c[0] === "/api/photos/settings" && c[1]?.method === "PATCH");
+    expect(calls).toHaveLength(0);
   });
 });
 

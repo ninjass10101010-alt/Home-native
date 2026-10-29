@@ -4,34 +4,19 @@ import { useRouter } from "expo-router";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { api, ApiError } from "../../api/client";
-import { photoSource, type WallPhoto } from "../../photos/library";
+import {
+  clampSettings,
+  DEFAULT_PHOTO_SETTINGS as DEFAULT_SETTINGS,
+  photoSource,
+  type PhotoSettings,
+  type WallPhoto,
+} from "../../photos/library";
 import { mix } from "../../theme/mix";
 import { useTheme } from "../../theme/ThemeProvider";
 import { MOTION, RADII, TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
 import { READ_COPY, READ_COPY_STALE, READ_RETRY_LABEL, useWidgetData } from "./data";
 import { pendingSurface } from "./WidgetFrame";
-
-interface PhotoSettings {
-  rotateSeconds: number; // clamped 10–600, default 75
-  transition: "crossfade" | "dissolve" | "slide" | "cut";
-  order: "shuffle" | "newest" | "oldest";
-  showCaption: boolean;
-}
-
-const DEFAULT_SETTINGS: PhotoSettings = {
-  rotateSeconds: 75,
-  transition: "crossfade",
-  order: "shuffle",
-  showCaption: true,
-};
-
-/** Server validates order (400 on unknown) — clamp the interval like the web. */
-function clampSettings(s: Partial<PhotoSettings>): PhotoSettings {
-  const raw = Number(s.rotateSeconds);
-  const rotateSeconds = Number.isFinite(raw) ? Math.min(600, Math.max(10, Math.round(raw))) : DEFAULT_SETTINGS.rotateSeconds;
-  return { ...DEFAULT_SETTINGS, ...s, rotateSeconds };
-}
 
 interface PhotosState {
   photos: WallPhoto[];
@@ -103,6 +88,7 @@ export function PhotosWidget() {
   const [failedIds, setFailedIds] = React.useState<ReadonlySet<string>>(new Set());
   const shownRef = React.useRef<string[]>([]);
   const fade = useSharedValue(1);
+  const slideX = useSharedValue(0);
 
   // A "fresh batch" is NEW PHOTO IDS, not a new object identity — the 60s
   // sync pulse rebuilds the data object with the same photos and must NOT
@@ -146,18 +132,38 @@ export function PhotosWidget() {
     return () => clearInterval(t);
   }, [data, photos.length, paused, current, seconds, refreshBatch]);
 
-  // Transition: crossfade/dissolve/slide all map to an opacity fade on the
-  // wall tile (slide is the web's phone treatment); cut → instant.
+  // Transitions: crossfade (smooth fade), dissolve (softer long blend),
+  // slide (smooth horizontal glide), and cut (instant switch).
   React.useEffect(() => {
-    const dur =
-      !reduceMotion && data && (data.settings.transition === "crossfade" || data.settings.transition === "dissolve")
-        ? MOTION.glide
-        : 0;
+    if (reduceMotion || !data) {
+      fade.value = 1;
+      slideX.value = 0;
+      return;
+    }
+    const transition = data.settings.transition;
+    if (transition === "cut") {
+      fade.value = 1;
+      slideX.value = 0;
+      return;
+    }
+    if (transition === "slide") {
+      const dur = MOTION.glide;
+      slideX.value = 90;
+      slideX.value = withTiming(0, { duration: dur });
+      fade.value = 0.2;
+      fade.value = withTiming(1, { duration: dur });
+      return;
+    }
+    const dur = transition === "dissolve" ? 850 : MOTION.glide;
+    slideX.value = 0;
     fade.value = 0;
     fade.value = withTiming(1, { duration: dur });
-  }, [index, reduceMotion, data, fade]);
+  }, [index, reduceMotion, data, fade, slideX]);
 
-  const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: fade.value,
+    transform: [{ translateX: slideX.value }],
+  }));
 
   const allFailed = !!data && data.photos.length > 0 && photos.length === 0;
 
@@ -204,11 +210,17 @@ export function PhotosWidget() {
     }
     const caption = current.caption || fallbackCaption(current.takenAt);
     return (
-      <View style={{ flex: 1, borderRadius: RADII.xl, overflow: "hidden" }}>
+      <Pressable
+        testID="photos-hero-card"
+        accessibilityRole="button"
+        accessibilityLabel="Photos on the wall — tap to manage"
+        onPress={() => router.push("/photos")}
+        style={{ flex: 1, borderRadius: RADII.xl, overflow: "hidden" }}
+      >
         {prev ? (
           <Image source={photoSource(prev)} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} resizeMode="cover" />
         ) : null}
-        <Animated.View style={[{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }, fadeStyle]}>
+        <Animated.View style={[{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }, animStyle]}>
           <Image
             testID="photos-hero-image"
             source={photoSource(current)}
@@ -228,7 +240,10 @@ export function PhotosWidget() {
             accessibilityRole="button"
             accessibilityLabel="Pause photo rotation"
             accessibilityState={{ checked: paused }}
-            onPress={() => setPausedByChoice((was) => !(was ?? reduceMotion))}
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              setPausedByChoice((was) => !(was ?? reduceMotion));
+            }}
             hitSlop={12}
             style={{
               position: "absolute",
@@ -307,7 +322,7 @@ export function PhotosWidget() {
             settings unavailable — default rotation
           </Text>
         ) : null}
-      </View>
+      </Pressable>
     );
   }
 

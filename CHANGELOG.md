@@ -4,6 +4,30 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — feat(photos): active wall display preview, live transition demonstration & settings controls (crossfade, dissolve, slide, cut) (`PhotosPage.tsx`, `PhotosWidget.tsx`, `library.ts`).
+  **What changed:**
+  - **ACTIVE WALL DISPLAY & PREVIEW ("Now on the Wall")** (`src/photos/PhotosPage.tsx`):
+    - Added dedicated live showcase displaying the photo currently active in the wall slideshow, its caption/date fallback, position badge (e.g. `1 / 4`), and active transition badge (`Transition: SLIDE` / `CROSSFADE` / etc.).
+    - Added interactive transition preview box demonstrating the active animation effect right on screen.
+    - Added horizontal thumbnail strip showing all photos in the active rotation queue, with one-tap selection to inspect any queued photo.
+    - Navigation controls: `◀ Prev`, `Next ▶`, and `Test <transition>` buttons.
+  - **WALL TRANSITION & ROTATION CONTROLS** (`src/photos/PhotosPage.tsx`):
+    - Transition Effect Selector: 4 options with rich descriptions — **Crossfade** (Smooth fade), **Dissolve** (Soft blend), **Slide** (Horizontal glide), and **Cut** (Instant switch).
+    - Rotation Cadence Presets: **Fast (30s)**, **Normal (75s)**, and **Slow (5m)**.
+    - Rotation Order Selector: **Shuffle** (Daily mix), **Newest First**, and **Oldest First**.
+    - Captions on Wall: Native `Toggle` switch to show/hide photo captions on the wall widget.
+    - Role Capability Gate: All controls are interactive for parents (`role === "parent"`), sending `PATCH /api/photos/settings` with optimistic UI updates and honest error recovery. Kids and guests see the active settings with the standing parent note ("A parent picks what's on the wall.").
+  - **REAL TRANSITION EXECUTION ON HOME WALL WIDGET** (`src/home/widgets/PhotosWidget.tsx`):
+    - Connected `PhotosWidget` to the configured `settings.transition`:
+      - `slide`: Executes horizontal translation glide (`translateX: 90 -> 0`) paired with fade.
+      - `dissolve`: Soft, extended opacity fade (850ms).
+      - `crossfade`: Standard smooth opacity fade (600ms).
+      - `cut`: Instant switch (0ms).
+    - Tapping the Photo hero card on the Home wall now navigates directly to the Photos screen (`/photos`), while maintaining pause button tap isolation.
+  - **SHARED SETTINGS & CLIENT HELPERS** (`src/photos/library.ts`):
+    - Exported `PhotoSettings`, `PHOTO_TRANSITION_OPTIONS`, `PHOTO_ROTATE_PRESETS`, `PHOTO_ORDER_OPTIONS`, `clampSettings`, `getPhotoSettings()`, and `updatePhotoSettings()`.
+  **Tests:** `tests/photos-page.test.tsx` (17 tests green), `tests/photos-widget.test.tsx` (6 tests green). `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-29 — fix(perf,anr): eliminate continuous SVG transform animations on Android to prevent UI thread event flooding and ANR crashes (`widgetIconMotion.tsx`, `useAmbient.tsx`, `AnimatedEmoji.tsx`).
   **What changed:**
   - **ROOT CAUSE DIAGNOSED VIA ANDROID DROPBOX / SYSTEM_SERVER**:
