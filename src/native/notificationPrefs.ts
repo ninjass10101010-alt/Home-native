@@ -8,6 +8,14 @@ export interface CategoryNotificationConfig {
   enabled: boolean;
   sound: NotificationSound;
   volume: number; // 0.0 to 1.0
+  // Advance (15-min) notice configuration
+  advanceEnabled?: boolean;
+  advanceSound?: NotificationSound;
+  advanceVolume?: number;
+  // Event start / routine due configuration
+  startEnabled?: boolean;
+  startSound?: NotificationSound;
+  startVolume?: number;
 }
 
 export interface NotificationPreferences {
@@ -24,25 +32,34 @@ export const NOTIFICATION_CATEGORIES: readonly NotificationCategory[] = [
 
 export const CATEGORY_META: Record<
   NotificationCategory,
-  { title: string; subtitle: string; icon: string; defaultSound: NotificationSound }
+  {
+    title: string;
+    subtitle: string;
+    icon: string;
+    defaultSound: NotificationSound;
+    hasTimingStages?: boolean;
+  }
 > = {
   weather: {
     title: "Weather Advisories",
     subtitle: "Severe thunderstorms, heavy snow, and high-wind alerts",
     icon: "⛈️",
     defaultSound: "radar",
+    hasTimingStages: false,
   },
   calendar: {
     title: "Calendar Reminders",
-    subtitle: "Appointments, games, recitals, and timed events starting soon",
+    subtitle: "Appointments, games, recitals, and timed family events",
     icon: "📅",
     defaultSound: "chime",
+    hasTimingStages: true,
   },
   routines: {
     title: "Routine Reminders",
-    subtitle: "Daily family schedules and routines starting in 15 minutes",
+    subtitle: "Daily family schedules, morning/evening habits, and chores",
     icon: "⏰",
     defaultSound: "harp",
+    hasTimingStages: true,
   },
 };
 
@@ -56,11 +73,23 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
     enabled: true,
     sound: "chime",
     volume: 0.7,
+    advanceEnabled: true,
+    advanceSound: "chime",
+    advanceVolume: 0.7,
+    startEnabled: true,
+    startSound: "beacon",
+    startVolume: 0.8,
   },
   routines: {
     enabled: true,
     sound: "harp",
     volume: 0.7,
+    advanceEnabled: true,
+    advanceSound: "harp",
+    advanceVolume: 0.7,
+    startEnabled: true,
+    startSound: "bell",
+    startVolume: 0.8,
   },
 };
 

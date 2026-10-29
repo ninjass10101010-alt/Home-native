@@ -5,6 +5,7 @@ jest.mock("@react-native-async-storage/async-storage", () =>
 import {
   isSevereWeather,
   isStartingSoon,
+  isDueNow,
 } from "../src/native/useNotificationMonitor";
 
 describe("useNotificationMonitor logic", () => {
@@ -56,6 +57,26 @@ describe("useNotificationMonitor logic", () => {
       expect(isStartingSoon("10:12", now, 15)).toBe(true);
       expect(isStartingSoon("10:25", now, 15)).toBe(false);
       expect(isStartingSoon("09:50", now, 15)).toBe(false);
+    });
+  });
+
+  describe("isDueNow", () => {
+    it("returns true for an event starting right now or within 2 minutes", () => {
+      const now = new Date("2026-10-26T14:00:00Z");
+      const future1m = new Date("2026-10-26T14:01:00Z").toISOString();
+      expect(isDueNow(future1m, now, 2)).toBe(true);
+    });
+
+    it("returns true for an event that started 30 seconds ago", () => {
+      const now = new Date("2026-10-26T14:00:30Z");
+      const past30s = new Date("2026-10-26T14:00:00Z").toISOString();
+      expect(isDueNow(past30s, now, 2)).toBe(true);
+    });
+
+    it("returns false for an event starting in 10 minutes", () => {
+      const now = new Date("2026-10-26T14:00:00Z");
+      const future10m = new Date("2026-10-26T14:10:00Z").toISOString();
+      expect(isDueNow(future10m, now, 2)).toBe(false);
     });
   });
 });

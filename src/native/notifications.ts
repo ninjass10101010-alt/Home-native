@@ -90,6 +90,7 @@ export interface PostNotificationParams {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  timing?: "advance" | "start";
 }
 
 /**
@@ -101,6 +102,7 @@ export async function dispatchNotification({
   title,
   body,
   data,
+  timing,
 }: PostNotificationParams): Promise<string | null> {
   if (category !== "emergency" && category !== "general") {
     const prefs = await loadNotificationPreferences();
@@ -108,8 +110,20 @@ export async function dispatchNotification({
     if (!config.enabled) {
       return null;
     }
-    // Play custom audio tone at configured volume
-    void playNotificationSound(config.sound, config.volume);
+    if (timing === "advance") {
+      if (config.advanceEnabled === false) return null;
+      const sound = config.advanceSound ?? config.sound;
+      const volume = config.advanceVolume ?? config.volume;
+      void playNotificationSound(sound, volume);
+    } else if (timing === "start") {
+      if (config.startEnabled === false) return null;
+      const sound = config.startSound ?? config.sound;
+      const volume = config.startVolume ?? config.volume;
+      void playNotificationSound(sound, volume);
+    } else {
+      // Play default category audio tone at configured volume
+      void playNotificationSound(config.sound, config.volume);
+    }
   } else if (category === "emergency") {
     void playNotificationSound("radar", 1.0);
   }

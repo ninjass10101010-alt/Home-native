@@ -105,4 +105,24 @@ describe("NotificationsCard", () => {
       })
     );
   });
+
+  it("switches timing stage and configures separate starting now tone", async () => {
+    const { getByTestId, findAllByText } = render(<NotificationsCard />, {
+      wrapper: wrap,
+    });
+
+    // Switch Calendar to "Starting Now" (first matching tab is calendar)
+    const startTabs = await findAllByText("🔔 Starting Now");
+    await act(async () => {
+      fireEvent.press(startTabs[0]);
+    });
+
+    // Pick new tone option "beacon"
+    const beaconChip = getByTestId("notif-sound-calendar-beacon");
+    await act(async () => {
+      fireEvent.press(beaconChip);
+    });
+
+    expect(playSoundSpy).toHaveBeenCalledWith("beacon", expect.any(Number));
+  });
 });

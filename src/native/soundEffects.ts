@@ -7,6 +7,12 @@ export const NOTIFICATION_SOUNDS = [
   "bell",
   "marimba",
   "pulse",
+  "beacon",
+  "breeze",
+  "strum",
+  "cascade",
+  "siren",
+  "zen",
 ] as const;
 
 export type NotificationSound = (typeof NOTIFICATION_SOUNDS)[number];
@@ -18,6 +24,12 @@ export const SOUND_LABELS: Record<NotificationSound, string> = {
   bell: "Service Bell",
   marimba: "Warm Marimba",
   pulse: "Double Pulse",
+  beacon: "Beacon Ping",
+  breeze: "Woodwind Breeze",
+  strum: "Acoustic Strum",
+  cascade: "Chime Cascade",
+  siren: "Alert Siren",
+  zen: "Singing Bowl",
 };
 
 export const SOUND_ICONS: Record<NotificationSound, string> = {
@@ -27,6 +39,12 @@ export const SOUND_ICONS: Record<NotificationSound, string> = {
   bell: "🛎️",
   marimba: "🪵",
   pulse: "✨",
+  beacon: "🗼",
+  breeze: "🍃",
+  strum: "🎸",
+  cascade: "🌟",
+  siren: "🚨",
+  zen: "🧘",
 };
 
 export const SOUND_ASSETS: Record<NotificationSound, number> = {
@@ -36,6 +54,12 @@ export const SOUND_ASSETS: Record<NotificationSound, number> = {
   bell: require("../../assets/sounds/bell.wav"),
   marimba: require("../../assets/sounds/marimba.wav"),
   pulse: require("../../assets/sounds/pulse.wav"),
+  beacon: require("../../assets/sounds/beacon.wav"),
+  breeze: require("../../assets/sounds/breeze.wav"),
+  strum: require("../../assets/sounds/strum.wav"),
+  cascade: require("../../assets/sounds/cascade.wav"),
+  siren: require("../../assets/sounds/siren.wav"),
+  zen: require("../../assets/sounds/zen.wav"),
 };
 
 type AudioModuleType = typeof import("expo-audio");

@@ -51,6 +51,34 @@ export function isStartingSoon(
   return diffMinutes >= 0 && diffMinutes <= leadMinutes;
 }
 
+/**
+ * Checks if a time string is starting right now (from 1 min ago up to windowMinutes ahead).
+ */
+export function isDueNow(
+  timeStr: string | undefined,
+  now: Date,
+  windowMinutes = 2
+): boolean {
+  if (!timeStr) return false;
+
+  let eventTime: Date;
+  if (timeStr.includes("T") || timeStr.includes("-")) {
+    eventTime = new Date(timeStr);
+  } else if (timeStr.includes(":")) {
+    const [hh, mm] = timeStr.split(":").map(Number);
+    eventTime = new Date(now);
+    eventTime.setHours(hh, mm, 0, 0);
+  } else {
+    return false;
+  }
+
+  if (isNaN(eventTime.getTime())) return false;
+
+  const diffMs = eventTime.getTime() - now.getTime();
+  const diffMinutes = diffMs / (60 * 1000);
+  return diffMinutes >= -1 && diffMinutes <= windowMinutes;
+}
+
 export function useNotificationMonitor({
   pollIntervalMs = 60_000,
   nowProvider = () => new Date(),
@@ -59,8 +87,10 @@ export function useNotificationMonitor({
   nowProvider?: () => Date;
 } = {}) {
   const alertedWeatherRef = useRef<string | null>(null);
-  const alertedCalendarIds = useRef<Set<string>>(new Set());
-  const alertedRoutineIds = useRef<Set<string>>(new Set());
+  const alertedCalendarAdvanceIds = useRef<Set<string>>(new Set());
+  const alertedCalendarStartIds = useRef<Set<string>>(new Set());
+  const alertedRoutineAdvanceIds = useRef<Set<string>>(new Set());
+  const alertedRoutineStartIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let alive = true;
@@ -103,16 +133,34 @@ export function useNotificationMonitor({
 
         for (const ev of events) {
           const key = String(ev.id);
+          // 15-min advance notification
           if (
-            !alertedCalendarIds.current.has(key) &&
-            isStartingSoon(ev.start, now, 15)
+            !alertedCalendarAdvanceIds.current.has(key) &&
+            isStartingSoon(ev.start, now, 15) &&
+            !isDueNow(ev.start, now, 2)
           ) {
-            alertedCalendarIds.current.add(key);
+            alertedCalendarAdvanceIds.current.add(key);
             void dispatchNotification({
               category: "calendar",
               title: "📅 Upcoming Event",
               body: `${ev.title || "Event"} starts in 15 minutes.`,
               data: { eventId: ev.id },
+              timing: "advance",
+            });
+          }
+
+          // Event starting now notification
+          if (
+            !alertedCalendarStartIds.current.has(key) &&
+            isDueNow(ev.start, now, 2)
+          ) {
+            alertedCalendarStartIds.current.add(key);
+            void dispatchNotification({
+              category: "calendar",
+              title: "🔔 Event Starting Now",
+              body: `${ev.title || "Event"} is starting now.`,
+              data: { eventId: ev.id },
+              timing: "start",
             });
           }
         }
@@ -141,20 +189,39 @@ export function useNotificationMonitor({
           }
 
           const targetMinutes = scheduleTimeMinutes(rt.time);
-          const startingSoon =
+          const advanceDue =
             targetMinutes !== null
-              ? targetMinutes - nowMins >= 0 && targetMinutes - nowMins <= 15
-              : isStartingSoon(rt.time, now, 15);
+              ? targetMinutes - nowMins > 2 && targetMinutes - nowMins <= 15
+              : isStartingSoon(rt.time, now, 15) && !isDueNow(rt.time, now, 2);
+          const startDue =
+            targetMinutes !== null
+              ? nowMins - targetMinutes >= -1 && nowMins - targetMinutes <= 2
+              : isDueNow(rt.time, now, 2);
 
           const key = `${todayISO}-${rt.id}`;
-          if (!alertedRoutineIds.current.has(key) && startingSoon) {
-            alertedRoutineIds.current.add(key);
-            const memberInfo = rt.member ? ` for ${rt.member.split(" ")[0]}` : "";
+          const memberInfo = rt.member ? ` for ${rt.member.split(" ")[0]}` : "";
+
+          // 15-min advance notification
+          if (!alertedRoutineAdvanceIds.current.has(key) && advanceDue) {
+            alertedRoutineAdvanceIds.current.add(key);
             void dispatchNotification({
               category: "routines",
-              title: `${rt.icon || "⏰"} Routine Reminder`,
+              title: `${rt.icon || "⏰"} Routine Soon`,
               body: `"${rt.title || "Daily routine"}"${memberInfo} starts in 15 minutes.`,
               data: { routineId: rt.id, member: rt.member },
+              timing: "advance",
+            });
+          }
+
+          // Routine starting now notification
+          if (!alertedRoutineStartIds.current.has(key) && startDue) {
+            alertedRoutineStartIds.current.add(key);
+            void dispatchNotification({
+              category: "routines",
+              title: "🔔 Routine Starting",
+              body: `"${rt.title || "Daily routine"}"${memberInfo} is starting now.`,
+              data: { routineId: rt.id, member: rt.member },
+              timing: "start",
             });
           }
         }

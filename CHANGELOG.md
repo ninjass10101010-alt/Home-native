@@ -4,6 +4,27 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — feat(settings,notifications): dual-timing alert tones (15-min heads-up vs event start) & 6 new synthesized notification tones (`NotificationsCard.tsx`, `soundEffects.ts`, `notificationPrefs.ts`, `useNotificationMonitor.ts`, `notifications.ts`).
+  **What changed:**
+  - **DUAL-STAGE TIMING TONES FOR CALENDAR & ROUTINES (`NotificationsCard.tsx`, `notificationPrefs.ts`)**:
+    - Expanded notification configuration so time-based categories (Calendar Reminders and Daily Routines) support independent tone, volume, preview, and test triggers for both the **15-minute advance reminder** and the **event start / routine due alert**.
+    - Integrated an interactive `SegmentedControl` (`[ ⏰ 15-Min Reminder ]` / `[ 🔔 Starting Now ]`) inside both cards, with contextual helper copy explaining each stage's timing.
+  - **EXPANDED TONE LIBRARY (12 HIGH-FIDELITY TONES) (`soundEffects.ts`, `assets/sounds/`)**:
+    - Added 6 new synthesized, 44.1kHz 16-bit PCM WAV notification tones:
+      - 🗼 **Beacon Ping** (`beacon`): Crisp, modern high-clarity crystal ping with natural harmonic decay.
+      - 🍃 **Woodwind Breeze** (`breeze`): Soft ascending woodwind/flute chord arpeggio.
+      - 🎸 **Acoustic Strum** (`strum`): Warm nylon guitar triad chord pluck.
+      - 🌟 **Chime Cascade** (`cascade`): Shimmering celeste chime descending arpeggio.
+      - 🚨 **Alert Siren** (`siren`): High-priority dual-pulse emergency alert tone.
+      - 🧘 **Singing Bowl** (`zen`): Deep resonant 432Hz Tibetan meditation bowl chime.
+    - Exported labels, icons, and asset mappings for all 12 tones with instant audio preview.
+  - **DUAL MONITOR DISPATCHING (`useNotificationMonitor.ts`, `notifications.ts`)**:
+    - Added `isDueNow(timeStr, now, windowMinutes = 2)` and separate deduplication tracking refs (`alertedCalendarAdvanceIds`, `alertedCalendarStartIds`, `alertedRoutineAdvanceIds`, `alertedRoutineStartIds`).
+    - The monitor now dispatches both the 15-min advance notification (`timing: "advance"`) and the start notification (`timing: "start"`), playing the user's customized sound and volume for each stage.
+  - **SAFETY ARCHITECTURE BLUEPRINT**:
+    - Evaluated automated emergency call workflows: documented the Home Assistant Critical Alerts & Intercom roadmap (for when Home Assistant is set up) alongside Twilio voice robocall/WebRTC bridging options.
+  **Tests:** `tests/notifications-prefs.test.ts` (3 tests green), `tests/notification-monitor.test.ts` (6 tests green), `tests/notifications-card.test.tsx` (6 tests green). `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-29 — fix(home,layout): content-aware smart widget sizing & strict honoring of user 1-cell settings (`wallActivity.ts`, `HomeWall.tsx`, `ScheduleWidget.tsx`).
   **What changed:**
   - **CONTENT-AWARE SMART SIZING (`wallActivity.ts`)**:
