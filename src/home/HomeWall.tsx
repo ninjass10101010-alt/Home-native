@@ -486,12 +486,13 @@ export function HomeWall({
             lineHeight: TYPOGRAPHY.label.lineHeight,
             fontWeight: "600",
             letterSpacing: 2,
+            maxWidth: 180,
             flexShrink: 1,
           }}
         >
           {day} · {date}
         </Text>
-        <View style={{ flexShrink: 1, minHeight: RAIL_ROW_H }}>
+        <View style={{ flexShrink: 1, maxWidth: 420, minHeight: RAIL_ROW_H }}>
           <MemberRail
             members={members}
             currentName={member?.name ?? null}

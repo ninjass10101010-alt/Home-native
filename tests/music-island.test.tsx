@@ -236,4 +236,40 @@ describe("MusicIsland", () => {
     expect(getByTestId("music-island-waveform")).toBeTruthy();
     expect(useOutputVolume).toHaveBeenCalledWith(mockPlayer);
   });
+
+  it("adapts layout on Home (/) to clear avatars and date gutter", () => {
+    (usePlayback as jest.Mock).mockReturnValue({ current: mockTrack });
+    (usePathname as jest.Mock).mockReturnValue("/");
+
+    const { getByTestId } = render(<MusicIsland />);
+    const island = getByTestId("music-island");
+    const collapsed = getByTestId("music-island-collapsed");
+
+    // Bounded between date (left: 200) and top-bar avatars (right: 480)
+    expect(island.props.style).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ left: 200, right: 480, top: 10 }),
+      ])
+    );
+    expect(collapsed.props.style).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ maxWidth: 290 }),
+      ])
+    );
+  });
+
+  it("uses standard full-width center layout on non-home routes", () => {
+    (usePlayback as jest.Mock).mockReturnValue({ current: mockTrack });
+    (usePathname as jest.Mock).mockReturnValue("/tasks");
+
+    const { getByTestId } = render(<MusicIsland />);
+    const island = getByTestId("music-island");
+
+    expect(island.props.style).toMatchObject({
+      left: 0,
+      right: 0,
+      top: 8,
+      alignItems: "center",
+    });
+  });
 });

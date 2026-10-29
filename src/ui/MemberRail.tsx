@@ -26,6 +26,7 @@ export interface MemberRailProps {
   onSignOut?: () => void;
   style?: ViewStyle;
   testID?: string;
+  wrap?: boolean;
 }
 
 /** True when the member's "emoji" slot carries a photo (data-URI or URL). */
@@ -154,7 +155,7 @@ function RailTap({
  * one avatar per member, the signed-in tile carries the accent, Sign out at the
  * rail's end. Tiles ≥ 64dp (the tile is 91dp tall: 8 pad + 48 avatar + 5 + 20).
  */
-export function MemberRail({ members, currentName = null, onSelect, onSignOut, style, testID }: MemberRailProps) {
+export function MemberRail({ members, currentName = null, onSelect, onSignOut, style, testID, wrap = false }: MemberRailProps) {
   const { colors, theme, accentColor } = useTheme();
   // Web WallMemberRail parity: sign-out is a 2-tap confirm — the first tap
   // arms ("Sign out?"), the second fires; the armed state auto-resets.
@@ -200,7 +201,7 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
       <View
         style={{
           flexDirection: "row",
-          flexWrap: "wrap",
+          flexWrap: wrap ? "wrap" : "nowrap",
           alignItems: "center",
           justifyContent: "flex-end",
           gap: TILE_GAP,

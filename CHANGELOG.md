@@ -4,6 +4,18 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — feat(music,home): gutter-aware Dynamic Island layout to guarantee zero overlap with top-bar member avatars (`MusicIsland.tsx`, `HomeWall.tsx`, `MemberRail.tsx`).
+  **What changed:**
+  - **GUTTER-AWARE TOP BAR INTEGRATION (`MusicIsland.tsx`)**:
+    - When displaying on the Home wall (`pathname === "/" || pathname === ""`), the collapsed Dynamic Island now detects the Home route and positions itself within the open center-left gutter (`top: 10, left: 200, right: 480`, `maxWidth: 290`), rather than centering across the whole 1080px display.
+    - This centers the music pill around x = 400 (spanning x ≈ 255 to x ≈ 545), leaving ~60px of breathing room from the Date eyebrow on the left (x ≤ 196) and ~55px minimum clearance from the Member avatars on the right (x ≥ 600).
+    - When expanded on Home or any screen, the island uses full-width centering with a modal backdrop overlay (`testID="music-island-backdrop"`) for track controls, volume sliding, and scrubber adjustment, then smoothly collapses back to the gutter pill.
+    - On non-home routes (`/tasks`, `/calendar`, etc.), the Dynamic Island maintains its standard full-width top-center position (`top: 8, left: 0, right: 0`).
+  - **TOP BAR BOUNDS & SINGLE-ROW AVATARS (`HomeWall.tsx`, `MemberRail.tsx`)**:
+    - Constrained the Date eyebrow in `HomeWall.tsx` to `maxWidth: 180` and the Member avatars container to `maxWidth: 420`, permanently reserving the center channel for the Music Island regardless of text lengths or roster size.
+    - Updated `MemberRail.tsx` to support `wrap?: boolean` (defaulting to `false`), preventing top-bar avatars from wrapping onto a second row over the greeting.
+  **Tests:** `tests/music-island.test.tsx` (14 tests green including Home gutter adaptation & non-home route centering tests), `tests/home-wall.test.tsx` (22 tests green), `tests/primitives-c.test.tsx` (18 tests green). `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-29 — feat(home): relocate member avatars to top bar adjacent to emergency button (`HomeWall.tsx`).
   **What changed:**
   - **UNCLUTTERED TOP BAR LAYOUT (`HomeWall.tsx`)**:
