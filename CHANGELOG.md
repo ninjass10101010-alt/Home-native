@@ -4,6 +4,14 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — feat(home): relocate member avatars to top bar adjacent to emergency button (`HomeWall.tsx`).
+  **What changed:**
+  - **UNCLUTTERED TOP BAR LAYOUT (`HomeWall.tsx`)**:
+    - Relocated the `MemberRail` avatars from the crowded header greeting band to the absolute top of the screen (`top: 10`, `right: 92`), sitting horizontally adjacent to the left of the Emergency Shield button (`top: 16, right: 16`).
+    - Positioned the date eyebrow (`{day} · {date}`) cleanly on the top-left of this top bar.
+    - Removed the cramped identity row from the greeting band, giving the two-line greeting ("Good afternoon, Garcia Family 🍂 5:42 PM") and the KPI stat tiles generous vertical breathing room so the wall no longer feels crowded or dense.
+  **Tests:** `tests/home-wall.test.tsx` (22 tests green). `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-29 — feat(settings,notifications): dual-timing alert tones (15-min heads-up vs event start) & 6 new synthesized notification tones (`NotificationsCard.tsx`, `soundEffects.ts`, `notificationPrefs.ts`, `useNotificationMonitor.ts`, `notifications.ts`, `EmergencyFlow.tsx`).
   **What changed:**
   - **EMBEDDED NOTIFICATIONS ON BOTH SAFETY SURFACES (`EmergencyFlow.tsx`, `SettingsPage.tsx`)**:

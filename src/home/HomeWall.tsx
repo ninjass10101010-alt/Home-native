@@ -111,27 +111,8 @@ const WALL_HEIGHT = 1920;
 /** The emergency shield's 64dp target, inset from the wall's corner (the web's
  *  fixed Emergency button: 16px in, 64×64). */
 const SHIELD_INSET = 16;
-/** The rail's right-hand clearance for that shield (the web's `pr-16`). */
-const SHIELD_CLEARANCE = 64;
-/**
- * The identity row's top inset, signed in.
- *
- * The web's emergency button is FIXED at the corner, so the web's rail clears
- * it HORIZONTALLY (`pr-16`) and its identity row is `flex-wrap`: with the
- * sign-out button in the rail the row overflows and the rail wraps onto a
- * line of its own. The native's rail is a wrapping flex row too, but a
- * wrapped rail would leave the sign-out button on its own line, so the band
- * opens BELOW the shield instead — the same outcome the web's wrap produces:
- * every tile, including sign out, is on screen.
- *
- * The opening is the reference's own gap: the chrome's bottom edge (the
- * shield's, at y=79 — the same height as the signed-out banner's) plus the
- * 28px the reference leaves before the rail's plate (its banner ends at 78,
- * its plate starts at 105). The signed-in band therefore opens at 107 and
- * its plate clears the shield by 28px — not the 5px a band opening at 84
- * left.
- */
-const IDENTITY_TOP_SIGNED_IN = 107;
+/** The emergency shield width and clearance. */
+const SHIELD_SIZE = 64;
 /**
  * The identity row's height — the member rail's tile (8 pad + the 48 avatar
  * + 5 + the 20 name line + 8 pad; the 2px ring is a spread shadow drawn
@@ -482,86 +463,69 @@ export function HomeWall({
           Emergency button, 16px in from the corner. */}
       <EmergencyShield style={{ top: SHIELD_INSET, right: SHIELD_INSET, zIndex: 30 }} />
 
-      {/* The signed-out band: full width across the very top of the wall, the
-          one place the family is told the wall is showing a saved copy — and
-          the ONLY notice the signed-out wall carries. The reference's guest
-          capture leaves the band between the strip and the identity row empty
-          canvas (y 78-105), so nothing else may sit there. */}
+      {/* Top bar: Date eyebrow on left, User avatars positioned way at the top
+          of the screen to the left of the Emergency button. */}
+      <View
+        style={{
+          position: "absolute",
+          top: 10,
+          left: GRID_H_PAD,
+          right: SHIELD_INSET + SHIELD_SIZE + 12, // 16 + 64 + 12 = 92dp to clear emergency shield + gap
+          zIndex: 30,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          minHeight: 64,
+        }}
+      >
+        <Text
+          numberOfLines={1}
+          style={{
+            color: colors["color-text-secondary"],
+            fontSize: TYPOGRAPHY.label.fontSize,
+            lineHeight: TYPOGRAPHY.label.lineHeight,
+            fontWeight: "600",
+            letterSpacing: 2,
+            flexShrink: 1,
+          }}
+        >
+          {day} · {date}
+        </Text>
+        <View style={{ flexShrink: 1, minHeight: RAIL_ROW_H }}>
+          <MemberRail
+            members={members}
+            currentName={member?.name ?? null}
+            onSelect={onSelectMember}
+            onSignOut={onSignOut}
+          />
+        </View>
+      </View>
+
+      {/* The signed-out band: full width across the top of the wall below the rail. */}
       {signedOut ? (
-        <WallSignedOutBanner
-          copy={
-            rosterUnreachable
-              ? hasSavedRoster
-                ? SIGNED_OUT_BANNER_OFFLINE
-                : SIGNED_OUT_BANNER_OFFLINE_NO_COPY
-              : hasSavedRoster
-                ? SIGNED_OUT_BANNER
-                : SIGNED_OUT_BANNER_NO_COPY
-          }
-          onSignIn={() => router.push("/settings" as never)}
-        />
+        <View style={{ marginTop: 104 }}>
+          <WallSignedOutBanner
+            copy={
+              rosterUnreachable
+                ? hasSavedRoster
+                  ? SIGNED_OUT_BANNER_OFFLINE
+                  : SIGNED_OUT_BANNER_OFFLINE_NO_COPY
+                : hasSavedRoster
+                  ? SIGNED_OUT_BANNER
+                  : SIGNED_OUT_BANNER_NO_COPY
+            }
+            onSignIn={() => router.push("/settings" as never)}
+          />
+        </View>
       ) : null}
 
-      {/* The header band. Signed out, the banner band above already carries the
-          wall past the shield, so the band opens by the web's pt-7. Signed in
-          there is no banner, so the band opens by the shield's own height and
-          the identity row clears it vertically. */}
-      <View style={{ paddingHorizontal: GRID_H_PAD, paddingTop: signedOut ? 28 : IDENTITY_TOP_SIGNED_IN }}>
-        {/* Row 1 — the date eyebrow (left) and the identity rail (right), the
-            web's header band: `flex flex-wrap items-center justify-between`.
-            The rail carries the shield's clearance so its last tile never
-            slides under the emergency button. */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <Text
-            numberOfLines={1}
-            style={{
-              color: colors["color-text-secondary"],
-              fontSize: TYPOGRAPHY.label.fontSize,
-              lineHeight: TYPOGRAPHY.label.lineHeight,
-              // The web's eyebrow is `font-semibold` (600) — the native's 700
-              // read heavier AND wider than the reference's, whose 'T' is 6px
-              // across against the native's 9.
-              fontWeight: "600",
-              letterSpacing: 2,
-              // The web's eyebrow is `flex-1 truncate`: when the rail needs
-              // the room, the date truncates rather than pushing the rail.
-              flexShrink: 1,
-            }}
-          >
-            {day} · {date}
-          </Text>
-          <View
-            style={{
-              flex: 1,
-              minWidth: 0,
-              // The web's `pr-16` clearance for the fixed emergency button.
-              // Signed in, the identity row already clears the shield
-              // vertically, so the rail takes the full width instead — the web
-              // gets that width by WRAPPING its rail onto a second line.
-              paddingRight: signedOut ? SHIELD_CLEARANCE : 0,
-              // The row is reserved at the rail tile's height so a wall with
-              // no roster to show keeps the band's geometry.
-              minHeight: RAIL_ROW_H,
-            }}
-          >
-            <MemberRail members={members} currentName={member?.name ?? null} onSelect={onSelectMember} onSignOut={onSignOut} />
-          </View>
-        </View>
-
-        {/* Row 2 — the greeting, on TWO lines (the web's `wall-board` break
+      {/* The header band. Opens with generous breathing room under the top bar. */}
+      <View style={{ paddingHorizontal: GRID_H_PAD, paddingTop: signedOut ? 16 : 112 }}>
+        {/* The greeting, on TWO lines (the web's `wall-board` break
             that the portrait wall keeps): the salutation, then the family
             name in the accent colour, with the season + clock badge sitting
-            on the second line's baseline beside it (the web's Row 2).
-
-            The two lines are set 40px apart — the reference's measured pitch
-            (baseline 234 → 274). Each line's BOX still measures 58, the
-            display ramp's line height, which tests/home-wall.test.tsx pins on
-            the accent span; the negative margins are what decouple the two.
-            The greeting itself rides 5px INTO the identity row's own air:
-            the reference's cap top (203) sits 3px above the rail tile's
-            bottom, and a 58px line box carries 13px of leading above the
-            caps. */}
-        <View style={{ marginTop: -5 }}>
+            on the second line's baseline beside it. */}
+        <View style={{ marginTop: 0 }}>
           <Text numberOfLines={1} style={greetingStyle}>
             {greeting},
           </Text>
