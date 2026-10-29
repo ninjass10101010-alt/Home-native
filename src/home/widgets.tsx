@@ -60,12 +60,14 @@ export const WALL_CONFIGURABLE_WIDGETS: WidgetId[] = [
   "music",
   "currentMeal",
   "leaderboard",
+  "schedule",
   "homeSecurity",
   "homeClimate",
   "homeLights",
 ];
 
 export const WALL_DEFAULT_HIDDEN_WIDGETS: WidgetId[] = [
+  "schedule",
   "homeSecurity",
   "homeClimate",
   "homeLights",
@@ -73,7 +75,6 @@ export const WALL_DEFAULT_HIDDEN_WIDGETS: WidgetId[] = [
 
 export const WALL_LOCKED_HIDDEN_WIDGETS: WidgetId[] = [
   "aiQuickAsk",
-  "schedule",
   "consuelaSuggestions",
   "financeLedger",
 ];

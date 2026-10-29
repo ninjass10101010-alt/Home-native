@@ -4,6 +4,22 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — feat(home,widgets): native Daily Schedule widget parity with webapp (`ScheduleWidget.tsx`).
+  **What changed:**
+  - **NATIVE `ScheduleWidget` COMPONENT** (`src/home/widgets/ScheduleWidget.tsx`):
+    - Full port of webapp's `ScheduleDisplay.tsx` in warm-glass design language with cyan accent tone (`#06b6d4` / `color-accent-cyan`).
+    - Integrated with household clock `DayLine` hairline showing today's routine dots across the 24h timeline.
+    - Displays upcoming routines filtered by today's weekday (`schedulesForDay`), with 12-hour formatted time (`formatScheduleTime12h`), routine icon/emoji, routine title, glowing colored left rail, and family member chip badge.
+    - Honest empty states: "No routines are scheduled for today" when empty, and "All done / All routines completed for today 🎉" when all routines are in the past.
+    - Deep-link footer (`+{N} more · See all →`) navigating to `/calendar` when routines exceed visible cell budget (2 for 1-cell span, 4 for 2-cell span).
+  - **HOME WALL & SETTINGS CONFIGURATION** (`app/index.tsx`, `src/home/widgets.tsx`, `src/settings/HomeSection.tsx`):
+    - Added `ScheduleWidget` to `WALL_WIDGETS` registry in `app/index.tsx`.
+    - Moved `schedule` from locked-hidden to `WALL_CONFIGURABLE_WIDGETS` (default hidden), allowing parents to configure and enable it on the 12-cell Home Wall via **Settings → Home**.
+  - **PERFORMANCE OPTIMIZATION FOR SVG ICONS & MONSTER DIGITS** (`src/ui/HomeWidgetIcon.tsx`, `src/weather/art.tsx`, `src/weather/useAmbient.tsx`):
+    - Replaced CPU-heavy Reanimated `useAnimatedProps` hooks on SVG paths/circles with static clay SVG elements and GPU-accelerated container transforms, resolving the Android ANR input dispatch timeout.
+    - Consolidated weather digit pupil glance loops to hero primary eye (`height >= 120`).
+  **Tests:** `tests/schedule-widget.test.tsx` (new, 3 tests), `tests/wall-layout.test.tsx` (13 tests), `tests/settings-page.test.tsx` (32 tests). `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-28 — feat(screensaver,settings): schedule-based screensaver with night quiet hours, presets (11 PM – 4 AM), and morning auto-wake.
   **What changed:**
   - **SCREENSAVER PREFERENCE STATE & HOOK** (`src/home/idle.ts`):

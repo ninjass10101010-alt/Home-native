@@ -52,18 +52,19 @@ describe("wall manifest — the balanced reading order", () => {
       "music",
       "currentMeal",
       "leaderboard",
+      "schedule",
       "homeSecurity",
       "homeClimate",
       "homeLights",
     ]);
     expect(WALL_DEFAULT_HIDDEN_WIDGETS).toEqual([
+      "schedule",
       "homeSecurity",
       "homeClimate",
       "homeLights",
     ]);
     expect(WALL_LOCKED_HIDDEN_WIDGETS).toEqual([
       "aiQuickAsk",
-      "schedule",
       "consuelaSuggestions",
       "financeLedger",
     ]);
@@ -149,7 +150,6 @@ describe("wall layout — v1 resets once and v2 customizations persist", () => {
   it("keeps deferred widgets locked off", () => {
     const custom = L({}, ["music", "homeClimate", "homeLights", "aiQuickAsk"]);
     expect(layoutWidgets(custom)).not.toContain("aiQuickAsk");
-    expect(layoutWidgets(custom)).not.toContain("schedule");
     expect(layoutWidgets(custom)).not.toContain("consuelaSuggestions");
     expect(layoutWidgets(custom)).not.toContain("financeLedger");
   });

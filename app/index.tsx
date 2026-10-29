@@ -36,6 +36,7 @@ import { HomeClimateWidget } from "../src/home/widgets/HomeClimateWidget";
 import { HomeLightsWidget } from "../src/home/widgets/HomeLightsWidget";
 import { LeaderboardWidget } from "../src/home/widgets/LeaderboardWidget";
 import { MusicWidget } from "../src/home/widgets/MusicWidget";
+import { ScheduleWidget } from "../src/home/widgets/ScheduleWidget";
 
 /** Wave 1 live widgets — the full 11-cell wall is live as of Task 5/6. */
 const WALL_WIDGETS: Partial<
@@ -52,6 +53,7 @@ const WALL_WIDGETS: Partial<
   homeLights: HomeLightsWidget,
   leaderboard: LeaderboardWidget,
   music: MusicWidget,
+  schedule: ScheduleWidget,
 };
 
 const WRONG_PIN_COPY = "Wrong PIN — try again.";

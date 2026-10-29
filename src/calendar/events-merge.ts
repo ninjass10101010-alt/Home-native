@@ -260,7 +260,7 @@ export function scheduleCoversWeekday(days: unknown, weekdayShort: string, weekd
 }
 
 /** Routine color name → theme token (the web's scheduleColorValues map). */
-const SCHEDULE_RAIL_TOKENS: Record<string, string> = {
+export const SCHEDULE_RAIL_TOKENS: Record<string, string> = {
   green: "color-accent-selected",
   amber: "color-accent-amber",
   cyan: "color-accent-cyan",

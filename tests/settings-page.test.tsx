@@ -381,8 +381,8 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
     expect(getByTestId("wall-layout-row-homeSecurity")).toBeTruthy();
     expect(getByTestId("wall-layout-row-homeClimate")).toBeTruthy();
     expect(getByTestId("wall-layout-row-homeLights")).toBeTruthy();
+    expect(getByTestId("wall-layout-row-schedule")).toBeTruthy();
     expect(queryByText("AI Quick Ask")).toBeNull();
-    expect(queryByText("Daily Schedule")).toBeNull();
     expect(queryByText("Consuela's Suggestions")).toBeNull();
     expect(queryByText("The Ledger")).toBeNull();
   });
@@ -427,6 +427,7 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
       );
       expect(stored?.version).toBe(2);
       expect(stored?.hidden).toEqual([
+        "schedule",
         "homeSecurity",
         "homeClimate",
         "homeLights",
