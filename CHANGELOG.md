@@ -4,6 +4,14 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — feat(home): home wall header greeting displays "Garcia Family" (`HomeWall.tsx`).
+  **What changed:**
+  - **HOME WALL HEADER GREETING**:
+    - Updated `src/home/HomeWall.tsx` greeting header to address the household ("Good afternoon, Garcia Family" / "Good morning, Garcia Family") instead of an individual member's first name, reflecting the wall's role as the shared central family dashboard.
+    - Updated `savedFamilyLabel` in `src/home/HomeWall.tsx` to capitalize `Family` (`${surname} Family`) when surnames are discovered across members, and fallback to `"Garcia Family"` when no surname patterns exist in the roster.
+    - Active signed-in members continue to be clearly highlighted in the top MemberRail with their glowing ring, checkmark, and sign-out control.
+  **Tests:** `tests/home-wall.test.tsx` (21 tests green). `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-29 — feat(home,widgets,notifications): native Daily Schedule widget parity with webapp (`ScheduleWidget.tsx`) & routine notification sound chime integration.
   **What changed:**
   - **NATIVE `ScheduleWidget` COMPONENT** (`src/home/widgets/ScheduleWidget.tsx`):

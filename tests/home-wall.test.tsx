@@ -3,7 +3,7 @@ import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
-import { HomeWall, greetingFor, GRID_CELL_H, seasonGlyph } from "../src/home/HomeWall";
+import { HomeWall, greetingFor, GRID_CELL_H, savedFamilyLabel, seasonGlyph } from "../src/home/HomeWall";
 import {
   visibleOnWall,
   wallColumns,
@@ -154,6 +154,21 @@ describe("HomeWall (the 12-cell wall bento)", () => {
     expect(greetingFor(23)).toBe("Good night");
   });
 
+  it("savedFamilyLabel derives surname family with capitalized Family", () => {
+    expect(
+      savedFamilyLabel([
+        { name: "Jeffery Garcia", emoji: "👨" },
+        { name: "Rebecca Garcia", emoji: "👩" },
+      ])
+    ).toBe("Garcia Family");
+    expect(
+      savedFamilyLabel([
+        { name: "Jeffery", emoji: "👨" },
+        { name: "Rebecca", emoji: "👩" },
+      ])
+    ).toBeNull();
+  });
+
   // The clock's season glyph is derived, never hardcoded — a hardcoded 🍂 is
   // right on its capture date and wrong for nine months of the year
   // (web page.tsx:411-413: Mar–May spring, Jun–Aug summer, Sep–Nov autumn).
@@ -295,7 +310,7 @@ describe("HomeWall KPI band + This Week tail", () => {
   // not have — so it is load-bearing, and pinned here.
   it("the greeting's nested span pins lineHeight so the 2-line header measures 116", () => {
     const view = render(<HomeWall members={members} onSelectMember={() => {}} />, { wrapper: wrap });
-    const spans = view.root.findAll(n => n.props?.children === "family" || n.props?.children === "Aurora");
+    const spans = view.root.findAll(n => n.props?.children === "Garcia Family" || n.props?.children === "family" || n.props?.children === "Aurora");
     expect(spans.length).toBeGreaterThan(0);
     for (const span of spans) {
       const flat = Object.assign({}, ...[].concat(span.props.style ?? []).filter(Boolean));

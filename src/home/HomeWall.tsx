@@ -331,7 +331,7 @@ export function savedFamilyLabel(members: RailMember[]): string | null {
   const counts = new Map<string, number>();
   for (const s of surnames) counts.set(s, (counts.get(s) ?? 0) + 1);
   const [surname, n] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-  return n >= 2 ? `${surname} family` : null;
+  return n >= 2 ? `${surname} Family` : null;
 }
 
 export interface HomeWallProps {
@@ -385,9 +385,9 @@ export function HomeWall({
   const date = now.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
   const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-  // Web parity (page.tsx:537): signed in → the session member's first name;
-  // signed out → the family label the saved roster carries, if it carries one.
-  const familyName = member?.name?.split(" ")[0] ?? savedFamilyLabel(members) ?? "family";
+  // The home wall is the household hub — header greets the family
+  // ("Good afternoon, Garcia Family"). Active session is highlighted in the rail.
+  const familyName = savedFamilyLabel(members) ?? "Garcia Family";
 
   /**
    * The signed-out state. The web's wall shows the SyncStatusBanner strip
