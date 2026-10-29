@@ -508,8 +508,8 @@ const styles = StyleSheet.create({
     zIndex: 9999,
   },
   containerHome: {
-    top: 10,
-    left: 200,
+    top: 12,
+    left: 24,
     right: 480,
     alignItems: "center",
   },
@@ -529,7 +529,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   collapsedHome: {
-    maxWidth: 290,
+    maxWidth: 300,
   },
   leftWaveform: {
     marginRight: 10,

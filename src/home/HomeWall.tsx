@@ -463,43 +463,26 @@ export function HomeWall({
           Emergency button, 16px in from the corner. */}
       <EmergencyShield style={{ top: SHIELD_INSET, right: SHIELD_INSET, zIndex: 30 }} />
 
-      {/* Top bar: Date eyebrow on left, User avatars positioned way at the top
-          of the screen to the left of the Emergency button. */}
+      {/* Top bar: Member avatars positioned at the top of the screen
+          to the left of the Emergency button. */}
       <View
         style={{
           position: "absolute",
-          top: 10,
-          left: GRID_H_PAD,
+          top: SHIELD_INSET,
           right: SHIELD_INSET + SHIELD_SIZE + 12, // 16 + 64 + 12 = 92dp to clear emergency shield + gap
           zIndex: 30,
           flexDirection: "row",
           alignItems: "center",
-          justifyContent: "space-between",
-          minHeight: 64,
+          justifyContent: "flex-end",
+          minHeight: RAIL_ROW_H,
         }}
       >
-        <Text
-          numberOfLines={1}
-          style={{
-            color: colors["color-text-secondary"],
-            fontSize: TYPOGRAPHY.label.fontSize,
-            lineHeight: TYPOGRAPHY.label.lineHeight,
-            fontWeight: "600",
-            letterSpacing: 2,
-            maxWidth: 180,
-            flexShrink: 1,
-          }}
-        >
-          {day} · {date}
-        </Text>
-        <View style={{ flexShrink: 1, maxWidth: 420, minHeight: RAIL_ROW_H }}>
-          <MemberRail
-            members={members}
-            currentName={member?.name ?? null}
-            onSelect={onSelectMember}
-            onSignOut={onSignOut}
-          />
-        </View>
+        <MemberRail
+          members={members}
+          currentName={member?.name ?? null}
+          onSelect={onSelectMember}
+          onSignOut={onSignOut}
+        />
       </View>
 
       {/* The signed-out band: full width across the top of the wall below the rail. */}
@@ -521,7 +504,22 @@ export function HomeWall({
       ) : null}
 
       {/* The header band. Opens with generous breathing room under the top bar. */}
-      <View style={{ paddingHorizontal: GRID_H_PAD, paddingTop: signedOut ? 16 : 112 }}>
+      <View style={{ paddingHorizontal: GRID_H_PAD, paddingTop: signedOut ? 16 : 92 }}>
+        {/* Date eyebrow relocated down into the header band, above the greeting */}
+        <Text
+          numberOfLines={1}
+          style={{
+            color: colors["color-text-secondary"],
+            fontSize: TYPOGRAPHY.label.fontSize,
+            lineHeight: TYPOGRAPHY.label.lineHeight,
+            fontWeight: "600",
+            letterSpacing: 2,
+            marginBottom: 4,
+          }}
+        >
+          {day} · {date}
+        </Text>
+
         {/* The greeting, on TWO lines (the web's `wall-board` break
             that the portrait wall keeps): the salutation, then the family
             name in the accent colour, with the season + clock badge sitting

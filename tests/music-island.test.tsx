@@ -245,15 +245,15 @@ describe("MusicIsland", () => {
     const island = getByTestId("music-island");
     const collapsed = getByTestId("music-island-collapsed");
 
-    // Bounded between date (left: 200) and top-bar avatars (right: 480)
+    // Bounded in the center-left gutter (clears avatars on right: 480)
     expect(island.props.style).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ left: 200, right: 480, top: 10 }),
+        expect.objectContaining({ left: 24, right: 480, top: 12 }),
       ])
     );
     expect(collapsed.props.style).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ maxWidth: 290 }),
+        expect.objectContaining({ maxWidth: 300 }),
       ])
     );
   });

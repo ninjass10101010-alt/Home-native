@@ -4,6 +4,17 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — fix(home): relocate date eyebrow to header band above greeting to prevent avatar overlap (`HomeWall.tsx`, `MusicIsland.tsx`).
+  **What changed:**
+  - **DATE EYEBROW RELOCATION (`HomeWall.tsx`)**:
+    - Relocated the date eyebrow (`{day} · {date}`) from the cramped absolute top bar down into the header band, positioned naturally right above the greeting (`Good afternoon, Garcia Family 🍂 6:30 PM`).
+    - Adjusted the header band's `paddingTop` from 112 to 92 (incorporating the 20px date eyebrow), ensuring the greeting and all downstream KPI and bento widgets maintain their exact pixel positions without scrolling or layout shift.
+  - **DEDICATED TOP-RIGHT AVATAR RAIL (`HomeWall.tsx`)**:
+    - The top bar is now dedicated to the member avatars anchored cleanly on the right adjacent to the Emergency button (`right: 92`), eliminating any collision or overlap between the avatar plates and the date.
+  - **EXPANDED MUSIC ISLAND CLEARANCE (`MusicIsland.tsx`)**:
+    - With the date moved down, updated the Home Dynamic Island container to `left: 24, right: 480, top: 12`, providing generous breathing room for the playback pill without any risk of collision.
+  **Tests:** `tests/music-island.test.tsx` (14 tests green), `tests/home-wall.test.tsx` (22 tests green). `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-29 — feat(music,home): gutter-aware Dynamic Island layout to guarantee zero overlap with top-bar member avatars (`MusicIsland.tsx`, `HomeWall.tsx`, `MemberRail.tsx`).
   **What changed:**
   - **GUTTER-AWARE TOP BAR INTEGRATION (`MusicIsland.tsx`)**:
