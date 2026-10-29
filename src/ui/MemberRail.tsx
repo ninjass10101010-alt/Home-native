@@ -27,6 +27,7 @@ export interface MemberRailProps {
   style?: ViewStyle;
   testID?: string;
   wrap?: boolean;
+  align?: "flex-start" | "flex-end" | "center";
 }
 
 /** True when the member's "emoji" slot carries a photo (data-URI or URL). */
@@ -155,7 +156,16 @@ function RailTap({
  * one avatar per member, the signed-in tile carries the accent, Sign out at the
  * rail's end. Tiles ≥ 64dp (the tile is 91dp tall: 8 pad + 48 avatar + 5 + 20).
  */
-export function MemberRail({ members, currentName = null, onSelect, onSignOut, style, testID, wrap = true }: MemberRailProps) {
+export function MemberRail({
+  members,
+  currentName = null,
+  onSelect,
+  onSignOut,
+  style,
+  testID,
+  wrap = true,
+  align = "flex-start",
+}: MemberRailProps) {
   const { colors, theme, accentColor } = useTheme();
   // Web WallMemberRail parity: sign-out is a 2-tap confirm — the first tap
   // arms ("Sign out?"), the second fires; the armed state auto-resets.
@@ -194,7 +204,7 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
       style={[{ width: "100%" }, style]}
       accessibilityLabel={standIn ? "Sample members — the family roster is unavailable" : "Family members"}
     >
-      {/* The web rail is `flex flex-wrap items-center justify-end gap-2` — a
+      {/* The web rail is `flex flex-wrap items-center justify-start gap-2` — a
           STATIC row that WRAPS when the roster is wider than the wall. The
           native used a horizontal ScrollView, so an over-wide roster scrolled
           invisibly with no affordance that more members existed. */}
@@ -203,7 +213,7 @@ export function MemberRail({ members, currentName = null, onSelect, onSignOut, s
           flexDirection: "row",
           flexWrap: wrap ? "wrap" : "nowrap",
           alignItems: "center",
-          justifyContent: "flex-end",
+          justifyContent: align,
           gap: TILE_GAP,
         }}
       >

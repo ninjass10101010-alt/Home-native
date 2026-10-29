@@ -462,13 +462,14 @@ export function HomeWall({
           then stacks the full-width MemberRail, Date/Greeting/Time + More…, and KPI strip. */}
       <View style={{ paddingHorizontal: GRID_H_PAD, paddingTop: signedOut ? 16 : 88 }}>
         {/* Row 1: Member avatars on their own dedicated full-width row (1048px)
-            below the MusicIsland zone so all 9 members + Sign Out fit cleanly. */}
-        <View style={{ minHeight: RAIL_ROW_H, justifyContent: "center" }}>
+            aligned to the left to look uniform with the date and greeting below. */}
+        <View style={{ minHeight: RAIL_ROW_H, justifyContent: "flex-start" }}>
           <MemberRail
             members={members}
             currentName={member?.name ?? null}
             onSelect={onSelectMember}
             onSignOut={onSignOut}
+            align="flex-start"
           />
         </View>
 

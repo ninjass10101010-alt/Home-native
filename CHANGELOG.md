@@ -4,6 +4,26 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — feat(notifications,island): iPhone-style alert card with 5s popup, island minimization & 1-min glow + flush-left avatars (`MusicIsland.tsx`, `notificationFeed.ts`, `notifications.ts`, `HomeWall.tsx`, `MemberRail.tsx`).
+  **What changed:**
+  - **IPHONE-STYLE NOTIFICATION ALERT LIFECYCLE (`MusicIsland.tsx`, `notificationFeed.ts`, `notifications.ts`)**:
+    - **Stage 1 (Large Pop-up Card)**: When any alert or reminder arrives (e.g. 15-min calendar heads-up, event start, routine due, weather warning, emergency alert), it displays prominently as an Apple-style frosted glass card (`maxWidth: 520`, `testID="notification-alert-large"`) for 5 seconds. Shows category tag, timing badge ("15m Reminder" / "Starting Now"), bold title, and message body.
+    - **Stage 2 (Island Minimization & 1-Minute Glow)**: After 5 seconds (or upon swipe-up), the card smoothly minimizes into the top Dynamic Island pill (`testID="music-island-collapsed"`). A breathing amber/accent halo glow pulses along the island's border and elevation shadow for 60 seconds (1 minute), then gracefully auto-dismisses.
+    - **Interactive Gestures & Dismissal**:
+      - Tapping the minimized notification pill in the island re-expands it back to the large window card.
+      - Swiping up on either the large window or the minimized pill immediately minimizes or dismisses the alert.
+      - A tactile `✕` dismiss button (`testID="notification-alert-dismiss"`) clears the notification immediately.
+    - **Standalone & Co-Existence with Music**:
+      - If no music is playing, the Dynamic Island activates solely to present the notification (large window -> glowing pill -> disappears).
+      - If music is actively playing, the island expands to `maxWidth: 440` when minimized, showing the sound waveform and track title on the left and the glowing notification badge on the right separated by a subtle vertical divider.
+  - **EXPANDED DYNAMIC ISLAND DIMENSIONS (`MusicIsland.tsx`)**:
+    - Increased standard collapsed island `maxWidth` from `320` to `390` (and `440` with active alert), giving track titles, waveforms, and artwork generous breathing room on the 1080px display.
+    - Increased expanded playback control card `maxWidth` from `420` to `480`.
+  - **FLUSH-LEFT UNIFORM AVATARS (`HomeWall.tsx`, `MemberRail.tsx`)**:
+    - Updated `MemberRail` to support `align?: "flex-start" | "flex-end" | "center"`, defaulting to `"flex-start"`.
+    - In `HomeWall.tsx`, aligned the avatar row to the left (`x = 16dp`), creating a clean, structured vertical alignment flush with the Date eyebrow (`{day} · {date}`) and Greeting below it.
+  **Tests:** `tests/music-island.test.tsx` (16 tests green), `tests/home-wall.test.tsx` (23 tests green), `tests/primitives-c.test.tsx` (18 tests green). `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-29 — feat(home,music): remove This Week tail widget to free top band for full-size Music Island & clean stacked header (`HomeWall.tsx`, `MusicIsland.tsx`, `MemberRail.tsx`).
   **What changed:**
   - **FULL-SIZE TOP-CENTER MUSIC ISLAND (`MusicIsland.tsx`, `HomeWall.tsx`)**:

@@ -27,12 +27,40 @@ import { musicTokensFor } from "../theme/music-tokens";
 import { useOutputVolume } from "./output-volume";
 import { DOCK_TOP_OFFSET } from "../nav/CapsuleDock";
 import { mix } from "../theme/mix";
+import {
+  subscribeActiveNotification,
+  dismissActiveNotification,
+  type ActiveNotification,
+} from "../native/notificationFeed";
 
 function formatTime(sec: number): string {
   if (!sec || isNaN(sec)) return "0:00";
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s < 10 ? "0" : ""}${s}`;
+}
+
+function categoryMeta(category: string, timing?: string) {
+  switch (category) {
+    case "emergency":
+      return { icon: "🚨", label: "EMERGENCY ALERT", colorKey: "color-accent-rose" as const };
+    case "weather":
+      return { icon: "⛈️", label: "WEATHER ADVISORY", colorKey: "color-accent-cyan" as const };
+    case "calendar":
+      return {
+        icon: "📅",
+        label: timing === "advance" ? "15-MIN CALENDAR REMINDER" : "CALENDAR EVENT",
+        colorKey: "color-accent-amber" as const,
+      };
+    case "routines":
+      return {
+        icon: "⏰",
+        label: timing === "advance" ? "15-MIN ROUTINE REMINDER" : "ROUTINE DUE",
+        colorKey: "color-accent-emerald" as const,
+      };
+    default:
+      return { icon: "🔔", label: "REMINDER", colorKey: "color-accent-amber" as const };
+  }
 }
 
 export function WaveformBars({
@@ -133,7 +161,7 @@ export function MusicIsland() {
   const { current, playing, position, duration, toggle, next, previous, stopAndClear, player } = usePlayback();
   const cast = useCast();
   const volume = useOutputVolume(player);
-  const { theme, boost } = useTheme();
+  const { colors, theme, boost, reduceMotion } = useTheme();
   const tokens = React.useMemo(() => musicTokensFor(theme, boost), [theme, boost]);
 
   const [expanded, setExpanded] = useState(false);
@@ -141,7 +169,114 @@ export function MusicIsland() {
   const autoCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopArmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-collapse after 5s
+  // Notification alert lifecycle:
+  // "large" (5s pop-up) -> "minimized" (into Island with glow for 60s) -> "idle" (dismissed)
+  const [alertStage, setAlertStage] = useState<"idle" | "large" | "minimized">("idle");
+  const [activeAlert, setActiveAlert] = useState<ActiveNotification | null>(null);
+  const largeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const minTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [glowAnim] = useState(() => new Animated.Value(0.35));
+
+  const handleDismissAlert = useCallback(() => {
+    if (largeTimerRef.current) clearTimeout(largeTimerRef.current);
+    if (minTimerRef.current) clearTimeout(minTimerRef.current);
+    setAlertStage("idle");
+    setActiveAlert(null);
+    dismissActiveNotification();
+  }, []);
+
+  const handleMinimizeAlert = useCallback(() => {
+    if (largeTimerRef.current) clearTimeout(largeTimerRef.current);
+    setAlertStage("minimized");
+  }, []);
+
+  const handleExpandAlert = useCallback(() => {
+    if (minTimerRef.current) clearTimeout(minTimerRef.current);
+    setAlertStage("large");
+    largeTimerRef.current = setTimeout(() => {
+      setAlertStage("minimized");
+    }, 5000);
+  }, []);
+
+  // Subscribe directly to external notification feed
+  useEffect(() => {
+    return subscribeActiveNotification((notif) => {
+      if (notif) {
+        setActiveAlert(notif);
+        setAlertStage("large");
+
+        if (largeTimerRef.current) clearTimeout(largeTimerRef.current);
+        if (minTimerRef.current) clearTimeout(minTimerRef.current);
+
+        largeTimerRef.current = setTimeout(() => {
+          setAlertStage("minimized");
+        }, 5000);
+      } else {
+        setAlertStage("idle");
+        setActiveAlert(null);
+        if (largeTimerRef.current) clearTimeout(largeTimerRef.current);
+        if (minTimerRef.current) clearTimeout(minTimerRef.current);
+      }
+    });
+  }, []);
+
+  // Glow animation & 60-second timer when minimized in the island
+  useEffect(() => {
+    if (alertStage === "minimized") {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, {
+            toValue: 1,
+            duration: 850,
+            useNativeDriver: false,
+          }),
+          Animated.timing(glowAnim, {
+            toValue: 0.35,
+            duration: 850,
+            useNativeDriver: false,
+          }),
+        ])
+      );
+      if (!reduceMotion) {
+        loop.start();
+      } else {
+        glowAnim.setValue(0.75);
+      }
+
+      minTimerRef.current = setTimeout(() => {
+        setAlertStage("idle");
+        setActiveAlert(null);
+        dismissActiveNotification();
+      }, 60000);
+
+      return () => {
+        loop.stop();
+        if (minTimerRef.current) clearTimeout(minTimerRef.current);
+      };
+    }
+  }, [alertStage, reduceMotion, glowAnim]);
+
+  const touchStartY = useRef<number | null>(null);
+
+  const handleTouchStart = (e: GestureResponderEvent) => {
+    touchStartY.current = e.nativeEvent.pageY;
+  };
+
+  const handleTouchEnd = (e: GestureResponderEvent) => {
+    if (touchStartY.current !== null) {
+      const dy = e.nativeEvent.pageY - touchStartY.current;
+      touchStartY.current = null;
+      if (dy < -20) {
+        if (alertStage === "large") {
+          handleMinimizeAlert();
+        } else if (alertStage === "minimized") {
+          handleDismissAlert();
+        }
+      }
+    }
+  };
+
+  // Auto-collapse music after 5s
   useEffect(() => {
     if (expanded) {
       autoCollapseTimer.current = setTimeout(() => {
@@ -205,7 +340,8 @@ export function MusicIsland() {
     setDragVolume(null);
   }, []);
 
-  if (!current) return null;
+  // Island appears if music is playing OR if a notification alert is active!
+  if (!current && (!activeAlert || alertStage === "idle")) return null;
   if (pathname === "/music" || pathname === "/screensaver") return null;
 
   const handleExpand = () => setExpanded(true);
@@ -253,83 +389,258 @@ export function MusicIsland() {
   const progress = duration > 0 ? position / duration : 0;
   const currentVolumeValue = isDraggingVolume && dragVolume !== null ? dragVolume : (volume?.muted ? 0 : (volume?.value ?? 0.5));
 
+  const catMeta = activeAlert ? categoryMeta(activeAlert.category, activeAlert.timing) : null;
+  const alertColor = catMeta ? (colors?.[catMeta.colorKey] ?? tokens.accent) : tokens.accent;
+  const isAlertMinimized = alertStage === "minimized" && Boolean(activeAlert);
+
   return (
     <>
-      {expanded && (
+      {(expanded || alertStage === "large") && (
         <Pressable
-          testID="music-island-backdrop"
+          testID={expanded ? "music-island-backdrop" : "notification-alert-backdrop"}
           style={[StyleSheet.absoluteFill, { bottom: DOCK_TOP_OFFSET }]}
-          onPress={handleCollapse}
+          onPress={() => {
+            if (expanded) handleCollapse();
+            if (alertStage === "large") handleMinimizeAlert();
+          }}
         />
       )}
       <View testID="music-island" style={styles.container} pointerEvents="box-none">
-        {!expanded ? (
-          <Pressable
-            testID="music-island-collapsed"
-            onPress={handleExpand}
+        {alertStage === "large" && activeAlert ? (
+          <Animated.View
+            testID="notification-alert-large"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
             style={[
-              styles.collapsed,
+              styles.alertLarge,
               {
                 backgroundColor: tokens.glassStrong,
-                borderColor: playing ? mix(tokens.accent, tokens.glassRim, 40) : tokens.glassRim,
-                shadowColor: playing ? tokens.accent : tokens.shadow,
-                shadowOpacity: playing ? 0.5 : 0.25,
-                shadowRadius: playing ? 14 : 8,
+                borderColor: alertColor,
+                shadowColor: alertColor,
               },
             ]}
           >
-            {/* Left: Sound Wave Equalizer (dancing when playing, flat off when paused) */}
-            <View style={styles.leftWaveform}>
-              <WaveformBars playing={playing} color={tokens.accent} />
+            {/* Top row: Category tag + dismiss button */}
+            <View style={styles.alertHeaderRow}>
+              <View style={[styles.alertCategoryPill, { backgroundColor: mix(alertColor, "transparent", 20) }]}>
+                <Text style={styles.alertCategoryIcon}>{catMeta?.icon}</Text>
+                <Text style={[styles.alertCategoryLabel, { color: alertColor }]}>
+                  {catMeta?.label}
+                </Text>
+              </View>
+              <Pressable
+                testID="notification-alert-dismiss"
+                onPress={handleDismissAlert}
+                accessibilityLabel="Dismiss notification"
+                hitSlop={8}
+                style={styles.alertDismissBtn}
+              >
+                <Text style={[styles.alertDismissText, { color: tokens.label2 }]}>✕</Text>
+              </Pressable>
             </View>
 
-            {/* Middle: Title & optional Cast badge */}
-            <View style={styles.collapsedMeta}>
+            {/* Title and body */}
+            <Pressable onPress={handleMinimizeAlert} style={styles.alertBodyPressable}>
               <Text
-                testID="music-island-title"
-                style={[styles.title, { color: tokens.label }]}
+                testID="notification-alert-title"
+                style={[styles.alertTitle, { color: tokens.label }]}
                 numberOfLines={1}
               >
-                {current.title}
+                {activeAlert.title}
               </Text>
-              {cast.casting && (
-                <Text testID="music-island-cast" style={[styles.cast, { color: tokens.green }]}>
-                  Casting
-                </Text>
-              )}
-            </View>
+              <Text
+                testID="notification-alert-body"
+                style={[styles.alertBody, { color: tokens.label2 }]}
+                numberOfLines={2}
+              >
+                {activeAlert.body}
+              </Text>
 
-            {/* Right: mini artwork with Apple squircle radius */}
-            <View style={styles.artContainer}>
-              <Image
-                testID="music-island-art"
-                source={{ uri: current.artworkUrl ?? undefined }}
-                style={styles.art}
-              />
-              {playing && (
+              {/* Swipe affordance */}
+              <View style={styles.alertAffordanceRow}>
+                <View style={[styles.alertSwipeBar, { backgroundColor: tokens.panelRim }]} />
+                <Text style={[styles.alertAffordanceText, { color: tokens.label3 }]}>
+                  Swipe up to minimize to Island
+                </Text>
+              </View>
+            </Pressable>
+          </Animated.View>
+        ) : !expanded ? (
+          !current && isAlertMinimized ? (
+            /* Minimized Notification Pill (when no music is playing) */
+            <Animated.View
+              style={{
+                borderRadius: 23,
+                shadowColor: alertColor,
+                shadowOpacity: 0.75,
+                shadowRadius: 16,
+                elevation: 10,
+              }}
+            >
+              <Pressable
+                testID="music-island-collapsed"
+                onPress={handleExpandAlert}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                style={[
+                  styles.collapsed,
+                  {
+                    backgroundColor: tokens.glassStrong,
+                    borderColor: alertColor,
+                  },
+                ]}
+              >
+                <View style={styles.alertPillIconContainer}>
+                  <Text style={styles.alertPillIcon}>{catMeta?.icon}</Text>
+                </View>
+                <View style={styles.collapsedMeta}>
+                  <Text
+                    testID="notification-minimized-title"
+                    style={[styles.title, { color: tokens.label }]}
+                    numberOfLines={1}
+                  >
+                    {activeAlert?.title}
+                  </Text>
+                  {activeAlert?.timing && (
+                    <Text style={[styles.cast, { color: alertColor }]}>
+                      {activeAlert.timing === "advance" ? "15m" : "Now"}
+                    </Text>
+                  )}
+                </View>
+                <Pressable
+                  testID="notification-alert-dismiss"
+                  onPress={handleDismissAlert}
+                  accessibilityLabel="Dismiss notification"
+                  hitSlop={8}
+                  style={styles.pillDismissBtn}
+                >
+                  <Text style={[styles.pillDismissIcon, { color: tokens.label2 }]}>✕</Text>
+                </Pressable>
+              </Pressable>
+            </Animated.View>
+          ) : current && isAlertMinimized ? (
+            /* Merged Music + Notification Minimized Pill */
+            <Animated.View
+              style={{
+                borderRadius: 23,
+                shadowColor: alertColor,
+                shadowOpacity: 0.75,
+                shadowRadius: 16,
+                elevation: 10,
+              }}
+            >
+              <Pressable
+                testID="music-island-collapsed"
+                onPress={handleExpand}
+                style={[
+                  styles.collapsed,
+                  styles.collapsedAlertActive,
+                  {
+                    backgroundColor: tokens.glassStrong,
+                    borderColor: alertColor,
+                  },
+                ]}
+              >
+                <View style={styles.leftWaveform}>
+                  <WaveformBars playing={playing} color={tokens.accent} />
+                </View>
+
+                <View style={styles.collapsedMeta}>
+                  <Text
+                    testID="music-island-title"
+                    style={[styles.title, { color: tokens.label }]}
+                    numberOfLines={1}
+                  >
+                    {current.title}
+                  </Text>
+                </View>
+
+                {/* Divider between music and notification */}
+                <View style={[styles.pillDivider, { backgroundColor: tokens.panelRim }]} />
+
+                {/* Minimized alert badge on right */}
+                <Pressable
+                  testID="notification-minimized-pill"
+                  onPress={handleExpandAlert}
+                  hitSlop={6}
+                  style={styles.pillAlertRight}
+                >
+                  <Text style={styles.alertPillIcon}>{catMeta?.icon}</Text>
+                  <Text style={[styles.pillAlertLabel, { color: alertColor }]} numberOfLines={1}>
+                    {activeAlert?.timing === "advance" ? "15m" : "Alert"}
+                  </Text>
+                </Pressable>
+              </Pressable>
+            </Animated.View>
+          ) : current ? (
+            /* Standard Collapsed Music Island */
+            <Pressable
+              testID="music-island-collapsed"
+              onPress={handleExpand}
+              style={[
+                styles.collapsed,
+                {
+                  backgroundColor: tokens.glassStrong,
+                  borderColor: playing ? mix(tokens.accent, tokens.glassRim, 40) : tokens.glassRim,
+                  shadowColor: playing ? tokens.accent : tokens.shadow,
+                  shadowOpacity: playing ? 0.5 : 0.25,
+                  shadowRadius: playing ? 14 : 8,
+                },
+              ]}
+            >
+              {/* Left: Sound Wave Equalizer (dancing when playing, flat off when paused) */}
+              <View style={styles.leftWaveform}>
+                <WaveformBars playing={playing} color={tokens.accent} />
+              </View>
+
+              {/* Middle: Title & optional Cast badge */}
+              <View style={styles.collapsedMeta}>
+                <Text
+                  testID="music-island-title"
+                  style={[styles.title, { color: tokens.label }]}
+                  numberOfLines={1}
+                >
+                  {current.title}
+                </Text>
+                {cast.casting && (
+                  <Text testID="music-island-cast" style={[styles.cast, { color: tokens.green }]}>
+                    Casting
+                  </Text>
+                )}
+              </View>
+
+              {/* Right: mini artwork with Apple squircle radius */}
+              <View style={styles.artContainer}>
+                <Image
+                  testID="music-island-art"
+                  source={{ uri: current.artworkUrl ?? undefined }}
+                  style={styles.art}
+                />
+                {playing && (
+                  <View
+                    style={[
+                      styles.activeDot,
+                      { backgroundColor: tokens.accent, borderColor: tokens.glassStrong },
+                    ]}
+                  />
+                )}
+              </View>
+
+              {/* Bottom: Hairline progress indicator */}
+              <View
+                testID="music-island-progress"
+                style={[styles.progress, { backgroundColor: tokens.panelRim }]}
+              >
                 <View
                   style={[
-                    styles.activeDot,
-                    { backgroundColor: tokens.accent, borderColor: tokens.glassStrong },
+                    styles.progressFill,
+                    { backgroundColor: tokens.accent, width: `${progress * 100}%` },
                   ]}
                 />
-              )}
-            </View>
-
-            {/* Bottom: Hairline progress indicator */}
-            <View
-              testID="music-island-progress"
-              style={[styles.progress, { backgroundColor: tokens.panelRim }]}
-            >
-              <View
-                style={[
-                  styles.progressFill,
-                  { backgroundColor: tokens.accent, width: `${progress * 100}%` },
-                ]}
-              />
-            </View>
-          </Pressable>
-        ) : (
+              </View>
+            </Pressable>
+          ) : null
+        ) : current ? (
           <View
             testID="music-island-expanded"
             style={[
@@ -485,7 +796,7 @@ export function MusicIsland() {
               </Text>
             </Pressable>
           </View>
-        )}
+        ) : null}
       </View>
     </>
   );
@@ -504,16 +815,19 @@ const styles = StyleSheet.create({
   collapsed: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    height: 44,
-    borderRadius: 22,
+    paddingHorizontal: 14,
+    height: 46,
+    borderRadius: 23,
     borderWidth: 1,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 10,
     elevation: 8,
-    maxWidth: 320,
+    maxWidth: 390,
     overflow: "hidden",
+  },
+  collapsedAlertActive: {
+    maxWidth: 440,
   },
   leftWaveform: {
     marginRight: 10,
@@ -579,14 +893,120 @@ const styles = StyleSheet.create({
   // Expanded Dynamic Island Card
   expanded: {
     width: "100%",
-    maxWidth: 420,
+    maxWidth: 480,
     padding: 18,
-    borderRadius: 34,
+    borderRadius: 32,
     borderWidth: 1,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.65,
     shadowRadius: 24,
     elevation: 20,
+  },
+  // Large Alert Window
+  alertLarge: {
+    width: "100%",
+    maxWidth: 520,
+    padding: 16,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.7,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  alertHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  alertCategoryPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 6,
+  },
+  alertCategoryIcon: {
+    fontSize: 14,
+  },
+  alertCategoryLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+  },
+  alertDismissBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  alertDismissText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  alertBodyPressable: {
+    marginTop: 2,
+  },
+  alertTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+    marginBottom: 4,
+  },
+  alertBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "500",
+  },
+  alertAffordanceRow: {
+    alignItems: "center",
+    marginTop: 10,
+    gap: 4,
+  },
+  alertSwipeBar: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+  },
+  alertAffordanceText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  alertPillIconContainer: {
+    marginRight: 8,
+  },
+  alertPillIcon: {
+    fontSize: 16,
+  },
+  pillDismissBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 6,
+  },
+  pillDismissIcon: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  pillDivider: {
+    width: 1,
+    height: 18,
+    marginHorizontal: 8,
+  },
+  pillAlertRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingLeft: 4,
+  },
+  pillAlertLabel: {
+    fontSize: 14,
+    fontWeight: "700",
   },
   expandedTop: {
     flexDirection: "row",

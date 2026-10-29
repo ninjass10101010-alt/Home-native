@@ -5,7 +5,9 @@ import { usePlayback } from "../src/music/playback";
 import { useCast } from "../src/music/CastProvider";
 import { usePathname, useRouter } from "expo-router";
 import { useTheme } from "../src/theme/ThemeProvider";
+import { TOKENS } from "../src/theme/tokens";
 import { useOutputVolume } from "../src/music/output-volume";
+import { postActiveNotification, dismissActiveNotification } from "../src/native/notificationFeed";
 
 jest.mock("../src/music/playback");
 jest.mock("../src/music/CastProvider");
@@ -36,7 +38,12 @@ describe("MusicIsland", () => {
     });
     (useCast as jest.Mock).mockReturnValue({ casting: false });
     (usePathname as jest.Mock).mockReturnValue("/");
-    (useTheme as jest.Mock).mockReturnValue({ theme: "dark", boost: false, reduceMotion: false });
+    (useTheme as jest.Mock).mockReturnValue({
+      colors: TOKENS.dark,
+      theme: "dark",
+      boost: false,
+      reduceMotion: false,
+    });
     (useOutputVolume as jest.Mock).mockReturnValue({
       value: 0.5,
       muted: false,
@@ -46,6 +53,7 @@ describe("MusicIsland", () => {
       target: "local",
     });
     (useRouter as jest.Mock).mockReturnValue({ push: jest.fn() });
+    dismissActiveNotification();
   });
 
   it("renders null when no current track", () => {
@@ -253,7 +261,7 @@ describe("MusicIsland", () => {
     });
     expect(collapsed.props.style).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ maxWidth: 320 }),
+        expect.objectContaining({ maxWidth: 390 }),
       ])
     );
   });
@@ -271,5 +279,84 @@ describe("MusicIsland", () => {
       top: 8,
       alignItems: "center",
     });
+  });
+
+  it("pops up notification in large window, then auto-minimizes to island after 5s and disappears after 60s", () => {
+    jest.useFakeTimers();
+    (usePlayback as jest.Mock).mockReturnValue({ current: null });
+
+    const { getByTestId, queryByTestId } = render(<MusicIsland />);
+
+    expect(queryByTestId("music-island")).toBeNull();
+
+    act(() => {
+      postActiveNotification({
+        id: "alert-1",
+        category: "calendar",
+        title: "Soccer Practice",
+        body: "Event starts in 15 minutes.",
+        timing: "advance",
+        timestamp: Date.now(),
+      });
+    });
+
+    // 1. Large window pop-up for 5 seconds
+    expect(getByTestId("notification-alert-large")).toBeTruthy();
+    expect(getByTestId("notification-alert-title").props.children).toBe("Soccer Practice");
+    expect(getByTestId("notification-alert-body").props.children).toBe("Event starts in 15 minutes.");
+
+    // 2. Advance by 5 seconds -> minimizes into Island
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    expect(queryByTestId("notification-alert-large")).toBeNull();
+    expect(getByTestId("music-island-collapsed")).toBeTruthy();
+    expect(getByTestId("notification-minimized-title").props.children).toBe("Soccer Practice");
+
+    // 3. Tapping minimized island re-expands to large window
+    fireEvent.press(getByTestId("music-island-collapsed"));
+    expect(getByTestId("notification-alert-large")).toBeTruthy();
+
+    // 4. Minimize again
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
+    expect(queryByTestId("notification-alert-large")).toBeNull();
+    expect(getByTestId("music-island-collapsed")).toBeTruthy();
+
+    // 5. Advance by 60s (1 min) -> disappears
+    act(() => {
+      jest.advanceTimersByTime(60000);
+    });
+
+    expect(queryByTestId("music-island")).toBeNull();
+
+    jest.useRealTimers();
+  });
+
+  it("dismiss button on large notification window dismisses alert immediately", () => {
+    jest.useFakeTimers();
+    (usePlayback as jest.Mock).mockReturnValue({ current: null });
+
+    const { getByTestId, queryByTestId } = render(<MusicIsland />);
+
+    act(() => {
+      postActiveNotification({
+        id: "alert-2",
+        category: "weather",
+        title: "Severe Weather Warning",
+        body: "Severe thunderstorm approaching.",
+        timestamp: Date.now(),
+      });
+    });
+
+    expect(getByTestId("notification-alert-large")).toBeTruthy();
+    fireEvent.press(getByTestId("notification-alert-dismiss"));
+
+    expect(queryByTestId("notification-alert-large")).toBeNull();
+    expect(queryByTestId("music-island")).toBeNull();
+
+    jest.useRealTimers();
   });
 });

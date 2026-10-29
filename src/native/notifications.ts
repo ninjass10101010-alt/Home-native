@@ -4,6 +4,7 @@ import {
   type NotificationCategory,
 } from "./notificationPrefs";
 import { playNotificationSound } from "./soundEffects";
+import { postActiveNotification } from "./notificationFeed";
 import { TOKENS } from "../theme/tokens";
 
 /**
@@ -127,6 +128,17 @@ export async function dispatchNotification({
   } else if (category === "emergency") {
     void playNotificationSound("radar", 1.0);
   }
+
+  const notifId = `notif-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  postActiveNotification({
+    id: notifId,
+    category,
+    title,
+    body,
+    data,
+    timing,
+    timestamp: Date.now(),
+  });
 
   if (typeof jest !== "undefined") return "mock-id";
   const Notifications = notifications();
