@@ -385,9 +385,13 @@ export function HomeWall({
   const date = now.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
   const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-  // The home wall is the household hub — header greets the family
-  // ("Good afternoon, Garcia Family"). Active session is highlighted in the rail.
-  const familyName = savedFamilyLabel(members) ?? "Garcia Family";
+  // Greeting label:
+  // - Signed in (someone logged in) → that member's first name ("Jeffery")
+  // - Signed out (no one logged in) → family label ("Garcia Family")
+  const familyName =
+    member?.name?.trim()
+      ? member.name.trim().split(" ")[0]
+      : (savedFamilyLabel(members) ?? "Garcia Family");
 
   /**
    * The signed-out state. The web's wall shows the SyncStatusBanner strip

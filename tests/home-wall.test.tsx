@@ -169,6 +169,12 @@ describe("HomeWall (the 12-cell wall bento)", () => {
     ).toBeNull();
   });
 
+  it("greeting displays Garcia Family when no one is signed in", () => {
+    const view = render(<HomeWall members={members} onSelectMember={() => {}} />, { wrapper: wrap });
+    const spans = view.root.findAll(n => n.props?.children === "Garcia Family");
+    expect(spans.length).toBeGreaterThan(0);
+  });
+
   // The clock's season glyph is derived, never hardcoded — a hardcoded 🍂 is
   // right on its capture date and wrong for nine months of the year
   // (web page.tsx:411-413: Mar–May spring, Jun–Aug summer, Sep–Nov autumn).
