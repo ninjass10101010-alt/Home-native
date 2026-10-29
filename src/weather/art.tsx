@@ -605,11 +605,9 @@ export function MonsterDigit({
   const width = height * DIGIT_ASPECT;
   const k = height / DIGIT_BOX_H;
   const primaryR = eye?.r ?? 21;
-  const allAnimatedEyes = eye
-    ? [{ x: eye.x, y: eye.y, r: primaryR }, ...extraEyes.map((e) => ({ x: e.x, y: e.y, r: e.r }))]
-    : [];
 
-  const hasAnimatedPupil = Boolean(eye && expression === "open" && height >= 72);
+  // Only animate the primary hero eye pupil on large digits (height >= 120), e.g. screensaver/hero weather
+  const hasAnimatedPupil = Boolean(eye && expression === "open" && height >= 120);
 
   const digitBody = (
     <View style={{ width, height, position: "relative" }}>
@@ -738,7 +736,7 @@ export function MonsterDigit({
                           strokeWidth={Math.max(2.5, er * 0.2)}
                           strokeLinecap="round"
                         />
-                      ) : !hasAnimatedPupil ? (
+                      ) : (!hasAnimatedPupil || idx > 0) ? (
                         <>
                           <Circle cx={e.x + 2} cy={e.y + 1.5} r={er * 0.56} fill={irisColor} />
                           <Circle cx={e.x + 2} cy={e.y + 1.5} r={er * 0.4} fill={ink.pupil} />
@@ -753,59 +751,57 @@ export function MonsterDigit({
           </G>
         ) : null}
       </Svg>
-      {/* Animated blinking & 2D pupil-glancing overlay on all eyes of open hero digits */}
-      {hasAnimatedPupil
-        ? allAnimatedEyes.map((e, idx) => {
-            const eBox = e.r * 2 * k;
-            const eLeft = ((e.x - e.r) / DIGIT_VIEW_W) * width;
-            const eTop = ((e.y - DIGIT_BOX_Y - e.r) / DIGIT_BOX_H) * height;
-            const pupilD = Math.max(5, Math.round(e.r * 0.92 * k));
-            const glintD = Math.max(2, Math.round(pupilD * 0.3));
-            return (
+      {/* Animated blinking & pupil-glancing overlay on the primary eye of open hero digits */}
+      {hasAnimatedPupil && eye ? (() => {
+        const e = { x: eye.x, y: eye.y, r: primaryR };
+        const eBox = e.r * 2 * k;
+        const eLeft = ((e.x - e.r) / DIGIT_VIEW_W) * width;
+        const eTop = ((e.y - DIGIT_BOX_Y - e.r) / DIGIT_BOX_H) * height;
+        const pupilD = Math.max(5, Math.round(e.r * 0.92 * k));
+        const glintD = Math.max(2, Math.round(pupilD * 0.3));
+        return (
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: eLeft + 1.5 * k,
+              top: eTop + 1.5 * k,
+              width: eBox,
+              height: eBox,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <AmbientEyePulse delayMs={index * 320}>
               <View
-                key={`anim-eye-${idx}`}
-                pointerEvents="none"
                 style={{
-                  position: "absolute",
-                  left: eLeft + 1.5 * k,
-                  top: eTop + 1.5 * k,
-                  width: eBox,
-                  height: eBox,
-                  alignItems: "center",
-                  justifyContent: "center",
+                  width: pupilD,
+                  height: pupilD,
+                  borderRadius: Math.ceil(pupilD / 2),
+                  backgroundColor: ink.pupil,
+                  alignItems: "flex-start",
+                  justifyContent: "flex-start",
+                  paddingLeft: Math.max(1, Math.round(pupilD * 0.18)),
+                  paddingTop: Math.max(1, Math.round(pupilD * 0.16)),
                 }}
               >
-                <AmbientEyePulse delayMs={index * 320 + idx * 190}>
-                  <View
-                    style={{
-                      width: pupilD,
-                      height: pupilD,
-                      borderRadius: Math.ceil(pupilD / 2),
-                      backgroundColor: ink.pupil,
-                      alignItems: "flex-start",
-                      justifyContent: "flex-start",
-                      paddingLeft: Math.max(1, Math.round(pupilD * 0.18)),
-                      paddingTop: Math.max(1, Math.round(pupilD * 0.16)),
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: glintD,
-                        height: glintD,
-                        borderRadius: Math.ceil(glintD / 2),
-                        backgroundColor: ink.glint,
-                      }}
-                    />
-                  </View>
-                </AmbientEyePulse>
+                <View
+                  style={{
+                    width: glintD,
+                    height: glintD,
+                    borderRadius: Math.ceil(glintD / 2),
+                    backgroundColor: ink.glint,
+                  }}
+                />
               </View>
-            );
-          })
-        : null}
+            </AmbientEyePulse>
+          </View>
+        );
+      })() : null}
     </View>
   );
 
-  if (height >= 72) {
+  if (height >= 120 && expression === "open") {
     return <AmbientMonsterIdle index={index}>{digitBody}</AmbientMonsterIdle>;
   }
   return digitBody;

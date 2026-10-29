@@ -89,58 +89,42 @@ export function AmbientEyePulse({
   const reduced = !ambientAllowed(reduceMotion, perfTier());
   const scaleY = useSharedValue(1);
   const shiftX = useSharedValue(0);
-  const shiftY = useSharedValue(0);
 
   useEffect(() => {
     if (reduced) return;
     const blinkLoop = withRepeat(
       withSequence(
-        withTiming(1, { duration: 2900 }),
-        withTiming(0.1, { duration: 85, easing: Easing.out(Easing.quad) }),
-        withTiming(1.06, { duration: 95, easing: Easing.out(Easing.quad) }),
-        withTiming(1, { duration: 70 }),
-        withTiming(1, { duration: 650 })
+        withTiming(1, { duration: 3200 }),
+        withTiming(0.12, { duration: 80, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 90, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 800 })
       ),
       -1,
       false
     );
     const lookXLoop = withRepeat(
       withSequence(
-        withTiming(0, { duration: 1200 }),
-        withTiming(2.4, { duration: 450, easing: Easing.inOut(Easing.ease) }),
-        withTiming(2.4, { duration: 850 }),
-        withTiming(-2.2, { duration: 550, easing: Easing.inOut(Easing.ease) }),
-        withTiming(-2.2, { duration: 850 }),
-        withTiming(0, { duration: 450, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      false
-    );
-    const lookYLoop = withRepeat(
-      withSequence(
-        withTiming(0, { duration: 1600 }),
-        withTiming(-1.6, { duration: 500, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1.4, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1.4, { duration: 750 }),
-        withTiming(0, { duration: 500, easing: Easing.inOut(Easing.ease) })
+        withTiming(0, { duration: 2400 }),
+        withTiming(2, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+        withTiming(2, { duration: 1200 }),
+        withTiming(-2, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(-2, { duration: 1200 }),
+        withTiming(0, { duration: 600, easing: Easing.inOut(Easing.ease) })
       ),
       -1,
       false
     );
     scaleY.value = delayMs > 0 ? withDelay(delayMs, blinkLoop) : blinkLoop;
     shiftX.value = delayMs > 0 ? withDelay(delayMs, lookXLoop) : lookXLoop;
-    shiftY.value = delayMs > 0 ? withDelay(delayMs, lookYLoop) : lookYLoop;
     return () => {
       cancelAnimation(scaleY);
       cancelAnimation(shiftX);
-      cancelAnimation(shiftY);
     };
-  }, [delayMs, reduced, scaleY, shiftX, shiftY]);
+  }, [delayMs, reduced, scaleY, shiftX]);
 
   const style = useAnimatedStyle(() => ({
     transform: [
       { translateX: shiftX.value },
-      { translateY: shiftY.value },
       { scaleY: scaleY.value },
     ],
   }));

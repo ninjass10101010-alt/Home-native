@@ -1,16 +1,5 @@
 import React from "react";
 import Svg, { Circle, G, Path, Rect } from "react-native-svg";
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useAnimatedProps,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from "react-native-reanimated";
-import { useTheme } from "../theme/ThemeProvider";
 import {
   HOME_WIDGET_ICON_PALETTES,
   HOME_WIDGET_ICON_SHADOW,
@@ -20,6 +9,7 @@ import {
   type HomeWidgetIconVariant,
 } from "../theme/materials";
 import { mix } from "../theme/mix";
+import { useTheme } from "../theme/ThemeProvider";
 import { WidgetIconMotion } from "./widgetIconMotion";
 
 export { HOME_WIDGET_ICON_VARIANTS, type HomeWidgetIconVariant };
@@ -86,45 +76,14 @@ export function widgetIconVariantFor(id: string): HomeWidgetIconVariant | null {
   }
 }
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
-const AnimatedG = Animated.createAnimatedComponent(G);
-
-/** Morning Briefing: rotating sun rays and radiant morning sun warm pulse */
+/** Morning Briefing: 3D clay morning sun with rays and halo */
 function BriefingSun({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withTiming(1, { duration: 24000, easing: Easing.linear }),
-      -1,
-      false
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const animatedRaysProps = useAnimatedProps(() => ({
-    transform: [{ rotate: `${t.value * 360}deg` }],
-  }));
-  const animatedHaloProps = useAnimatedProps(() => {
-    const pulse = Math.sin(t.value * Math.PI * 6);
-    return {
-      opacity: 0.22 + 0.12 * (pulse + 1) * 0.5,
-      r: 13.5 + 1.2 * (pulse + 1) * 0.5,
-    };
-  });
-
   return (
     <G>
-      {/* Animated glowing sun halo */}
-      <AnimatedCircle cx="24" cy="20" r={13.5} fill={p.glow} animatedProps={animatedHaloProps} />
-      {/* Sun rays rotating around (24, 20) */}
-      <AnimatedG animatedProps={animatedRaysProps} origin="24, 20">
+      {/* Glowing sun halo */}
+      <Circle cx="24" cy="20" r={13.5} fill={p.glow} opacity={0.25} />
+      {/* Sun rays around (24, 20) */}
+      <G origin="24, 20">
         <Path
           d="M24 4.5v4.2M24 31.5v4M8 20.5h4.2M35.8 20.5H40M12.5 9l3 3M32.5 29l3 3M35.5 9l-3 3M15.5 29l-3 3"
           stroke={p.lo}
@@ -138,7 +97,7 @@ function BriefingSun({ p }: { p: HomeWidgetIconPalette }) {
           strokeWidth="2.4"
           strokeLinecap="round"
         />
-      </AnimatedG>
+      </G>
       {/* 3D Clay Sun sphere */}
       <Circle cx="24" cy="21" r="10.2" fill={p.lo} />
       <Circle cx="24" cy="20" r="9.8" fill={p.mid} />
@@ -153,89 +112,30 @@ function BriefingSun({ p }: { p: HomeWidgetIconPalette }) {
   );
 }
 
-/** Current Meal: undulating, rising steam wisps off hot fresh food */
+/** Current Meal: rising steam wisps off hot fresh food */
 function MealSteam({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 2200, easing: Easing.inOut(Easing.sin) })
-      ),
-      -1,
-      true
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const wisp1Props = useAnimatedProps(() => ({
-    transform: [{ translateY: -3.5 * t.value }],
-    opacity: 0.4 + 0.55 * (1 - t.value * 0.4),
-  }));
-  const wisp2Props = useAnimatedProps(() => ({
-    transform: [{ translateY: -3.5 * (1 - t.value) }],
-    opacity: 0.4 + 0.55 * (0.6 + t.value * 0.4),
-  }));
-  const wisp3Props = useAnimatedProps(() => ({
-    transform: [{ translateY: -2.8 * t.value }],
-    opacity: 0.35 + 0.5 * (1 - t.value * 0.3),
-  }));
-
   return (
     <G>
-      <AnimatedG animatedProps={wisp1Props}>
+      <G>
         <Path d="M16.5 15c0-3.8 2.8-3.8 2.8-7.6" stroke={p.ink} strokeWidth="4" strokeLinecap="round" opacity={0.28} fill="none" />
         <Path d="M16.5 15c0-3.8 2.8-3.8 2.8-7.6" stroke={HOME_WIDGET_ICON_SHINE} strokeWidth="2.4" strokeLinecap="round" opacity={0.9} fill="none" />
-      </AnimatedG>
-      <AnimatedG animatedProps={wisp2Props}>
+      </G>
+      <G>
         <Path d="M23.5 13.8c0-3.8 2.8-3.8 2.8-7.6" stroke={p.ink} strokeWidth="4" strokeLinecap="round" opacity={0.28} fill="none" />
         <Path d="M23.5 13.8c0-3.8 2.8-3.8 2.8-7.6" stroke={HOME_WIDGET_ICON_SHINE} strokeWidth="2.4" strokeLinecap="round" opacity={0.9} fill="none" />
-      </AnimatedG>
-      <AnimatedG animatedProps={wisp3Props}>
+      </G>
+      <G>
         <Path d="M30.5 15c0-3.8 2.8-3.8 2.8-7.6" stroke={p.ink} strokeWidth="4" strokeLinecap="round" opacity={0.28} fill="none" />
         <Path d="M30.5 15c0-3.8 2.8-3.8 2.8-7.6" stroke={HOME_WIDGET_ICON_SHINE} strokeWidth="2.4" strokeLinecap="round" opacity={0.9} fill="none" />
-      </AnimatedG>
+      </G>
     </G>
   );
 }
 
-/** Music: rhythmically dancing beamed musical notes */
+/** Music: beamed musical notes */
 function MusicNotes({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }),
-        withTiming(-0.8, { duration: 900, easing: Easing.inOut(Easing.quad) }),
-        withTiming(0, { duration: 600, easing: Easing.inOut(Easing.quad) })
-      ),
-      -1,
-      true
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const animatedProps = useAnimatedProps(() => ({
-    transform: [
-      { translateY: -2.4 * t.value },
-      { rotate: `${3.2 * t.value}deg` },
-    ],
-  }));
-
   return (
-    <AnimatedG animatedProps={animatedProps} origin="25, 25">
+    <G origin="25, 25">
       <Path
         d="M21 32V19.5l10-2.2V29.8"
         stroke={p.ink}
@@ -256,38 +156,12 @@ function MusicNotes({ p }: { p: HomeWidgetIconPalette }) {
       <Circle cx="28.8" cy="30.6" r="3.6" fill={p.detail} stroke={p.ink} strokeWidth="1.5" />
       <Circle cx="17.8" cy="31.8" r="1.1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.9} />
       <Circle cx="27.8" cy="29.6" r="1.1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.9} />
-    </AnimatedG>
+    </G>
   );
 }
 
 /** Tasks: completed checkmark victory shimmer */
 function TasksCheckmarks({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1600, easing: Easing.out(Easing.quad) }),
-        withTiming(1, { duration: 1200 }),
-        withTiming(0, { duration: 600, easing: Easing.in(Easing.quad) }),
-        withTiming(0, { duration: 800 })
-      ),
-      -1,
-      false
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const check2Props = useAnimatedProps(() => ({
-    opacity: t.value > 0 ? 0.75 + 0.25 * t.value : 0.85,
-    transform: [{ scale: 1 + 0.08 * t.value }],
-  }));
-
   return (
     <G>
       {/* Row 1: check + bar (with ink shadow backing) */}
@@ -309,8 +183,8 @@ function TasksCheckmarks({ p }: { p: HomeWidgetIconPalette }) {
         fill="none"
       />
       <Rect x="25" y="17" width="9.5" height="3.6" rx="1.8" fill={p.hi} opacity={0.92} />
-      {/* Row 2: golden check + bar with completion shimmer */}
-      <AnimatedG animatedProps={check2Props} origin="16, 32">
+      {/* Row 2: golden check + bar */}
+      <G origin="16, 32">
         <Path
           d="m13 29.8 3 3 6-6"
           stroke={p.ink}
@@ -328,164 +202,66 @@ function TasksCheckmarks({ p }: { p: HomeWidgetIconPalette }) {
           strokeLinejoin="round"
           fill="none"
         />
-      </AnimatedG>
+      </G>
       <Rect x="25" y="27.2" width="9.5" height="3.6" rx="1.8" fill={p.hi} opacity={0.78} />
     </G>
   );
 }
 
-/** Events: hero date tile active reminder pulse */
+/** Events: hero date tile */
 function EventsHeroTile({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 1000 })
-      ),
-      -1,
-      false
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const animatedProps = useAnimatedProps(() => ({
-    transform: [{ scale: 1 + 0.08 * t.value }],
-  }));
-
   return (
-    <AnimatedG animatedProps={animatedProps} origin="25.5, 28">
+    <G origin="25.5, 28">
       <Rect x="20" y="23.5" width="11" height="12" rx="3.5" fill={p.ink} opacity={0.45} />
       <Rect x="20" y="22.5" width="11" height="11" rx="3.5" fill={p.hi} stroke={p.ink} strokeWidth="1.3" />
       <Rect x="21.5" y="23.8" width="8" height="2.2" rx="1.1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.88} />
-    </AnimatedG>
+    </G>
   );
 }
 
-/** Lights: warm incandescent bulb glow pulse */
+/** Lights: warm incandescent bulb glow */
 function LightsBulbGlow({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 1800, easing: Easing.inOut(Easing.sin) })
-      ),
-      -1,
-      true
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const animatedRaysProps = useAnimatedProps(() => ({
-    opacity: 0.65 + 0.35 * t.value,
-    transform: [{ scale: 0.95 + 0.08 * t.value }],
-  }));
-  const animatedGlowProps = useAnimatedProps(() => ({
-    opacity: 0.75 + 0.25 * t.value,
-    transform: [{ scale: 0.96 + 0.06 * t.value }],
-  }));
-
   return (
     <G>
-      <AnimatedG animatedProps={animatedRaysProps} origin="24, 20.5">
+      <G origin="24, 19.8">
         <Path
-          d="M24 2v4M6 20h4M38 20h4M11 7l3 3M34 10l3-3"
+          d="M24 4v3.5M24 35v3.5M9.5 20H6M42 20h-3.5M13.8 9.8l2.5 2.5M31.7 27.7l2.5 2.5M34.2 9.8l-2.5 2.5M16.3 27.7l-2.5 2.5"
           stroke={p.lo}
-          strokeWidth="3.6"
+          strokeWidth="3.2"
           strokeLinecap="round"
-          opacity={0.7}
+          opacity={0.65}
         />
         <Path
-          d="M24 2v4M6 20h4M38 20h4M11 7l3 3M34 10l3-3"
-          stroke={p.detail}
+          d="M24 4v3.5M24 35v3.5M9.5 20H6M42 20h-3.5M13.8 9.8l2.5 2.5M31.7 27.7l2.5 2.5M34.2 9.8l-2.5 2.5M16.3 27.7l-2.5 2.5"
+          stroke={p.hi}
           strokeWidth="2.2"
           strokeLinecap="round"
         />
-      </AnimatedG>
-      <Circle cx="24" cy="20.5" r="13.2" fill={p.lo} stroke={p.ink} strokeWidth="1.8" />
-      <AnimatedCircle cx="24" cy="19.8" r="12.2" fill={p.mid} animatedProps={animatedGlowProps} origin="24, 19.8" />
+      </G>
+      <Circle cx="24" cy="19.8" r="14" fill={p.glow} opacity={0.25} />
+      <Circle cx="24" cy="19.8" r="12.2" fill={p.mid} opacity={0.8} />
       <Circle cx="24" cy="18.8" r="8.8" fill={p.hi} opacity={0.88} />
       <Circle cx="21" cy="15.5" r="3.2" fill={HOME_WIDGET_ICON_SHINE} opacity={0.9} />
     </G>
   );
 }
 
-/** Climate: living mercury expansion and breathing */
+/** Climate: mercury stem */
 function ClimateMercury({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 2400, easing: Easing.inOut(Easing.sin) })
-      ),
-      -1,
-      true
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const animatedStemProps = useAnimatedProps(() => ({
-    transform: [{ scaleY: 0.88 + 0.16 * t.value }],
-  }));
-
   return (
     <G>
-      <AnimatedG animatedProps={animatedStemProps} origin="25, 35">
+      <G origin="25, 35">
         <Path d="M25 34V15.5" stroke={p.ink} strokeWidth="5.8" strokeLinecap="round" opacity={0.45} />
         <Path d="M25 34V15.5" stroke={p.detail} strokeWidth="4.2" strokeLinecap="round" />
-      </AnimatedG>
+      </G>
       <Circle cx="25" cy="35" r="5.4" fill={p.detail} stroke={p.ink} strokeWidth="1.4" />
       <Circle cx="23.2" cy="33.2" r="1.8" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
     </G>
   );
 }
 
-/** Security: protective shield ambient pulse and padlock shackle glint */
+/** Security: protective shield and padlock */
 function SecurityShield({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 2200, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      true
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const lockProps = useAnimatedProps(() => ({
-    transform: [{ scale: 1 + 0.06 * t.value }],
-  }));
-
   return (
     <G>
       {/* 3D Shield base + mid + specular half + keyline */}
@@ -500,7 +276,7 @@ function SecurityShield({ p }: { p: HomeWidgetIconPalette }) {
       <Path d="M24 5.5 38 10.5v9.5c0 9-5.6 15.6-14 19.4V5.5Z" fill={p.hi} opacity={0.42} />
       <Path d="M24 3.8v39.5" stroke={p.ink} strokeWidth="1.3" opacity={0.35} />
       {/* 3D Gold padlock with glint */}
-      <AnimatedG animatedProps={lockProps} origin="24, 25">
+      <G origin="24, 25">
         <Path
           d="M21 20v-3a3 3 0 0 1 6 0v3"
           stroke={p.ink}
@@ -518,82 +294,28 @@ function SecurityShield({ p }: { p: HomeWidgetIconPalette }) {
         <Rect x="18.5" y="20" width="11" height="11.5" rx="3" fill={p.detail} stroke={p.ink} strokeWidth="1.4" />
         <Rect x="20" y="21.2" width="8" height="2" rx="1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
         <Circle cx="24" cy="25.8" r="1.5" fill={p.ink} />
-      </AnimatedG>
+      </G>
     </G>
   );
 }
 
-/** Schedule: sweeping clock tick around (24, 24.5) */
+/** Schedule: clock hands */
 function ScheduleClockHands({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withTiming(1, { duration: 16000, easing: Easing.linear }),
-      -1,
-      false
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const handProps = useAnimatedProps(() => ({
-    transform: [{ rotate: `${t.value * 360}deg` }],
-  }));
-
   return (
     <G>
       <Path d="M24 24.5V15" stroke={p.ink} strokeWidth="3.2" strokeLinecap="round" />
-      <AnimatedG animatedProps={handProps} origin="24, 24.5">
-        <Path d="M24 24.5l8 5" stroke={p.ink} strokeWidth="3.2" strokeLinecap="round" />
-      </AnimatedG>
+      <Path d="M24 24.5l8 5" stroke={p.ink} strokeWidth="3.2" strokeLinecap="round" />
       <Circle cx="24" cy="24.5" r="3" fill={p.detail} stroke={p.ink} strokeWidth="1.2" />
     </G>
   );
 }
 
-/** Suggestions: twinkling 4-point clay star */
+/** Suggestions: 4-point clay star */
 function SuggestionsStars({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-        withTiming(-1, { duration: 1800, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      true
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const star1Props = useAnimatedProps(() => ({
-    transform: [
-      { scale: 1 + 0.08 * t.value },
-      { rotate: `${3.5 * t.value}deg` },
-    ],
-  }));
-  const star2Props = useAnimatedProps(() => ({
-    transform: [
-      { scale: 1 - 0.1 * t.value },
-      { rotate: `${-5 * t.value}deg` },
-    ],
-  }));
-
   return (
     <G>
       {/* Primary 4-point clay star */}
-      <AnimatedG animatedProps={star1Props} origin="20, 16">
+      <G origin="20, 16">
         <Path
           d="M20 4c1.6 7.8 4.2 10.4 12 12-7.8 1.6-10.4 4.2-12 12-1.6-7.8-4.2-10.4-12-12 7.8-1.6 10.4-4.2 12-12Z"
           fill={p.lo}
@@ -611,9 +333,9 @@ function SuggestionsStars({ p }: { p: HomeWidgetIconPalette }) {
           opacity={0.85}
         />
         <Circle cx="18.2" cy="12" r="2" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
-      </AnimatedG>
+      </G>
       {/* Secondary rose star */}
-      <AnimatedG animatedProps={star2Props} origin="36, 30.7">
+      <G origin="36, 30.7">
         <Path
           d="M36 24c.9 4.4 2.3 5.8 6.7 6.7-4.4.9-5.8 2.3-6.7 6.7-.9-4.4-2.3-5.8-6.7-6.7 4.4-.9 5.8-2.3 6.7-6.7Z"
           fill={p.detail}
@@ -622,87 +344,35 @@ function SuggestionsStars({ p }: { p: HomeWidgetIconPalette }) {
           strokeLinejoin="round"
         />
         <Circle cx="35" cy="29.5" r="1.4" fill={HOME_WIDGET_ICON_SHINE} opacity={0.75} />
-      </AnimatedG>
+      </G>
     </G>
   );
 }
 
-/** Week: wave breathing on rhythm columns */
+/** Week: rhythm columns */
 function WeekColumns({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
-        withTiming(-1, { duration: 1800, easing: Easing.inOut(Easing.sin) })
-      ),
-      -1,
-      true
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const col1Props = useAnimatedProps(() => ({
-    transform: [{ scaleY: 1 + 0.12 * t.value }],
-  }));
-  const col2Props = useAnimatedProps(() => ({
-    transform: [{ scaleY: 1 - 0.1 * t.value }],
-  }));
-  const col3Props = useAnimatedProps(() => ({
-    transform: [{ scaleY: 1 + 0.08 * t.value }],
-  }));
-
   return (
     <G>
-      <AnimatedG animatedProps={col1Props} origin="13.7, 35">
+      <G origin="13.7, 35">
         <Rect x="11" y="28" width="5.5" height="7" rx="2" fill={p.detail} stroke={p.ink} strokeWidth="1.2" />
         <Rect x="12" y="29" width="3.5" height="1.8" rx="0.9" fill={HOME_WIDGET_ICON_SHINE} opacity={0.7} />
-      </AnimatedG>
-      <AnimatedG animatedProps={col2Props} origin="23.7, 35">
+      </G>
+      <G origin="23.7, 35">
         <Rect x="21" y="22" width="5.5" height="13" rx="2" fill={p.detail} stroke={p.ink} strokeWidth="1.2" />
         <Rect x="22" y="23" width="3.5" height="1.8" rx="0.9" fill={HOME_WIDGET_ICON_SHINE} opacity={0.7} />
-      </AnimatedG>
-      <AnimatedG animatedProps={col3Props} origin="33.7, 35">
+      </G>
+      <G origin="33.7, 35">
         <Rect x="31" y="25" width="5.5" height="10" rx="2" fill={p.detail} stroke={p.ink} strokeWidth="1.2" />
         <Rect x="32" y="26" width="3.5" height="1.8" rx="0.9" fill={HOME_WIDGET_ICON_SHINE} opacity={0.7} />
-      </AnimatedG>
+      </G>
     </G>
   );
 }
 
-/** Ledger: gold coin gleam */
+/** Ledger: gold coin */
 function LedgerCoin({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 1800, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      true
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const coinProps = useAnimatedProps(() => ({
-    transform: [{ scale: 1 + 0.08 * t.value }],
-  }));
-
   return (
-    <AnimatedG animatedProps={coinProps} origin="32, 35">
+    <G origin="32, 35">
       <Circle cx="32" cy="35" r="7.2" fill={p.detail} stroke={p.ink} strokeWidth="1.5" />
       <Circle cx="30" cy="32.5" r="1.8" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
       <Path
@@ -711,37 +381,14 @@ function LedgerCoin({ p }: { p: HomeWidgetIconPalette }) {
         strokeWidth="1.7"
         strokeLinecap="round"
       />
-    </AnimatedG>
+    </G>
   );
 }
 
-/** Leaderboard: sparkling victory star pulse */
+/** Leaderboard: victory star */
 function LeaderboardStar({ p }: { p: HomeWidgetIconPalette }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    t.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.quad) }),
-        withTiming(0, { duration: 1400, easing: Easing.inOut(Easing.quad) })
-      ),
-      -1,
-      true
-    );
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-
-  const starProps = useAnimatedProps(() => ({
-    transform: [{ scale: 1 + 0.1 * t.value }],
-  }));
-
   return (
-    <AnimatedG animatedProps={starProps} origin="24, 18">
+    <G origin="24, 18">
       <Path
         d="m24 11 2 4.2 4.6.7-3.3 3.2.8 4.6L24 21.6l-4.1 2.1.8-4.6-3.3-3.2 4.6-.7L24 11Z"
         fill={p.detail}
@@ -749,82 +396,28 @@ function LeaderboardStar({ p }: { p: HomeWidgetIconPalette }) {
         strokeWidth="1"
         strokeLinejoin="round"
       />
-    </AnimatedG>
+    </G>
   );
 }
 
-function TypingDot({ cx, cy, r, index }: { cx: number; cy: number; r: number; index: number }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    const loop = withRepeat(
-      withSequence(
-        withTiming(0, { duration: 525 }),
-        withTiming(1, { duration: 525 }),
-        withTiming(1, { duration: 450 })
-      ),
-      -1,
-      false
-    );
-    t.value = index > 0 ? withDelay(index * 160, loop) : loop;
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t, index]);
-  const animatedProps = useAnimatedProps(() => ({
-    opacity: t.value > 0 ? 0.8 + 0.2 * t.value : 0.8,
-    transform: [{ translateY: t.value > 0 ? -2.5 * t.value : 0 }],
-  }));
-  return <AnimatedCircle cx={cx} cy={cy} r={r} animatedProps={animatedProps} />;
+function TypingDot({ cx, cy, r }: { cx: number; cy: number; r: number; index?: number }) {
+  return <Circle cx={cx} cy={cy} r={r} />;
 }
 
 function LeaderboardShine() {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    const loop = withRepeat(
-      withSequence(
-        withTiming(0, { duration: 900 }),
-        withTiming(1, { duration: 1500 }),
-        withTiming(1, { duration: 900 }),
-        withTiming(0, { duration: 1200 })
-      ),
-      -1,
-      false
-    );
-    t.value = loop;
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-  const animatedProps = useAnimatedProps(() => ({
-    x: 15 + 10 * t.value,
-    opacity: t.value < 0.14 ? t.value / 0.14 : t.value > 0.86 ? (1 - t.value) / 0.14 : 0.4,
-  }));
   return (
-    <AnimatedRect
+    <Rect
       x={15}
       y={9}
       width={5}
       height={13}
       rx={2.5}
       fill={HOME_WIDGET_ICON_SHINE}
-      animatedProps={animatedProps}
+      opacity={0.3}
     />
   );
 }
 
-/**
- * The clay body/shine are painted as SOLID palette steps with multi-layer 3D
- * clay volume (ground drop shadow -> shaded base -> mid body -> lit top /
- * specular rim -> ink keyline).
- */
 function renderArtwork(
   variant: HomeWidgetIconVariant,
   p: HomeWidgetIconPalette,

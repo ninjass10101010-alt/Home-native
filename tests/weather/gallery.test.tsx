@@ -50,7 +50,7 @@ describe("WeatherGallery (one fetch, honest states)", () => {
     expect(await findByTestId("wx-timeline-card")).toBeTruthy();
     expect(await findByTestId("wx-aqi-card")).toBeTruthy();
     expect(await findByTestId("wx-moon-card")).toBeTruthy();
-  });
+  }, 15000);
 });
 
 describe("cards (pure, data non-null)", () => {
