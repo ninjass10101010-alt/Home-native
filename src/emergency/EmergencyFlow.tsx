@@ -18,6 +18,7 @@ import { useToast } from "../ui/Toast";
 import { SignedOutBanner } from "../ui/SignedOutBanner";
 import { api, ApiError } from "../api/client";
 import { useAuth } from "../state/AuthProvider";
+import { NotificationsCard } from "../settings/NotificationsCard";
 
 export type EmergencyType = "fire" | "water" | "injury" | "general";
 
@@ -579,6 +580,11 @@ export function EmergencyFlow() {
         accessibilityLabel="Open safety settings"
         style={{ marginBottom: 24, borderStyle: "dashed", backgroundColor: colors["color-surface-2"] }}
       />
+
+      {/* Notifications & Alert Sounds */}
+      <View style={{ marginBottom: 24 }}>
+        <NotificationsCard />
+      </View>
 
       {/* 911 — the reference page's life-threatening card */}
       <Material tier="regular" tone={rose} style={{ borderRadius: 28, padding: 24, marginTop: 24, alignItems: "center", borderColor: mix(rose, "transparent", 35), backgroundColor: mix(rose, "transparent", 10) }}>
