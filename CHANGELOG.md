@@ -4,7 +4,7 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
-- 2026-10-29 — feat(home,widgets): native Daily Schedule widget parity with webapp (`ScheduleWidget.tsx`).
+- 2026-10-29 — feat(home,widgets,notifications): native Daily Schedule widget parity with webapp (`ScheduleWidget.tsx`) & routine notification sound chime integration.
   **What changed:**
   - **NATIVE `ScheduleWidget` COMPONENT** (`src/home/widgets/ScheduleWidget.tsx`):
     - Full port of webapp's `ScheduleDisplay.tsx` in warm-glass design language with cyan accent tone (`#06b6d4` / `color-accent-cyan`).
@@ -12,13 +12,16 @@ Full shipped-change history for Home-native (newest first, long-form entries).
     - Displays upcoming routines filtered by today's weekday (`schedulesForDay`), with 12-hour formatted time (`formatScheduleTime12h`), routine icon/emoji, routine title, glowing colored left rail, and family member chip badge.
     - Honest empty states: "No routines are scheduled for today" when empty, and "All done / All routines completed for today 🎉" when all routines are in the past.
     - Deep-link footer (`+{N} more · See all →`) navigating to `/calendar` when routines exceed visible cell budget (2 for 1-cell span, 4 for 2-cell span).
+  - **ROUTINE NOTIFICATION CHIME INTEGRATION** (`src/native/useNotificationMonitor.ts`):
+    - Connected routine schedule checks directly to `/api/db/schedules` (matching `ScheduleWidget` and PocketBase collection format) with `scheduleCoversWeekday` scoping and exact 15-minute lead detection.
+    - Plays configured routine sound effect (e.g. Gentle Harp, Warm Chime, or custom choice via `NotificationsCard`) with routine icon and member attribution.
   - **HOME WALL & SETTINGS CONFIGURATION** (`app/index.tsx`, `src/home/widgets.tsx`, `src/settings/HomeSection.tsx`):
     - Added `ScheduleWidget` to `WALL_WIDGETS` registry in `app/index.tsx`.
     - Moved `schedule` from locked-hidden to `WALL_CONFIGURABLE_WIDGETS` (default hidden), allowing parents to configure and enable it on the 12-cell Home Wall via **Settings → Home**.
   - **PERFORMANCE OPTIMIZATION FOR SVG ICONS & MONSTER DIGITS** (`src/ui/HomeWidgetIcon.tsx`, `src/weather/art.tsx`, `src/weather/useAmbient.tsx`):
     - Replaced CPU-heavy Reanimated `useAnimatedProps` hooks on SVG paths/circles with static clay SVG elements and GPU-accelerated container transforms, resolving the Android ANR input dispatch timeout.
     - Consolidated weather digit pupil glance loops to hero primary eye (`height >= 120`).
-  **Tests:** `tests/schedule-widget.test.tsx` (new, 3 tests), `tests/wall-layout.test.tsx` (13 tests), `tests/settings-page.test.tsx` (32 tests). `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+  **Tests:** `tests/schedule-widget.test.tsx` (3 tests), `tests/notification-monitor.test.ts` (8 tests), `tests/wall-layout.test.tsx` (13 tests), `tests/settings-page.test.tsx` (32 tests). `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
 
 - 2026-10-28 — feat(screensaver,settings): schedule-based screensaver with night quiet hours, presets (11 PM – 4 AM), and morning auto-wake.
   **What changed:**

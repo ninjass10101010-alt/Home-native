@@ -59,3 +59,11 @@ describe("useNotificationMonitor logic", () => {
     });
   });
 });
+
+describe("useNotificationMonitor routine integration", () => {
+  it("recognizes a routine scheduled within 15 minutes", () => {
+    const now = new Date(2026, 9, 26, 17, 0, 0); // 5:00 PM
+    expect(isStartingSoon("17:10", now, 15)).toBe(true);
+    expect(isStartingSoon("17:20", now, 15)).toBe(false);
+  });
+});

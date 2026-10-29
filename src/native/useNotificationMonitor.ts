@@ -1,17 +1,16 @@
 import React, { useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { dispatchNotification } from "./notifications";
+import {
+  type ScheduleRow,
+  scheduleCoversWeekday,
+  scheduleTimeMinutes,
+} from "../calendar/events-merge";
 
 export interface CalendarEventItem {
   id: string | number;
   title: string;
   start: string; // ISO string or time string
-}
-
-export interface RoutineScheduleItem {
-  id: string | number;
-  title: string;
-  time?: string; // e.g. "17:30" or ISO
 }
 
 /**
@@ -121,27 +120,41 @@ export function useNotificationMonitor({
         // offline or unmapped
       }
 
-      // 3. Check Routines
+      // 3. Check Routines & Daily Schedules
       try {
-        const schedRes = (await api("/api/schedules")) as any;
-        const routines: RoutineScheduleItem[] = Array.isArray(schedRes?.schedules)
-          ? schedRes.schedules
-          : Array.isArray(schedRes)
-            ? schedRes
-            : [];
+        const schedRes = (await api("/api/db/schedules")) as any;
+        const routines: ScheduleRow[] = Array.isArray(schedRes?.items)
+          ? schedRes.items
+          : Array.isArray(schedRes?.schedules)
+            ? schedRes.schedules
+            : Array.isArray(schedRes)
+              ? schedRes
+              : [];
+
+        const weekdayShort = now.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase();
+        const weekdayIndex = now.getDay();
+        const nowMins = now.getHours() * 60 + now.getMinutes();
 
         for (const rt of routines) {
+          if (!scheduleCoversWeekday(rt.days, weekdayShort, weekdayIndex)) {
+            continue;
+          }
+
+          const targetMinutes = scheduleTimeMinutes(rt.time);
+          const startingSoon =
+            targetMinutes !== null
+              ? targetMinutes - nowMins >= 0 && targetMinutes - nowMins <= 15
+              : isStartingSoon(rt.time, now, 15);
+
           const key = `${todayISO}-${rt.id}`;
-          if (
-            !alertedRoutineIds.current.has(key) &&
-            isStartingSoon(rt.time, now, 15)
-          ) {
+          if (!alertedRoutineIds.current.has(key) && startingSoon) {
             alertedRoutineIds.current.add(key);
+            const memberInfo = rt.member ? ` for ${rt.member.split(" ")[0]}` : "";
             void dispatchNotification({
               category: "routines",
-              title: "⏰ Routine Reminder",
-              body: `Family routine "${rt.title || "Scheduled routine"}" starts in 15 minutes.`,
-              data: { routineId: rt.id },
+              title: `${rt.icon || "⏰"} Routine Reminder`,
+              body: `"${rt.title || "Daily routine"}"${memberInfo} starts in 15 minutes.`,
+              data: { routineId: rt.id, member: rt.member },
             });
           }
         }
