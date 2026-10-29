@@ -18,7 +18,8 @@ import {
   type WallWidgetProps,
 } from "./widgets";
 import { layoutSpan, layoutWidgets, useWallLayout } from "./wallLayout";
-import { WallStatStrip, ThisWeekCard } from "./WallStatsStrip";
+import { WallStatStrip } from "./WallStatsStrip";
+import { MoreButton } from "../nav/CapsuleDock";
 import { useWallStats } from "./wall-stats";
 import { scoreWidgets, dynamicSpans, activityOrder } from "./wallActivity";
 
@@ -62,57 +63,32 @@ const GRID_TOP = 17;
  * that only exists when there is no session.
  */
 /**
- * The header band, measured row by row against the reference (signed out):
- *   the banner 78 + the band's `pt-7` 28 + the identity row (the member
- *   rail's 91px tile) − the greeting's 5 of overlap + the greeting's two
- *   lines (58 + 40) + the KPI band (its own 12 margin + the 78 tile) = 380,
- *   the KPI band's bottom border.
+ * The header band, measured row by row (signed out):
+ *   top Music Island clearance 60 + the signed-out banner (12 margin + 66) = 138
+ *   + header band pad 16 + member rail row 91 + gap 16 + date eyebrow 24
+ *   + greeting two lines (58 + 40) + KPI band (12 margin + 78 tile) = 473.
  */
-const HEADER_BAND_H = 380;
+const HEADER_BAND_H = 473;
 /**
- * The same band with no banner above it: the band opens by the shield's own
- * height (IDENTITY_TOP_SIGNED_IN 107) instead of the banner's 78 — 381, the
- * same band the reference's signed-out wall measures. A signed-in wall
- * therefore carries the SAME header geometry as the reference (the banner is
- * chrome above the band; the band itself does not move).
+ * The same band with no signed-out banner above it:
+ *   top Music Island & Emergency Shield clearance 88 + member rail row 91
+ *   + gap 16 + date eyebrow 24 + greeting two lines (58 + 40)
+ *   + KPI band (12 margin + 78 tile) = 407.
  */
-const HEADER_BAND_H_SIGNED_IN = 381;
+const HEADER_BAND_H_SIGNED_IN = 407;
 /**
  * Head-room on the band: a longer rail label, a third greeting line or a
  * taller KPI tile must never push the bento off the panel.
  */
 const HEADER_SLACK = 9;
 /**
- * The dock clearance under the tail.
- *
- * The tail's bottom edge must sit ~16px above the dock's top edge — the
- * reference's gap (reference/home/guest-dark.png: the tail's bottom border at
- * 1811, the dock's top at 1828). The native's tail card is 30px shorter than
- * the reference's (the card's own height lives in src/home/WallStatsStrip.tsx),
- * so the difference is absorbed by the gutter ABOVE the tail instead of
- * leaving a hole at the bottom of the column — the band below the bento now
- * reads as one filled column, which is what the reference shows.
+ * The dock clearance under the bento grid.
  */
 const DOCK_CLEAR = 114;
-/** "This Week" tail — the card's own fixed height (src/home/WallStatsStrip.tsx). */
-const TAIL_H = 190;
-/**
- * Grid → tail gap. The reference's bento ends at 1565 and its tail starts at
- * 1587 — 22px of canvas between two cards.
- *
- * The native's tail card is 30px shorter than the reference's, so the gap
- * carries the difference: the column from the bento's bottom edge to the
- * dock's top edge is the same height as the reference's, with the tail's
- * bottom landing 16px above the dock (the reference's gap) instead of 42px
- * below it (a void at the foot of the wall).
- */
-const TAIL_GAP = 44;
 const WALL_HEIGHT = 1920;
 /** The emergency shield's 64dp target, inset from the wall's corner (the web's
  *  fixed Emergency button: 16px in, 64×64). */
 const SHIELD_INSET = 16;
-/** The emergency shield width and clearance. */
-const SHIELD_SIZE = 64;
 /**
  * The identity row's height — the member rail's tile (8 pad + the 48 avatar
  * + 5 + the 20 name line + 8 pad; the 2px ring is a spread shadow drawn
@@ -128,22 +104,21 @@ const RAIL_ROW_H = 91;
 
 /**
  * Cell height. The derivation subtracts EVERY fixed row it sits between —
- * header, both gaps, the tail, the dock clearance and the grid's own internal
+ * header, grid top gap, dock clearance and the grid's own internal
  * gaps — so the reservation sum itself fits the panel (1920 of 1920), not
  * just the "measured" one.
  *
- * GRID_CELL_H is the SIGNED-OUT height: a signed-out wall carries the 78px
+ * GRID_CELL_H is the SIGNED-OUT height: a signed-out wall carries the
  * banner band, so its cards are the shorter ones. A signed-in wall gives
- * those 78px back to the grid (web parity: the bento area is the flex child
- * that grows, so the cards absorb whatever the banner did not use).
+ * that height back to the grid.
  */
 export const GRID_CELL_H = Math.floor(
-  (WALL_HEIGHT - HEADER_BAND_H - HEADER_SLACK - DOCK_CLEAR - GRID_TOP - TAIL_GAP - TAIL_H - GRID_GAP * (4 - 1)) / 4
+  (WALL_HEIGHT - HEADER_BAND_H - HEADER_SLACK - DOCK_CLEAR - GRID_TOP - GRID_GAP * (4 - 1)) / 4
 );
 
 /** The same cell height for a signed-in wall (no banner band to pay for). */
 const GRID_CELL_H_SIGNED_IN = Math.floor(
-  (WALL_HEIGHT - HEADER_BAND_H_SIGNED_IN - HEADER_SLACK - DOCK_CLEAR - GRID_TOP - TAIL_GAP - TAIL_H - GRID_GAP * (4 - 1)) / 4
+  (WALL_HEIGHT - HEADER_BAND_H_SIGNED_IN - HEADER_SLACK - DOCK_CLEAR - GRID_TOP - GRID_GAP * (4 - 1)) / 4
 );
 
 /** Time-of-day greeting matching the web's wall header. */
@@ -352,7 +327,7 @@ export function HomeWall({
   onSignOut,
   widgets = {},
   greetingNow,
-  onSelectDay,
+  onSelectDay: _onSelectDay,
   onOpenMore,
   hasSavedRoster = true,
   rosterUnreachable = false,
@@ -431,7 +406,7 @@ export function HomeWall({
         ? GRID_CELL_H
         : GRID_CELL_H_SIGNED_IN
       : Math.floor(
-          (effectiveWallH - (signedOut ? HEADER_BAND_H : HEADER_BAND_H_SIGNED_IN) - HEADER_SLACK - DOCK_CLEAR - GRID_TOP - TAIL_GAP - TAIL_H - GRID_GAP * (4 - 1)) / 4
+          (effectiveWallH - (signedOut ? HEADER_BAND_H : HEADER_BAND_H_SIGNED_IN) - HEADER_SLACK - DOCK_CLEAR - GRID_TOP - GRID_GAP * (4 - 1)) / 4
         );
 
   /**
@@ -460,34 +435,14 @@ export function HomeWall({
     // visible — see the note there.
     <View style={{ flex: 1 }}>
       {/* Emergency shield: 64dp, top-right of the wall — the web's fixed
-          Emergency button, 16px in from the corner. */}
+          Emergency button, 16px in from the corner. Top band (0..88px) stays
+          clear for the full-size MusicIsland centered at top: 8. */}
       <EmergencyShield style={{ top: SHIELD_INSET, right: SHIELD_INSET, zIndex: 30 }} />
 
-      {/* Top bar: Member avatars positioned at the top of the screen
-          to the left of the Emergency button. */}
-      <View
-        style={{
-          position: "absolute",
-          top: SHIELD_INSET,
-          right: SHIELD_INSET + SHIELD_SIZE + 12, // 16 + 64 + 12 = 92dp to clear emergency shield + gap
-          zIndex: 30,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          minHeight: RAIL_ROW_H,
-        }}
-      >
-        <MemberRail
-          members={members}
-          currentName={member?.name ?? null}
-          onSelect={onSelectMember}
-          onSignOut={onSignOut}
-        />
-      </View>
-
-      {/* The signed-out band: full width across the top of the wall below the rail. */}
+      {/* The signed-out band: full width across the top of the wall, below the
+          Music Island zone. */}
       {signedOut ? (
-        <View style={{ marginTop: 104 }}>
+        <View style={{ marginTop: 60 }}>
           <WallSignedOutBanner
             copy={
               rosterUnreachable
@@ -503,39 +458,32 @@ export function HomeWall({
         </View>
       ) : null}
 
-      {/* The header band. Opens with generous breathing room under the top bar. */}
-      <View style={{ paddingHorizontal: GRID_H_PAD, paddingTop: signedOut ? 16 : 92 }}>
-        {/* Date eyebrow relocated down into the header band, above the greeting */}
-        <Text
-          numberOfLines={1}
+      {/* The header band. Leaves the top 88px clear for MusicIsland + EmergencyShield,
+          then stacks the full-width MemberRail, Date/Greeting/Time + More…, and KPI strip. */}
+      <View style={{ paddingHorizontal: GRID_H_PAD, paddingTop: signedOut ? 16 : 88 }}>
+        {/* Row 1: Member avatars on their own dedicated full-width row (1048px)
+            below the MusicIsland zone so all 9 members + Sign Out fit cleanly. */}
+        <View style={{ minHeight: RAIL_ROW_H, justifyContent: "center" }}>
+          <MemberRail
+            members={members}
+            currentName={member?.name ?? null}
+            onSelect={onSelectMember}
+            onSignOut={onSignOut}
+          />
+        </View>
+
+        {/* Row 2: Date eyebrow + two-line Greeting + Time badge on the left,
+            More… button on the right. */}
+        <View
           style={{
-            color: colors["color-text-secondary"],
-            fontSize: TYPOGRAPHY.label.fontSize,
-            lineHeight: TYPOGRAPHY.label.lineHeight,
-            fontWeight: "600",
-            letterSpacing: 2,
-            marginBottom: 4,
+            marginTop: 16,
+            flexDirection: "row",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: 16,
           }}
         >
-          {day} · {date}
-        </Text>
-
-        {/* The greeting, on TWO lines (the web's `wall-board` break
-            that the portrait wall keeps): the salutation, then the family
-            name in the accent colour, with the season + clock badge sitting
-            on the second line's baseline beside it. */}
-        <View style={{ marginTop: 0 }}>
-          <Text numberOfLines={1} style={greetingStyle}>
-            {greeting},
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 12, marginTop: -18 }}>
-            <Text numberOfLines={1} style={greetingStyle}>
-              {/* lineHeight is explicit on the nested span too: the outer
-                  lineHeight caps inherited children at the platform default
-                  (~65 at 54sp), and the card height budget depends on this
-                  line measuring 58. */}
-              <Text style={{ color: accentColor, lineHeight: 58 }}>{familyName}</Text>
-            </Text>
+          <View style={{ flex: 1 }}>
             <Text
               numberOfLines={1}
               style={{
@@ -543,28 +491,58 @@ export function HomeWall({
                 fontSize: TYPOGRAPHY.label.fontSize,
                 lineHeight: TYPOGRAPHY.label.lineHeight,
                 fontWeight: "600",
-                letterSpacing: 1.6,
-                fontVariant: ["tabular-nums"],
-                // The badge rides the greeting's baseline (the web's `pb-1`).
-                marginBottom: 12,
+                letterSpacing: 2,
+                marginBottom: 4,
               }}
             >
-              {seasonGlyph(now.getMonth())} {time}
+              {day} · {date}
             </Text>
+
+            <Text numberOfLines={1} style={greetingStyle}>
+              {greeting},
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 12, marginTop: -18 }}>
+              <Text numberOfLines={1} style={greetingStyle}>
+                {/* lineHeight is explicit on the nested span too: the outer
+                    lineHeight caps inherited children at the platform default
+                    (~65 at 54sp), and the card height budget depends on this
+                    line measuring 58. */}
+                <Text style={{ color: accentColor, lineHeight: 58 }}>{familyName}</Text>
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  lineHeight: TYPOGRAPHY.label.lineHeight,
+                  fontWeight: "600",
+                  letterSpacing: 1.6,
+                  fontVariant: ["tabular-nums"],
+                  // The badge rides the greeting's baseline (the web's `pb-1`).
+                  marginBottom: 12,
+                }}
+              >
+                {seasonGlyph(now.getMonth())} {time}
+              </Text>
+            </View>
           </View>
+
+          {onOpenMore ? (
+            <View style={{ marginBottom: 8 }}>
+              <MoreButton onPress={onOpenMore} />
+            </View>
+          ) : null}
         </View>
 
-        {/* The KPI band — the web's three StatTiles (Events/Tasks/Week), fed by
-            the widgets that already own each fact (src/home/wall-stats.ts).
-            The strip owns its own 12dp top margin; the web's `gap-5` above
-            it lands the band on the reference's 300. */}
+        {/* Row 3: The KPI band — the web's three StatTiles (Events/Tasks/Week),
+            fed by the widgets that already own each fact (src/home/wall-stats.ts). */}
         <WallStatStrip />
       </View>
 
       {/* 12-cell bento: three explicit columns (web grid-flow-dense port) so
           photos can span rows 1–2 in col-1 while cols 2–3 fill beside it.
           Total height = 4×cellH + 3×GRID_GAP = WALL_HEIGHT − header − dock. */}
-      <View style={{ paddingHorizontal: GRID_H_PAD }}>
+      <View style={{ paddingHorizontal: GRID_H_PAD, paddingBottom: DOCK_CLEAR }}>
         <View style={{ flexDirection: "row", gap: GRID_GAP, marginTop: GRID_TOP }} testID="wall-grid">
           {columns.map((col, ci) => (
             <View key={`col-${ci}`} style={{ flex: 1, gap: GRID_GAP }} testID={`wall-col-${ci}`}>
@@ -597,13 +575,6 @@ export function HomeWall({
               })}
             </View>
           ))}
-        </View>
-
-        {/* "This Week" tail (web page.tsx:1070-1095): the week strip + a
-            week-mode DayLine, in a sibling below the bento — one tap from Home,
-            /meals?day= is the same contract the web relies on. */}
-        <View style={{ marginTop: TAIL_GAP, paddingBottom: DOCK_CLEAR }}>
-          <ThisWeekCard onSelectDay={onSelectDay} onOpenMore={onOpenMore} />
         </View>
       </View>
     </View>

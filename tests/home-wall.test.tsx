@@ -4,6 +4,7 @@ import { fireEvent, render } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { HomeWall, greetingFor, GRID_CELL_H, savedFamilyLabel, seasonGlyph } from "../src/home/HomeWall";
+import { ThisWeekCard } from "../src/home/WallStatsStrip";
 import {
   visibleOnWall,
   wallColumns,
@@ -231,7 +232,12 @@ describe("HomeWall KPI band + This Week tail", () => {
     expect(subtreeText(view, "wall-stat-events")).not.toContain("Events");
   });
 
-  it("renders the This Week card with a day strip + week DayLine", () => {
+  it("omits the This Week widget from the HomeWall to free header vertical space", () => {
+    const view = render(<HomeWall members={members} onSelectMember={() => {}} />, { wrapper: wrap });
+    expect(view.queryByTestId("wall-this-week")).toBeNull();
+  });
+
+  it("ThisWeekCard component still renders a day strip + week DayLine when mounted standalone", () => {
     publishWallStats({
       weekCells: [
         { label: "Mon", date: 5, planned: true, isToday: false },
@@ -243,46 +249,38 @@ describe("HomeWall KPI band + This Week tail", () => {
         { label: "Sun", date: 11, planned: false, isToday: false },
       ],
     });
-    const view = render(<HomeWall members={members} onSelectMember={() => {}} />, { wrapper: wrap });
+    const view = render(<ThisWeekCard />, { wrapper: wrap });
     const { getByTestId } = view;
     expect(subtreeText(view, "wall-this-week")).toContain("This Week");
     expect(subtreeText(view, "wall-this-week")).toContain("Meal and family rhythm at a glance");
     expect(getByTestId("wall-week-strip")).toBeTruthy();
-    // Hidden from assistive tech by design (the same facts live as real text),
-    // so it needs the repo's includeHiddenElements query, as WidgetFrame's
-    // icon disc does.
     expect(getByTestId("wall-week-dayline", { includeHiddenElements: true })).toBeTruthy();
-    // 7 cells, Monday-first, with the web's date numerals
     expect(getByTestId("wall-week-Mon")).toBeTruthy();
     expect(subtreeText(view, "wall-week-Mon")).toContain("5");
     expect(subtreeText(view, "wall-week-Sun")).toContain("11");
   });
 
-  // The strip's dates + today accent are calendar facts, not meal data. The
-  // web renders them regardless of the meals read; publishing nothing made
-  // the whole band vanish under a meal outage, hiding the calendar.
-  it("the day strip still renders when the meals read hasn't answered (skeleton)", () => {
-    const view = render(<HomeWall members={members} onSelectMember={() => {}} />, { wrapper: wrap });
+  it("ThisWeekCard day strip still renders when the meals read hasn't answered (skeleton)", () => {
+    const view = render(<ThisWeekCard />, { wrapper: wrap });
     const { getByTestId } = view;
     expect(getByTestId("wall-week-Mon")).toBeTruthy();
     expect(getByTestId("wall-week-Sun")).toBeTruthy();
-    // 7 cells, and today is accented among them
     const strip = getByTestId("wall-week-strip");
     expect(strip.children.length).toBe(7);
   });
 
-  it("a week cell tap navigates to /meals?day= (onSelectDay)", () => {
+  it("ThisWeekCard week cell tap navigates to /meals?day= (onSelectDay)", () => {
     publishWallStats({ weekCells: weekCellsFor(new Date(2026, 9, 10), new Set(["Sat"])) });
     const onSelectDay = jest.fn();
     const { getByTestId } = render(
-      <HomeWall members={members} onSelectMember={() => {}} onSelectDay={onSelectDay} />,
+      <ThisWeekCard onSelectDay={onSelectDay} />,
       { wrapper: wrap }
     );
     fireEvent.press(getByTestId("wall-week-Sat"));
     expect(onSelectDay).toHaveBeenCalledWith("Sat");
   });
 
-  it("renders the More… button on the This Week row when onOpenMore is provided", () => {
+  it("renders the More… button in the HomeWall header band when onOpenMore is provided", () => {
     const onOpenMore = jest.fn();
     const { getByTestId } = render(
       <HomeWall members={members} onSelectMember={() => {}} onOpenMore={onOpenMore} />,
@@ -295,18 +293,15 @@ describe("HomeWall KPI band + This Week tail", () => {
   });
 
   it("height budget: the RESERVED rows fit the panel, so the wall never scrolls", () => {
-    // The reservation — not the "measured" estimate — is what must fit: a
-    // budget that only fits because each row measures under its reservation
-    // is a budget that clips on the first longer label. Every fixed row the
-    // grid sits between is subtracted, including the grid's own top margin
-    // (whose omission is what put the old reservation 18dp OVER the panel).
-    const reserved = 385 + 20 + (GRID_CELL_H * 4 + 16 * 3) + 20 + 190 + 140;
+    // With ThisWeekCard removed, the budget is:
+    // HEADER_BAND_H (473) + HEADER_SLACK (22) + GRID_TOP (20) + (GRID_CELL_H * 4 + 16 * 3) + DOCK_CLEAR (100).
+    const reserved = 473 + 22 + 20 + (GRID_CELL_H * 4 + 16 * 3) + 100;
     expect(reserved).toBeLessThanOrEqual(1920);
     // …and the measured build leaves real slack under it.
-    const measured = 368 + 20 + (GRID_CELL_H * 4 + 16 * 3) + 20 + 177 + 140;
+    const measured = 456 + 20 + (GRID_CELL_H * 4 + 16 * 3) + 100;
     expect(measured).toBeLessThanOrEqual(1920);
     expect(1920 - measured).toBeGreaterThanOrEqual(16); // ≥ one grid gap of slack
-    expect(GRID_CELL_H).toBeLessThan(358); // cards are re-budgeted DOWN, not grown
+    expect(GRID_CELL_H).toBeLessThan(358);
   });
 
   // The greeting's inner span pins its OWN lineHeight: an outer lineHeight

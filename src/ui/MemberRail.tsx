@@ -155,7 +155,7 @@ function RailTap({
  * one avatar per member, the signed-in tile carries the accent, Sign out at the
  * rail's end. Tiles ≥ 64dp (the tile is 91dp tall: 8 pad + 48 avatar + 5 + 20).
  */
-export function MemberRail({ members, currentName = null, onSelect, onSignOut, style, testID, wrap = false }: MemberRailProps) {
+export function MemberRail({ members, currentName = null, onSelect, onSignOut, style, testID, wrap = true }: MemberRailProps) {
   const { colors, theme, accentColor } = useTheme();
   // Web WallMemberRail parity: sign-out is a 2-tap confirm — the first tap
   // arms ("Sign out?"), the second fires; the armed state auto-resets.

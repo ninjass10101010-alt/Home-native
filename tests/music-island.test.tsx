@@ -237,7 +237,7 @@ describe("MusicIsland", () => {
     expect(useOutputVolume).toHaveBeenCalledWith(mockPlayer);
   });
 
-  it("adapts layout on Home (/) to clear avatars and date gutter", () => {
+  it("uses full-size centered layout on Home (/) since top band is reserved for MusicIsland", () => {
     (usePlayback as jest.Mock).mockReturnValue({ current: mockTrack });
     (usePathname as jest.Mock).mockReturnValue("/");
 
@@ -245,15 +245,15 @@ describe("MusicIsland", () => {
     const island = getByTestId("music-island");
     const collapsed = getByTestId("music-island-collapsed");
 
-    // Bounded in the center-left gutter (clears avatars on right: 480)
-    expect(island.props.style).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ left: 24, right: 480, top: 12 }),
-      ])
-    );
+    expect(island.props.style).toMatchObject({
+      left: 0,
+      right: 0,
+      top: 8,
+      alignItems: "center",
+    });
     expect(collapsed.props.style).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ maxWidth: 300 }),
+        expect.objectContaining({ maxWidth: 320 }),
       ])
     );
   });

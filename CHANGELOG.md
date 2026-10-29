@@ -4,6 +4,19 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — feat(home,music): remove This Week tail widget to free top band for full-size Music Island & clean stacked header (`HomeWall.tsx`, `MusicIsland.tsx`, `MemberRail.tsx`).
+  **What changed:**
+  - **FULL-SIZE TOP-CENTER MUSIC ISLAND (`MusicIsland.tsx`, `HomeWall.tsx`)**:
+    - Restored `MusicIsland` to its full, unshrunk top-center layout (`top: 8, left: 0, right: 0, alignItems: "center", maxWidth: 320` collapsed / `420` expanded) across all routes including Home (`/`).
+    - Reserved the top `0..88px` band of `HomeWall` exclusively for the `MusicIsland` and the top-right `EmergencyShield` (`top: 16, right: 16`), so the Music Island never shrinks and never overlaps any header content.
+  - **REMOVED THIS WEEK TAIL WIDGET (`HomeWall.tsx`)**:
+    - Removed the unused `<ThisWeekCard />` tail widget (`190px` card + `44px` gap = `234px` vertical budget) from the bottom of `HomeWall` and relocated the `More…` sheet button (`testID="home-more"`) into the header band beside the greeting.
+  - **CLEAN STACKED HEADER BAND (`HomeWall.tsx`, `MemberRail.tsx`)**:
+    - **Row 1 (Avatars)**: Placed `MemberRail` on its own dedicated full-width (`1048px`) row below the Music Island zone (`y = 88..179`), giving all 9 household member tiles + Sign Out button plenty of horizontal space on a single row without touching the Music Island, Emergency button, or Date.
+    - **Row 2 (Date, Greeting, Time & More…)**: Stacked the Date eyebrow (`{day} · {date}`), two-line greeting (`{greeting},` / `{familyName}`), and `{seasonGlyph} {time}` cleanly below the avatar rail with `<MoreButton />` aligned to the right.
+    - **Row 3 (KPI Stat Strip & 12-Cell Bento)**: Re-budgeted `GRID_CELL_H` (`314px` signed-out / `331px` signed-in) so the 4-row bento grid fills the remaining vertical space cleanly above the dock without scrolling.
+  **Tests:** `tests/music-island.test.tsx` (14 tests green), `tests/home-wall.test.tsx` (23 tests green). `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-29 — fix(home): relocate date eyebrow to header band above greeting to prevent avatar overlap (`HomeWall.tsx`, `MusicIsland.tsx`).
   **What changed:**
   - **DATE EYEBROW RELOCATION (`HomeWall.tsx`)**:

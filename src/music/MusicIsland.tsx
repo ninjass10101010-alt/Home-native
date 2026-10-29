@@ -252,12 +252,6 @@ export function MusicIsland() {
 
   const progress = duration > 0 ? position / duration : 0;
   const currentVolumeValue = isDraggingVolume && dragVolume !== null ? dragVolume : (volume?.muted ? 0 : (volume?.value ?? 0.5));
-  const isHome = pathname === "/" || pathname === "";
-  const containerStyle = expanded
-    ? styles.container
-    : isHome
-    ? [styles.container, styles.containerHome]
-    : styles.container;
 
   return (
     <>
@@ -268,14 +262,13 @@ export function MusicIsland() {
           onPress={handleCollapse}
         />
       )}
-      <View testID="music-island" style={containerStyle} pointerEvents="box-none">
+      <View testID="music-island" style={styles.container} pointerEvents="box-none">
         {!expanded ? (
           <Pressable
             testID="music-island-collapsed"
             onPress={handleExpand}
             style={[
               styles.collapsed,
-              isHome && styles.collapsedHome,
               {
                 backgroundColor: tokens.glassStrong,
                 borderColor: playing ? mix(tokens.accent, tokens.glassRim, 40) : tokens.glassRim,
@@ -507,12 +500,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 9999,
   },
-  containerHome: {
-    top: 12,
-    left: 24,
-    right: 480,
-    alignItems: "center",
-  },
   // Collapsed Dynamic Island Pill
   collapsed: {
     flexDirection: "row",
@@ -527,9 +514,6 @@ const styles = StyleSheet.create({
     elevation: 8,
     maxWidth: 320,
     overflow: "hidden",
-  },
-  collapsedHome: {
-    maxWidth: 300,
   },
   leftWaveform: {
     marginRight: 10,
