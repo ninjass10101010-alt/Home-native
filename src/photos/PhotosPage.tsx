@@ -248,8 +248,8 @@ export function PhotosPage() {
       </>
     );
     const cellStyle = {
-      width: "15.5%" as const,
-      aspectRatio: 1,
+      width: 160,
+      height: 160,
       borderRadius: 18,
       overflow: "hidden" as const,
       backgroundColor: colors["color-surface-0"],
