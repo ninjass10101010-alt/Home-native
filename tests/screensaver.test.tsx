@@ -6,7 +6,19 @@ import { StyleSheet } from "react-native";
 import { Screensaver } from "../src/screensaver/Screensaver";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import ScreensaverRoute from "../app/screensaver";
-import { idleBoardDue, SCREENSAVER_IDLE_MS } from "../src/home/idle";
+import {
+  idleBoardDue,
+  SCREENSAVER_IDLE_MS,
+  SCREENSAVER_PREFS_STORAGE_KEY,
+  LEGACY_SCREENSAVER_STORAGE_KEY,
+  useScreensaverPrefs,
+  saveScreensaverPrefs,
+  loadScreensaverPrefs,
+  isHourInWindow,
+  isScreensaverDueNow,
+  formatHour,
+  _resetScreensaverMemoryForTest,
+} from "../src/home/idle";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -69,6 +81,7 @@ const settle = async (ms = 0) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  _resetScreensaverMemoryForTest();
   mockCanGoBack = true;
   api.mockReset();
 });
@@ -157,7 +170,15 @@ describe("Screensaver — the ambient board", () => {
     await findByTestId("ss-clock");
     fireEvent.press(getByTestId("screensaver-root"));
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
 
+  it("auto-wakes when night schedule concludes (e.g. daytime outside night window)", async () => {
+    good();
+    // Night window 11 PM (23) to 4 AM (4). Pinned test clock is 7:05 AM (daytime).
+    _resetScreensaverMemoryForTest({ mode: "night", startHour: 23, endHour: 4 });
+    const onExit = jest.fn();
+    render(<Screensaver onExit={onExit} />, { wrapper: wrap });
+    expect(onExit).toHaveBeenCalled();
   });
 });
 
@@ -180,9 +201,24 @@ describe("Screensaver route", () => {
 });
 
 describe("home idle rule — the wall idles into the board", () => {
+  beforeEach(() => {
+    _resetScreensaverMemoryForTest({ mode: "always", startHour: 23, endHour: 4 });
+  });
+
   it("a modal flow stands the clock down (mid-PIN taps never idle into the board)", () => {
     expect(
       idleBoardDue({ pathname: "/", idleMs: SCREENSAVER_IDLE_MS, pushed: false, blocked: true })
+    ).toBe(false);
+  });
+  it("when screensaver is disabled, idleBoardDue returns false even when quiet", () => {
+    expect(
+      idleBoardDue({
+        pathname: "/",
+        idleMs: SCREENSAVER_IDLE_MS * 2,
+        pushed: false,
+        blocked: false,
+        enabled: false,
+      })
     ).toBe(false);
   });
   it("fires only from Home, only when quiet long enough, only once", () => {
@@ -198,5 +234,55 @@ describe("home idle rule — the wall idles into the board", () => {
     expect(
       idleBoardDue({ pathname: "/meals", idleMs: SCREENSAVER_IDLE_MS * 2, pushed: false, blocked: false })
     ).toBe(false);
+  });
+
+  it("screensaver preference defaults to always and persists mode and hour changes", async () => {
+    const initial = await loadScreensaverPrefs();
+    expect(initial.mode).toBe("always");
+    expect(initial.startHour).toBe(23);
+    expect(initial.endHour).toBe(4);
+
+    await saveScreensaverPrefs({ mode: "night", startHour: 23, endHour: 4 });
+    const updated = await loadScreensaverPrefs();
+    expect(updated.mode).toBe("night");
+    expect(updated.startHour).toBe(23);
+    expect(updated.endHour).toBe(4);
+  });
+
+  it("isHourInWindow accurately handles schedules spanning midnight (11 PM - 4 AM)", () => {
+    expect(isHourInWindow(23, 23, 4)).toBe(true); // 11 PM
+    expect(isHourInWindow(0, 23, 4)).toBe(true);  // Midnight
+    expect(isHourInWindow(2, 23, 4)).toBe(true);  // 2 AM
+    expect(isHourInWindow(3, 23, 4)).toBe(true);  // 3 AM
+    expect(isHourInWindow(4, 23, 4)).toBe(false); // 4 AM (wake time)
+    expect(isHourInWindow(8, 23, 4)).toBe(false); // 8 AM daytime
+    expect(isHourInWindow(22, 23, 4)).toBe(false); // 10 PM
+  });
+
+  it("isScreensaverDueNow enforces night schedule vs daytime", () => {
+    const prefs = { mode: "night" as const, startHour: 23, endHour: 4 };
+
+    // At 10:00 PM: daytime (widgets shown)
+    const at10pm = new Date(2026, 9, 11, 22, 0, 0);
+    expect(isScreensaverDueNow(prefs, at10pm)).toBe(false);
+
+    // At 11:00 PM: night starts (screensaver active)
+    const at11pm = new Date(2026, 9, 11, 23, 0, 0);
+    expect(isScreensaverDueNow(prefs, at11pm)).toBe(true);
+
+    // At 2:00 AM: night active
+    const at2am = new Date(2026, 9, 12, 2, 0, 0);
+    expect(isScreensaverDueNow(prefs, at2am)).toBe(true);
+
+    // At 4:00 AM: wake up for the day
+    const at4am = new Date(2026, 9, 12, 4, 0, 0);
+    expect(isScreensaverDueNow(prefs, at4am)).toBe(false);
+  });
+
+  it("formatHour formats 0-23 hours to friendly AM/PM labels", () => {
+    expect(formatHour(23)).toBe("11:00 PM");
+    expect(formatHour(4)).toBe("4:00 AM");
+    expect(formatHour(0)).toBe("12:00 AM");
+    expect(formatHour(12)).toBe("12:00 PM");
   });
 });

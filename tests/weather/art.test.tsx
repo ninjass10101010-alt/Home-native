@@ -43,11 +43,12 @@ describe("MonsterDigit (web parity: WxToys.tsx:887-1044)", () => {
     expect(findAllByProp(root, "testID", "wx-digit-segment-upperRight")).toHaveLength(0);
   });
 
-  it("every digit 0-9 renders with exactly one eye; '-' has none", () => {
+  it("every digit 0-9 renders with its eye group and character texture layer; '-' has none", () => {
     for (const d of "0123456789") {
-      const { root } = render(<MonsterDigit digit={d} height={80} />, { wrapper: wrap });
+      const { root } = render(<MonsterDigit digit={d} height={80} index={Number(d)} />, { wrapper: wrap });
       expect(findAllByProp(root, "testID", `wx-digit-${d}`)).toHaveLength(1);
       expect(findAllByProp(root, "testID", "wx-digit-eye")).toHaveLength(1);
+      expect(findAllByProp(root, "testID", `wx-digit-texture-${d}`)).toHaveLength(1);
     }
     const minus = render(<MonsterDigit digit="-" height={80} />, { wrapper: wrap });
     expect(findAllByProp(minus.root, "testID", "wx-digit-segment-middle")).toHaveLength(1);

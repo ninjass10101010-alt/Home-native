@@ -19,6 +19,7 @@ import { SoftButton } from "../ui/SoftButton";
 import { SignedOutBanner } from "../ui/SignedOutBanner";
 import { Toggle } from "../ui/Toggle";
 import { scheduleLocalReminder } from "../native/notifications";
+import { formatHour, useScreensaverPrefs } from "../home/idle";
 import { FamilySection } from "./FamilySection";
 import { HomeSection } from "./HomeSection";
 import { NotificationsCard } from "./NotificationsCard";
@@ -770,6 +771,7 @@ function SafetySection({ member }: { member: ServerMember | null }) {
 
 function AppearanceSection() {
   const { colors, theme, boost, accent, setTheme, setBoost, setAccent } = useTheme();
+  const [screensaverPrefs, setScreensaverPrefs] = useScreensaverPrefs();
   return (
     <View style={{ gap: 16 }}>
       <Material tier="regular" style={{ borderRadius: 28, padding: 24, gap: 20 }}>
@@ -799,6 +801,47 @@ function AppearanceSection() {
           description="Bolder colors for easier reading"
           testID="settings-boost-toggle"
         />
+        <Toggle
+          value={screensaverPrefs.mode !== "off"}
+          onChange={(on) =>
+            setScreensaverPrefs((p) => ({
+              ...p,
+              mode: on ? (p.mode === "off" ? "night" : p.mode) : "off",
+            }))
+          }
+          label="Screensaver when inactive"
+          description={
+            screensaverPrefs.mode === "night"
+              ? `Active at night (${formatHour(screensaverPrefs.startHour)} – ${formatHour(screensaverPrefs.endHour)})`
+              : screensaverPrefs.mode === "off"
+              ? "Off — widgets stay visible all day"
+              : "Active anytime after 90 seconds of quiet"
+          }
+          testID="settings-screensaver-toggle"
+        />
+        {screensaverPrefs.mode !== "off" ? (
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingLeft: 4 }}>
+            <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
+              Schedule:
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Chip
+                testID="settings-screensaver-chip-night"
+                label={`Night (${formatHour(screensaverPrefs.startHour)} – ${formatHour(screensaverPrefs.endHour)})`}
+                tone={screensaverPrefs.mode === "night" ? "accent" : "neutral"}
+                selected={screensaverPrefs.mode === "night"}
+                onPress={() => setScreensaverPrefs((p) => ({ ...p, mode: "night" }))}
+              />
+              <Chip
+                testID="settings-screensaver-chip-always"
+                label="All day"
+                tone={screensaverPrefs.mode === "always" ? "accent" : "neutral"}
+                selected={screensaverPrefs.mode === "always"}
+                onPress={() => setScreensaverPrefs((p) => ({ ...p, mode: "always" }))}
+              />
+            </View>
+          </View>
+        ) : null}
         <SoftButton
           variant="secondary"
           size="sm"

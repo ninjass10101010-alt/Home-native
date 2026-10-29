@@ -18,7 +18,12 @@ import { getCachedMembersSync, listMembersSmart, type MembersResult } from "../s
 import { onBaseUrlChange } from "../src/api/config";
 import { ApiError } from "../src/api/client";
 import { PinRequired } from "../src/api/auth";
-import { idleBoardDue, IDLE_CHECK_MS } from "../src/home/idle";
+import {
+  idleBoardDue,
+  IDLE_CHECK_MS,
+  isScreensaverDueNow,
+  useScreensaverPrefs,
+} from "../src/home/idle";
 import type { WidgetId, WallWidgetProps } from "../src/home/widgets";
 import { TasksWidget } from "../src/home/widgets/TasksWidget";
 import { TodayEventsWidget } from "../src/home/widgets/TodayEventsWidget";
@@ -134,6 +139,7 @@ export default function HomePlaceholder() {
   // only opens once per Home visit (src/home/idle.ts holds the rule).
   // lastTouch starts 0 ("no touch yet") and is armed in the effect below —
   // Date.now() in render would be an impure read (react-hooks/purity).
+  const [screensaverPrefs] = useScreensaverPrefs();
   const lastTouchRef = React.useRef(0);
   const boardPushedRef = React.useRef(false);
 
@@ -147,6 +153,7 @@ export default function HomePlaceholder() {
 
   React.useEffect(() => {
     const t = setInterval(() => {
+      const activeNow = isScreensaverDueNow(screensaverPrefs, new Date());
       if (
         idleBoardDue({
           pathname,
@@ -156,6 +163,7 @@ export default function HomePlaceholder() {
           // taps never reach the touch clock, and pushing the board mid-PIN
           // is the exact failure the critic caught (modal-aware idle).
           blocked: !!pinTarget || moreOpen,
+          enabled: activeNow,
         })
       ) {
         boardPushedRef.current = true;
@@ -163,7 +171,7 @@ export default function HomePlaceholder() {
       }
     }, IDLE_CHECK_MS);
     return () => clearInterval(t);
-  }, [pathname, router, pinTarget, moreOpen]);
+  }, [pathname, router, pinTarget, moreOpen, screensaverPrefs]);
 
   // The roster read waits for auth hydration. Without the guard it fired a
   // doomed /api/members/admin 401 the moment the route mounted — before we

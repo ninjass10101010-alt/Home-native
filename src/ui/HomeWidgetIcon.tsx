@@ -2,6 +2,7 @@ import React from "react";
 import Svg, { Circle, G, Path, Rect } from "react-native-svg";
 import Animated, {
   cancelAnimation,
+  Easing,
   useAnimatedProps,
   useSharedValue,
   withDelay,
@@ -85,17 +86,744 @@ export function widgetIconVariantFor(id: string): HomeWidgetIconVariant | null {
   }
 }
 
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
+const AnimatedG = Animated.createAnimatedComponent(G);
+
+/** Morning Briefing: rotating sun rays and radiant morning sun warm pulse */
+function BriefingSun({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withTiming(1, { duration: 24000, easing: Easing.linear }),
+      -1,
+      false
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const animatedRaysProps = useAnimatedProps(() => ({
+    transform: [{ rotate: `${t.value * 360}deg` }],
+  }));
+  const animatedHaloProps = useAnimatedProps(() => {
+    const pulse = Math.sin(t.value * Math.PI * 6);
+    return {
+      opacity: 0.22 + 0.12 * (pulse + 1) * 0.5,
+      r: 13.5 + 1.2 * (pulse + 1) * 0.5,
+    };
+  });
+
+  return (
+    <G>
+      {/* Animated glowing sun halo */}
+      <AnimatedCircle cx="24" cy="20" r={13.5} fill={p.glow} animatedProps={animatedHaloProps} />
+      {/* Sun rays rotating around (24, 20) */}
+      <AnimatedG animatedProps={animatedRaysProps} origin="24, 20">
+        <Path
+          d="M24 4.5v4.2M24 31.5v4M8 20.5h4.2M35.8 20.5H40M12.5 9l3 3M32.5 29l3 3M35.5 9l-3 3M15.5 29l-3 3"
+          stroke={p.lo}
+          strokeWidth="3.6"
+          strokeLinecap="round"
+          opacity={0.7}
+        />
+        <Path
+          d="M24 4.5v4.2M24 31.5v4M8 20.5h4.2M35.8 20.5H40M12.5 9l3 3M32.5 29l3 3M35.5 9l-3 3M15.5 29l-3 3"
+          stroke={p.hi}
+          strokeWidth="2.4"
+          strokeLinecap="round"
+        />
+      </AnimatedG>
+      {/* 3D Clay Sun sphere */}
+      <Circle cx="24" cy="21" r="10.2" fill={p.lo} />
+      <Circle cx="24" cy="20" r="9.8" fill={p.mid} />
+      <Path
+        d="M15 17.5a9.4 9.4 0 0 1 18 0c-3.6-2.4-14.4-2.4-18 0Z"
+        fill={p.hi}
+        opacity={0.92}
+      />
+      <Circle cx="20.2" cy="15.8" r="2.2" fill={HOME_WIDGET_ICON_SHINE} opacity={0.88} />
+      <Circle cx="24" cy="20.4" r="10" fill="none" stroke={p.ink} strokeWidth="1.6" />
+    </G>
+  );
+}
+
+/** Current Meal: undulating, rising steam wisps off hot fresh food */
+function MealSteam({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 2200, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const wisp1Props = useAnimatedProps(() => ({
+    transform: [{ translateY: -3.5 * t.value }],
+    opacity: 0.4 + 0.55 * (1 - t.value * 0.4),
+  }));
+  const wisp2Props = useAnimatedProps(() => ({
+    transform: [{ translateY: -3.5 * (1 - t.value) }],
+    opacity: 0.4 + 0.55 * (0.6 + t.value * 0.4),
+  }));
+  const wisp3Props = useAnimatedProps(() => ({
+    transform: [{ translateY: -2.8 * t.value }],
+    opacity: 0.35 + 0.5 * (1 - t.value * 0.3),
+  }));
+
+  return (
+    <G>
+      <AnimatedG animatedProps={wisp1Props}>
+        <Path d="M16.5 15c0-3.8 2.8-3.8 2.8-7.6" stroke={p.ink} strokeWidth="4" strokeLinecap="round" opacity={0.28} fill="none" />
+        <Path d="M16.5 15c0-3.8 2.8-3.8 2.8-7.6" stroke={HOME_WIDGET_ICON_SHINE} strokeWidth="2.4" strokeLinecap="round" opacity={0.9} fill="none" />
+      </AnimatedG>
+      <AnimatedG animatedProps={wisp2Props}>
+        <Path d="M23.5 13.8c0-3.8 2.8-3.8 2.8-7.6" stroke={p.ink} strokeWidth="4" strokeLinecap="round" opacity={0.28} fill="none" />
+        <Path d="M23.5 13.8c0-3.8 2.8-3.8 2.8-7.6" stroke={HOME_WIDGET_ICON_SHINE} strokeWidth="2.4" strokeLinecap="round" opacity={0.9} fill="none" />
+      </AnimatedG>
+      <AnimatedG animatedProps={wisp3Props}>
+        <Path d="M30.5 15c0-3.8 2.8-3.8 2.8-7.6" stroke={p.ink} strokeWidth="4" strokeLinecap="round" opacity={0.28} fill="none" />
+        <Path d="M30.5 15c0-3.8 2.8-3.8 2.8-7.6" stroke={HOME_WIDGET_ICON_SHINE} strokeWidth="2.4" strokeLinecap="round" opacity={0.9} fill="none" />
+      </AnimatedG>
+    </G>
+  );
+}
+
+/** Music: rhythmically dancing beamed musical notes */
+function MusicNotes({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }),
+        withTiming(-0.8, { duration: 900, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0, { duration: 600, easing: Easing.inOut(Easing.quad) })
+      ),
+      -1,
+      true
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    transform: [
+      { translateY: -2.4 * t.value },
+      { rotate: `${3.2 * t.value}deg` },
+    ],
+  }));
+
+  return (
+    <AnimatedG animatedProps={animatedProps} origin="25, 25">
+      <Path
+        d="M21 32V19.5l10-2.2V29.8"
+        stroke={p.ink}
+        strokeWidth="4.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <Path
+        d="M21 32V19.5l10-2.2V29.8"
+        stroke={p.detail}
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <Circle cx="18.8" cy="32.8" r="3.6" fill={p.detail} stroke={p.ink} strokeWidth="1.5" />
+      <Circle cx="28.8" cy="30.6" r="3.6" fill={p.detail} stroke={p.ink} strokeWidth="1.5" />
+      <Circle cx="17.8" cy="31.8" r="1.1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.9} />
+      <Circle cx="27.8" cy="29.6" r="1.1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.9} />
+    </AnimatedG>
+  );
+}
+
+/** Tasks: completed checkmark victory shimmer */
+function TasksCheckmarks({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1600, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 1200 }),
+        withTiming(0, { duration: 600, easing: Easing.in(Easing.quad) }),
+        withTiming(0, { duration: 800 })
+      ),
+      -1,
+      false
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const check2Props = useAnimatedProps(() => ({
+    opacity: t.value > 0 ? 0.75 + 0.25 * t.value : 0.85,
+    transform: [{ scale: 1 + 0.08 * t.value }],
+  }));
+
+  return (
+    <G>
+      {/* Row 1: check + bar (with ink shadow backing) */}
+      <Path
+        d="m13 19.5 3 3 6-6"
+        stroke={p.ink}
+        strokeWidth="4.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+        opacity={0.45}
+      />
+      <Path
+        d="m13 19 3 3 6-6"
+        stroke={p.hi}
+        strokeWidth="3.1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <Rect x="25" y="17" width="9.5" height="3.6" rx="1.8" fill={p.hi} opacity={0.92} />
+      {/* Row 2: golden check + bar with completion shimmer */}
+      <AnimatedG animatedProps={check2Props} origin="16, 32">
+        <Path
+          d="m13 29.8 3 3 6-6"
+          stroke={p.ink}
+          strokeWidth="4.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+          opacity={0.5}
+        />
+        <Path
+          d="m13 29.2 3 3 6-6"
+          stroke={p.detail}
+          strokeWidth="3.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+      </AnimatedG>
+      <Rect x="25" y="27.2" width="9.5" height="3.6" rx="1.8" fill={p.hi} opacity={0.78} />
+    </G>
+  );
+}
+
+/** Events: hero date tile active reminder pulse */
+function EventsHeroTile({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 1000 })
+      ),
+      -1,
+      false
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    transform: [{ scale: 1 + 0.08 * t.value }],
+  }));
+
+  return (
+    <AnimatedG animatedProps={animatedProps} origin="25.5, 28">
+      <Rect x="20" y="23.5" width="11" height="12" rx="3.5" fill={p.ink} opacity={0.45} />
+      <Rect x="20" y="22.5" width="11" height="11" rx="3.5" fill={p.hi} stroke={p.ink} strokeWidth="1.3" />
+      <Rect x="21.5" y="23.8" width="8" height="2.2" rx="1.1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.88} />
+    </AnimatedG>
+  );
+}
+
+/** Lights: warm incandescent bulb glow pulse */
+function LightsBulbGlow({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 1800, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const animatedRaysProps = useAnimatedProps(() => ({
+    opacity: 0.65 + 0.35 * t.value,
+    transform: [{ scale: 0.95 + 0.08 * t.value }],
+  }));
+  const animatedGlowProps = useAnimatedProps(() => ({
+    opacity: 0.75 + 0.25 * t.value,
+    transform: [{ scale: 0.96 + 0.06 * t.value }],
+  }));
+
+  return (
+    <G>
+      <AnimatedG animatedProps={animatedRaysProps} origin="24, 20.5">
+        <Path
+          d="M24 2v4M6 20h4M38 20h4M11 7l3 3M34 10l3-3"
+          stroke={p.lo}
+          strokeWidth="3.6"
+          strokeLinecap="round"
+          opacity={0.7}
+        />
+        <Path
+          d="M24 2v4M6 20h4M38 20h4M11 7l3 3M34 10l3-3"
+          stroke={p.detail}
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        />
+      </AnimatedG>
+      <Circle cx="24" cy="20.5" r="13.2" fill={p.lo} stroke={p.ink} strokeWidth="1.8" />
+      <AnimatedCircle cx="24" cy="19.8" r="12.2" fill={p.mid} animatedProps={animatedGlowProps} origin="24, 19.8" />
+      <Circle cx="24" cy="18.8" r="8.8" fill={p.hi} opacity={0.88} />
+      <Circle cx="21" cy="15.5" r="3.2" fill={HOME_WIDGET_ICON_SHINE} opacity={0.9} />
+    </G>
+  );
+}
+
+/** Climate: living mercury expansion and breathing */
+function ClimateMercury({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 2400, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const animatedStemProps = useAnimatedProps(() => ({
+    transform: [{ scaleY: 0.88 + 0.16 * t.value }],
+  }));
+
+  return (
+    <G>
+      <AnimatedG animatedProps={animatedStemProps} origin="25, 35">
+        <Path d="M25 34V15.5" stroke={p.ink} strokeWidth="5.8" strokeLinecap="round" opacity={0.45} />
+        <Path d="M25 34V15.5" stroke={p.detail} strokeWidth="4.2" strokeLinecap="round" />
+      </AnimatedG>
+      <Circle cx="25" cy="35" r="5.4" fill={p.detail} stroke={p.ink} strokeWidth="1.4" />
+      <Circle cx="23.2" cy="33.2" r="1.8" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
+    </G>
+  );
+}
+
+/** Security: protective shield ambient pulse and padlock shackle glint */
+function SecurityShield({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 2200, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const lockProps = useAnimatedProps(() => ({
+    transform: [{ scale: 1 + 0.06 * t.value }],
+  }));
+
+  return (
+    <G>
+      {/* 3D Shield base + mid + specular half + keyline */}
+      <Path
+        d="M24 3 41 9v13c0 11-7 19-17 23-10-4-17-12-17-23V9L24 3Z"
+        fill={p.lo}
+        stroke={p.ink}
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <Path d="M24 4.2 39.5 9.8v11.8c0 9.8-6.2 17-15.5 20.8-9.3-3.8-15.5-11-15.5-20.8V9.8L24 4.2Z" fill={p.mid} />
+      <Path d="M24 5.5 38 10.5v9.5c0 9-5.6 15.6-14 19.4V5.5Z" fill={p.hi} opacity={0.42} />
+      <Path d="M24 3.8v39.5" stroke={p.ink} strokeWidth="1.3" opacity={0.35} />
+      {/* 3D Gold padlock with glint */}
+      <AnimatedG animatedProps={lockProps} origin="24, 25">
+        <Path
+          d="M21 20v-3a3 3 0 0 1 6 0v3"
+          stroke={p.ink}
+          strokeWidth="4"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <Path
+          d="M21 20v-3a3 3 0 0 1 6 0v3"
+          stroke={p.detail}
+          strokeWidth="2.4"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <Rect x="18.5" y="20" width="11" height="11.5" rx="3" fill={p.detail} stroke={p.ink} strokeWidth="1.4" />
+        <Rect x="20" y="21.2" width="8" height="2" rx="1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
+        <Circle cx="24" cy="25.8" r="1.5" fill={p.ink} />
+      </AnimatedG>
+    </G>
+  );
+}
+
+/** Schedule: sweeping clock tick around (24, 24.5) */
+function ScheduleClockHands({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withTiming(1, { duration: 16000, easing: Easing.linear }),
+      -1,
+      false
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const handProps = useAnimatedProps(() => ({
+    transform: [{ rotate: `${t.value * 360}deg` }],
+  }));
+
+  return (
+    <G>
+      <Path d="M24 24.5V15" stroke={p.ink} strokeWidth="3.2" strokeLinecap="round" />
+      <AnimatedG animatedProps={handProps} origin="24, 24.5">
+        <Path d="M24 24.5l8 5" stroke={p.ink} strokeWidth="3.2" strokeLinecap="round" />
+      </AnimatedG>
+      <Circle cx="24" cy="24.5" r="3" fill={p.detail} stroke={p.ink} strokeWidth="1.2" />
+    </G>
+  );
+}
+
+/** Suggestions: twinkling 4-point clay star */
+function SuggestionsStars({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(-1, { duration: 1800, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const star1Props = useAnimatedProps(() => ({
+    transform: [
+      { scale: 1 + 0.08 * t.value },
+      { rotate: `${3.5 * t.value}deg` },
+    ],
+  }));
+  const star2Props = useAnimatedProps(() => ({
+    transform: [
+      { scale: 1 - 0.1 * t.value },
+      { rotate: `${-5 * t.value}deg` },
+    ],
+  }));
+
+  return (
+    <G>
+      {/* Primary 4-point clay star */}
+      <AnimatedG animatedProps={star1Props} origin="20, 16">
+        <Path
+          d="M20 4c1.6 7.8 4.2 10.4 12 12-7.8 1.6-10.4 4.2-12 12-1.6-7.8-4.2-10.4-12-12 7.8-1.6 10.4-4.2 12-12Z"
+          fill={p.lo}
+          stroke={p.ink}
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M20 4.5c1.4 7 3.8 9.5 10.8 11-7 1.4-9.4 3.8-10.8 10.8-1.4-7-3.8-9.4-10.8-10.8 7-1.5 9.4-4 10.8-11Z"
+          fill={p.mid}
+        />
+        <Path
+          d="M20 6.5c1 4.5 2.5 6 7 7-4.5 1-6 2.5-7 7-1-4.5-2.5-6-7-7 4.5-1 6-2.5 7-7Z"
+          fill={p.hi}
+          opacity={0.85}
+        />
+        <Circle cx="18.2" cy="12" r="2" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
+      </AnimatedG>
+      {/* Secondary rose star */}
+      <AnimatedG animatedProps={star2Props} origin="36, 30.7">
+        <Path
+          d="M36 24c.9 4.4 2.3 5.8 6.7 6.7-4.4.9-5.8 2.3-6.7 6.7-.9-4.4-2.3-5.8-6.7-6.7 4.4-.9 5.8-2.3 6.7-6.7Z"
+          fill={p.detail}
+          stroke={p.ink}
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+        />
+        <Circle cx="35" cy="29.5" r="1.4" fill={HOME_WIDGET_ICON_SHINE} opacity={0.75} />
+      </AnimatedG>
+    </G>
+  );
+}
+
+/** Week: wave breathing on rhythm columns */
+function WeekColumns({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
+        withTiming(-1, { duration: 1800, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const col1Props = useAnimatedProps(() => ({
+    transform: [{ scaleY: 1 + 0.12 * t.value }],
+  }));
+  const col2Props = useAnimatedProps(() => ({
+    transform: [{ scaleY: 1 - 0.1 * t.value }],
+  }));
+  const col3Props = useAnimatedProps(() => ({
+    transform: [{ scaleY: 1 + 0.08 * t.value }],
+  }));
+
+  return (
+    <G>
+      <AnimatedG animatedProps={col1Props} origin="13.7, 35">
+        <Rect x="11" y="28" width="5.5" height="7" rx="2" fill={p.detail} stroke={p.ink} strokeWidth="1.2" />
+        <Rect x="12" y="29" width="3.5" height="1.8" rx="0.9" fill={HOME_WIDGET_ICON_SHINE} opacity={0.7} />
+      </AnimatedG>
+      <AnimatedG animatedProps={col2Props} origin="23.7, 35">
+        <Rect x="21" y="22" width="5.5" height="13" rx="2" fill={p.detail} stroke={p.ink} strokeWidth="1.2" />
+        <Rect x="22" y="23" width="3.5" height="1.8" rx="0.9" fill={HOME_WIDGET_ICON_SHINE} opacity={0.7} />
+      </AnimatedG>
+      <AnimatedG animatedProps={col3Props} origin="33.7, 35">
+        <Rect x="31" y="25" width="5.5" height="10" rx="2" fill={p.detail} stroke={p.ink} strokeWidth="1.2" />
+        <Rect x="32" y="26" width="3.5" height="1.8" rx="0.9" fill={HOME_WIDGET_ICON_SHINE} opacity={0.7} />
+      </AnimatedG>
+    </G>
+  );
+}
+
+/** Ledger: gold coin gleam */
+function LedgerCoin({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 1800, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const coinProps = useAnimatedProps(() => ({
+    transform: [{ scale: 1 + 0.08 * t.value }],
+  }));
+
+  return (
+    <AnimatedG animatedProps={coinProps} origin="32, 35">
+      <Circle cx="32" cy="35" r="7.2" fill={p.detail} stroke={p.ink} strokeWidth="1.5" />
+      <Circle cx="30" cy="32.5" r="1.8" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
+      <Path
+        d="M32 31.5v7M29.8 33.4h4.4M29.8 36.6h4.4"
+        stroke={p.ink}
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </AnimatedG>
+  );
+}
+
+/** Leaderboard: sparkling victory star pulse */
+function LeaderboardStar({ p }: { p: HomeWidgetIconPalette }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0, { duration: 1400, easing: Easing.inOut(Easing.quad) })
+      ),
+      -1,
+      true
+    );
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+
+  const starProps = useAnimatedProps(() => ({
+    transform: [{ scale: 1 + 0.1 * t.value }],
+  }));
+
+  return (
+    <AnimatedG animatedProps={starProps} origin="24, 18">
+      <Path
+        d="m24 11 2 4.2 4.6.7-3.3 3.2.8 4.6L24 21.6l-4.1 2.1.8-4.6-3.3-3.2 4.6-.7L24 11Z"
+        fill={p.detail}
+        stroke={p.ink}
+        strokeWidth="1"
+        strokeLinejoin="round"
+      />
+    </AnimatedG>
+  );
+}
+
+function TypingDot({ cx, cy, r, index }: { cx: number; cy: number; r: number; index: number }) {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    const loop = withRepeat(
+      withSequence(
+        withTiming(0, { duration: 525 }),
+        withTiming(1, { duration: 525 }),
+        withTiming(1, { duration: 450 })
+      ),
+      -1,
+      false
+    );
+    t.value = index > 0 ? withDelay(index * 160, loop) : loop;
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t, index]);
+  const animatedProps = useAnimatedProps(() => ({
+    opacity: t.value > 0 ? 0.8 + 0.2 * t.value : 0.8,
+    transform: [{ translateY: t.value > 0 ? -2.5 * t.value : 0 }],
+  }));
+  return <AnimatedCircle cx={cx} cy={cy} r={r} animatedProps={animatedProps} />;
+}
+
+function LeaderboardShine() {
+  const { reduceMotion } = useTheme();
+  const t = useSharedValue(0);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      cancelAnimation(t);
+      t.value = 0;
+      return;
+    }
+    const loop = withRepeat(
+      withSequence(
+        withTiming(0, { duration: 900 }),
+        withTiming(1, { duration: 1500 }),
+        withTiming(1, { duration: 900 }),
+        withTiming(0, { duration: 1200 })
+      ),
+      -1,
+      false
+    );
+    t.value = loop;
+    return () => cancelAnimation(t);
+  }, [reduceMotion, t]);
+  const animatedProps = useAnimatedProps(() => ({
+    x: 15 + 10 * t.value,
+    opacity: t.value < 0.14 ? t.value / 0.14 : t.value > 0.86 ? (1 - t.value) / 0.14 : 0.4,
+  }));
+  return (
+    <AnimatedRect
+      x={15}
+      y={9}
+      width={5}
+      height={13}
+      rx={2.5}
+      fill={HOME_WIDGET_ICON_SHINE}
+      animatedProps={animatedProps}
+    />
+  );
+}
+
 /**
  * The clay body/shine are painted as SOLID palette steps with multi-layer 3D
  * clay volume (ground drop shadow -> shaded base -> mid body -> lit top /
  * specular rim -> ink keyline).
- *
- * They were `fill="url(#…)"` gradient refs until WS-0 round 2: on
- * react-native-web a `<Defs>`-scoped ref never resolves, which dropped the
- * WHOLE subtree — not just the gradient shapes, but the solid-fill siblings
- * too — so 9 of 10 wall discs rendered as empty tinted circles. A solid fill
- * cannot fail to resolve, so every variant rides the multi-layer clay stack
- * established by `leaderboard`.
  */
 function renderArtwork(
   variant: HomeWidgetIconVariant,
@@ -111,32 +839,8 @@ function renderArtwork(
         <G>
           {/* Ground drop shadow */}
           <Path d="M4 44.5h40v2.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2.5Z" fill={HOME_WIDGET_ICON_SHADOW} opacity={0.28} />
-          {/* Sun warm halo */}
-          <Circle cx="24" cy="20" r="13.5" fill={p.glow} opacity={0.26} />
-          {/* Sun rays (shadowed ink under lit ray) */}
-          <Path
-            d="M24 4.5v4.2M24 31.5v4M8 20.5h4.2M35.8 20.5H40M12.5 9l3 3M32.5 29l3 3M35.5 9l-3 3M15.5 29l-3 3"
-            stroke={p.lo}
-            strokeWidth="3.6"
-            strokeLinecap="round"
-            opacity={0.7}
-          />
-          <Path
-            d="M24 4.5v4.2M24 31.5v4M8 20.5h4.2M35.8 20.5H40M12.5 9l3 3M32.5 29l3 3M35.5 9l-3 3M15.5 29l-3 3"
-            stroke={p.hi}
-            strokeWidth="2.4"
-            strokeLinecap="round"
-          />
-          {/* 3D Clay Sun sphere: shaded base -> mid body -> top crescent -> specular dot -> keyline */}
-          <Circle cx="24" cy="21" r="10.2" fill={p.lo} />
-          <Circle cx="24" cy="20" r="9.8" fill={p.mid} />
-          <Path
-            d="M15 17.5a9.4 9.4 0 0 1 18 0c-3.6-2.4-14.4-2.4-18 0Z"
-            fill={p.hi}
-            opacity={0.92}
-          />
-          <Circle cx="20.2" cy="15.8" r="2.2" fill={HOME_WIDGET_ICON_SHINE} opacity={0.78} />
-          <Circle cx="24" cy="20.4" r="10" fill="none" stroke={p.ink} strokeWidth="1.6" />
+          {/* Sun & rotating rays */}
+          <BriefingSun p={p} />
           {/* Back horizon hill */}
           <Path d="M6 41c5-7 11-7.5 17-2.5 5.5 4.5 11.5 4 19-2.5v6H6v-1Z" fill={p.lo} opacity={0.85} />
           {/* Front emerald hill + lit ridge */}
@@ -217,33 +921,7 @@ function renderArtwork(
             fill={HOME_WIDGET_ICON_SHADOW}
             opacity={0.26}
           />
-          {/* Primary 4-point clay star */}
-          <Path
-            d="M20 4c1.6 7.8 4.2 10.4 12 12-7.8 1.6-10.4 4.2-12 12-1.6-7.8-4.2-10.4-12-12 7.8-1.6 10.4-4.2 12-12Z"
-            fill={p.lo}
-            stroke={p.ink}
-            strokeWidth="1.8"
-            strokeLinejoin="round"
-          />
-          <Path
-            d="M20 4.5c1.4 7 3.8 9.5 10.8 11-7 1.4-9.4 3.8-10.8 10.8-1.4-7-3.8-9.4-10.8-10.8 7-1.5 9.4-4 10.8-11Z"
-            fill={p.mid}
-          />
-          <Path
-            d="M20 6.5c1 4.5 2.5 6 7 7-4.5 1-6 2.5-7 7-1-4.5-2.5-6-7-7 4.5-1 6-2.5 7-7Z"
-            fill={p.hi}
-            opacity={0.85}
-          />
-          <Circle cx="18.2" cy="12" r="2" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
-          {/* Secondary rose star */}
-          <Path
-            d="M36 24c.9 4.4 2.3 5.8 6.7 6.7-4.4.9-5.8 2.3-6.7 6.7-.9-4.4-2.3-5.8-6.7-6.7 4.4-.9 5.8-2.3 6.7-6.7Z"
-            fill={p.detail}
-            stroke={p.ink}
-            strokeWidth="1.4"
-            strokeLinejoin="round"
-          />
-          <Circle cx="35" cy="29.5" r="1.4" fill={HOME_WIDGET_ICON_SHINE} opacity={0.75} />
+          <SuggestionsStars p={p} />
           <Circle cx="11" cy="38" r="4.5" fill={accentFill} opacity={op} stroke={p.ink} strokeWidth="1.3" />
         </G>
       );
@@ -253,14 +931,6 @@ function renderArtwork(
         <G>
           {/* Ground drop shadow */}
           <Rect x="15" y="41.5" width="18" height="3" rx="1.5" fill={HOME_WIDGET_ICON_SHADOW} opacity={0.3} />
-          {/* The web's trophy (Home-ai HomeWidgetIcon.tsx:124-138) with two
-              native corrections:
-              1. the body is a SOLID clay stack (shaded base -> mid body -> lit
-                 top) instead of the web's `fill="url(#…)"` gradient — a
-                 `<Defs>`-scoped gradient ref never resolves on
-                 react-native-web and dropped the whole subtree;
-              2. every shape carries a DARK KEYLINE so the silhouette reads
-                 clearly on both dark and light badge washes. */}
           <Path
             d="M14 11H8v3c0 5 3 8 7 8M34 11h6v3c0 5-3 8-7 8"
             stroke={p.ink}
@@ -286,13 +956,7 @@ function renderArtwork(
             strokeLinejoin="round"
           />
           <LeaderboardShine />
-          <Path
-            d="m24 11 2 4.2 4.6.7-3.3 3.2.8 4.6L24 21.6l-4.1 2.1.8-4.6-3.3-3.2 4.6-.7L24 11Z"
-            fill={p.detail}
-            stroke={p.ink}
-            strokeWidth="1"
-            strokeLinejoin="round"
-          />
+          <LeaderboardStar p={p} />
           <Path
             d="M24 29v7M16 42h16l-2-6H18l-2 6Z"
             fill={p.lo}
@@ -336,10 +1000,8 @@ function renderArtwork(
           <Circle cx="33" cy="14" r="2.4" fill={p.ink} />
           <Path d="M15 4.8v8.8M33 4.8v8.8" stroke={p.ink} strokeWidth="4.4" strokeLinecap="round" />
           <Path d="M15 5.2v8M33 5.2v8" stroke={p.hi} strokeWidth="2.2" strokeLinecap="round" />
-          {/* Featured hero date tile (3D raised) */}
-          <Rect x="20" y="23.5" width="11" height="12" rx="3.5" fill={p.ink} opacity={0.45} />
-          <Rect x="20" y="22.5" width="11" height="11" rx="3.5" fill={p.hi} stroke={p.ink} strokeWidth="1.3" />
-          <Rect x="21.5" y="23.8" width="8" height="2.2" rx="1.1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.8} />
+          {/* Featured hero date tile (3D raised with animated pulse) */}
+          <EventsHeroTile p={p} />
           {/* Surrounding date cells */}
           <G fill={p.hi} opacity={0.78}>
             <Rect x="11" y="22.5" width="6.2" height="6.2" rx="2" />
@@ -372,9 +1034,7 @@ function renderArtwork(
           <Circle cx="24" cy="24.5" r="13.2" fill={p.hi} opacity={0.35} />
           <Circle cx="24" cy="24.5" r="12.5" fill={HOME_WIDGET_ICON_SHINE} opacity={0.32} />
           <Path d="M24 10V6.5M38.5 24.5H42M24 39v3.5M9.5 24.5H6" stroke={p.ink} strokeWidth="2.4" strokeLinecap="round" opacity={0.75} />
-          <Path d="M24 24.5V15" stroke={p.ink} strokeWidth="3.2" strokeLinecap="round" />
-          <Path d="M24 24.5l8 5" stroke={p.ink} strokeWidth="3.2" strokeLinecap="round" />
-          <Circle cx="24" cy="24.5" r="3" fill={p.detail} stroke={p.ink} strokeWidth="1.2" />
+          <ScheduleClockHands p={p} />
           <Circle cx="38" cy="11" r="5" fill={accentFill} opacity={op} stroke={p.ink} strokeWidth="1.3" />
         </G>
       );
@@ -384,17 +1044,8 @@ function renderArtwork(
         <G>
           {/* Ground shadow */}
           <Path d="M8 44.5h32v2.5a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-2.5Z" fill={HOME_WIDGET_ICON_SHADOW} opacity={0.3} />
-          {/* Steam wisps: dark halo + bright white core so steam reads on light & dark discs */}
-          <G stroke={p.ink} strokeWidth="4" strokeLinecap="round" opacity={0.28} fill="none">
-            <Path d="M16.5 15c0-3.8 2.8-3.8 2.8-7.6" />
-            <Path d="M23.5 13.8c0-3.8 2.8-3.8 2.8-7.6" />
-            <Path d="M30.5 15c0-3.8 2.8-3.8 2.8-7.6" />
-          </G>
-          <G stroke={HOME_WIDGET_ICON_SHINE} strokeWidth="2.4" strokeLinecap="round" opacity={0.9} fill="none">
-            <Path d="M16.5 15c0-3.8 2.8-3.8 2.8-7.6" />
-            <Path d="M23.5 13.8c0-3.8 2.8-3.8 2.8-7.6" />
-            <Path d="M30.5 15c0-3.8 2.8-3.8 2.8-7.6" />
-          </G>
+          {/* Rising hot steam wisps */}
+          <MealSteam p={p} />
           {/* Warm golden meal dome inside the bowl */}
           <Path
             d="M10.5 24c2.2-6.5 8.2-9.2 15-7.8 4.8 1 8.8 3.8 11 7.8h-26Z"
@@ -451,44 +1102,8 @@ function renderArtwork(
           {/* Sculpted golden clipboard clip at top */}
           <Rect x="16" y="3" width="16" height="6.8" rx="3.2" fill={p.detail} stroke={p.ink} strokeWidth="1.6" />
           <Rect x="18.5" y="4.3" width="11" height="2" rx="1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.75} />
-          {/* Row 1: check + bar (with ink shadow backing) */}
-          <Path
-            d="m13 19.5 3 3 6-6"
-            stroke={p.ink}
-            strokeWidth="4.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-            opacity={0.45}
-          />
-          <Path
-            d="m13 19 3 3 6-6"
-            stroke={p.hi}
-            strokeWidth="3.1"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-          <Rect x="25" y="17" width="9.5" height="3.6" rx="1.8" fill={p.hi} opacity={0.92} />
-          {/* Row 2: golden check + bar */}
-          <Path
-            d="m13 29.8 3 3 6-6"
-            stroke={p.ink}
-            strokeWidth="4.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-            opacity={0.5}
-          />
-          <Path
-            d="m13 29.2 3 3 6-6"
-            stroke={p.detail}
-            strokeWidth="3.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-          <Rect x="25" y="27.2" width="9.5" height="3.6" rx="1.8" fill={p.hi} opacity={0.78} />
+          {/* Row checkmarks with animated victory shimmer */}
+          <TasksCheckmarks p={p} />
           {/* Accent badge pill */}
           <Rect x="11.5" y="34.5" width="13" height="5" rx="2.5" fill={accentFill} opacity={op} stroke={p.ink} strokeWidth="1.1" />
         </G>
@@ -517,18 +1132,8 @@ function renderArtwork(
             strokeLinecap="round"
             opacity={0.62}
           />
-          {/* Rhythm columns with 3D keyline */}
-          <G fill={p.detail} stroke={p.ink} strokeWidth="1.2">
-            <Rect x="11" y="28" width="5.5" height="7" rx="2" />
-            <Rect x="21" y="22" width="5.5" height="13" rx="2" />
-            <Rect x="31" y="25" width="5.5" height="10" rx="2" />
-          </G>
-          {/* Column top highlights */}
-          <G fill={HOME_WIDGET_ICON_SHINE} opacity={0.65}>
-            <Rect x="12" y="29" width="3.5" height="1.8" rx="0.9" />
-            <Rect x="22" y="23" width="3.5" height="1.8" rx="0.9" />
-            <Rect x="32" y="26" width="3.5" height="1.8" rx="0.9" />
-          </G>
+          {/* Rhythm columns with wave breathing */}
+          <WeekColumns p={p} />
           <G fill={p.hi} opacity={0.85}>
             <Rect x="12" y="14" width="5" height="2.8" rx="1.4" />
             <Rect x="22" y="14" width="5" height="2.8" rx="1.4" />
@@ -543,35 +1148,7 @@ function renderArtwork(
         <G>
           {/* Ground drop shadow */}
           <Path d="M24 5.5 41 11.5v13c0 11-7 19-17 23-10-4-17-12-17-23v-13L24 5.5Z" fill={HOME_WIDGET_ICON_SHADOW} opacity={0.28} />
-          {/* 3D Shield base + mid + specular half + keyline */}
-          <Path
-            d="M24 3 41 9v13c0 11-7 19-17 23-10-4-17-12-17-23V9L24 3Z"
-            fill={p.lo}
-            stroke={p.ink}
-            strokeWidth="1.8"
-            strokeLinejoin="round"
-          />
-          <Path d="M24 4.2 39.5 9.8v11.8c0 9.8-6.2 17-15.5 20.8-9.3-3.8-15.5-11-15.5-20.8V9.8L24 4.2Z" fill={p.mid} />
-          <Path d="M24 5.5 38 10.5v9.5c0 9-5.6 15.6-14 19.4V5.5Z" fill={p.hi} opacity={0.42} />
-          <Path d="M24 3.8v39.5" stroke={p.ink} strokeWidth="1.3" opacity={0.35} />
-          {/* 3D Gold padlock */}
-          <Path
-            d="M21 20v-3a3 3 0 0 1 6 0v3"
-            stroke={p.ink}
-            strokeWidth="4"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <Path
-            d="M21 20v-3a3 3 0 0 1 6 0v3"
-            stroke={p.detail}
-            strokeWidth="2.4"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <Rect x="18.5" y="20" width="11" height="11.5" rx="3" fill={p.detail} stroke={p.ink} strokeWidth="1.4" />
-          <Rect x="20" y="21.2" width="8" height="2" rx="1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.75} />
-          <Circle cx="24" cy="25.8" r="1.5" fill={p.ink} />
+          <SecurityShield p={p} />
           <Circle cx="40" cy="38" r="5" fill={accentFill} opacity={op} stroke={p.ink} strokeWidth="1.3" />
         </G>
       );
@@ -591,11 +1168,8 @@ function renderArtwork(
           />
           <Path d="M20 26.8V10.2a5 5 0 0 1 10 0v16.6a8.3 8.3 0 1 1-10 0Z" fill={p.mid} />
           <Path d="M22 26V11a3 3 0 0 1 6 0v15a7 7 0 1 1-6 0Z" fill={p.hi} opacity={0.62} />
-          {/* Mercury stem + bulb */}
-          <Path d="M25 34V15.5" stroke={p.ink} strokeWidth="5.8" strokeLinecap="round" opacity={0.45} />
-          <Path d="M25 34V15.5" stroke={p.detail} strokeWidth="4.2" strokeLinecap="round" />
-          <Circle cx="25" cy="35" r="5.4" fill={p.detail} stroke={p.ink} strokeWidth="1.4" />
-          <Circle cx="23.2" cy="33.2" r="1.8" fill={HOME_WIDGET_ICON_SHINE} opacity={0.8} />
+          {/* Animated living mercury */}
+          <ClimateMercury p={p} />
           {/* Scale ticks */}
           <G stroke={p.ink} strokeWidth="3.2" strokeLinecap="round" opacity={0.45}>
             <Path d="M34.5 9h6.5M34.5 14.5h4.5M34.5 20h6.5" />
@@ -612,25 +1186,8 @@ function renderArtwork(
         <G>
           {/* Ground shadow */}
           <Rect x="19" y="34" width="10" height="8.5" rx="3" fill={HOME_WIDGET_ICON_SHADOW} opacity={0.28} />
-          {/* Rays */}
-          <Path
-            d="M24 2v4M6 20h4M38 20h4M11 7l3 3M34 10l3-3"
-            stroke={p.lo}
-            strokeWidth="3.6"
-            strokeLinecap="round"
-            opacity={0.7}
-          />
-          <Path
-            d="M24 2v4M6 20h4M38 20h4M11 7l3 3M34 10l3-3"
-            stroke={p.detail}
-            strokeWidth="2.2"
-            strokeLinecap="round"
-          />
-          {/* 3D Bulb globe */}
-          <Circle cx="24" cy="20.5" r="13.2" fill={p.lo} stroke={p.ink} strokeWidth="1.8" />
-          <Circle cx="24" cy="19.8" r="12.2" fill={p.mid} />
-          <Circle cx="24" cy="18.8" r="8.8" fill={p.hi} opacity={0.88} />
-          <Circle cx="21" cy="15.5" r="3.2" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
+          {/* Glowing bulb & rays */}
+          <LightsBulbGlow p={p} />
           {/* Screw base */}
           <Path
             d="M19.5 31.5h9v5.2a3.2 3.2 0 0 1-3.2 3.2h-2.6a3.2 3.2 0 0 1-3.2-3.2v-5.2Z"
@@ -665,15 +1222,8 @@ function renderArtwork(
           </G>
           {/* Bookmark ribbon */}
           <Path d="M33.5 4h9v14l-4.5-3.4L33.5 18V4Z" fill={accentFill} opacity={op} stroke={p.ink} strokeWidth="1.2" strokeLinejoin="round" />
-          {/* Gold coin */}
-          <Circle cx="32" cy="35" r="7.2" fill={p.detail} stroke={p.ink} strokeWidth="1.5" />
-          <Circle cx="30" cy="32.5" r="1.8" fill={HOME_WIDGET_ICON_SHINE} opacity={0.75} />
-          <Path
-            d="M32 31.5v7M29.8 33.4h4.4M29.8 36.6h4.4"
-            stroke={p.ink}
-            strokeWidth="1.7"
-            strokeLinecap="round"
-          />
+          {/* Animated gleaming gold coin */}
+          <LedgerCoin p={p} />
         </G>
       );
 
@@ -682,7 +1232,7 @@ function renderArtwork(
         <G>
           {/* Ground drop shadow */}
           <Circle cx="24" cy="27" r="17" fill={HOME_WIDGET_ICON_SHADOW} opacity={0.26} />
-          {/* 3D Clay Headphone headband arc: ink keyline -> shaded base -> mid body -> lit top crown */}
+          {/* 3D Clay Headphone headband arc */}
           <Path
             d="M9.5 26v-3.5a14.5 14.5 0 0 1 29 0V26"
             stroke={p.ink}
@@ -714,27 +1264,8 @@ function renderArtwork(
           <Rect x="34.3" y="23.6" width="6.8" height="12" rx="3.4" fill={p.mid} />
           <Rect x="35.5" y="24.8" width="2.4" height="5.5" rx="1.2" fill={p.hi} opacity={0.85} />
 
-          {/* Center 3D Golden Beamed Music Note */}
-          <Path
-            d="M21 32V19.5l10-2.2V29.8"
-            stroke={p.ink}
-            strokeWidth="4.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-          <Path
-            d="M21 32V19.5l10-2.2V29.8"
-            stroke={p.detail}
-            strokeWidth="2.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-          <Circle cx="18.8" cy="32.8" r="3.6" fill={p.detail} stroke={p.ink} strokeWidth="1.5" />
-          <Circle cx="28.8" cy="30.6" r="3.6" fill={p.detail} stroke={p.ink} strokeWidth="1.5" />
-          <Circle cx="17.8" cy="31.8" r="1.1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
-          <Circle cx="27.8" cy="29.6" r="1.1" fill={HOME_WIDGET_ICON_SHINE} opacity={0.85} />
+          {/* Center 3D Golden Beamed Music Note with rhythmic beat */}
+          <MusicNotes p={p} />
           {/* Accent badge */}
           <Circle cx="39" cy="38" r="4.8" fill={accentFill} opacity={op} stroke={p.ink} strokeWidth="1.3" />
         </G>
@@ -742,96 +1273,6 @@ function renderArtwork(
   }
 }
 
-
-/**
- * The "ask" bubble's typing dots — the web's `.hwi-m-ask circle` rule
- * (globals.css:4285) lifts each dot in turn, staggered by 0.16s.
- */
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
-
-/**
- * The leaderboard's shine — the web's `.hwi-m-leaderboard` sweep
- * (globals.css:4238-4242), a white bar that glides across the cup.
- *
- * The web clips the bar to the cup (`<clipPath>`), which react-native-svg
- * does not implement on react-native-web (no ClipPath in the web build), so
- * the bar here stays inside the cup's straight-sided band and fades at its
- * travel limits instead of being clipped away.
- *
- * The sweep rides the ARTWORK, never the disc: the shared "sweep" motion
- * spec drives the whole icon and fades it to zero opacity for a third of
- * every cycle, which blanked the trophy on the wall (the disc rendered as
- * a flat empty amber circle). The leaderboard draws its own motion.
- */
-function LeaderboardShine() {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    // The web's 5.4s sweep, held inside the cup's band.
-    const loop = withRepeat(
-      withSequence(
-        withTiming(0, { duration: 900 }),
-        withTiming(1, { duration: 1500 }),
-        withTiming(1, { duration: 900 }),
-        withTiming(0, { duration: 1200 })
-      ),
-      -1,
-      false
-    );
-    t.value = loop;
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t]);
-  const animatedProps = useAnimatedProps(() => ({
-    x: 15 + 10 * t.value,
-    opacity: t.value < 0.14 ? t.value / 0.14 : t.value > 0.86 ? (1 - t.value) / 0.14 : 0.4,
-  }));
-  return (
-    <AnimatedRect
-      x={15}
-      y={9}
-      width={5}
-      height={13}
-      rx={2.5}
-      fill={HOME_WIDGET_ICON_SHINE}
-      animatedProps={animatedProps}
-    />
-  );
-}
-
-function TypingDot({ cx, cy, r, index }: { cx: number; cy: number; r: number; index: number }) {
-  const { reduceMotion } = useTheme();
-  const t = useSharedValue(0);
-  React.useEffect(() => {
-    if (reduceMotion) {
-      cancelAnimation(t);
-      t.value = 0;
-      return;
-    }
-    // The web staggers the three dots by 0.16s each.
-    const loop = withRepeat(
-      withSequence(
-        withTiming(0, { duration: 525 }),
-        withTiming(1, { duration: 525 }),
-        withTiming(1, { duration: 450 })
-      ),
-      -1,
-      false
-    );
-    t.value = index > 0 ? withDelay(index * 160, loop) : loop;
-    return () => cancelAnimation(t);
-  }, [reduceMotion, t, index]);
-  const animatedProps = useAnimatedProps(() => ({
-    opacity: t.value > 0 ? 0.8 + 0.2 * t.value : 0.8,
-    transform: [{ translateY: t.value > 0 ? -2.5 * t.value : 0 }],
-  }));
-  return <AnimatedCircle cx={cx} cy={cy} r={r} animatedProps={animatedProps} />;
-}
 
 export function HomeWidgetIcon({ variant, state = "default", size = "md", title }: HomeWidgetIconProps) {
   const { accentColor } = useTheme();
@@ -847,20 +1288,20 @@ export function HomeWidgetIcon({ variant, state = "default", size = "md", title 
       fill="none"
       accessibilityLabel={title}
     >
-      <Circle cx="24" cy="24" r="22" fill={p.glow} opacity={0.16} />
+      {/* Warm Glass v2 multi-layer diffused inner radiance */}
+      <Circle cx="24" cy="24" r="22" fill={p.glow} opacity={0.22} />
+      <Circle cx="24" cy="24" r="16" fill={p.hi} opacity={0.12} />
+      {/* Top rim glass specular curve */}
+      <Path
+        d="M11 9a16.5 16.5 0 0 1 26 0"
+        stroke={HOME_WIDGET_ICON_SHINE}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        opacity={0.32}
+      />
       {renderArtwork(variant, p, accentFill, state)}
     </Svg>
   );
-
-  // The web's leaderboard motion is a shine bar INSIDE the icon
-  // (globals.css:4283 → `.hwi-m-leaderboard` rides the clipped white rect),
-  // and the leaderboard draws its own shine (see LeaderboardShine). The
-  // shared wrapper's "sweep" spec instead drives the WHOLE disc — and its
-  // opacity dips to 0 for a third of every 5.4s cycle, so the trophy
-  // BLANKED OUT: the wall showed an empty amber disc (on the device and in
-  // the capture), which is the one thing a wall icon may never do. Every
-  // other variant keeps the shared motion untouched.
-  if (variant === "leaderboard") return art;
 
   return <WidgetIconMotion variant={variant}>{art}</WidgetIconMotion>;
 }

@@ -75,8 +75,8 @@ export function AmbientCloudDrift({
 }
 
 /**
- * Periodic monster eye blink + pupil glance (Not Boring Monsters video 00:15–00:19, 00:28):
- * every ~3.8s the monster's eye performs a crisp 160ms squash blink and subtle glance.
+ * Periodic monster eye blink + 2D pupil glance (Not Boring Monsters video 00:15–00:19, 00:28):
+ * every ~3.8s the monster's eye performs a crisp 160ms squash blink and glances around in 2D.
  */
 export function AmbientEyePulse({
   children,
@@ -89,41 +89,115 @@ export function AmbientEyePulse({
   const reduced = !ambientAllowed(reduceMotion, perfTier());
   const scaleY = useSharedValue(1);
   const shiftX = useSharedValue(0);
+  const shiftY = useSharedValue(0);
 
   useEffect(() => {
     if (reduced) return;
     const blinkLoop = withRepeat(
       withSequence(
-        withTiming(1, { duration: 3200 }),
-        withTiming(0.12, { duration: 90, easing: Easing.out(Easing.quad) }),
-        withTiming(1, { duration: 110, easing: Easing.in(Easing.quad) }),
-        withTiming(1, { duration: 400 })
+        withTiming(1, { duration: 2900 }),
+        withTiming(0.1, { duration: 85, easing: Easing.out(Easing.quad) }),
+        withTiming(1.06, { duration: 95, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 70 }),
+        withTiming(1, { duration: 650 })
       ),
       -1,
       false
     );
-    const lookLoop = withRepeat(
+    const lookXLoop = withRepeat(
       withSequence(
-        withTiming(0, { duration: 1400 }),
-        withTiming(1.8, { duration: 500, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1.8, { duration: 900 }),
-        withTiming(-1.8, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-        withTiming(-1.8, { duration: 900 }),
+        withTiming(0, { duration: 1200 }),
+        withTiming(2.4, { duration: 450, easing: Easing.inOut(Easing.ease) }),
+        withTiming(2.4, { duration: 850 }),
+        withTiming(-2.2, { duration: 550, easing: Easing.inOut(Easing.ease) }),
+        withTiming(-2.2, { duration: 850 }),
+        withTiming(0, { duration: 450, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      false
+    );
+    const lookYLoop = withRepeat(
+      withSequence(
+        withTiming(0, { duration: 1600 }),
+        withTiming(-1.6, { duration: 500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.4, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.4, { duration: 750 }),
         withTiming(0, { duration: 500, easing: Easing.inOut(Easing.ease) })
       ),
       -1,
       false
     );
     scaleY.value = delayMs > 0 ? withDelay(delayMs, blinkLoop) : blinkLoop;
-    shiftX.value = delayMs > 0 ? withDelay(delayMs, lookLoop) : lookLoop;
+    shiftX.value = delayMs > 0 ? withDelay(delayMs, lookXLoop) : lookXLoop;
+    shiftY.value = delayMs > 0 ? withDelay(delayMs, lookYLoop) : lookYLoop;
     return () => {
       cancelAnimation(scaleY);
       cancelAnimation(shiftX);
+      cancelAnimation(shiftY);
     };
-  }, [delayMs, reduced, scaleY, shiftX]);
+  }, [delayMs, reduced, scaleY, shiftX, shiftY]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: shiftX.value }, { scaleY: scaleY.value }],
+    transform: [
+      { translateX: shiftX.value },
+      { translateY: shiftY.value },
+      { scaleY: scaleY.value },
+    ],
+  }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
+
+/**
+ * Staggered per-digit organic monster idle motion: gentle breathing squish-and-stretch,
+ * floating bob, and playful rock so multi-digit temperatures feel like living characters.
+ */
+export function AmbientMonsterIdle({
+  children,
+  index = 0,
+}: {
+  children: React.ReactNode;
+  index?: number;
+}) {
+  const { reduceMotion } = useTheme();
+  const reduced = !ambientAllowed(reduceMotion, perfTier());
+  const breath = useSharedValue(0);
+  const tilt = useSharedValue(0);
+
+  useEffect(() => {
+    if (reduced) return;
+    const delay = (index % 4) * 420;
+    const breathLoop = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 2200, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      false
+    );
+    const tiltLoop = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2800, easing: Easing.inOut(Easing.sin) }),
+        withTiming(-1, { duration: 2800, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+    breath.value = delay > 0 ? withDelay(delay, breathLoop) : breathLoop;
+    tilt.value = delay > 0 ? withDelay(delay, tiltLoop) : tiltLoop;
+    return () => {
+      cancelAnimation(breath);
+      cancelAnimation(tilt);
+    };
+  }, [breath, index, reduced, tilt]);
+
+  const dir = index % 2 === 0 ? 1 : -1;
+  const style = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: (0.5 - breath.value) * 4.5 },
+      { scaleX: 1 + (breath.value - 0.5) * 0.036 },
+      { scaleY: 1 - (breath.value - 0.5) * 0.036 },
+      { rotate: `${tilt.value * 1.6 * dir}deg` },
+    ],
   }));
   return <Animated.View style={style}>{children}</Animated.View>;
 }
@@ -141,20 +215,31 @@ export function AmbientDigitPop({
 }) {
   const { reduceMotion } = useTheme();
   const reduced = !ambientAllowed(reduceMotion, perfTier());
-  const scale = useSharedValue(1);
+  const scaleX = useSharedValue(1);
+  const scaleY = useSharedValue(1);
 
   useEffect(() => {
     if (reduced) return;
-    scale.value = withSequence(
-      withTiming(0.9, { duration: 70, easing: Easing.out(Easing.quad) }),
-      withTiming(1.04, { duration: 140, easing: Easing.out(Easing.quad) }),
-      withTiming(1, { duration: 110, easing: Easing.inOut(Easing.ease) })
+    scaleX.value = withSequence(
+      withTiming(1.08, { duration: 65, easing: Easing.out(Easing.quad) }),
+      withTiming(0.95, { duration: 120, easing: Easing.out(Easing.quad) }),
+      withTiming(1.03, { duration: 110, easing: Easing.out(Easing.quad) }),
+      withTiming(1, { duration: 100, easing: Easing.inOut(Easing.ease) })
     );
-    return () => cancelAnimation(scale);
-  }, [reduced, scale, triggerKey]);
+    scaleY.value = withSequence(
+      withTiming(0.88, { duration: 65, easing: Easing.out(Easing.quad) }),
+      withTiming(1.07, { duration: 120, easing: Easing.out(Easing.quad) }),
+      withTiming(0.98, { duration: 110, easing: Easing.out(Easing.quad) }),
+      withTiming(1, { duration: 100, easing: Easing.inOut(Easing.ease) })
+    );
+    return () => {
+      cancelAnimation(scaleX);
+      cancelAnimation(scaleY);
+    };
+  }, [reduced, scaleX, scaleY, triggerKey]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ scaleX: scaleX.value }, { scaleY: scaleY.value }],
   }));
   return <Animated.View style={style}>{children}</Animated.View>;
 }

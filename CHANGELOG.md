@@ -4,6 +4,27 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-28 — feat(screensaver,settings): schedule-based screensaver with night quiet hours, presets (11 PM – 4 AM), and morning auto-wake.
+  **What changed:**
+  - **SCREENSAVER PREFERENCE STATE & HOOK** (`src/home/idle.ts`):
+    - Upgraded screensaver storage to `consuela-screensaver-prefs` with `mode: "always" | "night" | "off"`, `startHour: number` (0-23, default `23` / 11 PM), and `endHour: number` (0-23, default `4` / 4 AM), while maintaining backward-compatible sync with `consuela-screensaver-enabled`.
+    - Added pure scheduling helpers:
+      - `isHourInWindow(hour, startHour, endHour)`: accurately handles overnight time windows spanning midnight (e.g. 11:00 PM to 4:00 AM).
+      - `isScreensaverDueNow(prefs, date)`: checks whether the screensaver is permitted to trigger right now based on active mode and schedule.
+      - `formatHour(hour)`: renders 0-23 hours into friendly `"11:00 PM"` / `"4:00 AM"` strings.
+    - Exported `useScreensaverPrefs()`, `saveScreensaverPrefs()`, and `loadScreensaverPrefs()`, backed by in-memory cache and pub-sub listener set.
+  - **WALL IDLE & SCREENSAVER AUTO-WAKE** (`app/index.tsx`, `src/screensaver/Screensaver.tsx`):
+    - Subscribed `HomePlaceholder` to `useScreensaverPrefs()`, passing `enabled: isScreensaverDueNow(screensaverPrefs, new Date())` into `idleBoardDue`. Outside of night hours (e.g. daytime from 4:00 AM to 11:00 PM), the idle transition stands down completely, keeping all Home widgets visible and active on the wall.
+    - Added morning auto-wake to `Screensaver.tsx`: when the clock reaches wake time (e.g. 4:00 AM), `Screensaver` automatically invokes `onExit()`, transitioning back to the Home wall so the family is greeted by their morning widgets.
+  - **SETTINGS CONTROLS** (`src/settings/HomeSection.tsx`, `src/settings/SettingsPage.tsx`):
+    - **`Settings → Home`**: Rebuilt the ambient screensaver card with:
+      - Toggle: On / Off.
+      - Mode selection: "Night schedule" vs "All day".
+      - Quick presets: "11 PM – 4 AM", "10 PM – 6 AM", "11 PM – 7 AM".
+      - Start & Wake steppers (`−` / `+`) to configure custom start and end hours with live formatted labels.
+    - **`Settings → Appearance`**: Added "Screensaver when inactive" toggle with live schedule chips ("Night (11:00 PM – 4:00 AM)" vs "All day"), accessible to all family members and guest mode.
+  **Tests:** `tests/screensaver.test.tsx` (17 tests), `tests/settings-page.test.tsx` (32 tests). Full test suites passing, `tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-27 — feat(home,ui): 3D clay HomeWidgetIcon sculpture pass, first-class Music 3D icon, badge & dock specular highlights, and Home Wall parity polish.
   **What changed:**
   - **14-VARIANT 3D CLAY `HomeWidgetIcon` SCULPTURE PASS** (`src/ui/HomeWidgetIcon.tsx`, `src/theme/materials.ts`, `src/ui/widgetIconMotion.tsx`):

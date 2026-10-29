@@ -5,6 +5,7 @@ import { TOKENS } from "../theme/tokens";
 import { mixAlpha } from "../ui/SoftButton";
 import { ConditionIcon, MonsterDigit } from "../weather/art";
 import { conditionCode } from "../weather/conditions";
+import { isScreensaverDueNow, useScreensaverPrefs } from "../home/idle";
 
 /**
  * The wall's ambient idle board (WS-8) — RN port of Home-ai's
@@ -89,12 +90,21 @@ export function Screensaver({ onExit }: ScreensaverProps) {
   const [now, setNow] = React.useState(() => new Date());
   // State (not a ref): the dim is READ during render, so it must subscribe.
   const [lastTouch, setLastTouch] = React.useState(() => Date.now());
+  const [prefs] = useScreensaverPrefs();
 
   // Clock/dim/stale re-render cadence (the clock itself is minute-precision).
   React.useEffect(() => {
     const t = setInterval(() => setNow(new Date()), TICK_MS);
     return () => clearInterval(t);
   }, []);
+
+  // Auto-wake when scheduled night hours conclude (e.g. 4:00 AM arrives)
+  // so the Home wall and widgets are ready for the morning.
+  React.useEffect(() => {
+    if (!isScreensaverDueNow(prefs, now)) {
+      onExit?.();
+    }
+  }, [now, prefs, onExit]);
 
   // Poll — web board parity: pull on mount + every 60s + on foreground.
   // Malformed ok:true payloads are ignored; failures keep the last-good board

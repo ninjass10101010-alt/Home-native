@@ -8,7 +8,7 @@ import { mix, parseColor, toCss } from "../theme/mix";
 import { RADII } from "../theme/tokens";
 import { moonLitPath } from "./astro";
 import { useMonsterInk, type ConditionCode, type MonsterInkName } from "./language";
-import { AmbientCloudDrift, AmbientEyePulse, AmbientVaneSway } from "./useAmbient";
+import { AmbientCloudDrift, AmbientEyePulse, AmbientMonsterIdle, AmbientVaneSway } from "./useAmbient";
 
 type Ink = Record<MonsterInkName, string>;
 
@@ -107,12 +107,392 @@ const DIGIT_SEGMENTS: Record<string, readonly DigitSection[]> = {
   "-": [{ segment: "middle", color: "purple" }],
 };
 
-const DIGIT_EYE_POSITIONS: Record<string, { x: number; y: number }> = {
-  "0": { x: 100, y: 120 }, "1": { x: 54, y: 132 }, "2": { x: 62, y: 88 },
-  "3": { x: 74, y: 158 }, "4": { x: 100, y: 105 }, "5": { x: 58, y: 210 },
-  "6": { x: 100, y: 205 }, "7": { x: 106, y: 254 }, "8": { x: 100, y: 105 },
-  "9": { x: 62, y: 250 },
+const DIGIT_EYE_POSITIONS: Record<string, { x: number; y: number; r?: number }> = {
+  "0": { x: 100, y: 88, r: 21 },
+  "1": { x: 112, y: 58, r: 21 },
+  "2": { x: 64, y: 86, r: 19 },
+  "3": { x: 92, y: 86, r: 22 },
+  "4": { x: 140, y: 80, r: 20 },
+  "5": { x: 126, y: 66, r: 19 },
+  "6": { x: 134, y: 62, r: 19 },
+  "7": { x: 64, y: 62, r: 17 },
+  "8": { x: 100, y: 96, r: 19 },
+  "9": { x: 98, y: 104, r: 22 },
 };
+
+/**
+ * Additional monster eyes per digit from the monster number reference sheet:
+ * - '0' has 2 lower cheek eyes below the hollow mouth
+ * - '2' has 3 playful googly eyes scattered down the curved spine
+ * - '4' has 3 vertically stacked eyes down its main pillar
+ * - '5' has a smaller sidekick googly eye perched beside the main top-right eye
+ * - '7' has a pair of eyes across its top monster jaw
+ * - '8' has a second oversized cyclops eye in its lower belly loop
+ */
+const DIGIT_EXTRA_EYES: Record<string, readonly { x: number; y: number; r: number; iris?: MonsterInkName }[]> = {
+  "0": [
+    { x: 52, y: 220, r: 11, iris: "orange" },
+    { x: 148, y: 204, r: 13, iris: "teal" },
+  ],
+  "2": [
+    { x: 136, y: 74, r: 10, iris: "orange" },
+    { x: 144, y: 122, r: 11, iris: "purple" },
+    { x: 114, y: 168, r: 9, iris: "red" },
+  ],
+  "4": [
+    { x: 140, y: 132, r: 14, iris: "teal" },
+    { x: 140, y: 172, r: 10, iris: "orange" },
+  ],
+  "5": [
+    { x: 164, y: 58, r: 12, iris: "orange" },
+  ],
+  "7": [
+    { x: 118, y: 62, r: 17, iris: "teal" },
+  ],
+  "8": [
+    { x: 100, y: 198, r: 24, iris: "teal" },
+  ],
+};
+
+/**
+ * Rich monster character textures & anatomy (spots, tiger/wedge stripes, candy
+ * cross-stripes, horns, cat ears, scalloped monster toes, spine ridges, and
+ * fanged jaws) rendered strictly with Monster Ink palette tokens.
+ */
+function MonsterDigitTexture({ digit, ink }: { digit: string; ink: Ink }) {
+  switch (digit) {
+    case "1":
+      return (
+        <G testID="wx-digit-texture-1">
+          {/* Top cyclops antenna stalk & bulb */}
+          <Path d="M 107 36 V 29 H 117 V 36 Z" fill={ink.orange} />
+          <Circle cx={112} cy={29} r={5} fill={ink.orange} />
+          {/* Scalloped monster toes along the bottom base */}
+          {[78, 95, 112, 129, 146].map((cx, i) => (
+            <G key={`toe-1-${i}`}>
+              <Circle cx={cx} cy={286} r={10} fill={ink.red} />
+              <Circle cx={cx} cy={288} r={4} fill={ink.orange} />
+            </G>
+          ))}
+          {/* Polka-dot spots on the curved left snout */}
+          <Circle cx={58} cy={78} r={6} fill={ink.orange} />
+          <Circle cx={74} cy={62} r={4.5} fill={ink.knotRed} />
+          <Circle cx={68} cy={88} r={4} fill={ink.starCream} opacity={0.85} />
+          {/* Fanged monster grin directly under the cyclops eye */}
+          <Path
+            d="M 90 88 Q 112 106 134 88 Q 112 96 90 88 Z"
+            fill={ink.inkBlue}
+            stroke={ink.inkBlue}
+            strokeWidth={3}
+            strokeLinejoin="round"
+          />
+          <Path d="M 98 91 L 103 100 L 108 92 Z M 116 92 L 121 100 L 126 91 Z" fill={ink.glint} />
+          {/* Horizontal / angled monster belly wedge stripes */}
+          <Path d="M 76 122 L 148 114 V 130 L 76 136 Z" fill={ink.orange} />
+          <Path d="M 76 146 L 148 142 V 158 L 76 164 Z" fill={ink.knotRed} />
+          <Path d="M 76 172 L 148 166 V 184 L 76 188 Z" fill={ink.orange} />
+          <Path d="M 76 198 L 148 194 V 210 L 76 214 Z" fill={ink.purple} />
+          <Path d="M 76 220 L 148 216 V 230 L 76 234 Z" fill={ink.orange} />
+          {/* Lower foot polka-dot spots */}
+          <Circle cx={92} cy={254} r={6.5} fill={ink.knotRed} />
+          <Circle cx={116} cy={248} r={5} fill={ink.starCream} opacity={0.85} />
+          <Circle cx={134} cy={260} r={7} fill={ink.purple} />
+          <Circle cx={104} cy={268} r={5.5} fill={ink.teal} />
+        </G>
+      );
+    case "2":
+      return (
+        <G testID="wx-digit-texture-2">
+          {/* Inner belly sawtooth monster spikes */}
+          <Path
+            d="M 92 98 L 80 105 L 92 112 L 80 119 L 92 126 L 82 133 L 94 140 Z"
+            fill={ink.glint}
+          />
+          {/* Wavy organic two-tone monster patches on crown & base */}
+          <Path
+            d="M 92 34 H 124 Q 140 52 120 66 Q 102 76 92 58 Z"
+            fill={ink.teal}
+            opacity={0.88}
+          />
+          <Path
+            d="M 24 244 Q 58 232 88 252 Q 122 272 168 250 V 288 H 24 Z"
+            fill={ink.teal}
+            opacity={0.85}
+          />
+          {/* Bubbly leopard / polka-dot texture across the body */}
+          <Circle cx={112} cy={50} r={7} fill={ink.blue} />
+          <Circle cx={154} cy={96} r={8.5} fill={ink.purple} />
+          <Circle cx={124} cy={104} r={6} fill={ink.teal} />
+          <Circle cx={152} cy={150} r={7.5} fill={ink.orange} />
+          <Circle cx={68} cy={146} r={9} fill={ink.teal} />
+          <Circle cx={44} cy={168} r={6.5} fill={ink.orange} />
+          <Circle cx={74} cy={180} r={5.5} fill={ink.starCream} opacity={0.85} />
+          <Circle cx={48} cy={214} r={10} fill={ink.purple} />
+          <Circle cx={76} cy={222} r={6.5} fill={ink.teal} />
+          <Circle cx={136} cy={216} r={9} fill={ink.blue} />
+          <Circle cx={56} cy={268} r={8} fill={ink.blue} />
+          <Circle cx={102} cy={266} r={9.5} fill={ink.purple} />
+          <Circle cx={142} cy={270} r={7} fill={ink.orange} />
+        </G>
+      );
+    case "3":
+      return (
+        <G testID="wx-digit-texture-3">
+          {/* Pointed monster cat ears on top of the upper arch */}
+          <Path d="M 42 46 L 56 28 L 76 38 Z" fill={ink.orange} />
+          <Path d="M 49 43 L 57 31 L 69 38 Z" fill={ink.red} />
+          <Path d="M 124 38 L 144 28 L 158 46 Z" fill={ink.teal} />
+          <Path d="M 131 38 L 143 31 L 151 43 Z" fill={ink.red} />
+          {/* Candy-striped circular patches (from reference '3') */}
+          <G>
+            <Circle cx={146} cy={84} r={12} fill={ink.glint} />
+            <Line x1={137} y1={79} x2={155} y2={79} stroke={ink.red} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={135} y1={85} x2={157} y2={85} stroke={ink.red} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={138} y1={91} x2={154} y2={91} stroke={ink.red} strokeWidth={3} strokeLinecap="round" />
+          </G>
+          <G>
+            <Circle cx={116} cy={160} r={11} fill={ink.glint} />
+            <Line x1={108} y1={155} x2={124} y2={155} stroke={ink.knotRed} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={106} y1={161} x2={126} y2={161} stroke={ink.knotRed} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={108} y1={167} x2={124} y2={167} stroke={ink.knotRed} strokeWidth={3} strokeLinecap="round" />
+          </G>
+          <G>
+            <Circle cx={144} cy={236} r={12} fill={ink.glint} />
+            <Line x1={135} y1={231} x2={153} y2={231} stroke={ink.red} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={133} y1={237} x2={155} y2={237} stroke={ink.red} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={136} y1={243} x2={152} y2={243} stroke={ink.red} strokeWidth={3} strokeLinecap="round" />
+          </G>
+          <G>
+            <Circle cx={64} cy={258} r={11} fill={ink.glint} />
+            <Line x1={56} y1={253} x2={72} y2={253} stroke={ink.orange} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={54} y1={259} x2={74} y2={259} stroke={ink.orange} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={56} y1={265} x2={72} y2={265} stroke={ink.orange} strokeWidth={3} strokeLinecap="round" />
+          </G>
+          {/* Speckles & polka-dot spots across both loops */}
+          <Circle cx={48} cy={78} r={7.5} fill={ink.red} />
+          <Circle cx={136} cy={120} r={7} fill={ink.orange} />
+          <Circle cx={154} cy={166} r={6.5} fill={ink.teal} />
+          <Circle cx={126} cy={204} r={8} fill={ink.orange} />
+          <Circle cx={108} cy={264} r={7.5} fill={ink.teal} />
+          <Circle cx={44} cy={228} r={6} fill={ink.orange} />
+        </G>
+      );
+    case "4":
+      return (
+        <G testID="wx-digit-texture-4">
+          {/* Curved bull / devil monster horns crowning the main stem */}
+          <Path d="M 110 42 Q 92 28 98 28 Q 114 28 124 38 Z" fill={ink.red} />
+          <Path d="M 170 42 Q 188 28 182 28 Q 166 28 156 38 Z" fill={ink.red} />
+          {/* Bold diagonal tiger stripes across the left arm */}
+          <Path d="M 32 76 L 88 52 V 68 L 24 96 Z" fill={ink.purple} />
+          <Path d="M 24 112 L 88 84 V 102 L 24 130 Z" fill={ink.red} />
+          <Path d="M 24 144 L 88 118 V 136 L 40 156 Z" fill={ink.orange} />
+          {/* Clustered polka-dot spots across the crossbar & lower pillar */}
+          <Circle cx={46} cy={180} r={8.5} fill={ink.teal} />
+          <Circle cx={74} cy={194} r={6.5} fill={ink.orange} />
+          <Circle cx={98} cy={176} r={7.5} fill={ink.red} />
+          <Circle cx={120} cy={200} r={5.5} fill={ink.starCream} opacity={0.85} />
+          <Circle cx={166} cy={190} r={7} fill={ink.orange} />
+          <Circle cx={124} cy={230} r={6.5} fill={ink.purple} />
+          <Circle cx={158} cy={226} r={7.5} fill={ink.teal} />
+          <Circle cx={136} cy={274} r={6} fill={ink.orange} />
+          {/* Fanged lower monster grin near bottom of the stem */}
+          <Path
+            d="M 118 250 Q 140 264 162 250"
+            stroke={ink.inkBlue}
+            strokeWidth={4}
+            strokeLinecap="round"
+            fill="none"
+          />
+          <Path d="M 123 252 L 128 243 L 133 254 Z M 147 254 L 152 243 L 157 252 Z" fill={ink.glint} />
+        </G>
+      );
+    case "5":
+      return (
+        <G testID="wx-digit-texture-5">
+          {/* Outer monster spine ridges along the lower-right curve */}
+          <Circle cx={175} cy={168} r={7} fill={ink.teal} />
+          <Circle cx={177} cy={192} r={7.5} fill={ink.orange} />
+          <Circle cx={176} cy={216} r={7} fill={ink.teal} />
+          <Circle cx={173} cy={240} r={6.5} fill={ink.orange} />
+          <Circle cx={158} cy={274} r={7} fill={ink.teal} />
+          <Circle cx={132} cy={286} r={6.5} fill={ink.orange} />
+          {/* Bold tiger / zebra wedge stripes across the body */}
+          <Path d="M 24 52 L 74 44 L 82 58 L 24 72 Z" fill={ink.orange} />
+          <Path d="M 24 88 L 78 76 L 84 92 L 24 108 Z" fill={ink.knotOrange} />
+          <Path d="M 24 120 L 74 112 V 128 L 24 134 Z" fill={ink.orange} />
+          <Path d="M 42 136 L 62 184 H 46 L 28 136 Z" fill={ink.teal} />
+          <Path d="M 104 152 L 176 144 V 162 L 104 168 Z" fill={ink.teal} />
+          <Path d="M 104 182 L 176 176 V 196 L 104 200 Z" fill={ink.orange} />
+          <Path d="M 104 214 L 176 210 V 228 L 104 230 Z" fill={ink.teal} />
+          <Path d="M 64 238 L 52 282 H 72 L 82 238 Z" fill={ink.orange} />
+          <Path d="M 102 238 L 98 288 H 118 L 118 238 Z" fill={ink.teal} />
+          <Path d="M 136 238 L 148 282 H 164 L 152 238 Z" fill={ink.orange} />
+          {/* Giant chomping monster teeth inside the middle counter pocket */}
+          <Path
+            d="M 42 184 L 52 204 L 62 184 L 74 206 L 86 184 L 96 202 L 104 184 Z"
+            fill={ink.glint}
+          />
+          <Path
+            d="M 48 238 L 58 218 L 68 238 L 80 216 L 92 238 L 102 220 L 110 238 Z"
+            fill={ink.glint}
+          />
+        </G>
+      );
+    case "6":
+      return (
+        <G testID="wx-digit-texture-6">
+          {/* Polka-dot spots down the upper neck */}
+          <Circle cx={74} cy={58} r={8} fill={ink.purple} />
+          <Circle cx={48} cy={78} r={7} fill={ink.knotPurple} />
+          <Circle cx={68} cy={98} r={6} fill={ink.red} />
+          <Circle cx={42} cy={112} r={8.5} fill={ink.purple} />
+          <Circle cx={66} cy={132} r={7} fill={ink.orange} />
+          <Circle cx={44} cy={148} r={6.5} fill={ink.knotPurple} />
+          {/* Radial pinwheel stripes around the lower belly loop */}
+          <Path d="M 24 176 L 88 186 V 202 L 24 198 Z" fill={ink.purple} />
+          <Path d="M 24 212 L 88 206 V 222 L 24 232 Z" fill={ink.teal} />
+          <Path d="M 42 268 L 84 228 H 100 L 66 284 Z" fill={ink.purple} />
+          <Path d="M 96 288 L 102 228 H 118 L 122 288 Z" fill={ink.teal} />
+          <Path d="M 148 276 L 114 228 H 132 L 166 260 Z" fill={ink.purple} />
+          <Path d="M 112 202 L 176 194 V 214 L 112 216 Z" fill={ink.teal} />
+          <Path d="M 98 136 L 116 186 H 134 L 120 136 Z" fill={ink.teal} />
+          {/* Single big curved monster tooth hanging into the inner loop counter */}
+          <Path d="M 92 184 Q 100 210 108 184 Z" fill={ink.glint} />
+        </G>
+      );
+    case "7":
+      return (
+        <G testID="wx-digit-texture-7">
+          {/* Stitched monster brow ticks along the top bar */}
+          <Line x1={52} y1={34} x2={56} y2={42} stroke={ink.inkBlue} strokeWidth={3.5} strokeLinecap="round" />
+          <Line x1={64} y1={34} x2={64} y2={41} stroke={ink.inkBlue} strokeWidth={3.5} strokeLinecap="round" />
+          <Line x1={76} y1={34} x2={72} y2={42} stroke={ink.inkBlue} strokeWidth={3.5} strokeLinecap="round" />
+          <Line x1={108} y1={34} x2={112} y2={42} stroke={ink.inkBlue} strokeWidth={3.5} strokeLinecap="round" />
+          <Line x1={120} y1={34} x2={120} y2={41} stroke={ink.inkBlue} strokeWidth={3.5} strokeLinecap="round" />
+          {/* Full row of 5 sharp hanging monster teeth under the top jaw */}
+          <Path
+            d="M 28 92 L 38 112 L 48 92 L 59 114 L 70 92 L 81 114 L 92 92 L 102 110 L 112 92 Z"
+            fill={ink.glint}
+          />
+          {/* Two-tone ringed polka-dot spots cascading down the stem */}
+          <Circle cx={154} cy={62} r={9} fill={ink.red} />
+          <Circle cx={154} cy={62} r={4.5} fill={ink.starCream} />
+          <Circle cx={136} cy={112} r={10} fill={ink.orange} />
+          <Circle cx={136} cy={112} r={5} fill={ink.purple} />
+          <Circle cx={114} cy={156} r={11} fill={ink.teal} />
+          <Circle cx={114} cy={156} r={5.5} fill={ink.orange} />
+          <Circle cx={92} cy={188} r={9.5} fill={ink.orange} />
+          <Circle cx={92} cy={188} r={4.5} fill={ink.starCream} />
+          <Circle cx={126} cy={204} r={8.5} fill={ink.purple} />
+          <Circle cx={126} cy={204} r={4} fill={ink.teal} />
+          <Circle cx={88} cy={220} r={7} fill={ink.teal} />
+        </G>
+      );
+    case "8":
+      return (
+        <G testID="wx-digit-texture-8">
+          {/* Pointed monster ears on top of the upper figure-8 loop */}
+          <Path d="M 46 44 L 58 28 L 76 36 Z" fill={ink.red} />
+          <Path d="M 52 42 L 59 31 L 70 36 Z" fill={ink.blue} />
+          <Path d="M 124 36 L 142 28 L 154 44 Z" fill={ink.red} />
+          <Path d="M 130 36 L 141 31 L 148 42 Z" fill={ink.blue} />
+          {/* Large bold monster polka-dots across the entire figure-8 */}
+          <Circle cx={64} cy={64} r={9.5} fill={ink.blue} />
+          <Circle cx={136} cy={64} r={9.5} fill={ink.blue} />
+          <Circle cx={48} cy={112} r={10.5} fill={ink.blue} />
+          <Circle cx={152} cy={112} r={10.5} fill={ink.orange} />
+          <Circle cx={62} cy={158} r={9} fill={ink.blue} />
+          <Circle cx={138} cy={158} r={9} fill={ink.teal} />
+          <Circle cx={46} cy={204} r={11.5} fill={ink.blue} />
+          <Circle cx={154} cy={204} r={11.5} fill={ink.purple} />
+          <Circle cx={56} cy={246} r={10} fill={ink.teal} />
+          <Circle cx={144} cy={246} r={10} fill={ink.orange} />
+          {/* Fanged monster smile at the bottom chin */}
+          <Path
+            d="M 74 256 Q 100 278 126 256 Q 100 264 74 256 Z"
+            fill={ink.inkBlue}
+            stroke={ink.inkBlue}
+            strokeWidth={3}
+            strokeLinejoin="round"
+          />
+          <Path
+            d="M 84 260 L 89 269 L 94 261 Z M 97 262 L 100 270 L 103 262 Z M 106 261 L 111 269 L 116 260 Z"
+            fill={ink.glint}
+          />
+        </G>
+      );
+    case "9":
+      return (
+        <G testID="wx-digit-texture-9">
+          {/* Three dark spiky monster brow tufts crowning the eye */}
+          <Path
+            d="M 70 68 L 76 52 L 84 66 L 98 48 L 110 66 L 120 52 L 126 68 Z"
+            fill={ink.inkBlue}
+          />
+          {/* Candy-striped circular patches */}
+          <G>
+            <Circle cx={148} cy={146} r={11} fill={ink.glint} />
+            <Line x1={140} y1={141} x2={156} y2={141} stroke={ink.red} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={138} y1={147} x2={158} y2={147} stroke={ink.red} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={140} y1={153} x2={156} y2={153} stroke={ink.red} strokeWidth={3} strokeLinecap="round" />
+          </G>
+          <G>
+            <Circle cx={136} cy={234} r={11} fill={ink.glint} />
+            <Line x1={128} y1={229} x2={144} y2={229} stroke={ink.purple} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={126} y1={235} x2={146} y2={235} stroke={ink.purple} strokeWidth={3} strokeLinecap="round" />
+            <Line x1={128} y1={241} x2={144} y2={241} stroke={ink.purple} strokeWidth={3} strokeLinecap="round" />
+          </G>
+          {/* Multi-color polka-dots across the head, stem & tail */}
+          <Circle cx={48} cy={78} r={8.5} fill={ink.teal} />
+          <Circle cx={148} cy={82} r={9.5} fill={ink.orange} />
+          <Circle cx={46} cy={132} r={10} fill={ink.orange} />
+          <Circle cx={68} cy={182} r={9} fill={ink.teal} />
+          <Circle cx={124} cy={188} r={8.5} fill={ink.orange} />
+          <Circle cx={154} cy={198} r={7} fill={ink.starCream} opacity={0.9} />
+          <Circle cx={114} cy={266} r={8} fill={ink.teal} />
+        </G>
+      );
+    case "0":
+      return (
+        <G testID="wx-digit-texture-0">
+          {/* Two curved monster horns sticking up from the top shoulders */}
+          <Path d="M 48 48 Q 30 28 42 28 Q 58 29 68 40 Z" fill={ink.red} />
+          <Path d="M 152 48 Q 170 28 158 28 Q 142 29 132 40 Z" fill={ink.red} />
+          {/* 5 scalloped monster toes along the bottom base */}
+          {[56, 78, 100, 122, 144].map((cx, i) => (
+            <G key={`toe-0-${i}`}>
+              <Circle cx={cx} cy={285} r={11} fill={ink.orange} />
+              <Circle cx={cx} cy={287} r={4.5} fill={ink.red} />
+            </G>
+          ))}
+          {/* Tall hollow monster mouth cavity in the center with bottom teeth */}
+          <Rect x={82} y={108} width={36} height={108} rx={18} fill={ink.inkBlue} />
+          <Path
+            d="M 86 212 L 92 198 L 98 212 L 104 198 L 110 212 L 114 202 L 116 212 Z"
+            fill={ink.glint}
+          />
+          {/* Horizontal tiger stripes on the left and right flanks */}
+          <Path d="M 24 114 L 82 122 V 134 L 24 128 Z" fill={ink.red} />
+          <Path d="M 24 142 L 82 148 V 160 L 24 156 Z" fill={ink.knotOrange} />
+          <Path d="M 24 170 L 82 174 V 186 L 24 184 Z" fill={ink.red} />
+          <Path d="M 118 122 L 176 114 V 128 L 118 134 Z" fill={ink.orange} />
+          <Path d="M 118 148 L 176 142 V 156 L 118 160 Z" fill={ink.purple} />
+          <Path d="M 118 174 L 176 170 V 184 L 118 186 Z" fill={ink.orange} />
+          {/* Polka-dot spots on forehead & lower chin */}
+          <Circle cx={60} cy={66} r={7.5} fill={ink.purple} />
+          <Circle cx={140} cy={66} r={7.5} fill={ink.teal} />
+          <Circle cx={78} cy={52} r={5.5} fill={ink.red} />
+          <Circle cx={122} cy={52} r={5.5} fill={ink.red} />
+          <Circle cx={84} cy={246} r={8.5} fill={ink.purple} />
+          <Circle cx={118} cy={252} r={7.5} fill={ink.orange} />
+          <Circle cx={100} cy={268} r={6} fill={ink.teal} />
+        </G>
+      );
+    default:
+      return null;
+  }
+}
 
 /**
  * Modular Not Boring Monsters block paths (`notbor.ing/product/monsters` &
@@ -207,27 +587,31 @@ export function MonsterDigit({
   digit,
   height,
   expression = "open",
+  index = 0,
 }: {
   digit: string;
   height: number;
   expression?: "open" | "sleepy" | "storm";
+  index?: number;
 }) {
   const ink = useMonsterInk();
   const sections = DIGIT_SEGMENTS[digit];
   const eye = DIGIT_EYE_POSITIONS[digit];
+  const extraEyes = DIGIT_EXTRA_EYES[digit] ?? [];
   if (!sections) {
     // Unknown character: text fallback — never a blank glyph, never fake art.
     return <Text style={{ fontSize: height, lineHeight: height * 1.1, color: ink.inkBlue }}>{digit}</Text>;
   }
   const width = height * DIGIT_ASPECT;
   const k = height / DIGIT_BOX_H;
-  const eyeLeft = eye ? ((eye.x - 22) / DIGIT_VIEW_W) * width : 0;
-  const eyeTop = eye ? ((eye.y - DIGIT_BOX_Y - 22) / DIGIT_BOX_H) * height : 0;
-  const eyeBox = 44 * k;
+  const primaryR = eye?.r ?? 21;
+  const allAnimatedEyes = eye
+    ? [{ x: eye.x, y: eye.y, r: primaryR }, ...extraEyes.map((e) => ({ x: e.x, y: e.y, r: e.r }))]
+    : [];
 
   const hasAnimatedPupil = Boolean(eye && expression === "open" && height >= 72);
 
-  return (
+  const digitBody = (
     <View style={{ width, height, position: "relative" }}>
       <Svg
         testID={`wx-digit-${digit}`}
@@ -262,7 +646,7 @@ export function MonsterDigit({
             </G>
           );
         })}
-        {/* Authentic Not Boring Monsters flush geometric block segments */}
+        {/* Authentic Not Boring Monsters flush geometric block segments (3D depth extrusion) */}
         <G transform="translate(5, 7)">
           {sections.map(({ segment, color }) => {
             const d = monsterSegmentPath(digit, segment);
@@ -283,11 +667,9 @@ export function MonsterDigit({
           return <Path key={`s-${segment}`} d={d} fill={ink[color]} />;
         })}
         {/* Video 00:15/00:24: golden-orange base block on '1' */}
-        {digit === "1" ? <Rect x={76} y={242} width={72} height={46} fill={ink.orange} /> : null}
-        {/* Video 00:20: 2 white monster teeth hanging from the top bar of '7' */}
-        {digit === "7" ? (
-          <Path d="M 42 92 L 53 110 L 64 92 L 75 110 L 86 92 Z" fill={ink.glint} />
-        ) : null}
+        {digit === "1" ? <Rect x={76} y={242} width={72} height={46} fill={ink.red} /> : null}
+        {/* Rich monster textures: spots, stripes, horns, ears, toes, and fanged jaws */}
+        <MonsterDigitTexture digit={digit} ink={ink} />
         {/* Cozy winter/night scarf on digit '4' when sleepy (from monsters-night.png) */}
         {expression === "sleepy" && digit === "4" ? (
           <G>
@@ -317,66 +699,116 @@ export function MonsterDigit({
                 />
               </>
             ) : (
-              /* 3D shaded white eyeball sphere nestled in the counter pocket */
+              /* 3D shaded white eyeball sphere(s) + iris rings + specular glint */
               <>
-                <Circle cx={eye.x + 2} cy={eye.y + 4} r={22} fill={mix(ink.glint, ink.inkBlue, 72)} />
-                <Circle cx={eye.x} cy={eye.y} r={22} fill={ink.glint} />
-                {/* Soft crescent shading on lower-left of the 3D eyeball */}
-                <Path
-                  d={`M ${eye.x - 16} ${eye.y - 10} A 20 20 0 1 0 ${eye.x + 14} ${eye.y + 14} A 18 18 0 1 1 ${eye.x - 16} ${eye.y - 10} Z`}
-                  fill={mix(ink.glint, ink.inkBlue, 84)}
-                />
-                {expression === "sleepy" ? (
-                  <Path
-                    d={`M ${eye.x - 9} ${eye.y - 1} Q ${eye.x} ${eye.y + 9} ${eye.x + 9} ${eye.y - 1}`}
-                    stroke={ink.pupil}
-                    strokeWidth={4.5}
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-                ) : expression === "storm" ? (
-                  <Path
-                    d={`M ${eye.x - 7} ${eye.y - 7} L ${eye.x + 7} ${eye.y + 7} M ${eye.x + 7} ${eye.y - 7} L ${eye.x - 7} ${eye.y + 7}`}
-                    stroke={ink.pupil}
-                    strokeWidth={4.5}
-                    strokeLinecap="round"
-                  />
-                ) : !hasAnimatedPupil ? (
-                  <Circle cx={eye.x + 3} cy={eye.y + 2} r={10.5} fill={ink.pupil} />
-                ) : null}
+                {[
+                  { x: eye.x, y: eye.y, r: primaryR, iris: digit === "9" ? ("purple" as MonsterInkName) : ("teal" as MonsterInkName) },
+                  ...extraEyes,
+                ].map((e, idx) => {
+                  const er = e.r;
+                  const irisColor = e.iris ? ink[e.iris] : ink.teal;
+                  return (
+                    <G key={`eye-ball-${idx}`}>
+                      <Circle cx={e.x + 2} cy={e.y + 3.5} r={er} fill={mix(ink.glint, ink.inkBlue, 70)} />
+                      <Circle cx={e.x} cy={e.y} r={er} fill={ink.glint} />
+                      {/* Soft crescent shading on lower-left of the 3D eyeball */}
+                      <Path
+                        d={`M ${e.x - er * 0.72} ${e.y - er * 0.45} A ${er * 0.9} ${er * 0.9} 0 1 0 ${e.x + er * 0.64} ${e.y + er * 0.64} A ${er * 0.82} ${er * 0.82} 0 1 1 ${e.x - er * 0.72} ${e.y - er * 0.45} Z`}
+                        fill={mix(ink.glint, ink.inkBlue, 84)}
+                      />
+                      {/* Sassy half-lidded upper eyelid on digit '9' (from reference) */}
+                      {digit === "9" && idx === 0 && expression === "open" ? (
+                        <Path
+                          d={`M ${e.x - er} ${e.y - 2} A ${er} ${er} 0 0 1 ${e.x + er} ${e.y - 2} Z`}
+                          fill={ink.red}
+                        />
+                      ) : null}
+                      {expression === "sleepy" ? (
+                        <Path
+                          d={`M ${e.x - er * 0.42} ${e.y - 1} Q ${e.x} ${e.y + er * 0.42} ${e.x + er * 0.42} ${e.y - 1}`}
+                          stroke={ink.pupil}
+                          strokeWidth={Math.max(2.5, er * 0.2)}
+                          strokeLinecap="round"
+                          fill="none"
+                        />
+                      ) : expression === "storm" ? (
+                        <Path
+                          d={`M ${e.x - er * 0.32} ${e.y - er * 0.32} L ${e.x + er * 0.32} ${e.y + er * 0.32} M ${e.x + er * 0.32} ${e.y - er * 0.32} L ${e.x - er * 0.32} ${e.y + er * 0.32}`}
+                          stroke={ink.pupil}
+                          strokeWidth={Math.max(2.5, er * 0.2)}
+                          strokeLinecap="round"
+                        />
+                      ) : !hasAnimatedPupil ? (
+                        <>
+                          <Circle cx={e.x + 2} cy={e.y + 1.5} r={er * 0.56} fill={irisColor} />
+                          <Circle cx={e.x + 2} cy={e.y + 1.5} r={er * 0.4} fill={ink.pupil} />
+                          <Circle cx={e.x - er * 0.14} cy={e.y - er * 0.16} r={Math.max(1.5, er * 0.14)} fill={ink.glint} />
+                        </>
+                      ) : null}
+                    </G>
+                  );
+                })}
               </>
             )}
           </G>
         ) : null}
       </Svg>
-      {/* Animated blinking & pupil-glancing overlay on open hero digits (Mobbin video 00:15–00:19) */}
-      {hasAnimatedPupil ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            left: eyeLeft + 3 * k,
-            top: eyeTop + 2 * k,
-            width: eyeBox,
-            height: eyeBox,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <AmbientEyePulse delayMs={0}>
-            <View
-              style={{
-                width: Math.max(6, Math.round(21 * k)),
-                height: Math.max(6, Math.round(21 * k)),
-                borderRadius: Math.max(3, Math.round(11 * k)),
-                backgroundColor: ink.pupil,
-              }}
-            />
-          </AmbientEyePulse>
-        </View>
-      ) : null}
+      {/* Animated blinking & 2D pupil-glancing overlay on all eyes of open hero digits */}
+      {hasAnimatedPupil
+        ? allAnimatedEyes.map((e, idx) => {
+            const eBox = e.r * 2 * k;
+            const eLeft = ((e.x - e.r) / DIGIT_VIEW_W) * width;
+            const eTop = ((e.y - DIGIT_BOX_Y - e.r) / DIGIT_BOX_H) * height;
+            const pupilD = Math.max(5, Math.round(e.r * 0.92 * k));
+            const glintD = Math.max(2, Math.round(pupilD * 0.3));
+            return (
+              <View
+                key={`anim-eye-${idx}`}
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  left: eLeft + 1.5 * k,
+                  top: eTop + 1.5 * k,
+                  width: eBox,
+                  height: eBox,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <AmbientEyePulse delayMs={index * 320 + idx * 190}>
+                  <View
+                    style={{
+                      width: pupilD,
+                      height: pupilD,
+                      borderRadius: Math.ceil(pupilD / 2),
+                      backgroundColor: ink.pupil,
+                      alignItems: "flex-start",
+                      justifyContent: "flex-start",
+                      paddingLeft: Math.max(1, Math.round(pupilD * 0.18)),
+                      paddingTop: Math.max(1, Math.round(pupilD * 0.16)),
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: glintD,
+                        height: glintD,
+                        borderRadius: Math.ceil(glintD / 2),
+                        backgroundColor: ink.glint,
+                      }}
+                    />
+                  </View>
+                </AmbientEyePulse>
+              </View>
+            );
+          })
+        : null}
     </View>
   );
+
+  if (height >= 72) {
+    return <AmbientMonsterIdle index={index}>{digitBody}</AmbientMonsterIdle>;
+  }
+  return digitBody;
 }
 
 // ─── Condition icon primitives (WxToys.tsx:633-824 verbatim) ───

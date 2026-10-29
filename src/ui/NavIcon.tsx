@@ -1,5 +1,12 @@
 import React from "react";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import type { NavIconKey } from "../nav/nav-items";
 
@@ -173,21 +180,44 @@ function renderIconPaths(iconKey: NavIconKey | "more", strokeColor: string, acti
 }
 
 export function NavIcon({ iconKey, active = false, size = 24, color }: NavIconProps) {
-  const { colors } = useTheme();
+  const { colors, reduceMotion } = useTheme();
   const strokeColor = color ?? colors["color-text-primary"];
+  const scale = useSharedValue(active ? 1.06 : 1);
+
+  React.useEffect(() => {
+    if (reduceMotion) {
+      scale.value = active ? 1.05 : 1;
+      return;
+    }
+    if (active) {
+      scale.value = withSequence(
+        withTiming(1.14, { duration: 150, easing: Easing.out(Easing.quad) }),
+        withTiming(1.06, { duration: 160, easing: Easing.inOut(Easing.ease) })
+      );
+    } else {
+      scale.value = withTiming(1, { duration: 160 });
+    }
+  }, [active, reduceMotion, scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   return (
-    <Svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={strokeColor}
-      strokeWidth={active ? 2.5 : 2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {renderIconPaths(iconKey, strokeColor, active)}
-    </Svg>
+    <Animated.View style={animatedStyle}>
+      <Svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth={active ? 2.5 : 2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {renderIconPaths(iconKey, strokeColor, active)}
+      </Svg>
+    </Animated.View>
   );
 }
 

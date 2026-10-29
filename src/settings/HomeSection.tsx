@@ -14,6 +14,7 @@ import {
   WALL_CELLS,
   type WallLayout,
 } from "../home/wallLayout";
+import { formatHour, useScreensaverPrefs } from "../home/idle";
 
 /**
  * Settings → Home — the wall's own arrangement.
@@ -47,6 +48,7 @@ function widgetEmoji(id: WidgetId): string {
 export function HomeSection() {
   const { colors } = useTheme();
   const { layout, setLayout, reset: resetLayout } = useWallLayout();
+  const [screensaverPrefs, setScreensaverPrefs] = useScreensaverPrefs();
   const cells = layoutCells(layout);
 
   /** Apply a new layout, and say why it was refused when it does not fit. */
@@ -161,6 +163,221 @@ export function HomeSection() {
             onChange={(enabled) => apply({ ...layout, autoArrange: enabled })}
             accessibilityLabel="Auto-arrange widgets by activity"
           />
+        </View>
+
+        {/* Screensaver when inactive */}
+        <View
+          testID="wall-screensaver-setting"
+          style={{
+            flexDirection: "column",
+            gap: 14,
+            paddingVertical: 18,
+            paddingHorizontal: 18,
+            borderRadius: 20,
+            backgroundColor: mix(colors["color-accent-selected"] ?? colors["color-text-primary"], "transparent", 8),
+            borderWidth: 1,
+            borderColor: mix(colors["color-accent-selected"] ?? colors["color-text-primary"], "transparent", 20),
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+            }}
+          >
+            <View style={{ flex: 1, gap: 2 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 18 }}>🌙</Text>
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.body.fontSize,
+                    fontWeight: "700",
+                  }}
+                >
+                  Screensaver when inactive
+                </Text>
+              </View>
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  lineHeight: 18,
+                }}
+              >
+                {screensaverPrefs.mode === "off"
+                  ? "Screensaver is turned off. The Home wall stays awake with your widgets visible."
+                  : screensaverPrefs.mode === "night"
+                  ? `Active at night from ${formatHour(screensaverPrefs.startHour)} to ${formatHour(screensaverPrefs.endHour)}. Automatically wakes at ${formatHour(screensaverPrefs.endHour)} for the day.`
+                  : "Active anytime after 90 seconds of quiet on the Home wall."}
+              </Text>
+            </View>
+            <Toggle
+              testID="wall-screensaver-toggle"
+              value={screensaverPrefs.mode !== "off"}
+              onChange={(on) =>
+                setScreensaverPrefs((p) => ({
+                  ...p,
+                  mode: on ? (p.mode === "off" ? "night" : p.mode) : "off",
+                }))
+              }
+              accessibilityLabel="Screensaver when inactive"
+            />
+          </View>
+
+          {screensaverPrefs.mode !== "off" ? (
+            <View
+              style={{
+                gap: 12,
+                paddingTop: 12,
+                borderTopWidth: 1,
+                borderTopColor: mix(colors["color-border"] ?? "transparent", "transparent", 40),
+              }}
+            >
+              {/* Schedule Mode Selector: Night schedule vs All day */}
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+                  Active schedule
+                </Text>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <Chip
+                    testID="screensaver-mode-night"
+                    label="Night schedule"
+                    tone={screensaverPrefs.mode === "night" ? "accent" : "neutral"}
+                    selected={screensaverPrefs.mode === "night"}
+                    onPress={() => setScreensaverPrefs((p) => ({ ...p, mode: "night" }))}
+                  />
+                  <Chip
+                    testID="screensaver-mode-always"
+                    label="All day"
+                    tone={screensaverPrefs.mode === "always" ? "accent" : "neutral"}
+                    selected={screensaverPrefs.mode === "always"}
+                    onPress={() => setScreensaverPrefs((p) => ({ ...p, mode: "always" }))}
+                  />
+                </View>
+              </View>
+
+              {/* Night Schedule Controls (when night mode selected) */}
+              {screensaverPrefs.mode === "night" ? (
+                <View style={{ gap: 10, paddingTop: 4 }}>
+                  {/* Preset Buttons */}
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                    <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                      Presets:
+                    </Text>
+                    {[
+                      { label: "11 PM – 4 AM", start: 23, end: 4 },
+                      { label: "10 PM – 6 AM", start: 22, end: 6 },
+                      { label: "11 PM – 7 AM", start: 23, end: 7 },
+                    ].map((preset) => {
+                      const selected =
+                        screensaverPrefs.startHour === preset.start &&
+                        screensaverPrefs.endHour === preset.end;
+                      return (
+                        <Chip
+                          key={preset.label}
+                          testID={`screensaver-preset-${preset.start}-${preset.end}`}
+                          label={preset.label}
+                          tone={selected ? "accent" : "neutral"}
+                          selected={selected}
+                          onPress={() =>
+                            setScreensaverPrefs((p) => ({
+                              ...p,
+                              startHour: preset.start,
+                              endHour: preset.end,
+                            }))
+                          }
+                        />
+                      );
+                    })}
+                  </View>
+
+                  {/* Start / End hour steppers */}
+                  <View style={{ flexDirection: "row", gap: 16, marginTop: 4 }}>
+                    {/* Start Time */}
+                    <View
+                      style={{
+                        flex: 1,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        backgroundColor: mix(colors["color-surface-2"] ?? colors["color-text-primary"], "transparent", 20),
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 14,
+                      }}
+                    >
+                      <View>
+                        <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>STARTS</Text>
+                        <Text testID="screensaver-start-hour-text" style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                          {formatHour(screensaverPrefs.startHour)}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 6 }}>
+                        <Pressable
+                          testID="screensaver-start-prev"
+                          onPress={() => setScreensaverPrefs((p) => ({ ...p, startHour: (p.startHour + 23) % 24 }))}
+                          accessibilityLabel="Earlier start hour"
+                          style={{ minWidth: 36, minHeight: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                        >
+                          <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>−</Text>
+                        </Pressable>
+                        <Pressable
+                          testID="screensaver-start-next"
+                          onPress={() => setScreensaverPrefs((p) => ({ ...p, startHour: (p.startHour + 1) % 24 }))}
+                          accessibilityLabel="Later start hour"
+                          style={{ minWidth: 36, minHeight: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                        >
+                          <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>+</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    {/* End Time */}
+                    <View
+                      style={{
+                        flex: 1,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        backgroundColor: mix(colors["color-surface-2"] ?? colors["color-text-primary"], "transparent", 20),
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 14,
+                      }}
+                    >
+                      <View>
+                        <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>WAKES AT</Text>
+                        <Text testID="screensaver-end-hour-text" style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                          {formatHour(screensaverPrefs.endHour)}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 6 }}>
+                        <Pressable
+                          testID="screensaver-end-prev"
+                          onPress={() => setScreensaverPrefs((p) => ({ ...p, endHour: (p.endHour + 23) % 24 }))}
+                          accessibilityLabel="Earlier wake hour"
+                          style={{ minWidth: 36, minHeight: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                        >
+                          <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>−</Text>
+                        </Pressable>
+                        <Pressable
+                          testID="screensaver-end-next"
+                          onPress={() => setScreensaverPrefs((p) => ({ ...p, endHour: (p.endHour + 1) % 24 }))}
+                          accessibilityLabel="Later wake hour"
+                          style={{ minWidth: 36, minHeight: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                        >
+                          <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>+</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         <View style={{ gap: 10 }}>

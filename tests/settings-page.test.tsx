@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { ACCENTS } from "../src/theme/tokens";
+import { _resetScreensaverMemoryForTest } from "../src/home/idle";
 import { SettingsPage } from "../src/settings/SettingsPage";
 import SettingsRoute from "../app/settings";
 
@@ -95,6 +96,7 @@ beforeEach(async () => {
   // The async-storage-mock keeps a real in-memory store across tests; a later
   // ThemeProvider hydration must not pick up an earlier test's persisted keys.
   await AsyncStorage.clear();
+  _resetScreensaverMemoryForTest();
   mockMember = parent;
   mockHydrated = true;
   mockStale = false;
@@ -296,6 +298,20 @@ describe("SettingsPage — Appearance (live writes)", () => {
     expect(setItemMock().mock.calls.some(([k, v]) => k === "consuela-boost" && v === "1")).toBe(true);
   });
 
+  it("screensaver toggle in Appearance flips preference and persists consuela-screensaver-enabled", async () => {
+    mockMember = null;
+    const { getByTestId } = render(<SettingsPage />, { wrapper: wrap });
+    await flush();
+    fireEvent.press(getByTestId("settings-section-appearance"));
+    fireEvent.press(getByTestId("settings-screensaver-toggle"));
+    await flush();
+    expect(
+      setItemMock().mock.calls.some(
+        ([k, v]) => k === "consuela-screensaver-enabled" && v === "0"
+      )
+    ).toBe(true);
+  });
+
   it("all ten accent chips render and a pick persists consuela-accent", async () => {
     mockMember = null;
     const { getByTestId } = render(<SettingsPage />, { wrapper: wrap });
@@ -431,6 +447,34 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
         ?.disabled,
     ).toBe(true);
     expect(getByTestId("wall-layout-hint")).toBeTruthy();
+  });
+  it("Home section toggles the screensaver setting", async () => {
+    mockMember = parent;
+    const { getByTestId, findByText } = render(<SettingsPage />, { wrapper: wrap });
+    await flush();
+    fireEvent.press(getByTestId("settings-section-home"));
+    await findByText("Widget layout");
+    expect(getByTestId("wall-screensaver-setting")).toBeTruthy();
+    fireEvent.press(getByTestId("wall-screensaver-toggle"));
+    await flush();
+    expect(
+      setItemMock().mock.calls.some(
+        ([k, v]) => k === "consuela-screensaver-enabled" && v === "0"
+      )
+    ).toBe(true);
+  });
+
+  it("Home section allows selecting night schedule and presets", async () => {
+    mockMember = parent;
+    const { getByTestId, findByText } = render(<SettingsPage />, { wrapper: wrap });
+    await flush();
+    fireEvent.press(getByTestId("settings-section-home"));
+    await findByText("Widget layout");
+    fireEvent.press(getByTestId("screensaver-mode-night"));
+    expect(getByTestId("screensaver-preset-23-4")).toBeTruthy();
+    fireEvent.press(getByTestId("screensaver-preset-23-4"));
+    expect(getByTestId("screensaver-start-hour-text").props.children).toBe("11:00 PM");
+    expect(getByTestId("screensaver-end-hour-text").props.children).toBe("4:00 AM");
   });
 });
 

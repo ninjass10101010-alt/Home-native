@@ -27,7 +27,7 @@ export function WeatherAirQuality({ data }: { data: WeatherSnapshot }) {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 16, flex: 1 }}>
               <View style={{ flexDirection: "row" }}>
                 {String(air.aqi).split("").map((d, i) => (
-                  <MonsterDigit key={i} digit={d} height={140} />
+                  <MonsterDigit key={i} digit={d} height={140} index={i} />
                 ))}
               </View>
               <View style={{ gap: 4, flexShrink: 1 }}>

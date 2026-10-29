@@ -243,7 +243,7 @@ export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
       <AmbientDigitPop triggerKey={`${scrubIdx}-${activeTempF}`}>
         <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "center" }} testID="wx-temp-digits">
           {String(Math.round(activeTempF)).split("").map((d, i) => (
-            <MonsterDigit key={`${d}-${i}`} digit={d} height={digitsHeight} expression={expression} />
+            <MonsterDigit key={`${d}-${i}`} digit={d} height={digitsHeight} expression={expression} index={i} />
           ))}
           <Text style={{ color: soft, fontSize: digitsHeight * 0.28, lineHeight: digitsHeight * 0.32, fontWeight: "300", marginLeft: 2, marginTop: digitsHeight * 0.05 }}>
             °
