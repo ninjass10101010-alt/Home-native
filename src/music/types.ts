@@ -68,3 +68,16 @@ export interface DownloadEntry {
   bytes: number;
   savedAt: number;
 }
+
+export interface FavoriteArtist {
+  name: string;
+  artworkUrl?: string | null;
+  savedAt: number;
+}
+
+export interface RecommendedArtist {
+  name: string;
+  genre: string;
+  reason: string;
+  artworkUrl?: string | null;
+}

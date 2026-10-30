@@ -34,12 +34,20 @@ import { TransportPill } from "./TransportPill";
 import { WaveformBars } from "./MusicIsland";
 import { currentLineIndex, fetchLyrics, followOffset, FOLLOW_PAUSE_MS, lyricSegments, type LyricLine } from "./lyrics";
 import { countUnrated, isContentHidden, isDeniedTerm, searchNote, visibleTracks } from "./explicit";
-import { totalDownloadBytes } from "./library";
+import {
+  getRecommendedArtists,
+  isFavoriteArtist,
+  loadFavoriteArtists,
+  saveFavoriteArtists,
+  toggleFavoriteArtist,
+  totalDownloadBytes,
+} from "./library";
+import { toHighResArtworkUrl } from "./artwork";
 import { LYRIC_CURRENT_SCALE, LYRIC_TYPE, STAGE_TYPE } from "./stage-type";
-import type { DownloadEntry, MediaTrack, RepeatMode } from "./types";
+import type { DownloadEntry, FavoriteArtist, MediaTrack, RecommendedArtist, RepeatMode } from "./types";
 
-/** The Now Playing screen's three modes. Stage is the artwork-led one. */
-type Mode = "stage" | "lyrics" | "queue";
+/** The Now Playing screen's modes. Stage is the artwork-led one. */
+type Mode = "stage" | "lyrics" | "queue" | "library";
 
 /** The artwork's crossfade, in ms. */
 const STAGE_FADE_MS = 250;
@@ -92,6 +100,24 @@ export function MusicPlayer() {
   const [denyOpen, setDenyOpen] = React.useState(false);
   const [denyTerm, setDenyTerm] = React.useState("");
 
+  const [favoriteArtists, setFavoriteArtists] = React.useState<FavoriteArtist[]>([]);
+
+  React.useEffect(() => {
+    let alive = true;
+    void loadFavoriteArtists().then((list) => {
+      if (alive) setFavoriteArtists(list);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const handleToggleFavoriteArtist = (artistName: string, artworkUrl?: string | null) => {
+    setFavoriteArtists((prev) => {
+      const updated = toggleFavoriteArtist(prev, artistName, artworkUrl);
+      void saveFavoriteArtists(updated);
+      return updated;
+    });
+  };
+
   // The role-aware policy comes from the provider — it knows who is watching
   // (a parent sees everything; a kid role and a signed-out guest fail
   // closed). See src/music/explicit.ts.
@@ -107,6 +133,39 @@ export function MusicPlayer() {
   // see is never painted here either (the provider already stops it — this
   // is the same rule on the same screen).
   const visibleCurrent = current && !isContentHidden(current, policy) ? current : null;
+
+  const isCurrentArtistFavorite = visibleCurrent
+    ? isFavoriteArtist(favoriteArtists, visibleCurrent.artist)
+    : false;
+
+  const recommendedArtists = React.useMemo(
+    () => getRecommendedArtists(visibleHistory, favoriteArtists),
+    [visibleHistory, favoriteArtists]
+  );
+
+  const selectArtist = async (artistName: string) => {
+    setQuery(artistName);
+    setSearchOpen(true);
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const outcome = await engineSearch(artistName, 20);
+      setTracks(outcome.tracks);
+      setExplicitKnown(outcome.explicitKnown);
+      setHasSearched(true);
+      const vis = visibleTracks(outcome.tracks, policy);
+      if (vis.length > 0) {
+        await play(vis[0], vis);
+      }
+    } catch (e) {
+      setSearchError(e instanceof Error ? e.message : "search_failed");
+      setTracks([]);
+      setExplicitKnown(false);
+      setHasSearched(true);
+    } finally {
+      setSearching(false);
+    }
+  };
   const unrated = countUnrated(tracks);
   const note =
     hasSearched && !searching && !searchError
@@ -439,9 +498,8 @@ export function MusicPlayer() {
         {visibleCurrent ? (
           <>
             {/*
-              The Now Playing screen's three modes. Stage is the artwork-led
-              one; Lyrics and Queue are behind the switcher until T4 restyles
-              them.
+              The Now Playing screen's modes. Stage is the artwork-led
+              one; Lyrics, Queue and Library are behind the switcher.
             */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ flex: 1 }}>
@@ -452,6 +510,7 @@ export function MusicPlayer() {
                     { id: "stage", label: "Now Playing" },
                     { id: "lyrics", label: "Lyrics" },
                     { id: "queue", label: "Queue" },
+                    { id: "library", label: "Library" },
                   ]}
                   value={mode}
                   onChange={(id) => setMode(id as Mode)}
@@ -490,6 +549,10 @@ export function MusicPlayer() {
                 onToggleShuffle={toggleShuffleMode}
                 onCycleRepeat={cycleRepeatMode}
                 onDownload={() => void downloadCurrent()}
+                isFavorite={isCurrentArtistFavorite}
+                onToggleFavorite={() => handleToggleFavoriteArtist(visibleCurrent.artist, visibleCurrent.artworkUrl)}
+                onOpenLyrics={() => setMode("lyrics")}
+                onOpenQueue={() => setMode("queue")}
               />
             ) : null}
 
@@ -519,6 +582,31 @@ export function MusicPlayer() {
               />
             ) : null}
 
+            {mode === "library" ? (
+              <View style={{ gap: tokens.shelfGap }}>
+                <FavoriteArtistsShelf
+                  favorites={favoriteArtists}
+                  tokens={tokens}
+                  onSelectArtist={(artist) => void selectArtist(artist)}
+                  onToggleFavorite={(artist) => handleToggleFavoriteArtist(artist)}
+                />
+                <RecommendedArtistsShelf
+                  recommendations={recommendedArtists}
+                  favorites={favoriteArtists}
+                  tokens={tokens}
+                  onSelectArtist={(artist) => void selectArtist(artist)}
+                  onToggleFavorite={(artist) => handleToggleFavoriteArtist(artist)}
+                />
+                {visibleHistory.length > 0 ? (
+                  <HistoryShelf
+                    history={visibleHistory}
+                    tokens={tokens}
+                    onPlay={(track, list) => void play(track, list)}
+                  />
+                ) : null}
+              </View>
+            ) : null}
+
             {/*
               The error line sits NEXT to the stage, never on its tint: the
               rose is a page-level colour and it needs the page's ground to
@@ -537,11 +625,32 @@ export function MusicPlayer() {
             ) : null}
           </>
         ) : (
-          <View style={{ backgroundColor: tokens.panel, borderRadius: tokens.panelRadius, borderWidth: 1, borderColor: tokens.panelRim, padding: 24, alignItems: "center", gap: 8 }}>
-            <Text style={{ fontSize: 56 }}>🎵</Text>
-            <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "800" }}>Search YouTube Music</Text>
-            <Text style={{ color: tokens.label2, ...TYPOGRAPHY.body, textAlign: "center" }}>Millions of songs, no ads. Sign in to play.</Text>
-          </View>
+          <>
+            {!hasSearched ? (
+              <>
+                <View style={{ backgroundColor: tokens.panel, borderRadius: tokens.panelRadius, borderWidth: 1, borderColor: tokens.panelRim, padding: 24, alignItems: "center", gap: 8 }}>
+                  <Text style={{ fontSize: 56 }}>🎵</Text>
+                  <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "800" }}>Search YouTube Music</Text>
+                  <Text style={{ color: tokens.label2, ...TYPOGRAPHY.body, textAlign: "center" }}>Millions of songs, no ads. Sign in to play.</Text>
+                </View>
+
+                <FavoriteArtistsShelf
+                  favorites={favoriteArtists}
+                  tokens={tokens}
+                  onSelectArtist={(artist) => void selectArtist(artist)}
+                  onToggleFavorite={(artist) => handleToggleFavoriteArtist(artist)}
+                />
+
+                <RecommendedArtistsShelf
+                  recommendations={recommendedArtists}
+                  favorites={favoriteArtists}
+                  tokens={tokens}
+                  onSelectArtist={(artist) => void selectArtist(artist)}
+                  onToggleFavorite={(artist) => handleToggleFavoriteArtist(artist)}
+                />
+              </>
+            ) : null}
+          </>
         )}
 
         {/*
@@ -975,6 +1084,287 @@ function DownloadsTray({
 }
 
 /**
+ * The FAVORITE ARTISTS shelf — the family's saved artists in Apple Music style.
+ *
+ * Artists are displayed with circular avatars, names, and one-tap access to
+ * explore their music or toggle favorite status.
+ */
+function FavoriteArtistsShelf({
+  favorites,
+  tokens,
+  onSelectArtist,
+  onToggleFavorite,
+}: {
+  favorites: FavoriteArtist[];
+  tokens: MusicTokens;
+  onSelectArtist: (artistName: string) => void;
+  onToggleFavorite: (artistName: string) => void;
+}) {
+  return (
+    <View
+      testID="music-favorite-artists-shelf"
+      style={{
+        backgroundColor: tokens.grouped,
+        borderRadius: tokens.panelRadius,
+        borderWidth: 1,
+        borderColor: tokens.panelRim,
+        overflow: "hidden",
+        padding: 16,
+        gap: 12,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
+        <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "700" }}>
+          Favorite Artists
+        </Text>
+        <Text style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>
+          {favorites.length} {favorites.length === 1 ? "artist" : "artists"}
+        </Text>
+      </View>
+
+      {favorites.length === 0 ? (
+        <View style={{ paddingVertical: 18, alignItems: "center", gap: 8 }}>
+          <Text style={{ fontSize: 32 }}>⭐</Text>
+          <Text style={{ color: tokens.label2, ...TYPOGRAPHY.body, textAlign: "center" }}>
+            No favorite artists saved yet. Tap the ★ star while listening to add artists here.
+          </Text>
+        </View>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingVertical: 4 }}>
+          {favorites.map((artist) => {
+            const initial = (artist.name[0] || "?").toUpperCase();
+            return (
+              <View
+                key={artist.name}
+                testID={`music-favorite-artist-item-${artist.name}`}
+                style={{
+                  width: 110,
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Play songs by ${artist.name}`}
+                  onPress={() => onSelectArtist(artist.name)}
+                  style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 36,
+                    backgroundColor: tokens.panel,
+                    borderWidth: 2,
+                    borderColor: tokens.panelRim,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                  }}
+                >
+                  {artist.artworkUrl ? (
+                    <Image
+                      source={{ uri: toHighResArtworkUrl(artist.artworkUrl) ?? artist.artworkUrl }}
+                      style={{ width: 72, height: 72 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={{ color: tokens.label, fontSize: 26, fontWeight: "800" }}>{initial}</Text>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${artist.name}`}
+                  onPress={() => onSelectArtist(artist.name)}
+                  style={{ minHeight: 44, justifyContent: "center" }}
+                >
+                  <Text numberOfLines={1} style={{ color: tokens.label, ...TYPOGRAPHY.body, fontWeight: "700", textAlign: "center" }}>
+                    {artist.name}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${artist.name} from favorites`}
+                  hitSlop={8}
+                  onPress={() => onToggleFavorite(artist.name)}
+                  style={{
+                    minHeight: 44,
+                    minWidth: 44,
+                    paddingHorizontal: 10,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 999,
+                    backgroundColor: mix(tokens.accent, "transparent", 18),
+                  }}
+                >
+                  <Text style={{ color: tokens.accent, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>★ Favorited</Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+/**
+ * The RECOMMENDED ARTISTS shelf — smart suggestions combining recent listening
+ * and curated chart leaders with Apple Music style cards.
+ */
+function RecommendedArtistsShelf({
+  recommendations,
+  favorites,
+  tokens,
+  onSelectArtist,
+  onToggleFavorite,
+}: {
+  recommendations: RecommendedArtist[];
+  favorites: FavoriteArtist[];
+  tokens: MusicTokens;
+  onSelectArtist: (artistName: string) => void;
+  onToggleFavorite: (artistName: string) => void;
+}) {
+  return (
+    <View
+      testID="music-recommended-artists-shelf"
+      style={{
+        backgroundColor: tokens.grouped,
+        borderRadius: tokens.panelRadius,
+        borderWidth: 1,
+        borderColor: tokens.panelRim,
+        overflow: "hidden",
+        padding: 16,
+        gap: 12,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
+        <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "700" }}>
+          Recommended Artists
+        </Text>
+        <Text style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>
+          Apple Music Picks
+        </Text>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingVertical: 4 }}>
+        {recommendations.map((rec) => {
+          const isFav = isFavoriteArtist(favorites, rec.name);
+          const initial = (rec.name[0] || "?").toUpperCase();
+          return (
+            <View
+              key={rec.name}
+              testID={`music-recommended-artist-${rec.name}`}
+              style={{
+                width: 160,
+                backgroundColor: tokens.panel,
+                borderRadius: tokens.panelRadius,
+                borderWidth: 1,
+                borderColor: tokens.panelRim,
+                padding: 14,
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Play ${rec.name}`}
+                onPress={() => onSelectArtist(rec.name)}
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  backgroundColor: mix(tokens.label, "transparent", 10),
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                }}
+              >
+                {rec.artworkUrl ? (
+                  <Image
+                    source={{ uri: toHighResArtworkUrl(rec.artworkUrl) ?? rec.artworkUrl }}
+                    style={{ width: 64, height: 64 }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={{ color: tokens.label, fontSize: 24, fontWeight: "800" }}>{initial}</Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Search ${rec.name}`}
+                onPress={() => onSelectArtist(rec.name)}
+                style={{ alignItems: "center", minHeight: 44, justifyContent: "center" }}
+              >
+                <Text numberOfLines={1} style={{ color: tokens.label, ...TYPOGRAPHY.body, fontWeight: "700", textAlign: "center" }}>
+                  {rec.name}
+                </Text>
+                <Text numberOfLines={1} style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize }}>
+                  {rec.genre}
+                </Text>
+              </Pressable>
+
+              <View
+                style={{
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  borderRadius: 999,
+                  backgroundColor: mix(tokens.label, "transparent", 8),
+                }}
+              >
+                <Text numberOfLines={1} style={{ color: tokens.label2, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+                  {rec.reason}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+                <Pressable
+                  testID={`music-rec-play-${rec.name}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Play ${rec.name}`}
+                  onPress={() => onSelectArtist(rec.name)}
+                  style={{
+                    minHeight: 48,
+                    paddingHorizontal: 14,
+                    borderRadius: 12,
+                    backgroundColor: tokens.accent,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ color: tokens.onAccent, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>Play</Text>
+                </Pressable>
+
+                <Pressable
+                  testID={`music-rec-fav-${rec.name}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={isFav ? `Remove ${rec.name}` : `Favorite ${rec.name}`}
+                  onPress={() => onToggleFavorite(rec.name)}
+                  style={{
+                    minHeight: 48,
+                    minWidth: 48,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: tokens.panelRim,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: isFav ? mix(tokens.accent, "transparent", 20) : tokens.sheet,
+                  }}
+                >
+                  <Text style={{ color: isFav ? tokens.accent : tokens.label, fontSize: 16 }}>
+                    {isFav ? "★" : "☆"}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+/**
  * The RECENTLY PLAYED shelf — the visible history, on the grouped ground.
  *
  * The section ground is `grouped` and the rows sit on a panel inside it, so
@@ -1103,7 +1493,11 @@ function ArtworkLead({
       }}
     >
       {track.artworkUrl ? (
-        <Image source={{ uri: track.artworkUrl }} style={{ width: 120, height: 120 }} resizeMode="cover" />
+        <Image
+          source={{ uri: toHighResArtworkUrl(track.artworkUrl) ?? track.artworkUrl }}
+          style={{ width: 120, height: 120 }}
+          resizeMode="cover"
+        />
       ) : (
         <Text style={{ fontSize: 40 }}>🎵</Text>
       )}
@@ -1137,6 +1531,10 @@ interface StageProps {
   onToggleShuffle: () => void;
   onCycleRepeat: () => void;
   onDownload: () => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
+  onOpenLyrics?: () => void;
+  onOpenQueue?: () => void;
 }
 
 /**
@@ -1159,11 +1557,11 @@ function NowPlayingStage({
   track, tokens, reduceMotion,
   playing, position, duration, repeat, shuffle, downloaded, casting, player, streamFormat,
   onToggle, onNext, onPrevious, onSeek, onToggleShuffle, onCycleRepeat, onDownload,
+  isFavorite = false, onToggleFavorite, onOpenLyrics, onOpenQueue,
 }: StageProps) {
-  // The artwork's crossfade: on a track change it comes up from 0.96 with a
-  // fade, so the cover never SNAPS between tracks. Reduced motion kills it
-  // (the app's authority: AccessibilityInfo.isReduceMotionEnabled, read by
-  // the ThemeProvider).
+  // The artwork's crossfade and play/pause scale dynamics:
+  // On play, cover expands to 1.0. When paused, it shrinks to 0.92
+  // (Apple Music signature dynamic scale).
   const opacity = useSharedValue(1);
   const scale = useSharedValue(1);
 
@@ -1177,11 +1575,10 @@ function NowPlayingStage({
     }
     cancelAnimation(opacity);
     cancelAnimation(scale);
-    opacity.value = 0;
-    scale.value = 0.96;
+    const targetScale = playing ? 1 : 0.92;
     opacity.value = withTiming(1, { duration: STAGE_FADE_MS });
-    scale.value = withTiming(1, { duration: STAGE_FADE_MS });
-  }, [track.id, reduceMotion, opacity, scale]);
+    scale.value = withTiming(targetScale, { duration: STAGE_FADE_MS });
+  }, [track.id, playing, reduceMotion, opacity, scale]);
 
   const artworkStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -1220,6 +1617,31 @@ function NowPlayingStage({
         elevation: 6,
       }}
     >
+      {/* Apple Music sheet grab indicator */}
+      <View
+        style={{
+          width: 38,
+          height: 5,
+          borderRadius: 2.5,
+          backgroundColor: mix(tokens.label, "transparent", 35),
+          alignSelf: "center",
+          marginBottom: 2,
+        }}
+      />
+      <Text
+        style={{
+          color: tokens.label3,
+          fontSize: 12,
+          fontWeight: "700",
+          letterSpacing: 1.2,
+          textTransform: "uppercase",
+          textAlign: "center",
+          marginBottom: 4,
+        }}
+      >
+        Playing from YouTube Music
+      </Text>
+
       {/* The artwork: a soft shadow under a rounded cover. */}
       <Animated.View
         style={[
@@ -1249,24 +1671,45 @@ function NowPlayingStage({
           }}
         >
           {track.artworkUrl ? (
-            <Image source={{ uri: track.artworkUrl }} style={{ width: artworkEdge, height: artworkEdge }} resizeMode="cover" />
+            <Image
+              source={{ uri: toHighResArtworkUrl(track.artworkUrl) ?? track.artworkUrl }}
+              style={{ width: artworkEdge, height: artworkEdge }}
+              resizeMode="cover"
+            />
           ) : (
             <Text style={{ fontSize: 96 }}>🎵</Text>
           )}
         </View>
       </Animated.View>
 
-      <View style={{ alignItems: "center", gap: 4 }}>
-        <Text testID="np-title" numberOfLines={2} style={{ color: tokens.label, ...STAGE_TYPE.title, textAlign: "center" }}>
-          {track.title}
-        </Text>
-        {/*
-          THE ARTIST reads the FULL label token, never a dim tier: the ground
-          here is the glass panel over the tinted artwork, not the page ground,
-          and the dim tier measures ~3.4:1 on it. The hierarchy is carried by
-          the type step and the weight — never by colour (see
-          tests/music-stage-contrast.test.ts).
-        */}
+      <View style={{ alignItems: "center", gap: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 12 }}>
+          <Text testID="np-title" numberOfLines={2} style={{ color: tokens.label, ...STAGE_TYPE.title, textAlign: "center", flexShrink: 1 }}>
+            {track.title}
+          </Text>
+          {onToggleFavorite ? (
+            <Pressable
+              testID="music-favorite-artist"
+              accessibilityRole="button"
+              accessibilityLabel={isFavorite ? `Remove ${track.artist} from favorite artists` : `Save ${track.artist} to favorite artists`}
+              accessibilityState={{ selected: isFavorite }}
+              hitSlop={12}
+              onPress={onToggleFavorite}
+              style={{
+                minWidth: 48,
+                minHeight: 48,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 24,
+                backgroundColor: isFavorite ? mix(tokens.accent, "transparent", 20) : mix(tokens.label, "transparent", 8),
+              }}
+            >
+              <Text style={{ fontSize: 22, color: isFavorite ? tokens.accent : tokens.label }}>
+                {isFavorite ? "★" : "☆"}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
         <Text numberOfLines={1} style={{ color: tokens.label, ...STAGE_TYPE.artist, textAlign: "center" }}>
           {track.artist}
         </Text>
@@ -1361,6 +1804,54 @@ function NowPlayingStage({
 
       {/* Sound control — contextual: receiver amplifier while casting, tablet volume otherwise. */}
       <CastVolume compact player={player} />
+
+      {/* Apple Music Bottom Utility Dock: Lyrics toggle, AirPlay/Cast output, Up Next Queue */}
+      <View
+        testID="np-apple-actions"
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingHorizontal: 16,
+          paddingVertical: 4,
+        }}
+      >
+        <Pressable
+          testID="np-open-lyrics"
+          accessibilityRole="button"
+          accessibilityLabel="Lyrics view"
+          onPress={onOpenLyrics}
+          style={{
+            minWidth: 56,
+            minHeight: 56,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 14,
+            backgroundColor: mix(tokens.label, "transparent", 8),
+          }}
+        >
+          <Text style={{ fontSize: 22, color: tokens.label }}>💬</Text>
+        </Pressable>
+
+        <CastControl track={track} />
+
+        <Pressable
+          testID="np-open-queue"
+          accessibilityRole="button"
+          accessibilityLabel="Queue view"
+          onPress={onOpenQueue}
+          style={{
+            minWidth: 56,
+            minHeight: 56,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 14,
+            backgroundColor: mix(tokens.label, "transparent", 8),
+          }}
+        >
+          <Text style={{ fontSize: 24, color: tokens.label }}>≡</Text>
+        </Pressable>
+      </View>
 
       {/*
         THE DOWNLOAD — the one control outside the pill, on its own row. Its
@@ -1861,7 +2352,7 @@ function ArtworkThumb({
     >
       {track.artworkUrl ? (
         <Image
-          source={{ uri: track.artworkUrl }}
+          source={{ uri: toHighResArtworkUrl(track.artworkUrl) ?? track.artworkUrl }}
           style={{ width: 48, height: 48 }}
           resizeMode="cover"
         />

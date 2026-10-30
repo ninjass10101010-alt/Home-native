@@ -5,9 +5,12 @@ jest.mock("@react-native-async-storage/async-storage", () =>
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   appendHistory,
+  getRecommendedArtists,
   HISTORY_SCHEMA_VERSION,
+  isFavoriteArtist,
   loadDenylist,
   loadDownloads,
+  loadFavoriteArtists,
   loadHistory,
   loadMusicSettings,
   mergeHistory,
@@ -15,6 +18,8 @@ import {
   removeDownloadEntry,
   saveDenylist,
   saveDownloads,
+  saveFavoriteArtists,
+  toggleFavoriteArtist,
   totalDownloadBytes,
   upsertDownload,
 } from "../src/music/library";
@@ -174,5 +179,46 @@ describe("music library", () => {
   it("reads a corrupt deny-list as empty instead of throwing", async () => {
     await AsyncStorage.setItem("music.denylist", "{not json");
     expect(await loadDenylist()).toEqual([]);
+  });
+
+  describe("favorite and recommended artists", () => {
+    it("round-trips favorite artists and filters invalid entries", async () => {
+      expect(await loadFavoriteArtists()).toEqual([]);
+      const list = [{ name: "Taylor Swift", artworkUrl: null, savedAt: 123 }];
+      await saveFavoriteArtists(list);
+      expect(await loadFavoriteArtists()).toEqual(list);
+
+      await AsyncStorage.setItem("music.favorites.artists", JSON.stringify([{ notName: 1 }]));
+      expect(await loadFavoriteArtists()).toEqual([]);
+    });
+
+    it("toggles favorite artists on and off", () => {
+      const initial: any[] = [];
+      const toggled = toggleFavoriteArtist(initial, "Dua Lipa", "https://img/dua.jpg");
+      expect(toggled).toHaveLength(1);
+      expect(toggled[0].name).toBe("Dua Lipa");
+      expect(isFavoriteArtist(toggled, "dua lipa")).toBe(true);
+      expect(isFavoriteArtist(toggled, "Other")).toBe(false);
+
+      const removed = toggleFavoriteArtist(toggled, "Dua Lipa");
+      expect(removed).toHaveLength(0);
+      expect(isFavoriteArtist(removed, "Dua Lipa")).toBe(false);
+    });
+
+    it("generates recommended artists from history and curated leaders", () => {
+      const historyTracks = [
+        { ...track("1"), artist: "Billie Eilish", artworkUrl: "https://img/billie.jpg" },
+        { ...track("2"), artist: "Kendrick Lamar", artworkUrl: null },
+      ];
+      const favorites = [{ name: "Taylor Swift", savedAt: 1 }];
+      const recs = getRecommendedArtists(historyTracks, favorites);
+
+      expect(recs.length).toBeGreaterThan(0);
+      // History artist is recommended first
+      expect(recs[0].name).toBe("Billie Eilish");
+      expect(recs[0].reason).toContain("recent listening");
+      // Favorited artist is excluded from recommendations
+      expect(recs.some((r) => r.name.toLowerCase() === "taylor swift")).toBe(false);
+    });
   });
 });

@@ -4,6 +4,24 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-29 — feat(music): Apple Music iPhone-style player redesign with crisp HD artwork, favorite artists & smart recommendations (`MusicPlayer.tsx`, `artwork.ts`, `library.ts`, `types.ts`).
+  **What changed:**
+  - **APPLE MUSIC IPHONE PLAYER REVERSE-ENGINEERING (`MusicPlayer.tsx`)**:
+    - **Now Playing Sheet Design**: Added Apple Music iOS sheet grab handle indicator (`width: 38, height: 5, borderRadius: 2.5`) and tracked uppercase eyebrow title (`PLAYING FROM YOUTUBE MUSIC`).
+    - **Dynamic Play/Pause Artwork Scaling**: Reverse-engineered Apple Music's signature dynamic cover scale — when actively playing, the album artwork expands to full scale (1.0); when paused, it smoothly and subtly scales down to 0.92 with Reanimated spring/timing animation (and respects `reduceMotion`).
+    - **Apple Music Favorite Star Toggle**: Added Apple Music's signature Favorite Star button (`testID="music-favorite-artist"`) positioned directly on the Now Playing stage beside the song title. Tapping toggles the artist in/out of the user's Favorite Artists library with filled gold/accent star (`★`) and instant feedback.
+    - **Apple Music Scrubber & Time Display**: Scrubber bar with tabular monospace figures, elapsed time on the left and total/remaining time on the right.
+    - **Apple Music Bottom Action Bar**: Added quick-access iOS utility dock under the volume bar with synced lyrics toggle (`💬`, `testID="np-open-lyrics"`), AirPlay / Cast device output selector (`CastControl`), and Up Next queue toggle (`≡`, `testID="np-open-queue"`).
+  - **CRISP HIGH-DEFINITION ARTWORK RESOLUTION (`artwork.ts`)**:
+    - Added `toHighResArtworkUrl(url, size = 1200)` to upgrade default downscaled Google User Content and YouTube Music thumbnails (`=w120-h120`, `=w544-h544`, `=s60`) to crystal-clear 1200x1200 resolution. Upgrades standard YouTube video thumbnails (`hqdefault.jpg` -> `maxresdefault.jpg`) while preserving fallbacks, eliminating blurriness on high-DPI displays.
+    - Applied high-definition resolution across `NowPlayingStage`, `ArtworkLead`, `ArtworkThumb`, and library shelves.
+  - **LIBRARY & FAVORITE ARTISTS (`library.ts`, `types.ts`, `MusicPlayer.tsx`)**:
+    - Persisted `music.favorites.artists` in AsyncStorage with `loadFavoriteArtists`, `saveFavoriteArtists`, `isFavoriteArtist`, and `toggleFavoriteArtist`.
+    - **Favorite Artists Shelf (`testID="music-favorite-artists-shelf"`)**: Displays circular artist avatars with names, favorited badges, and one-tap playback.
+    - **Recommended Artists Shelf (`testID="music-recommended-artists-shelf"`)**: Generates personalized artist recommendations combining recently played history with curated genre hitmakers (Taylor Swift, The Weeknd, Kendrick Lamar, Billie Eilish, Drake, Bad Bunny, SZA, etc.). Cards feature circular avatars, genre badges, recommendation context, and one-tap Play / Favorite buttons.
+    - **Library Mode Navigation**: Added `Library` to the Now Playing mode switcher (`Now Playing`, `Lyrics`, `Queue`, `Library`), and surfaces Favorite Artists, Recommended Artists, and Recently Played when idle.
+  **Tests:** `tests/music-apple-player.test.tsx` (4 tests green), `tests/music-artwork.test.ts` (4 tests green), `tests/music-library.test.ts` (20 tests green), `tests/music-player.test.tsx` (99 tests green). All 25 music test suites (517 tests) green. `npm run tokens:check` CLEAN, `npx tsc --noEmit` CLEAN, `npx expo lint` CLEAN.
+
 - 2026-10-29 — feat(notifications,island): iPhone-style alert card with 5s popup, island minimization & 1-min glow + flush-left avatars (`MusicIsland.tsx`, `notificationFeed.ts`, `notifications.ts`, `HomeWall.tsx`, `MemberRail.tsx`).
   **What changed:**
   - **IPHONE-STYLE NOTIFICATION ALERT LIFECYCLE (`MusicIsland.tsx`, `notificationFeed.ts`, `notifications.ts`)**:

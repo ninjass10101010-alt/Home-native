@@ -1,11 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { DenyEntry, DownloadEntry, MediaTrack, RepeatMode } from "./types";
+import type { DenyEntry, DownloadEntry, FavoriteArtist, MediaTrack, RecommendedArtist, RepeatMode } from "./types";
 
 const DOWNLOADS_KEY = "music.downloads";
 const HISTORY_KEY = "music.history";
 const HISTORY_VERSION_KEY = "music.history.version";
 const SETTINGS_KEY = "music.settings";
 const DENYLIST_KEY = "music.denylist";
+const FAVORITE_ARTISTS_KEY = "music.favorites.artists";
 
 export const HISTORY_LIMIT = 500;
 export const DOWNLOAD_CAP_BYTES = 2 * 1024 * 1024 * 1024;
@@ -177,4 +178,125 @@ export async function loadDenylist(): Promise<DenyEntry[]> {
 
 export function saveDenylist(list: DenyEntry[]): Promise<void> {
   return writeJson(DENYLIST_KEY, list);
+}
+
+/**
+ * Load the family's saved favorite artists from storage.
+ */
+export async function loadFavoriteArtists(): Promise<FavoriteArtist[]> {
+  const list = await readJson<FavoriteArtist[]>(FAVORITE_ARTISTS_KEY, []);
+  return Array.isArray(list)
+    ? list.filter((a) => typeof a?.name === "string" && a.name.trim().length > 0)
+    : [];
+}
+
+/**
+ * Persist the favorite artists list to storage.
+ */
+export function saveFavoriteArtists(list: FavoriteArtist[]): Promise<void> {
+  return writeJson(FAVORITE_ARTISTS_KEY, list);
+}
+
+/**
+ * Test whether an artist is in the favorites list (case-insensitive).
+ */
+export function isFavoriteArtist(list: FavoriteArtist[], artistName: string): boolean {
+  if (!artistName) return false;
+  const target = artistName.trim().toLowerCase();
+  return list.some((a) => a.name.trim().toLowerCase() === target);
+}
+
+/**
+ * Toggle an artist in the favorites list.
+ */
+export function toggleFavoriteArtist(
+  list: FavoriteArtist[],
+  artistName: string,
+  artworkUrl?: string | null
+): FavoriteArtist[] {
+  const trimmed = artistName.trim();
+  if (!trimmed) return list;
+  const target = trimmed.toLowerCase();
+  const exists = list.some((a) => a.name.trim().toLowerCase() === target);
+  if (exists) {
+    return list.filter((a) => a.name.trim().toLowerCase() !== target);
+  }
+  return [{ name: trimmed, artworkUrl: artworkUrl ?? null, savedAt: Date.now() }, ...list];
+}
+
+/**
+ * Hand-curated genre leaders for intelligent discovery recommendations.
+ */
+export const CURATED_ARTISTS: readonly Omit<RecommendedArtist, "reason">[] = [
+  { name: "Taylor Swift", genre: "Pop" },
+  { name: "The Weeknd", genre: "R&B / Pop" },
+  { name: "Kendrick Lamar", genre: "Hip-Hop" },
+  { name: "Billie Eilish", genre: "Alternative" },
+  { name: "Drake", genre: "Hip-Hop / Rap" },
+  { name: "Bad Bunny", genre: "Latin / Urban" },
+  { name: "SZA", genre: "R&B / Soul" },
+  { name: "Ed Sheeran", genre: "Acoustic / Pop" },
+  { name: "Bruno Mars", genre: "Funk / Soul" },
+  { name: "Dua Lipa", genre: "Dance / Pop" },
+  { name: "Post Malone", genre: "Melodic / Pop" },
+  { name: "Coldplay", genre: "Alternative Rock" },
+  { name: "Adele", genre: "Vocal / Soul" },
+  { name: "Queen", genre: "Classic Rock" },
+];
+
+/**
+ * Generate smart artist recommendations combining listening history,
+ * saved favorites, and curated chart leaders.
+ */
+export function getRecommendedArtists(
+  history: MediaTrack[],
+  favorites: FavoriteArtist[]
+): RecommendedArtist[] {
+  const favoriteNames = new Set(favorites.map((f) => f.name.trim().toLowerCase()));
+  const historyArtists = new Map<string, { name: string; artworkUrl: string | null }>();
+
+  // Extract distinct artists from recently played history
+  for (const track of history) {
+    const raw = track.artist.trim();
+    if (!raw) continue;
+    const lower = raw.toLowerCase();
+    if (!favoriteNames.has(lower) && !historyArtists.has(lower)) {
+      historyArtists.set(lower, { name: raw, artworkUrl: track.artworkUrl });
+    }
+  }
+
+  const recommendations: RecommendedArtist[] = [];
+
+  // 1. History-driven recommendations
+  for (const [, { name, artworkUrl }] of historyArtists) {
+    recommendations.push({
+      name,
+      genre: "Recently Played",
+      reason: "Based on your recent listening",
+      artworkUrl,
+    });
+    if (recommendations.length >= 4) break;
+  }
+
+  // 2. Curated genre leaders not yet favorited or listed
+  const seen = new Set<string>([
+    ...favoriteNames,
+    ...recommendations.map((r) => r.name.toLowerCase()),
+  ]);
+
+  for (const item of CURATED_ARTISTS) {
+    const lower = item.name.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      recommendations.push({
+        name: item.name,
+        genre: item.genre,
+        reason: "Featured Artist",
+        artworkUrl: null,
+      });
+    }
+    if (recommendations.length >= 10) break;
+  }
+
+  return recommendations;
 }
