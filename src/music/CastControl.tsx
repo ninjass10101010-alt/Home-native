@@ -101,8 +101,14 @@ export function CastControl({ track }: CastControlProps) {
         onClose={() => setOpen(false)}
         title="Cast"
         testID="cast-modal"
+        style={{
+          maxWidth: 780,
+          width: "92%",
+          padding: 32,
+          borderRadius: 32,
+        }}
       >
-        <View style={{ gap: 12 }}>
+        <View style={{ gap: 16 }}>
           {cast.error ? (
             <Text
               testID="cast-error"
@@ -110,8 +116,8 @@ export function CastControl({ track }: CastControlProps) {
               accessibilityLiveRegion="polite"
               style={{
                 color: colors["color-accent-rose"],
-                fontSize: TYPOGRAPHY.body.fontSize,
-                lineHeight: TYPOGRAPHY.body.lineHeight,
+                fontSize: 18,
+                lineHeight: 26,
               }}
             >
               {cast.error}
@@ -123,8 +129,8 @@ export function CastControl({ track }: CastControlProps) {
               testID="cast-unavailable"
               style={{
                 color: tokens.label2,
-                fontSize: TYPOGRAPHY.body.fontSize,
-                lineHeight: TYPOGRAPHY.body.lineHeight,
+                fontSize: 18,
+                lineHeight: 26,
               }}
             >
               {"Casting isn't available on this device."}
@@ -134,8 +140,8 @@ export function CastControl({ track }: CastControlProps) {
               testID="cast-searching"
               style={{
                 color: tokens.label2,
-                fontSize: TYPOGRAPHY.body.fontSize,
-                lineHeight: TYPOGRAPHY.body.lineHeight,
+                fontSize: 18,
+                lineHeight: 26,
               }}
             >
               Searching for cast devices…
@@ -145,8 +151,8 @@ export function CastControl({ track }: CastControlProps) {
               testID="cast-empty"
               style={{
                 color: tokens.label2,
-                fontSize: TYPOGRAPHY.body.fontSize,
-                lineHeight: TYPOGRAPHY.body.lineHeight,
+                fontSize: 18,
+                lineHeight: 26,
               }}
             >
               No cast devices found.
@@ -164,27 +170,39 @@ export function CastControl({ track }: CastControlProps) {
                   disabled={busy}
                   onPress={() => void pick(device.id)}
                   style={{
-                    minHeight: 64,
-                    paddingHorizontal: 16,
+                    minHeight: 76,
+                    paddingHorizontal: 22,
                     flexDirection: "row",
                     alignItems: "center",
-                    gap: 12,
-                    borderRadius: 14,
+                    gap: 16,
+                    borderRadius: 18,
                     borderWidth: 1,
                     borderColor: tokens.panelRim,
                     backgroundColor: tokens.sheet,
                   }}
                 >
+                  <Text style={{ fontSize: 22 }}>{connected ? "🔊" : "📺"}</Text>
                   <Text
                     numberOfLines={1}
-                    style={{ flex: 1, color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize }}
+                    style={{ flex: 1, color: tokens.label, fontSize: 20, fontWeight: "600" }}
                   >
                     {device.name}
                   </Text>
                   {connected ? (
-                    <Text style={{ color: tokens.label2, fontSize: TYPOGRAPHY.label.fontSize }}>
-                      Connected
-                    </Text>
+                    <View
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 999,
+                        backgroundColor: tokens.scrim,
+                        borderWidth: 1,
+                        borderColor: tokens.panelRim,
+                      }}
+                    >
+                      <Text style={{ color: tokens.label, fontSize: 16, fontWeight: "600" }}>
+                        Connected
+                      </Text>
+                    </View>
                   ) : null}
                 </Pressable>
               );
@@ -202,17 +220,17 @@ export function CastControl({ track }: CastControlProps) {
               disabled={busy}
               onPress={() => void stop()}
               style={{
-                minHeight: 64,
-                paddingHorizontal: 20,
+                minHeight: 76,
+                paddingHorizontal: 24,
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: 14,
+                borderRadius: 18,
                 borderWidth: 1,
                 borderColor: tokens.panelRim,
                 backgroundColor: tokens.scrim,
               }}
             >
-              <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+              <Text style={{ color: tokens.label, fontSize: 20, fontWeight: "700" }}>
                 Stop casting
               </Text>
             </Pressable>

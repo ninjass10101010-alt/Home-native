@@ -106,12 +106,12 @@ export function CastVolume({ compact = false, player = null }: CastVolumeProps) 
       };
 
   const muteStyle = {
-    minHeight: 64,
-    minWidth: 64,
-    paddingHorizontal: 20,
+    minHeight: compact ? 64 : 76,
+    minWidth: compact ? 64 : 76,
+    paddingHorizontal: compact ? 20 : 24,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    borderRadius: 14,
+    borderRadius: compact ? 14 : 18,
     borderWidth: 1,
     borderColor: tokens.panelRim,
     backgroundColor: compact ? tokens.scrim : tokens.sheet,
@@ -135,7 +135,7 @@ export function CastVolume({ compact = false, player = null }: CastVolumeProps) 
       onPress={() => void flipMute()}
       style={muteStyle}
     >
-      <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+      <Text style={{ color: tokens.label, fontSize: compact ? TYPOGRAPHY.body.fontSize : 18, fontWeight: "700" }}>
         {volume.muted ? "Unmute" : "Mute"}
       </Text>
     </Pressable>
@@ -147,18 +147,18 @@ export function CastVolume({ compact = false, player = null }: CastVolumeProps) 
       style={
         compact
           ? { flexDirection: "row", alignItems: "center", gap: 12 }
-          : { gap: 12 }
+          : { gap: 16, marginTop: 4 }
       }
     >
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: 12,
+          gap: 14,
           flex: compact ? 1 : undefined,
         }}
       >
-        <Text style={{ fontSize: 16 }}>
+        <Text style={{ fontSize: compact ? 16 : 22 }}>
           {volume.muted ? "🔇" : percent === 0 ? "🔈" : percent < 50 ? "🔉" : "🔊"}
         </Text>
         <View
@@ -187,12 +187,12 @@ export function CastVolume({ compact = false, player = null }: CastVolumeProps) 
           // modal body). Without this the scroll takes the gesture and a drag
           // scrolls the panel instead of moving the volume.
           {...BLOCK_NATIVE_RESPONDER}
-          style={{ flex: 1, height: 64, justifyContent: "center" }}
+          style={{ flex: 1, height: compact ? 64 : 72, justifyContent: "center" }}
         >
           <View
             style={{
-              height: TRACK_HEIGHT,
-              borderRadius: TRACK_HEIGHT / 2,
+              height: compact ? TRACK_HEIGHT : 12,
+              borderRadius: (compact ? TRACK_HEIGHT : 12) / 2,
               borderWidth: 1,
               borderColor: tokens.panelRim,
               backgroundColor: tokens.scrim,
@@ -203,7 +203,7 @@ export function CastVolume({ compact = false, player = null }: CastVolumeProps) 
               style={{
                 width: `${percent}%`,
                 height: "100%",
-                borderRadius: TRACK_HEIGHT / 2,
+                borderRadius: (compact ? TRACK_HEIGHT : 12) / 2,
                 backgroundColor: volume.muted ? tokens.label3 : tokens.accent,
               }}
             />
@@ -212,12 +212,12 @@ export function CastVolume({ compact = false, player = null }: CastVolumeProps) 
             pointerEvents="none"
             style={{
               position: "absolute",
-              top: (64 - KNOB_SIZE) / 2,
+              top: ((compact ? 64 : 72) - (compact ? KNOB_SIZE : 24)) / 2,
               left: `${percent}%`,
-              marginLeft: -KNOB_SIZE / 2,
-              width: KNOB_SIZE,
-              height: KNOB_SIZE,
-              borderRadius: KNOB_SIZE / 2,
+              marginLeft: -(compact ? KNOB_SIZE : 24) / 2,
+              width: compact ? KNOB_SIZE : 24,
+              height: compact ? KNOB_SIZE : 24,
+              borderRadius: (compact ? KNOB_SIZE : 24) / 2,
               backgroundColor: tokens.label,
               borderWidth: 1,
               borderColor: tokens.panelRim,
@@ -228,10 +228,10 @@ export function CastVolume({ compact = false, player = null }: CastVolumeProps) 
           testID={ids.percent}
           accessibilityLabel={`Volume ${percent} percent`}
           style={{
-            minWidth: 52,
+            minWidth: compact ? 52 : 60,
             textAlign: "right",
             color: tokens.label,
-            fontSize: TYPOGRAPHY.body.fontSize,
+            fontSize: compact ? TYPOGRAPHY.body.fontSize : 20,
             fontWeight: "700",
           }}
         >

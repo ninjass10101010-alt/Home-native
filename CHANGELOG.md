@@ -4,6 +4,22 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-30 — feat(music,weather): expand Cast modal sizing for wall tablet and re-enable weather-only ambient motion (`CastControl.tsx`, `CastVolume.tsx`, `useAmbient.tsx`).
+  **What changed:**
+  - **Cast Modal Sizing (`src/music/CastControl.tsx`, `src/music/CastVolume.tsx`)**:
+    - Overrode the default narrow modal constraint (`maxWidth: 640`) by passing `style={{ maxWidth: 780, width: "92%", padding: 32, borderRadius: 32 }}` to `<Modal>` for spacious viewing on the wall tablet.
+    - Expanded device rows from 64dp to 76dp (`minHeight: 76`, `paddingHorizontal: 22`, `borderRadius: 18`, `gap: 16`), increased device title from 16px body to 20px semi-bold (`fontSize: 20, fontWeight: "600"`), added distinct receiver glyphs (`🔊`/`📺`), and formatted connection status as a styled badge pill.
+    - Expanded "Stop casting" button to 76dp with 20px bold font (`fontSize: 20, fontWeight: "700"`).
+    - In `CastVolume.tsx`, expanded sheet mute button to 76dp, volume emoji to 22px, percentage text to 20px, and knob slider to 24dp for comfortable standing-height finger control.
+  - **Weather-Only Ambient Motion (`src/weather/useAmbient.tsx`)**:
+    - Removed `IS_ANDROID` suppression from weather ambient loops (`AmbientBob`, `AmbientCloudDrift`, `AmbientEyePulse`, `AmbientMonsterIdle`, `AmbientVaneSway`).
+    - Weather monster animations (cloud drift, eye blinks, idle breathing, vane sway) now run when `reduceMotion` is false.
+    - Kept Android motion suppression on `widgetIconMotion.tsx` (the 10 widget icons) and `AnimatedEmoji.tsx` (emoji bouncing loops) intact to protect the UI thread event queue and prevent ANRs.
+  **Verification:**
+  - `npx jest tests/music-cast-control.test.tsx tests/weather/hero.test.tsx`: all 29 tests passed.
+  - `npm run tokens:check`: CLEAN.
+  - `npm run typecheck`: CLEAN (0 errors).
+
 - 2026-10-30 — fix(sync,home): prevent soft server projection lag (`reconciled: false`) from triggering false "Showing your saved copy — couldn't refresh." banners (`SyncManager.tsx`, `LeaderboardWidget.tsx`, `CalendarPage.tsx`, `sync.test.tsx`).
   **What changed:**
   - **`reconcileLag` Isolation in `SyncManager` (`src/state/SyncManager.tsx`)**:
