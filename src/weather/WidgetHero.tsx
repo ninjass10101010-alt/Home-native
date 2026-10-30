@@ -633,6 +633,7 @@ export function WeatherHeroCell({ span = 1 }: { span?: WallSpan }) {
   return (
     <WidgetFrame
       id="weather"
+      guestVisible
       icon="⛅"
       title="Weather"
       // The reference poster is full-bleed: no title band (identity lives in

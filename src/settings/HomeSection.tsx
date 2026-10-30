@@ -388,6 +388,7 @@ export function HomeSection() {
             const trial = { ...layout, spans: { ...layout.spans, [id]: span === 1 ? 2 : 1 } };
             const trialCells = layoutCells(trial);
             const blocked = trialCells.used > WALL_CELLS;
+            const cannotShow = hidden && cells.free < span;
             return (
               <View
                 key={id}
@@ -413,6 +414,10 @@ export function HomeSection() {
                     <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
                       {span === 1 ? "Bigger needs a free cell" : "Smaller frees a cell"}
                     </Text>
+                  ) : cannotShow ? (
+                    <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                      {`Needs ${span} free ${span === 1 ? "cell" : "cells"} to show`}
+                    </Text>
                   ) : null}
                 </View>
                 <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
@@ -423,7 +428,7 @@ export function HomeSection() {
                       label={option.label}
                       tone={span === option.span ? "accent" : "neutral"}
                       selected={span === option.span}
-                      disabled={hidden || (option.span !== span && blocked)}
+                      disabled={!hidden && option.span !== span && blocked}
                       onPress={() => setSpan(id, option.span)}
                     />
                   ))}
@@ -431,6 +436,7 @@ export function HomeSection() {
                 <Toggle
                   testID={`wall-layout-visible-${id}`}
                   value={!hidden}
+                  disabled={cannotShow}
                   onChange={(on) => setHidden(id, !on)}
                   accessibilityLabel={`Show ${widgetLabel(id)} on the wall`}
                 />

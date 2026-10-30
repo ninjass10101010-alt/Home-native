@@ -1,4 +1,7 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { moonPhase, moonPhaseName, nextMoonEvents } from "./astro";
+
+export const WEATHER_STORAGE_KEY = "consuela-weather-cache";
 
 /** Home-ai weather_location service registry defaults (web parity). */
 export const PLACE = { label: "Holland, MI", lat: 42.7875, lon: -86.1089 };
@@ -127,15 +130,32 @@ export async function fetchWeather(): Promise<WeatherSnapshot> {
     `?latitude=${PLACE.lat}&longitude=${PLACE.lon}` +
     "&current=us_aqi,pm2_5,pm10&timezone=auto";
 
-  const [forecast, air] = await Promise.all([
-    fetch(forecastUrl, { signal: AbortSignal.timeout(12_000) }).then((r) => {
-      if (!r.ok) throw new Error(`weather service ${r.status}`);
-      return r.json();
-    }),
-    fetch(airUrl, { signal: AbortSignal.timeout(12_000) })
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null),
-  ]);
+  let forecast: any = null;
+  let air: any = null;
+  try {
+    [forecast, air] = await Promise.all([
+      fetch(forecastUrl, { signal: AbortSignal.timeout(12_000) }).then((r) => {
+        if (!r.ok) throw new Error(`weather service ${r.status}`);
+        return r.json();
+      }),
+      fetch(airUrl, { signal: AbortSignal.timeout(12_000) })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]);
+  } catch (err) {
+    try {
+      const cached = await AsyncStorage.getItem(WEATHER_STORAGE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed.tempF === "number") {
+          return parsed as WeatherSnapshot;
+        }
+      }
+    } catch {
+      // ignore cache read failure
+    }
+    throw err;
+  }
 
   const c = forecast?.current;
   const d = forecast?.daily;
@@ -182,7 +202,7 @@ export async function fetchWeather(): Promise<WeatherSnapshot> {
   const { phase, illumination, waxing } = moonPhase(nowMs);
   const nextEvents = nextMoonEvents(nowMs);
 
-  return {
+  const snapshot: WeatherSnapshot = {
     place: PLACE.label,
     tempF: toFiniteRounded(c.temperature_2m),
     feelsLikeF: toFiniteRounded(c.apparent_temperature),
@@ -209,4 +229,6 @@ export async function fetchWeather(): Promise<WeatherSnapshot> {
     humidityPct: toFiniteRounded(c.relative_humidity_2m),
     precipTodayPct: toFiniteRounded(d?.precipitation_probability_max?.[0]),
   };
+  void AsyncStorage.setItem(WEATHER_STORAGE_KEY, JSON.stringify(snapshot)).catch(() => {});
+  return snapshot;
 }

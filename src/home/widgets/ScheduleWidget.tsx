@@ -69,7 +69,7 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
     };
   }, [data, now, nowMinutes, colors, cyan, accentColor]);
 
-  const maxVisible = span === 2 ? 4 : 2;
+  const maxVisible = span === 2 ? 6 : 2;
   const visibleRoutines = upcomingRoutines.slice(0, maxVisible);
   const remainingCount = upcomingRoutines.length - visibleRoutines.length;
 
@@ -81,6 +81,7 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
   return (
     <WidgetFrame
       id="schedule"
+      guestVisible
       icon="🕐"
       title="Daily Schedule"
       description={countLabel}

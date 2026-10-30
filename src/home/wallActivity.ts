@@ -104,6 +104,9 @@ export function scoreWidgets(stats: WallStats): Map<WidgetId, WidgetActivity> {
   // Leaderboard: motivational but not urgent
   scores.set("leaderboard", { id: "leaderboard", score: 30, settled: true });
 
+  // Daily schedule: routines and timeline
+  scores.set("schedule", { id: "schedule", score: 40, settled: true });
+
   // Music: has dynamic island now, card is lower priority
   scores.set("music", { id: "music", score: 25, settled: true });
 
@@ -142,6 +145,9 @@ export function hasMoreContent(id: WidgetId, stats: WallStats): boolean {
       return stats.plannedDays !== null && stats.plannedDays >= 2;
     case "weather":
       // Weather has a rich 5-day forecast row directly on the card
+      return true;
+    case "schedule":
+      // Daily schedule with timeline and routines
       return true;
     default:
       // Other widgets (music, briefing, leaderboard, home controls) are compact 1-cell cards

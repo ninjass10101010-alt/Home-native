@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
 import { StyleSheet, Text } from "react-native";
-import { render } from "@testing-library/react-native";
+import { render, waitFor } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
+import { AuthProvider } from "../src/state/AuthProvider";
 import { WidgetFrame, HEADER_BAND_H, pendingSurface } from "../src/home/widgets/WidgetFrame";
 import { READ_COPY, READ_COPY_STALE } from "../src/home/widgets/data";
 import { HOME_WIDGET_ICON_PALETTES, HOME_WIDGET_ICON_VARIANTS, MATERIALS } from "../src/theme/materials";
@@ -165,6 +166,22 @@ describe("WidgetFrame state machine (U13.8/U13.10) — never a blank cell, never
     );
     expect(getByTestId("wf-error")).toBeTruthy();
     expect(getByText(new RegExp(READ_COPY.error.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))).toBeTruthy();
+  });
+
+  it("signed-out session does NOT override an error with a PIN gate for guestVisible widgets", async () => {
+    const signedOutWrap = ({ children }: { children: React.ReactNode }) => (
+      <AuthProvider>
+        <ThemeProvider>{children}</ThemeProvider>
+      </AuthProvider>
+    );
+    const { getByText, queryByText } = render(
+      <Frame guestVisible status="error" failure="error" hasData={false} />,
+      { wrapper: signedOutWrap }
+    );
+    await waitFor(() => {
+      expect(getByText(new RegExp(READ_COPY.error.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))).toBeTruthy();
+    });
+    expect(queryByText(new RegExp(READ_COPY.unauthorised.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))).toBeNull();
   });
 
   it("loading stays the skeleton when there is no failure", () => {

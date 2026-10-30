@@ -4,6 +4,23 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-30 — fix(home,weather,schedule): unlock Weather widget when signed out, cache weather offline, and enable 2-cell span for Daily Schedule (`WidgetFrame.tsx`, `WidgetHero.tsx`, `data.ts`, `HomeSection.tsx`, `ScheduleWidget.tsx`, `wallActivity.ts`).
+  **What changed:**
+  - **Weather Widget Unlock & Persistence (`WidgetFrame.tsx`, `WidgetHero.tsx`, `data.ts`)**:
+    - Identified root cause of locked Weather card: `WidgetFrame` was overriding any failure when signed out (`hydrated && !member`) to `"unauthorised"`, rendering "Sign in with your PIN to see the family's data" on network timeouts or delayed Wi-Fi connections.
+    - Added `guestVisible?: boolean` to `WidgetFrameProps` and ensured public/guest-visible widgets (`guestVisible`, `weather`, `schedule`) never force `"unauthorised"` when signed out.
+    - Added AsyncStorage caching (`WEATHER_STORAGE_KEY`) to `src/weather/data.ts` to cache successful weather snapshots. On network failure or boot delays, `fetchWeather()` transparently recovers the last-known snapshot, keeping the full-bleed weather card visible and honestly stale-badged.
+  - **Daily Schedule 2-Cell Span (`ScheduleWidget.tsx`, `HomeSection.tsx`, `wallActivity.ts`)**:
+    - In `ScheduleWidget.tsx`, expanded routine display budget from 4 to 6 items when `span === 2` (`maxVisible = span === 2 ? 6 : 2`), filling the 2-cell card cleanly without leaving large vertical gaps.
+    - In `HomeSection.tsx`, unlocked size chip selection (`1 cell` / `2 cells`) even while a widget is hidden (`disabled={!hidden && option.span !== span && blocked}`), allowing the user to configure Daily Schedule to 2 cells before making room and unhiding it.
+    - Added clear helpful hint text (`Needs N free cells to show`) and guarded visibility toggle when unhiding a widget would exceed the fixed 12-cell wall board.
+    - In `wallActivity.ts`, added scoring (score 40) and `hasMoreContent: true` for `schedule` so dynamic activity layouts support expanding Daily Schedule to 2 cells when room allows.
+  **Verification:**
+  - `npx jest tests/widget-frame.test.tsx tests/weather/data.test.ts tests/schedule-widget.test.tsx tests/wall-activity.test.ts tests/wall-layout.test.tsx tests/widgets-data.test.tsx tests/tasks-widget-guest.test.tsx`: all 7 suites passed (102 tests).
+  - `npm run tokens:check`: CLEAN.
+  - `npx tsc --noEmit`: CLEAN.
+  - `npx expo lint`: CLEAN (0 errors, 0 warnings).
+
 - 2026-10-30 — feat(home,calendar): unlock Calendar and This Week's Leaderboard widgets when signed out (`TodayEventsWidget.tsx`, `CalendarPage.tsx`, `LeaderboardWidget.tsx`, `TasksPage.tsx`).
   **What changed:**
   - **Today's Events / Calendar Widget (`TodayEventsWidget.tsx`)**:

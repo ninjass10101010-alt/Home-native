@@ -203,6 +203,8 @@ export interface WidgetFrameProps {
   headerRight?: React.ReactNode;
   /** Force the identity disc even when a `header` override is passed. */
   showDisc?: boolean;
+  /** When true, widget is public/guest-visible and never overrides errors with PIN gates. */
+  guestVisible?: boolean;
   children: React.ReactNode;
 }
 
@@ -236,6 +238,7 @@ export function WidgetFrame({
   header,
   headerRight,
   showDisc = false,
+  guestVisible = false,
   children,
 }: WidgetFrameProps) {
   const { colors, theme, accentColor, reduceMotion } = useTheme();
@@ -418,9 +421,11 @@ export function WidgetFrame({
   //    status "ready" and render their own honest empty state as children.
   const failed = !hasData && (failure !== null || status === "error");
   if (failed) {
-    // A signed-out session must never claim a network fault / couldn't-load
-    // error. Gate on signed-out FIRST, ahead of READ_COPY[shown].
-    const shown: ReadFailure = signedOut ? "unauthorised" : (failure ?? "error");
+    // Only session-gated widgets gate on signed-out with a PIN prompt when they fail.
+    // Public / guest-visible widgets (e.g. Weather, Schedule) never claim
+    // unauthorised when signed out.
+    const isPublic = guestVisible || id === "weather" || id === "schedule";
+    const shown: ReadFailure = (!isPublic && signedOut) ? "unauthorised" : (failure ?? "error");
     // Semantic pill tone: hard errors read rose; the guest PIN gate and
     // connectivity failures read amber (web ReadStatePill parity).
     const pillTone = shown === "error" ? rose : amber;

@@ -193,4 +193,15 @@ describe("wall layout — v1 resets once and v2 customizations persist", () => {
     expect(accepted).toBe(false);
     expect(result.current.layout).toEqual(DEFAULT_WALL_LAYOUT);
   });
+
+  it("allows schedule to have span 2 when room is available", () => {
+    // Hide currentMeal and leaderboard to free 2 cells:
+    // photos (2) + weather (2) + todayEvents (2) + tasks (2) + morningBriefing (1) + music (1) = 10 cells
+    // schedule with span 2 = 12 cells
+    const custom = L({ schedule: 2 }, ["currentMeal", "leaderboard", "homeSecurity", "homeClimate", "homeLights"]);
+    expect(layoutFits(custom)).toBe(true);
+    expect(layoutCells(custom)).toEqual({ used: 12, free: 0 });
+    expect(layoutSpan(custom, "schedule")).toBe(2);
+    expect(normalizeWallLayout(custom)).toEqual(custom);
+  });
 });

@@ -160,6 +160,10 @@ describe("wallActivity — hasMoreContent", () => {
     expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 2 })).toBe(true);
     expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 10 })).toBe(true);
   });
+
+  it("treats schedule as having more content for 2-cell expansion", () => {
+    expect(hasMoreContent("schedule", QUIET_STATS)).toBe(true);
+  });
 });
 
 describe("wallActivity — activityOrder", () => {

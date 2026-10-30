@@ -1,5 +1,11 @@
-import { aqiCategory, fetchWeather, PLACE, type WeatherSnapshot } from "../../src/weather/data";
+/* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factory */
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { aqiCategory, fetchWeather, PLACE, WEATHER_STORAGE_KEY, type WeatherSnapshot } from "../../src/weather/data";
 import { FORECAST_PAYLOAD, mockWeatherFetch } from "./fixtures";
+
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
 
 describe("aqiCategory (EPA bands)", () => {
   it("pins the boundaries", () => {
@@ -18,6 +24,10 @@ describe("aqiCategory (EPA bands)", () => {
 });
 
 describe("fetchWeather (honest mapping)", () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+  });
+
   afterEach(() => {
     (global.fetch as unknown as jest.Mock)?.mockRestore?.();
   });
@@ -71,5 +81,21 @@ describe("fetchWeather (honest mapping)", () => {
     jest.spyOn(global, "fetch").mockImplementation(mockWeatherFetch() as never);
     const s = await fetchWeather();
     expect(s.outlook).toMatch(/^Rain likely around \d+ (AM|PM)/);
+  });
+
+  it("falls back to cached snapshot when network fetch fails", async () => {
+    jest.spyOn(global, "fetch").mockImplementation(mockWeatherFetch() as never);
+    const s = await fetchWeather();
+    expect(s.tempF).toBe(63);
+
+    // Verify it was stored in AsyncStorage
+    const stored = await AsyncStorage.getItem(WEATHER_STORAGE_KEY);
+    expect(stored).toBeTruthy();
+
+    // Now make network reject
+    jest.spyOn(global, "fetch").mockImplementation(() => Promise.reject(new Error("Network failed")));
+    const fallback = await fetchWeather();
+    expect(fallback.tempF).toBe(63);
+    expect(fallback.place).toBe(PLACE.label);
   });
 });

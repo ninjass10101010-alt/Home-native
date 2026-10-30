@@ -102,4 +102,24 @@ describe("ScheduleWidget", () => {
     expect(await findByText("All done")).toBeTruthy();
     expect(await findByText("All routines completed for today.")).toBeTruthy();
   });
+
+  it("renders up to 6 routines when span is 2 (bigger widget)", async () => {
+    const sixSchedules = Array.from({ length: 6 }, (_, i) => ({
+      id: `sched_${i}`,
+      title: `Routine ${i + 1}`,
+      time: "23:59",
+      days: "mon,tue,wed,thu,fri,sat,sun",
+      icon: "⏰",
+      color: "cyan",
+    }));
+
+    jest.spyOn(client, "api").mockResolvedValue({ items: sixSchedules } as any);
+
+    const { findByText, findByTestId } = render(<ScheduleWidget span={2} />, { wrapper: wrap });
+    expect(await findByText("Daily Schedule")).toBeTruthy();
+    for (let i = 0; i < 6; i++) {
+      expect(await findByText(`Routine ${i + 1}`)).toBeTruthy();
+      expect(await findByTestId(`schedule-row-s_sched_${i}`)).toBeTruthy();
+    }
+  });
 });
