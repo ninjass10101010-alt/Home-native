@@ -1631,7 +1631,7 @@ function NowPlayingStage({
       <Text
         style={{
           color: tokens.label3,
-          fontSize: 12,
+          fontSize: 14,
           fontWeight: "700",
           letterSpacing: 1.2,
           textTransform: "uppercase",

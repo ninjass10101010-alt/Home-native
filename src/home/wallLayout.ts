@@ -119,15 +119,22 @@ function persistLayout(layout: WallLayout): void {
   ).catch(() => {});
 }
 
+let memoryCachedLayout: WallLayout | null = null;
+
+export function _resetWallLayoutMemoryForTest(): void {
+  memoryCachedLayout = null;
+}
+
 export function resetWallLayout(): WallLayout {
   const layout = cloneDefaultLayout();
+  memoryCachedLayout = layout;
   persistLayout(layout);
   return layout;
 }
 
 export function useWallLayout() {
   const [layout, setLayoutState] = useState<WallLayout>(
-    () => cloneDefaultLayout(),
+    () => memoryCachedLayout ?? cloneDefaultLayout(),
   );
 
   useEffect(() => {
@@ -142,14 +149,22 @@ export function useWallLayout() {
           parsed = null;
         }
         const normalized = normalizeWallLayout(parsed);
-        setLayoutState(normalized);
+        memoryCachedLayout = normalized;
+        setLayoutState((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(normalized)) return prev;
+          return normalized;
+        });
         const serialized = JSON.stringify(normalized);
         if (raw !== serialized) persistLayout(normalized);
       })
       .catch(() => {
         if (cancelled) return;
         const fallback = cloneDefaultLayout();
-        setLayoutState(fallback);
+        memoryCachedLayout = fallback;
+        setLayoutState((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(fallback)) return prev;
+          return fallback;
+        });
       });
     return () => {
       cancelled = true;
@@ -159,6 +174,7 @@ export function useWallLayout() {
   const setLayout = useCallback((next: WallLayout): boolean => {
     const repaired = repairLayout(next);
     if (!repaired) return false;
+    memoryCachedLayout = repaired;
     setLayoutState(repaired);
     persistLayout(repaired);
     return true;

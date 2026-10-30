@@ -26,7 +26,7 @@
  * frame, two contradictory claims.
  */
 
-import { useEffect, useReducer } from "react";
+import { useSyncExternalStore } from "react";
 
 /** One cell of the wall's week strip: a weekday, its date, and whether the
  *  family planned anything for it. */
@@ -67,9 +67,34 @@ const INITIAL: WallStats = {
 let stats: WallStats = INITIAL;
 const listeners = new Set<() => void>();
 
+function areStatsEqual(curr: WallStats, next: Partial<WallStats>): boolean {
+  for (const k of Object.keys(next) as (keyof WallStats)[]) {
+    if (k === "weekCells") {
+      const a = curr.weekCells;
+      const b = next.weekCells;
+      if (a === b) continue;
+      if (!a || !b || a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        if (
+          a[i].date !== b[i].date ||
+          a[i].planned !== b[i].planned ||
+          a[i].isToday !== b[i].isToday ||
+          a[i].label !== b[i].label
+        ) {
+          return false;
+        }
+      }
+    } else if (curr[k] !== next[k]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** Merge a widget's freshly-read truth into the band. Late publishers win;
  *  a widget that unmounts simply stops updating its slice. */
 export function publishWallStats(next: Partial<WallStats>): void {
+  if (areStatsEqual(stats, next)) return;
   stats = { ...stats, ...next };
   for (const listener of [...listeners]) listener();
 }
@@ -95,20 +120,21 @@ export function publishWallStatsUnknown(slice: "eventsToday" | "openTasks" | "pl
   publishWallStats(slice === "openTasks" ? { openTasks: null, openTasksStale: false } : { [slice]: null });
 }
 
-/** Subscribe to the band. Reading during render is safe: the module state is
- *  replaced (never mutated) on every publish, and the reducer re-render is
- *  what makes the new object visible. */
-export function useWallStats(): WallStats {
-  const [, bump] = useReducer((c: number) => c + 1, 0);
-  useEffect(() => {
-    const listener = () => bump();
-    listeners.add(listener);
-    listener(); // a publish between first render and this effect must not be lost
-    return () => {
-      listeners.delete(listener);
-    };
-  }, []);
+function subscribeWallStats(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function getWallStatsSnapshot(): WallStats {
   return stats;
+}
+
+/** Subscribe to the band using React's useSyncExternalStore for tear-free,
+ *  zero-unnecessary-rerender consumption of the module store. */
+export function useWallStats(): WallStats {
+  return useSyncExternalStore(subscribeWallStats, getWallStatsSnapshot);
 }
 
 /** Test/route-teardown hook: drop every slice back to "not answered yet". */

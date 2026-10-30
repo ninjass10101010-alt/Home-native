@@ -4,6 +4,25 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-30 — fix(home): eliminate infinite wallStats oscillation loop & constant dashboard refreshing (`wall-stats.ts`, `TasksWidget.tsx`, `wallLayout.ts`, `Home-ai/src/app/page.tsx`).
+  **What caused the refreshing loop:**
+  - **TasksWidget Loading Ping-Pong**: On initial mount and on every remount, `guestRead.chores` starts as `null` while `/api/tasks/family` fetches. TasksWidget's sync effect published `publishWallStatsUnknown("openTasks")` immediately during loading (`chores === null`). When the fetch completed, it published `openTasks: 15`.
+  - **Dynamic Spans & Column Re-Packing**: The transition from `openTasks: null` to `15` triggered `dynamicSpans` (expanding tasks span from 1 to 2) and `activityOrder` (moving tasks from column 1 to column 0). Because React Native renders each wall column inside its own parent `<View key={`col-${ci}`}>`, moving a card between columns destroyed the old component tree and mounted a fresh instance. The new instance started with `chores: null`, immediately published `openTasks: null`, shrunk back to span 1 and moved back to column 1, which unmounted and mounted it again — creating a rapid 1.4s render/unmount ping-pong that consumed 172% CPU and locked Tasks in a permanent loading skeleton.
+  - **Wall Stats & Layout Mount Re-renders**: `publishWallStats` had no shallow equality check (re-broadcasting even unchanged numbers), and `useWallStats` used an artificial mount listener run. `useWallLayout` unconditionally called `setLayoutState(normalized)` after an async read on every mount.
+  - **Home-ai 1-Second Clock Timer**: `Home-ai/src/app/page.tsx` was running `setInterval(..., 1000)` re-rendering the full 1224-line Next.js dashboard page every 1s just to update minutes.
+  **What changed:**
+  - **`TasksWidget.tsx`**: In the sync `useEffect`, only publish `publishWallStatsUnknown("openTasks")` on actual failure (`guestRead.failure !== null` or `syncError !== null`). While loading (`chores === null && failure === null`), preserve previous stats and never publish `null`.
+  - **`wall-stats.ts`**: Added `areStatsEqual(curr, next)` shallow equality check so duplicate publishes are dropped without triggering listeners. Modernized `useWallStats()` to use React's `useSyncExternalStore(subscribeWallStats, getWallStatsSnapshot)`, eliminating artificial mount re-renders.
+  - **`wallLayout.ts`**: Added in-memory layout cache `memoryCachedLayout` and equality check in `setLayoutState` to prevent async layout flicker on mount.
+  - **`Home-ai/src/app/page.tsx`**: Relaxed the dashboard clock timer from 1000ms to 30,000ms (30s).
+  - **`MusicPlayer.tsx`**: Bumped sub-floor 12sp eyebrow text to 14sp to satisfy the 14sp type floor.
+  **Verification:**
+  - Tested on physical ApoloSign tablet: CPU dropped from 172% to ~0-10% idle, `topSvgLayout` dropped bursts completely ceased (0 occurrences), `uiautomator dump` succeeds instantly without timing out, and Tasks widget stably renders all 15 tasks without flashing skeletons.
+  - `npx jest tests/wall-stats.test.ts tests/wall-activity.test.ts tests/wall-layout.test.tsx tests/home-wall.test.tsx tests/tasks-widget-guest.test.tsx`: 5 suites passed (67 tests).
+  - `npm run a11y:audit && npm run paint:audit`: CLEAN.
+  - `npm run tokens:check`: CLEAN.
+  - `npx tsc --noEmit && npx expo lint`: CLEAN.
+
 - 2026-10-29 — feat(music): Apple Music iPhone-style player redesign with crisp HD artwork, favorite artists & smart recommendations (`MusicPlayer.tsx`, `artwork.ts`, `library.ts`, `types.ts`).
   **What changed:**
   - **APPLE MUSIC IPHONE PLAYER REVERSE-ENGINEERING (`MusicPlayer.tsx`)**:

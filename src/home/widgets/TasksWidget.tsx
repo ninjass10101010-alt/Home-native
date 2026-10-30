@@ -231,14 +231,14 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
     if (guest) {
       if (guestRead.chores !== null) {
         publishWallStats({ openTasks: guestPending.length, openTasksStale: false });
-      } else {
+      } else if (guestRead.failure !== null) {
         publishWallStatsUnknown("openTasks");
       }
       return;
     }
     if (hasData) publishWallStats({ openTasks: pending.length, openTasksStale: syncStale });
-    else publishWallStatsUnknown("openTasks");
-  }, [guest, guestRead.chores, guestPending.length, hasData, syncStale, pending.length]);
+    else if (syncError !== null) publishWallStatsUnknown("openTasks");
+  }, [guest, guestRead.chores, guestPending.length, guestRead.failure, hasData, syncStale, pending.length, syncError]);
 
   return (
     <WidgetFrame
