@@ -4,6 +4,30 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-30 — feat(home,calendar): unlock Calendar and This Week's Leaderboard widgets when signed out (`TodayEventsWidget.tsx`, `CalendarPage.tsx`, `LeaderboardWidget.tsx`, `TasksPage.tsx`).
+  **What changed:**
+  - **Today's Events / Calendar Widget (`TodayEventsWidget.tsx`)**:
+    - Removed the signed-out guest gate that forced Google Calendar into a PIN-gated error state (`googleFailure = "unauthorised"`).
+    - Unlocked both Family DB events (`/api/db/events`) and Google Calendar events (`/api/google-calendar`) for signed-out / guest viewing on the wall.
+    - Updated event count calculation (`countKnown`) and staleness tracking so guests see full event counts and event rows without a PIN lock pill.
+  - **Calendar Page (`CalendarPage.tsx`)**:
+    - Enabled `useWidgetData` guest execution with `{ guestVisible: true }`.
+    - Removed the guest PIN lock status line ("Sign in with your PIN to see the family's calendar.") and allowed the day event count to display accurately for guests.
+    - Preserved honest error states (`status === "error" && data === null`) while loading and displaying schedule, family, and Google events for everyone.
+  - **This Week's Leaderboard Widget (`LeaderboardWidget.tsx`)**:
+    - Removed the guest PIN gate state (`GUEST_LEADERBOARD = "Sign in with your PIN"`).
+    - Added a public guest lane that queries `/api/db/week_data` when no live session snapshot is in memory, computing weekly points and ranks from current week rows.
+    - Preserved roster-first photo avatar resolution via `readCachedMembers()` fallback when rendered on HomeWall.
+    - Unlocked "See all →" for everyone, linking to `/tasks` leaderboard.
+    - Renders the honest empty-state ("Be the first! New week — prizes up for grabs") when no one has scored yet, instead of a locked PIN gate.
+  - **Tasks Page Leaderboard Tab (`TasksPage.tsx`)**:
+    - Added guest fallback fetch to `/api/db/week_data` when the Leaderboard tab is opened without a session snapshot, ensuring weekly champion and race standings render for everyone.
+  **Verification:**
+  - `npx jest tests/today-events-widget.test.tsx tests/calendar-page.test.tsx tests/ha-leaderboard.test.tsx tests/tasks-page.test.tsx`: 4 test suites passed (102 tests).
+  - `npm run tokens:check`: CLEAN.
+  - `npx tsc --noEmit`: CLEAN.
+  - `npx expo lint`: CLEAN (0 errors, 0 warnings).
+
 - 2026-10-30 — fix(home): eliminate infinite wallStats oscillation loop & constant dashboard refreshing (`wall-stats.ts`, `TasksWidget.tsx`, `wallLayout.ts`, `Home-ai/src/app/page.tsx`).
   **What caused the refreshing loop:**
   - **TasksWidget Loading Ping-Pong**: On initial mount and on every remount, `guestRead.chores` starts as `null` while `/api/tasks/family` fetches. TasksWidget's sync effect published `publishWallStatsUnknown("openTasks")` immediately during loading (`chores === null`). When the fetch completed, it published `openTasks: 15`.

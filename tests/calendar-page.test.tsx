@@ -320,11 +320,12 @@ describe("CalendarPage — agenda view", () => {
 });
 
 describe("CalendarPage — states", () => {
-  it("guest gate: honest PIN copy, no doomed fetches", async () => {
+  it("signed out: loads calendar events for everyone without PIN gate", async () => {
     mockMember = null;
-    const { findByText } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
-    expect(await findByText("Sign in with your PIN to see the family's calendar.")).toBeTruthy();
-    expect(api).not.toHaveBeenCalled();
+    fullRoute();
+    const { findByText, queryByText } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
+    expect(await findByText("Piano lesson")).toBeTruthy();
+    expect(queryByText("Sign in with your PIN to see the family's calendar.")).toBeNull();
   });
 
   it("stale badge when the sync layer reports staleness", async () => {

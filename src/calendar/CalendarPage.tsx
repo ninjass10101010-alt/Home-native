@@ -50,7 +50,6 @@ import { addDaysISO, localDateISO, monthGridCells, selectedWeekISO } from "./dat
  * - Agenda/Schedule tab: 7-day grouped timeline with quiet days omitted
  */
 
-const GUEST_COPY = "Sign in with your PIN to see the family's calendar.";
 const LOADING_COPY = "Loading the family's calendar…";
 const READONLY_COPY = "Adding events from the wall arrives with the next wave — ask a parent on the phone.";
 const GOOGLE_PILL_CONNECTED = "Google Calendar isn't connected.";
@@ -157,10 +156,10 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     }
 
     return { dbEvents, googleRows, schedules, googleFailure, schedulesFailure };
-  });
+  }, { guestVisible: true });
 
   const stale = dataStale || syncStale;
-  const pageFailed = !!member && status === "error" && data === null;
+  const pageFailed = status === "error" && data === null;
   const dbEvents = useMemo(() => {
     const server = Array.isArray(data?.dbEvents) ? data.dbEvents : [];
     if (optimisticRows.length === 0) return server;
@@ -530,30 +529,15 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                 fontWeight: "700",
               }}
             >
-              {!member
-                ? "Nothing else today"
-                : selectedEventCount > 0
-                  ? `${selectedEventCount} ${selectedEventCount === 1 ? "event" : "events"}`
-                  : "Nothing else today"}
+              {selectedEventCount > 0
+                ? `${selectedEventCount} ${selectedEventCount === 1 ? "event" : "events"}`
+                : "Nothing else today"}
             </Text>
           </View>
         </Material>
 
         {/* Status line directly under Hero card */}
-        {!member ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors["color-accent-amber"] }} />
-            <Text
-              style={{
-                color: colors["color-accent-amber"] ?? colors["color-text-secondary"],
-                fontSize: TYPOGRAPHY.label.fontSize,
-                fontWeight: "600",
-              }}
-            >
-              {GUEST_COPY}
-            </Text>
-          </View>
-        ) : failure && failure !== "not_connected" ? (
+        {failure && failure !== "not_connected" ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4 }}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors["color-accent-amber"] }} />
             <Text
@@ -697,7 +681,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
           onChange={(id) => setView(id as "week" | "agenda")}
         />
 
-        {status === "loading" && member && !data ? (
+        {status === "loading" && !data ? (
           <View testID="calendar-loading" accessibilityLabel={LOADING_COPY} style={{ gap: 12 }}>
             {[0, 1, 2].map((i) => (
               <View key={i} style={{ height: 64, borderRadius: 20, backgroundColor: colors["color-surface-2"] }} />

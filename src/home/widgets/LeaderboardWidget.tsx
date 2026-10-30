@@ -1,6 +1,9 @@
 import React from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { api } from "../../api/client";
+import { readCachedMembers } from "../../api/members";
+import type { DbListEnvelope } from "../../api/types";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
@@ -8,7 +11,7 @@ import { mix } from "../../theme/mix";
 import { useSync, type WeekData } from "../../state/SyncManager";
 import { displayEmoji } from "../../tasks/claim";
 import { isPhotoUri } from "../../ui/MemberRail";
-import { weekStartMondayISO } from "./data";
+import { classifyFailure, weekStartMondayISO, type ReadFailure } from "./data";
 import { WidgetFrame } from "./WidgetFrame";
 import { AnimatedEmoji } from "../../ui/AnimatedEmoji";
 import { EmptyState } from "../../ui/EmptyState";
@@ -16,14 +19,6 @@ import type { WallSpan } from "../widgets";
 
 const EMPTY_LEADERBOARD = "Be the first!";
 const EMPTY_PRIZES = "New week — prizes up for grabs 🥇🥈🥉";
-/**
- * The signed-out wall. The race needs a session (/api/tasks/sync is
- * server-auth), so the card says so — it never pretends the week is empty
- * and it never fakes a podium. It keeps the reference's empty-state SHAPE
- * (crown → a bold line → the prizes line) so the tile reads as a state
- * instead of a hole in the wall.
- */
-const GUEST_LEADERBOARD = "Sign in with your PIN";
 const VISIBLE_RANKS = 3;
 
 /**
@@ -108,27 +103,102 @@ export function LeaderboardWidget({
   const { colors, accentColor } = useTheme();
   const router = useRouter();
   const { member, hydrated } = useAuth();
-  const { snapshot, stale: syncStale, syncError, refreshNow } = useSync();
+  const { snapshot, stale: syncStale, syncError, refreshNow, onPulse } = useSync();
 
-  const weekData = snapshot?.weekData as WeekData | undefined;
+  const isGuest = hydrated && !member;
+  const snapshotWeek = snapshot?.weekData as WeekData | undefined;
+
+  // Guest lane: fetch public week_data if no snapshot is available
+  const [guestWeek, setGuestWeek] = React.useState<{
+    data: WeekData | null;
+    failure: ReadFailure | null;
+    status: "loading" | "ready" | "error";
+  }>({
+    data: null,
+    failure: null,
+    status: "loading",
+  });
+  const guestAliveRef = React.useRef(true);
+  const guestRequestRef = React.useRef(0);
+
+  React.useEffect(() => {
+    guestAliveRef.current = true;
+    return () => {
+      guestAliveRef.current = false;
+    };
+  }, []);
+
+  const readGuestWeek = React.useCallback(async () => {
+    const requestId = guestRequestRef.current + 1;
+    guestRequestRef.current = requestId;
+    try {
+      const res = await api<DbListEnvelope<{ weekStart: string; points: Record<string, number> }>>("/api/db/week_data");
+      if (!guestAliveRef.current || guestRequestRef.current !== requestId) return;
+      const items = Array.isArray(res?.items) ? res.items : [];
+      const monday = weekStartMondayISO();
+      const current = items.find((r) => r.weekStart === monday) ?? items[0];
+      const parsed: WeekData = current
+        ? { weekStart: current.weekStart, points: current.points ?? {}, streak: {}, lastActive: {} }
+        : { weekStart: monday, points: {}, streak: {}, lastActive: {} };
+      setGuestWeek({ data: parsed, failure: null, status: "ready" });
+    } catch (e) {
+      if (!guestAliveRef.current || guestRequestRef.current !== requestId) return;
+      setGuestWeek((prev) => ({
+        data: prev.data,
+        failure: classifyFailure(e),
+        status: prev.data ? "ready" : "error",
+      }));
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!hydrated || !isGuest || snapshotWeek) return;
+    void readGuestWeek();
+  }, [hydrated, isGuest, snapshotWeek, readGuestWeek]);
+
+  React.useEffect(() => {
+    if (!isGuest || snapshotWeek) return;
+    return onPulse(() => {
+      void readGuestWeek();
+    });
+  }, [isGuest, snapshotWeek, onPulse, readGuestWeek]);
+
+  const weekData = snapshotWeek ?? (isGuest ? guestWeek.data ?? undefined : undefined);
   const ranked = rankWeek(weekData);
   const visibleLimit = span === 2 ? 5 : VISIBLE_RANKS;
+
+  const [rosterMembers, setRosterMembers] = React.useState<LeaderboardMember[]>(members);
+  React.useEffect(() => {
+    if (members.length > 0) {
+      setRosterMembers(members);
+      return;
+    }
+    let alive = true;
+    void readCachedMembers().then((cached) => {
+      if (!alive) return;
+      if (cached.length > 0) {
+        setRosterMembers(cached.map((c) => ({ name: c.name, emoji: c.emoji })));
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [members]);
 
   // Roster row by first name (the rail's matching convention)
   const memberFor = (fullName: string): LeaderboardMember | undefined => {
     const first = fullName.split(" ")[0].toLowerCase();
-    return members.find((m) => m.name.split(" ")[0].toLowerCase() === first);
+    return rosterMembers.find((m) => m.name.split(" ")[0].toLowerCase() === first);
   };
 
-  // Guest model: /api/tasks/sync requires a live session (server-auth), so a
-  // signed-out fetch can only 401 — guests get the PIN gate WITHOUT a doomed
-  // poll (the web keeps the same rule: no signed-out gateway polling).
-  const guest = hydrated && !member;
-  const hasData = !guest && !!weekData;
-  // U5.1 taxonomy: "unreachable" is the family's connection; "server" is the
-  // NAS answering and failing — an error, not offline.
-  const failure = guest
-    ? null
+  const hasData = isGuest
+    ? (snapshotWeek ? true : guestWeek.data !== null)
+    : !!snapshotWeek;
+
+  const failure: ReadFailure | null = isGuest
+    ? snapshotWeek
+      ? null
+      : guestWeek.failure
     : syncError === "unreachable"
       ? "offline"
       : syncError === "unauthorized"
@@ -136,13 +206,22 @@ export function LeaderboardWidget({
         : syncError === "server"
           ? "error"
           : null;
-  const status = guest
-    ? "ready"
+
+  const status: "loading" | "ready" | "error" = isGuest
+    ? snapshotWeek
+      ? "ready"
+      : guestWeek.status
     : syncError !== null && !hasData
       ? "error"
       : hasData
         ? "ready"
         : "loading";
+
+  const isStale = isGuest
+    ? (snapshotWeek ? syncStale : guestWeek.failure !== null && guestWeek.data !== null)
+    : syncStale;
+
+  const onRetry = isGuest && !snapshotWeek ? () => void readGuestWeek() : refreshNow;
 
   /**
    * The reference's heading: ONE line, LEFT-aligned, starting immediately to
@@ -179,20 +258,18 @@ export function LeaderboardWidget({
       >
         This Week&apos;s Leaderboard
       </Text>
-      {!guest ? (
-        <Pressable
-          testID="leaderboard-see-all"
-          accessibilityRole="link"
-          accessibilityLabel="Open leaderboard in tasks"
-          hitSlop={{ top: 18, bottom: 18, left: 12, right: 12 }}
-          onPress={() => router.push("/tasks" as never)}
-          style={{ paddingHorizontal: 6, paddingVertical: 4 }}
-        >
-          <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
-            See all →
-          </Text>
-        </Pressable>
-      ) : null}
+      <Pressable
+        testID="leaderboard-see-all"
+        accessibilityRole="link"
+        accessibilityLabel="Open leaderboard in tasks"
+        hitSlop={{ top: 18, bottom: 18, left: 12, right: 12 }}
+        onPress={() => router.push("/tasks" as never)}
+        style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+      >
+        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+          See all →
+        </Text>
+      </Pressable>
     </View>
   );
 
@@ -206,12 +283,10 @@ export function LeaderboardWidget({
       status={status}
       failure={failure}
       hasData={hasData}
-      stale={!guest && syncStale}
-      onRetry={refreshNow}
+      stale={isStale}
+      onRetry={onRetry}
     >
-      {guest ? (
-        <RaceState title={GUEST_LEADERBOARD} />
-      ) : hasData ? (
+      {hasData ? (
         ranked.length === 0 ? (
           // The reference's empty week: crown + the prizes line, NO countdown.
           <RaceState title={EMPTY_LEADERBOARD} />

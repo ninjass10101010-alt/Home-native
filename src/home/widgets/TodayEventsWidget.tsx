@@ -231,13 +231,9 @@ export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
     }
 
     // Google: a failure here degrades to an honest pill, not a widget failure.
+    // Unlocked for everyone (including signed-out wall).
     let google: WallEvent[] = [];
     let googleFailure: ReadFailure | null = null;
-    if (guest) {
-      // The Google lane IS session-gated: the guest gets the PIN-gated pill
-      // with Try again and ZERO doomed fetches (reference guest capture).
-      googleFailure = "unauthorised";
-    } else
     try {
       const res = await api<{ ok?: boolean; connected?: boolean; events?: GoogleEventRow[] }>("/api/google-calendar");
       // Body fields win over status: ok:false means the read is not truth;
@@ -301,8 +297,7 @@ export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
       : "Events on the family calendar";
   const daylineTone = colors["color-accent-selected"] ?? colors[FAMILY_RAIL_TOKEN];
 
-  const googleKnown =
-    !googleFailure || googleFailure === "not_connected" || (guest && googleFailure === "unauthorised");
+  const googleKnown = !googleFailure || googleFailure === "not_connected";
   const countKnown = Boolean(data?.familyAnswered && googleKnown);
 
   // The wall's KPI band reads THIS widget's count (src/home/wall-stats.ts) —
@@ -327,7 +322,7 @@ export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
       status={status}
       failure={failure}
       hasData={data !== null}
-      stale={stale || Boolean(googleFailure && googleFailure !== "not_connected" && !(guest && googleFailure === "unauthorised"))}
+      stale={stale || Boolean(googleFailure && googleFailure !== "not_connected")}
       onRetry={retry}
     >
       <View style={{ flex: 1 }}>

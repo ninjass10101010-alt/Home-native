@@ -336,23 +336,21 @@ describe("TodayEventsWidget — the visible-row budget follows the wall span", (
   });
 });
 
-describe("TodayEventsWidget — guest split (reference capture: family live, Google gated)", () => {
-  it("a signed-out wall reads FAMILY events live and gates ONLY the Google pill", async () => {
+describe("TodayEventsWidget — guest / signed-out wall (unlocked calendar)", () => {
+  it("a signed-out wall reads both FAMILY and GOOGLE events live without PIN gate", async () => {
     mockMember = null;
     route({
       "/api/db/events": { items: [{ id: "e1", title: "Piano lesson", date: localTodayISO(), time: "17:30", member: "Aurora", icon: "🎹" }] },
+      "/api/google-calendar": googleOk([{ google_id: "g1", summary: "Soccer practice", start_iso: `${today}T15:00:00`, all_day: false, calendar_id: "primary" }]),
     });
-    const { findByText, queryByText } = render(<TodayEventsWidget />, { wrapper: wrap });
-    // family rows render live (the db-gateway read is public)
+    const { findByText, queryByText, queryByTestId } = render(<TodayEventsWidget />, { wrapper: wrap });
+    // both family and Google rows render live
     expect(await findByText("Piano lesson")).toBeTruthy();
-    expect(await findByText("1 event on the family calendar")).toBeTruthy();
-    // only the Google lane is PIN-gated — with the reference's exact pill copy
-    expect(
-      await findByText("🔒 Google Calendar: Sign in with your PIN to see the family's data.")
-    ).toBeTruthy();
-    // zero doomed Google fetches for a guest
-    expect(api.mock.calls.filter((c) => String(c[0]).startsWith("/api/google-calendar")).length).toBe(0);
-    expect(queryByText("Sign in with your PIN to see the family's data.")).toBeNull();
+    expect(await findByText("Soccer practice")).toBeTruthy();
+    expect(await findByText("2 events on the family calendar")).toBeTruthy();
+    // no PIN gate on Google Calendar
+    expect(queryByTestId("todayEvents-google-pill")).toBeNull();
+    expect(queryByText(/Sign in with your PIN/)).toBeNull();
   });
 });
 

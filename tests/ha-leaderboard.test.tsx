@@ -25,8 +25,9 @@ jest.mock("expo-router", () => ({
   usePathname: () => "/",
 }));
 
+let mockMember: any = { id: "p1", role: "parent" };
 jest.mock("../src/state/AuthProvider", () => ({
-  useAuth: () => ({ member: { id: "p1", role: "parent" }, role: "parent", hydrated: true, signOut: jest.fn(), poke: jest.fn() }),
+  useAuth: () => ({ member: mockMember, role: mockMember ? mockMember.role : null, hydrated: true, signOut: jest.fn(), poke: jest.fn() }),
 }));
 
 jest.mock("../src/api/client", () => ({
@@ -171,6 +172,7 @@ describe("Leaderboard (shared snapshot — no widget fetch)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     api.mockReset();
+    mockMember = { id: "p1", role: "parent" };
     mockSnapshot = null;
     mockStale = false;
     mockSyncError = null;
@@ -208,6 +210,44 @@ describe("Leaderboard (shared snapshot — no widget fetch)", () => {
     const { getByText, queryByText } = render(<LeaderboardWidget />, { wrapper: wrap });
     expect(getByText(/Couldn't load this right now/)).toBeTruthy();
     expect(queryByText(/Offline/)).toBeNull();
+  });
+
+  it("signed-out wall: loads week_data from /api/db/week_data and displays podium for everyone", async () => {
+    mockMember = null;
+    mockSnapshot = null;
+    api.mockImplementation((path: string) => {
+      if (path.startsWith("/api/db/week_data")) {
+        return Promise.resolve({
+          items: [{ weekStart: "2026-10-26", points: { "Aurora": 25, "Emily": 18, "Bailey": 10 } }],
+        });
+      }
+      return Promise.resolve({ items: [] });
+    });
+    const { findByText, getByText, queryByText } = render(<LeaderboardWidget />, { wrapper: wrap });
+    expect(await findByText(/🥇 Aurora/)).toBeTruthy();
+    expect(getByText("25 pts")).toBeTruthy();
+    expect(getByText(/🥈 Emily/)).toBeTruthy();
+    expect(getByText("18 pts")).toBeTruthy();
+    expect(getByText(/🥉 Bailey/)).toBeTruthy();
+    expect(getByText("10 pts")).toBeTruthy();
+    expect(getByText("See all →")).toBeTruthy();
+    expect(queryByText(/Sign in with your PIN/)).toBeNull();
+  });
+
+  it("signed-out wall: empty week_data -> 'Be the first!' (never PIN gate)", async () => {
+    mockMember = null;
+    mockSnapshot = null;
+    api.mockImplementation((path: string) => {
+      if (path.startsWith("/api/db/week_data")) {
+        return Promise.resolve({
+          items: [{ weekStart: "2026-10-26", points: {} }],
+        });
+      }
+      return Promise.resolve({ items: [] });
+    });
+    const { findByText, queryByText } = render(<LeaderboardWidget />, { wrapper: wrap });
+    expect(await findByText("Be the first!")).toBeTruthy();
+    expect(queryByText(/Sign in with your PIN/)).toBeNull();
   });
 });
 

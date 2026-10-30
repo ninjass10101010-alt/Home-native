@@ -21,7 +21,7 @@ import { EmptyState } from "../ui/EmptyState";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { useToast } from "../ui/Toast";
 import { SignedOutBanner } from "../ui/SignedOutBanner";
-import { localTodayISO } from "../home/widgets/data";
+import { localTodayISO, weekStartMondayISO } from "../home/widgets/data";
 import {
   memberScoped,
   openBoard,
@@ -633,6 +633,7 @@ export function TasksPage() {
   } | null>(null);
 
   const [prizes, setPrizes] = useState<any[]>([]);
+  const [guestWeekData, setGuestWeekData] = useState<WeekData | null>(null);
 
   React.useEffect(() => {
     if (activeTab !== "leaderboard") return;
@@ -643,10 +644,25 @@ export function TasksPage() {
     void fetchDbCollection("weekly_prizes").then((res) => {
       if (alive && Array.isArray(res)) setPrizes(res);
     });
+    if (!snapshot?.weekData) {
+      void fetchDbCollection("week_data").then((items) => {
+        if (!alive || !Array.isArray(items)) return;
+        const monday = weekStartMondayISO();
+        const current = items.find((r) => r.weekStart === monday) ?? items[0];
+        if (current) {
+          setGuestWeekData({
+            weekStart: current.weekStart,
+            points: current.points ?? {},
+            streak: {},
+            lastActive: {},
+          });
+        }
+      });
+    }
     return () => {
       alive = false;
     };
-  }, [activeTab]);
+  }, [activeTab, snapshot?.weekData]);
 
   const [cachedRoster, setCachedRoster] = useState<{ name: string; emoji: string; color?: string }[]>([]);
   React.useEffect(() => {
@@ -727,7 +743,7 @@ export function TasksPage() {
   const waitingRows = completedWaiting(scoped);
   const historyRows = completedHistory(scoped);
   const weekGroups = completedByWeek(scoped);
-  const ranked = rankWeek(weekData);
+  const ranked = rankWeek(weekData ?? guestWeekData ?? undefined);
 
   // Honest sync states (web syncRead parity): SyncManager only stamps
   // lastSyncAt AFTER a successful read, so a LAN-down/503 leaves it null with
