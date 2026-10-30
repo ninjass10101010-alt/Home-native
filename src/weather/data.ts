@@ -117,7 +117,138 @@ function deriveOutlookInfo(hourly: any, condition: string, nowMs: number): strin
  * Forecast failure REJECTS (the widget shows the honest failure card);
  * air failure degrades to `air: null` (only the AQI card degrades).
  */
-export async function fetchWeather(): Promise<WeatherSnapshot> {
+function fetchWithTimeout(url: string, timeoutMs = 12_000, headers?: Record<string, string>): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  return fetch(url, { signal: ctrl.signal, headers }).finally(() => clearTimeout(timer));
+}
+
+function forecastToWmoCode(text: string): number {
+  const lower = text.toLowerCase();
+  if (lower.includes("thunder")) return 95;
+  if (lower.includes("snow")) return 71;
+  if (lower.includes("rain") || lower.includes("shower") || lower.includes("drizzle")) return 61;
+  if (lower.includes("fog")) return 45;
+  if (lower.includes("overcast") || lower.includes("cloudy")) return lower.includes("partly") ? 2 : 3;
+  if (lower.includes("sunny") || lower.includes("clear")) return lower.includes("mostly") ? 1 : 0;
+  return 1;
+}
+
+export async function fetchNwsWeather(): Promise<WeatherSnapshot> {
+  const headers = { "User-Agent": "ConsuelaDashboard/1.0 (contact@garcia.family)" };
+  const [hourlyRes, dailyRes] = await Promise.all([
+    fetchWithTimeout("https://api.weather.gov/gridpoints/GRR/27,38/forecast/hourly", 10_000, headers).then((r) => {
+      if (!r.ok) throw new Error(`NWS hourly ${r.status}`);
+      return r.json();
+    }),
+    fetchWithTimeout("https://api.weather.gov/gridpoints/GRR/27,38/forecast", 10_000, headers).then((r) => {
+      if (!r.ok) throw new Error(`NWS daily ${r.status}`);
+      return r.json();
+    }),
+  ]);
+
+  const hourlyPeriods = Array.isArray(hourlyRes?.properties?.periods) ? hourlyRes.properties.periods : [];
+  const dailyPeriods = Array.isArray(dailyRes?.properties?.periods) ? dailyRes.properties.periods : [];
+  if (hourlyPeriods.length === 0) throw new Error("NWS hourly missing");
+
+  const cur = hourlyPeriods[0];
+  const nowMs = Date.now();
+
+  const hours: HourCell[] = [];
+  for (let i = 0; i < Math.min(24, hourlyPeriods.length); i++) {
+    const p = hourlyPeriods[i];
+    const h = new Date(p.startTime).getHours();
+    const hour12 = h % 12 === 0 ? 12 : h % 12;
+    hours.push({
+      label: `${hour12} ${h >= 12 ? "PM" : "AM"}`,
+      tempF: Math.round(p.temperature),
+      precipPct: typeof p.probabilityOfPrecipitation?.value === "number" ? Math.round(p.probabilityOfPrecipitation.value) : 0,
+      precipIn: null,
+      isDay: Boolean(p.isDaytime),
+    });
+  }
+
+  const daysByDate = new Map<string, { label: string; high: number | null; low: number | null; code: number }>();
+  for (const p of dailyPeriods) {
+    const dStr = p.startTime ? String(p.startTime).slice(0, 10) : "";
+    if (!dStr) continue;
+    let entry = daysByDate.get(dStr);
+    if (!entry) {
+      const dObj = new Date(`${dStr}T12:00:00`);
+      entry = {
+        label: dObj.toLocaleDateString("en-US", { weekday: "short" }),
+        high: null,
+        low: null,
+        code: forecastToWmoCode(p.shortForecast ?? ""),
+      };
+      daysByDate.set(dStr, entry);
+    }
+    if (p.isDaytime) {
+      entry.high = typeof p.temperature === "number" ? Math.round(p.temperature) : entry.high;
+    } else {
+      entry.low = typeof p.temperature === "number" ? Math.round(p.temperature) : entry.low;
+    }
+  }
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayEntry = daysByDate.get(todayIso);
+  const days: DayCell[] = [];
+  for (const [dateKey, val] of daysByDate.entries()) {
+    if (dateKey <= todayIso) continue;
+    if (days.length >= 5) break;
+    days.push({
+      key: dateKey,
+      label: val.label,
+      highF: val.high,
+      lowF: val.low,
+      code: val.code,
+    });
+  }
+
+  const code = forecastToWmoCode(cur.shortForecast ?? "");
+  const condition = cur.shortForecast || "Clear sky";
+  const { phase, illumination, waxing } = moonPhase(nowMs);
+  const nextEvents = nextMoonEvents(nowMs);
+
+  let windSpeed = 0;
+  if (typeof cur.windSpeed === "string") {
+    const match = cur.windSpeed.match(/\d+/);
+    if (match) windSpeed = parseInt(match[0], 10);
+  }
+
+  const snapshot: WeatherSnapshot = {
+    place: PLACE.label,
+    tempF: Math.round(cur.temperature),
+    feelsLikeF: Math.round(cur.temperature),
+    highF: todayEntry?.high ?? Math.round(cur.temperature),
+    lowF: todayEntry?.low ?? null,
+    condition,
+    code,
+    isDay: Boolean(cur.isDaytime),
+    updatedAt: nowMs,
+    hours,
+    days,
+    air: null,
+    moon: {
+      phaseName: moonPhaseName(phase),
+      illuminationPct: Math.round(illumination * 100),
+      waxing,
+      nextFullISO: nextEvents.nextFullISO,
+      nextNewISO: nextEvents.nextNewISO,
+    },
+    outlook: cur.shortForecast ? `${cur.shortForecast} today` : null,
+    uvIndex: null,
+    windMph: windSpeed,
+    windDirDeg: null,
+    humidityPct: typeof cur.relativeHumidity?.value === "number" ? Math.round(cur.relativeHumidity.value) : null,
+    precipTodayPct: typeof cur.probabilityOfPrecipitation?.value === "number" ? Math.round(cur.probabilityOfPrecipitation.value) : 0,
+  };
+
+  void AsyncStorage.setItem(WEATHER_STORAGE_KEY, JSON.stringify(snapshot)).catch(() => {});
+  return snapshot;
+}
+
+export async function fetchOpenMeteoWeather(): Promise<WeatherSnapshot> {
   const forecastUrl =
     "https://api.open-meteo.com/v1/forecast" +
     `?latitude=${PLACE.lat}&longitude=${PLACE.lon}` +
@@ -130,32 +261,15 @@ export async function fetchWeather(): Promise<WeatherSnapshot> {
     `?latitude=${PLACE.lat}&longitude=${PLACE.lon}` +
     "&current=us_aqi,pm2_5,pm10&timezone=auto";
 
-  let forecast: any = null;
-  let air: any = null;
-  try {
-    [forecast, air] = await Promise.all([
-      fetch(forecastUrl, { signal: AbortSignal.timeout(12_000) }).then((r) => {
-        if (!r.ok) throw new Error(`weather service ${r.status}`);
-        return r.json();
-      }),
-      fetch(airUrl, { signal: AbortSignal.timeout(12_000) })
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null),
-    ]);
-  } catch (err) {
-    try {
-      const cached = await AsyncStorage.getItem(WEATHER_STORAGE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && typeof parsed.tempF === "number") {
-          return parsed as WeatherSnapshot;
-        }
-      }
-    } catch {
-      // ignore cache read failure
-    }
-    throw err;
-  }
+  const [forecast, air] = await Promise.all([
+    fetchWithTimeout(forecastUrl).then((r) => {
+      if (!r.ok) throw new Error(`weather service ${r.status}`);
+      return r.json();
+    }),
+    fetchWithTimeout(airUrl)
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+  ]);
 
   const c = forecast?.current;
   const d = forecast?.daily;
@@ -231,4 +345,30 @@ export async function fetchWeather(): Promise<WeatherSnapshot> {
   };
   void AsyncStorage.setItem(WEATHER_STORAGE_KEY, JSON.stringify(snapshot)).catch(() => {});
   return snapshot;
+}
+
+export async function fetchWeather(): Promise<WeatherSnapshot> {
+  try {
+    return await fetchOpenMeteoWeather();
+  } catch (err: any) {
+    if (err?.message === "weather service malformed") {
+      throw err;
+    }
+    try {
+      return await fetchNwsWeather();
+    } catch {
+      try {
+        const cached = await AsyncStorage.getItem(WEATHER_STORAGE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && typeof parsed.tempF === "number") {
+            return parsed as WeatherSnapshot;
+          }
+        }
+      } catch {
+        // ignore cache read failure
+      }
+      throw err;
+    }
+  }
 }

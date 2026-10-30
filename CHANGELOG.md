@@ -4,6 +4,23 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-30 — fix(weather): add NOAA / NWS dual-provider fallback and Hermes timeout fix (`src/weather/data.ts`).
+  **What changed:**
+  - **Open-Meteo Rate Limiting & Dual-Provider Resilience**:
+    - Identified root cause of tablet weather showing `⚠️ Weather: Couldn't load this right now`: Open-Meteo returned `HTTP 429 Too Many Requests: Daily API request limit exceeded` on the household IP (caused by earlier render oscillation before it was patched).
+    - In React Native Hermes, `AbortSignal.timeout(12000)` threw `TypeError: AbortSignal.timeout is not a function`. Replaced with `fetchWithTimeout()` using standard `new AbortController()` + `setTimeout` / `clearTimeout`.
+    - Implemented `fetchNwsWeather()` querying the US National Weather Service (`api.weather.gov/gridpoints/GRR/27,38/forecast` and `/forecast/hourly`) for Holland, MI. NWS is free, keyless, NOAA official data, and not rate-limited.
+    - Updated `fetchWeather()` to chain:
+      1. Open-Meteo (primary provider with AQI, UV, and WMO codes).
+      2. If Open-Meteo fails or hits 429 rate limit, automatically falls back to NWS.
+      3. If both network calls fail, falls back to `AsyncStorage` cached snapshot (`consuela-weather-cache`).
+  **Verification:**
+  - `npx jest tests/weather/ tests/widget-frame.test.tsx tests/schedule-widget.test.tsx`: 11 test suites passed (129 tests).
+  - `npm run tokens:check`: CLEAN.
+  - `npx tsc --noEmit`: CLEAN.
+  - `npx expo lint`: CLEAN (0 errors, 0 warnings).
+
+
 - 2026-10-30 — fix(home,weather,schedule): unlock Weather widget when signed out, cache weather offline, and enable 2-cell span for Daily Schedule (`WidgetFrame.tsx`, `WidgetHero.tsx`, `data.ts`, `HomeSection.tsx`, `ScheduleWidget.tsx`, `wallActivity.ts`).
   **What changed:**
   - **Weather Widget Unlock & Persistence (`WidgetFrame.tsx`, `WidgetHero.tsx`, `data.ts`)**:
