@@ -4,6 +4,27 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-10-30 — fix(sync,home): prevent soft server projection lag (`reconciled: false`) from triggering false "Showing your saved copy — couldn't refresh." banners (`SyncManager.tsx`, `LeaderboardWidget.tsx`, `CalendarPage.tsx`, `sync.test.tsx`).
+  **What changed:**
+  - **`reconcileLag` Isolation in `SyncManager` (`src/state/SyncManager.tsx`)**:
+    - Identified root cause of tablet showing amber notice `Showing your saved copy — couldn't refresh.` on `TasksWidget`, `LeaderboardWidget`, and header wall stats (`15 Tasks Pending · stale`):
+    - When `/api/tasks/sync` succeeds with HTTP 200, but returns `reconciled: false` (due to background projection warnings such as `warnings: ["projection_reconcile_pending", "approval:projection"]`), `SyncManager` was computing `stale: syncError !== null || reconcileLag || ...`.
+    - Because `reconcileLag` was true, `useSync().stale` was permanently true even though the sync poll succeeded with HTTP 200 and fresh snapshot data.
+    - Updated `SyncValue` to expose `reconcileLag: boolean` separately from `stale`. Computed `stale: syncError !== null || (member !== null && lastSyncAt === null)` so `stale` (which triggers `READ_COPY_STALE = "Showing your saved copy — couldn't refresh."`) only fires on actual failed refreshes or un-synced initial state.
+  - **Guest Capability Contract in `LeaderboardWidget` (`src/home/widgets/LeaderboardWidget.tsx`)**:
+    - Updated `isGuest` calculation from `hydrated && !member` to `hydrated && role === null`, conforming to `AGENTS.md` capability contract (cached profile `member` is display-only; live capability role governs access).
+  - **Calendar Page Capability Role in `CalendarPage` (`src/calendar/CalendarPage.tsx`)**:
+    - Updated parent check from `String(member?.role ?? "").toLowerCase() === "parent"` to `role === "parent"` from `useAuth()`.
+  - **Test Suite Updates (`tests/sync.test.tsx`)**:
+    - Updated `reconciled:false honesty (U5.3)` to assert `stale === false` and `reconcileLag === true` on HTTP 200 responses with `reconciled: false`, and verify that subsequent reconciled responses clear `reconcileLag`.
+  **Verification:**
+  - `npx jest tests/sync.test.tsx tests/photos-page.test.tsx tests/meals-page.test.tsx tests/calendar-page.test.tsx tests/widgets-data.test.tsx tests/tasks-widget-guest.test.tsx tests/ha-leaderboard.test.tsx`: all 7 suites passed (130 tests).
+  - `npm run tokens:check`: CLEAN.
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors, 0 warnings).
+  - Deployed to ApoloSign panel (`192.168.0.112:34229`) via adb `pm install -r`. UI hierarchy dumped live; verified zero occurrences of `"couldn't refresh"` or `"stale"` on the Home wall, Tasks, Meals, and Calendar pages.
+
+
 - 2026-10-30 — fix(weather): add NOAA / NWS dual-provider fallback and Hermes timeout fix (`src/weather/data.ts`).
   **What changed:**
   - **Open-Meteo Rate Limiting & Dual-Provider Resilience**:

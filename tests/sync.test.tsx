@@ -213,7 +213,7 @@ describe("initial stale honesty (U5.2) — never fresh-when-unknown", () => {
 });
 
 describe("reconciled:false honesty (U5.3) — Home-ai ARCHITECTURE §5.6", () => {
-  it("keeps the last-good snapshot but leaves stale truthy until the server reconciles", async () => {
+  it("keeps the last-good snapshot and reports reconcileLag until the server reconciles", async () => {
     api.mockResolvedValueOnce({ snapshot: { tasks: [1] }, reconciled: false });
     const { result } = renderHook(() => useSync(), { wrapper: wrap });
     await act(async () => {
@@ -223,16 +223,18 @@ describe("reconciled:false honesty (U5.3) — Home-ai ARCHITECTURE §5.6", () =>
     expect(result.current.snapshot).toEqual({ tasks: [1] });
     expect(result.current.lastSyncAt).not.toBeNull();
     expect(result.current.syncError).toBeNull();
-    // …but surfaces must be badged: the data on screen may still lag the family truth.
-    expect(result.current.stale).toBe(true);
+    // …the snapshot refreshed successfully, but reconcileLag notes the server projection is catching up.
+    expect(result.current.stale).toBe(false);
+    expect(result.current.reconcileLag).toBe(true);
 
-    // A later reconciled response clears the badge.
+    // A later reconciled response clears the lag.
     api.mockResolvedValueOnce({ snapshot: { tasks: [2] }, reconciled: true });
     await act(async () => {
       await result.current.refreshNow();
     });
     expect(result.current.snapshot).toEqual({ tasks: [2] });
     expect(result.current.stale).toBe(false);
+    expect(result.current.reconcileLag).toBe(false);
   });
 });
 

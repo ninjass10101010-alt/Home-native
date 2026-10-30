@@ -102,10 +102,10 @@ export function LeaderboardWidget({
 }) {
   const { colors, accentColor } = useTheme();
   const router = useRouter();
-  const { member, hydrated } = useAuth();
+  const { role, hydrated } = useAuth();
   const { snapshot, stale: syncStale, syncError, refreshNow, onPulse } = useSync();
 
-  const isGuest = hydrated && !member;
+  const isGuest = hydrated && role === null;
   const snapshotWeek = snapshot?.weekData as WeekData | undefined;
 
   // Guest lane: fetch public week_data if no snapshot is available

@@ -32,10 +32,11 @@ export function classifySyncError(e: unknown): SyncError {
 
 export interface SyncValue {
   lastSyncAt: number | null;
-  /** True when what is on screen may not be the family truth (failed refresh,
-   *  unreconciled server response, or no successful sync yet while signed in)
-   *  — surfaces MUST badge or hide stale data. */
+  /** True when a refresh failed or no successful sync has completed yet while signed in
+   *  (surfaces badge with couldn't-refresh notice). */
   stale: boolean;
+  /** True when the server response indicated background projection lag (reconciled === false). */
+  reconcileLag: boolean;
   syncError: SyncError;
   /** The latest /api/tasks/sync snapshot (tasks + weekData) — ONE poll serves
    *  every snapshot consumer (web CacheRefresher parity). */
@@ -199,11 +200,13 @@ export function SyncManager({ children }: { children: React.ReactNode }) {
   const value = useMemo<SyncValue>(
     () => ({
       lastSyncAt,
-      // U5.2/U5.3: a failed refresh, a not-yet-reconciled server, or a
-      // signed-in wall that has never completed a sync — none of them may
-      // read as "fresh" (guests never sync: their wall is the saved-copy
-      // rail + gates by design).
-      stale: syncError !== null || reconcileLag || (member !== null && lastSyncAt === null),
+      // U5.2: a failed refresh, or a signed-in wall that has never completed
+      // a sync — neither may read as "fresh".
+      // Note: reconcileLag (reconciled: false from the server) indicates background
+      // projection catch-up, but the HTTP 200 response carried fresh data and succeeded,
+      // so it does NOT mark the local client as couldn't-refresh stale.
+      stale: syncError !== null || (member !== null && lastSyncAt === null),
+      reconcileLag,
       syncError,
       snapshot,
       refreshNow,

@@ -84,8 +84,8 @@ interface CalendarLoad {
 
 export function CalendarPage({ now = new Date() }: { now?: Date }) {
   const { colors, theme, accentColor, setTheme } = useTheme();
-  const { member } = useAuth();
-  const isParent = String(member?.role ?? "").toLowerCase() === "parent";
+  const { member, role } = useAuth();
+  const isParent = role === "parent";
   const { stale: syncStale } = useSync();
   const router = useRouter();
 
