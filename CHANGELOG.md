@@ -4,6 +4,16 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-02 — fix(photos): guard against unmounted state updates during batch refresh (`PhotosWidget.tsx`, `photos-widget.test.tsx`).
+  **What changed:**
+  - Added an unmount guard (`mountedRef`) to `PhotosWidget`.
+  - When an in-flight `loadPhotos()` call resolves during or after component unmount (e.g. on navigation, screensaver idle, or profile change), `setOverride(next)` is guarded to prevent state updates on unmounted components and avoid memory leaks.
+  **Verification:**
+  - `npx jest tests/photos-widget.test.tsx tests/photos-page.test.tsx`: all 23 tests passed.
+  - `npm run tokens:check`: CLEAN.
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+
 - 2026-10-30 — feat(music,weather): expand Cast modal sizing for wall tablet and re-enable weather-only ambient motion (`CastControl.tsx`, `CastVolume.tsx`, `useAmbient.tsx`).
   **What changed:**
   - **Cast Modal Sizing (`src/music/CastControl.tsx`, `src/music/CastVolume.tsx`)**:
