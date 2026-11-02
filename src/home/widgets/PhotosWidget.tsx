@@ -78,6 +78,16 @@ function fallbackCaption(takenAt?: string): string | null {
 export function PhotosWidget() {
   const { colors, theme, reduceMotion } = useTheme();
   const router = useRouter();
+  const mountedRef = React.useRef(true);
+
+  // The unmount guard: an in-flight rotation refresh must never setState after teardown.
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const { status, data: batch, failure, stale, retry } = useWidgetData<PhotosState>(() => loadPhotos(), { guestVisible: true });
 
   const [override, setOverride] = React.useState<PhotosState | null>(null);
@@ -114,7 +124,9 @@ export function PhotosWidget() {
   // phone change lands within one rotation (the web's advance→refresh loop).
   const refreshBatch = React.useCallback(async () => {
     try {
-      setOverride(await loadPhotos(shownRef.current.slice(-12)));
+      const next = await loadPhotos(shownRef.current.slice(-12));
+      if (!mountedRef.current) return;
+      setOverride(next);
     } catch {
       /* keep the current batch on screen; the next rotation tries again */
     }
