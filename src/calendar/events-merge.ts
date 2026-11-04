@@ -272,11 +272,83 @@ export const SCHEDULE_RAIL_TOKENS: Record<string, string> = {
   teal: "color-accent-cyan",
 };
 
-/** Routines that land on the given calendar day (weekday scope + time sort). */
+/**
+ * Maps routine titles to a semantic family routine key for deduplication.
+ * Resolves legacy database duplicates (e.g. "MOM out of work" vs "Rebecca Gets Home From Work",
+ * duplicate breakfasts, duplicate school departures).
+ */
+export function normalizeRoutineSemanticKey(title: string): string {
+  const t = title.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+  if ((t.includes("rebecca") || t.includes("mom")) && (t.includes("work") || t.includes("home"))) {
+    return "mom_work";
+  }
+  if ((t.includes("papa") || t.includes("dad")) && (t.includes("work") || t.includes("home") || t.includes("wake"))) {
+    if (t.includes("wake")) return "papa_wake";
+    if (t.includes("leav") || t.includes("to work")) return "papa_leave";
+    return "papa_home";
+  }
+  if (t.includes("school")) {
+    if (t.includes("leav") || t.includes("to school") || t.includes("for school")) return "school_leave";
+    if (t.includes("get ready") || t.includes("ready")) {
+      return t.includes("little") ? "school_prep_littles" : "school_prep_bigs";
+    }
+    if (t.includes("kid") || t.includes("pick up") || t.includes("recoger")) return "school_pickup";
+  }
+  if (t.includes("breakfast") || t.includes("desayuno")) return "breakfast";
+  if (t.includes("lunch") || t.includes("almuerzo")) return "lunch";
+  if (t.includes("dinner") || t.includes("cena")) return "dinner";
+  if (t.includes("snack") || t.includes("merienda")) return "snack";
+  if (t.includes("dog") || t.includes("perro")) return "dogs";
+  if (t.includes("bed") || t.includes("cama")) {
+    if (t.includes("little")) return "bed_littles";
+    if (t.includes("big")) return "bed_bigs";
+  }
+  if (t.includes("lights out")) return "lights_out";
+  return t;
+}
+
+/**
+ * Deduplicates routines that land in the same 20-minute window with the same semantic meaning,
+ * or identical title records.
+ */
+export function deduplicateScheduleEvents(events: WallEvent[]): WallEvent[] {
+  const sorted = [...events].sort((a, b) => a.sortMinutes - b.sortMinutes);
+  const result: WallEvent[] = [];
+
+  for (const item of sorted) {
+    const key = normalizeRoutineSemanticKey(item.title);
+    const existingIndex = result.findIndex((r) => {
+      const rKey = normalizeRoutineSemanticKey(r.title);
+      if (rKey === key && key.length > 2) {
+        // Same semantic routine within 20 minutes of each other
+        return Math.abs(r.sortMinutes - item.sortMinutes) <= 20;
+      }
+      // Exact title match at exact same time
+      return r.title.toLowerCase().trim() === item.title.toLowerCase().trim() && r.sortMinutes === item.sortMinutes;
+    });
+
+    if (existingIndex === -1) {
+      result.push(item);
+    } else {
+      // If the duplicate has a title with Rebecca/Mom and is more descriptive, prefer it
+      const existing = result[existingIndex];
+      const prefersItem =
+        (item.title.toLowerCase().includes("rebecca") && !existing.title.toLowerCase().includes("rebecca")) ||
+        (item.title.length > existing.title.length && !item.title.endsWith("!"));
+      if (prefersItem) {
+        result[existingIndex] = item;
+      }
+    }
+  }
+
+  return result;
+}
+
+/** Routines that land on the given calendar day (weekday scope + time sort + smart deduplication). */
 export function schedulesForDay(rows: ScheduleRow[], date: Date): WallEvent[] {
   const weekdayShort = date.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase();
   const weekdayIndex = date.getDay();
-  return rows
+  const rawList = rows
     .filter((s) => scheduleCoversWeekday(s.days, weekdayShort, weekdayIndex))
     .map((s, i) => {
       const display = formatScheduleTime12h(s.time);
@@ -291,6 +363,8 @@ export function schedulesForDay(rows: ScheduleRow[], date: Date): WallEvent[] {
         isRoutine: true,
       };
     });
+
+  return deduplicateScheduleEvents(rawList);
 }
 
 /** One day's merged timeline: all-day first (−1), then by clock, unknown last. */

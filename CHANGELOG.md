@@ -4,6 +4,36 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-04 — feat(schedule,notifications,cast): room-scale popups, schedule deduplication, ElevenLabs daily schedule announcements, and spacious Cast modal (`MusicIsland.tsx`, `ScheduleWidget.tsx`, `events-merge.ts`, `voiceCallouts.ts`, `CastControl.tsx`, `Modal.tsx`).
+  **What changed:**
+  - **Room-Scale Notification Alert Card & Duration (`src/music/MusicIsland.tsx`)**:
+    - Expanded notification banner width from 520dp to 840dp (~78% of the 1080px portrait wall screen width) with 32dp corner radii and 24dp internal padding for high visibility across the room.
+    - Scaled alert title from 17sp to 28sp bold with 34px line height; scaled body copy from 14sp to 20sp semi-bold (up to 3 lines with 28px line height).
+    - Enlarged category pill badges and dismiss button to 44×44dp tap targets for comfortable standing finger taps.
+    - Extended auto-minimize display duration from 5000ms (5s) to 16000ms (16s) so notifications remain legible if the family does not look immediately.
+  - **Daily Schedule Deduplication & Database Cleanup (`src/calendar/events-merge.ts`)**:
+    - Investigated PocketBase `schedules` collection and safely removed 8 duplicate/redundant database entries: eliminated redundant 5:40 PM "MOM out of work" (favoring 5:45 PM "Rebecca Gets Home From Work"), duplicate 6:10 AM school prep, duplicate 6:15 PM dinner, duplicate 6:45 PM dog walk, duplicate 6:50 AM breakfast, duplicate 7:05 AM school departures, and duplicate 8:30 PM bedtime.
+    - Added defensive deduplication `deduplicateScheduleEvents()` with fuzzy semantic key matching (`normalizeRoutineSemanticKey()`) in `events-merge.ts` that automatically coalesces overlapping events within a 20-minute window, ensuring future duplicate database records never clutter the UI.
+  - **Daily Schedule Voice Announcements (`src/home/widgets/ScheduleWidget.tsx`, `src/native/voiceCallouts.ts`, `assets/sounds/voices/`)**:
+    - Added 5 new high-definition bilingual audio announcements generated with ElevenLabs Sarah persona:
+      - Daily Schedule Summary: *"Attention Garcia Family! Here is today's daily schedule. ¡Atención familia Garcia! Este es el horario de hoy."* (`routine_schedule_summary.mp3`).
+      - Breakfast: *"Good morning Garcia Family! Breakfast is ready. ¡El desayuno está listo, a comer!"* (`routine_breakfast.mp3`).
+      - Leaving for School: *"Attention Garcia Family! Time to leave for school. ¡Hora de salir para la escuela!"* (`routine_school_leave.mp3`).
+      - Getting Ready for School: *"Time to get ready for school! ¡A prepararse para la escuela!"* (`routine_school_prep.mp3`).
+      - Papá Leaving for Work: *"Papá is heading out to work. ¡Papá ya sale para el trabajo!"* (`routine_papa_leave.mp3`).
+      - Updated Mom Return: *"Attention Garcia Family! Mom is on her way home from work. ¡Mamá ya viene en camino del trabajo!"* (`routine_mom.mp3`).
+    - Added a `[ 🔊 Speak ]` button to the Daily Schedule card header. Tapping it posts a room-scale notification banner displaying today's upcoming routines and speaks Sarah's bilingual schedule announcement out loud through device speakers.
+    - Updated `WidgetFrame.tsx` `headerBlock` container with `pointerEvents="box-none"` to ensure header action buttons receive touches seamlessly.
+  - **Spacious Cast Modal & Button (`src/music/CastControl.tsx`, `src/ui/Modal.tsx`)**:
+    - Enhanced Cast button trigger in `CastControl.tsx` with a distinct `📺`/`🔊` receiver glyph and 16sp bold label (`fontSize: 16, fontWeight: "700"`) inside a 64dp pill for standing-height visibility.
+    - Updated `src/ui/Modal.tsx` `panelStyle` with `width: "100%", alignItems: "center"` to ensure custom modal widths (like Cast modal's 780dp wide sheet) center and scale properly across Android screen layouts.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (0 violations).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+  - Unit tests: all tests in `tests/calendar-events-merge.test.ts`, `tests/voice-callouts.test.ts`, and `tests/music-cast-control.test.tsx` passed.
+  - Built release APK with Gradle and installed on ApoloSign tablet (`192.168.0.112:38777`).
+
 - 2026-11-04 — feat(notifications): ElevenLabs bilingual voice call-outs (Sarah) with Tone + Voice non-spook delivery and Settings announcement controls (`voiceCallouts.ts`, `notificationPrefs.ts`, `notifications.ts`, `NotificationsCard.tsx`, `assets/sounds/voices/`).
   **What changed:**
   - **ElevenLabs Bilingual Voice Call-Outs (`src/native/voiceCallouts.ts`, `assets/sounds/voices/`)**:

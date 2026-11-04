@@ -407,11 +407,13 @@ export function WidgetFrame({
   );
 
   const headerBlock = (
-    <View>
+    <View pointerEvents="box-none">
       {disc}
       {header ?? defaultHeader}
       {headerRight ? (
-        <View style={{ position: "absolute", top: 0, right: 0, zIndex: 4 }}>{headerRight}</View>
+        <View pointerEvents="box-none" style={{ position: "absolute", top: 0, right: 0, zIndex: 10 }}>
+          {headerRight}
+        </View>
       ) : null}
     </View>
   );

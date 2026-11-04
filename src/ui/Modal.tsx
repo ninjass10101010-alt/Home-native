@@ -81,6 +81,8 @@ export function Modal({
 
   const scrimStyle = useAnimatedStyle(() => ({ opacity: opacity.value * 0.5 }));
   const panelStyle = useAnimatedStyle(() => ({
+    width: "100%",
+    alignItems: "center",
     opacity: opacity.value,
     transform:
       modalScale !== 1

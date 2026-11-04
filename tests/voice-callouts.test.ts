@@ -30,7 +30,7 @@ describe("voiceCallouts", () => {
 
   describe("Asset & Description Integrity", () => {
     it("has audio assets for every declared voice call-out key", () => {
-      expect(VOICE_CALLOUT_KEYS.length).toBe(13);
+      expect(VOICE_CALLOUT_KEYS.length).toBe(18);
       for (const key of VOICE_CALLOUT_KEYS) {
         expect(VOICE_CALLOUT_ASSETS[key]).toBeDefined();
         expect(typeof VOICE_CALLOUT_ASSETS[key]).toBe("number");
@@ -47,16 +47,24 @@ describe("voiceCallouts", () => {
       expect(resolveVoiceCallout("general", "¡A comer!", "La cena está servida")).toBe("dinner_ready");
       expect(resolveVoiceCallout("routines", "⏰ Routine Soon", "Lunch! starts in 15 minutes.")).toBe("routine_lunch");
       expect(resolveVoiceCallout("routines", "Hora de comer", "Almuerzo para la familia")).toBe("routine_lunch");
+      expect(resolveVoiceCallout("routines", "⏰ Routine Soon", "Breakfast is ready!")).toBe("routine_breakfast");
+      expect(resolveVoiceCallout("routines", "Desayuno", "A desayunar en familia")).toBe("routine_breakfast");
     });
 
     it("resolves family schedule routines", () => {
       expect(resolveVoiceCallout("routines", "Routine", "PAPÁ gets home from work")).toBe("routine_papa");
       expect(resolveVoiceCallout("routines", "Routine", "Papa ya viene en camino")).toBe("routine_papa");
+      expect(resolveVoiceCallout("routines", "Routine", "PAPA Leaving to work!!")).toBe("routine_papa_leave");
       expect(resolveVoiceCallout("routines", "Routine", "Get Kids From School")).toBe("routine_school");
+      expect(resolveVoiceCallout("routines", "Routine", "Leaving for School")).toBe("routine_school_leave");
+      expect(resolveVoiceCallout("routines", "Routine", "The Littles Get Ready For School")).toBe("routine_school_prep");
+      expect(resolveVoiceCallout("routines", "Routine", "BIG's get ready for school")).toBe("routine_school_prep");
       expect(resolveVoiceCallout("routines", "Routine", "Take Dogs Out!")).toBe("routine_dogs");
       expect(resolveVoiceCallout("routines", "Routine", "Snack Time")).toBe("routine_snack");
       expect(resolveVoiceCallout("routines", "Routine", "MOM out of work")).toBe("routine_mom");
+      expect(resolveVoiceCallout("routines", "Routine", "Rebecca Gets Home From Work")).toBe("routine_mom");
       expect(resolveVoiceCallout("routines", "Routine", "Bedtime reading and wind-down")).toBe("routine_bedtime");
+      expect(resolveVoiceCallout("routines", "Daily Schedule", "Today's daily schedule summary")).toBe("routine_schedule_summary");
     });
 
     it("resolves chore and task reminders", () => {

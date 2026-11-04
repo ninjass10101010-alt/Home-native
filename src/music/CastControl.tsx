@@ -1,7 +1,6 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
-import { TYPOGRAPHY } from "../theme/tokens";
 import { musicTokensFor } from "../theme/music-tokens";
 import { Modal } from "../ui/Modal";
 import { CastVolume } from "./CastVolume";
@@ -74,21 +73,24 @@ export function CastControl({ track }: CastControlProps) {
         style={{
           minHeight: 64,
           minWidth: 64,
-          maxWidth: 300,
+          maxWidth: 320,
           paddingHorizontal: 18,
+          flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
+          gap: 8,
           borderRadius: 999,
           backgroundColor: tokens.scrim,
           borderWidth: 1,
           borderColor: tokens.panelRim,
         }}
       >
+        <Text style={{ fontSize: 18 }}>{cast.casting ? "🔊" : "📺"}</Text>
         <Text
           numberOfLines={1}
           style={{
             color: tokens.label,
-            fontSize: TYPOGRAPHY.label.fontSize,
+            fontSize: 16,
             fontWeight: "700",
           }}
         >

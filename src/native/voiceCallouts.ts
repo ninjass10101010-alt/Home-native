@@ -4,12 +4,17 @@ import { playNotificationSound, type NotificationSound } from "./soundEffects";
 export const VOICE_CALLOUT_KEYS = [
   "dinner_ready",
   "routine_lunch",
+  "routine_breakfast",
   "routine_papa",
+  "routine_papa_leave",
   "routine_school",
+  "routine_school_leave",
+  "routine_school_prep",
   "routine_dogs",
   "routine_snack",
   "routine_mom",
   "routine_bedtime",
+  "routine_schedule_summary",
   "task_dishwasher",
   "task_bed",
   "task_generic",
@@ -22,12 +27,17 @@ export type VoiceCalloutKey = (typeof VOICE_CALLOUT_KEYS)[number];
 export const VOICE_CALLOUT_ASSETS: Record<VoiceCalloutKey, number> = {
   dinner_ready: require("../../assets/sounds/voices/dinner_ready.mp3"),
   routine_lunch: require("../../assets/sounds/voices/routine_lunch.mp3"),
+  routine_breakfast: require("../../assets/sounds/voices/routine_breakfast.mp3"),
   routine_papa: require("../../assets/sounds/voices/routine_papa.mp3"),
+  routine_papa_leave: require("../../assets/sounds/voices/routine_papa_leave.mp3"),
   routine_school: require("../../assets/sounds/voices/routine_school.mp3"),
+  routine_school_leave: require("../../assets/sounds/voices/routine_school_leave.mp3"),
+  routine_school_prep: require("../../assets/sounds/voices/routine_school_prep.mp3"),
   routine_dogs: require("../../assets/sounds/voices/routine_dogs.mp3"),
   routine_snack: require("../../assets/sounds/voices/routine_snack.mp3"),
   routine_mom: require("../../assets/sounds/voices/routine_mom.mp3"),
   routine_bedtime: require("../../assets/sounds/voices/routine_bedtime.mp3"),
+  routine_schedule_summary: require("../../assets/sounds/voices/routine_schedule_summary.mp3"),
   task_dishwasher: require("../../assets/sounds/voices/task_dishwasher.mp3"),
   task_bed: require("../../assets/sounds/voices/task_bed.mp3"),
   task_generic: require("../../assets/sounds/voices/task_generic.mp3"),
@@ -44,13 +54,29 @@ export const VOICE_CALLOUT_DESCRIPTIONS: Record<VoiceCalloutKey, { label: string
     label: "Lunch Time",
     text: "Attention Garcia Family! Lunch time. ¡Hora del almuerzo!",
   },
+  routine_breakfast: {
+    label: "Breakfast Time",
+    text: "Good morning Garcia Family! Breakfast is ready. ¡El desayuno está listo, a comer!",
+  },
   routine_papa: {
     label: "Papá Coming Home",
     text: "Attention! Papá is on his way home. ¡Papá ya viene en camino!",
   },
+  routine_papa_leave: {
+    label: "Papá Leaving to Work",
+    text: "Papá is heading out to work. ¡Papá ya sale para el trabajo!",
+  },
   routine_school: {
     label: "Kids From School",
     text: "Reminder: Time to pick up the kids from school. ¡Hora de recoger a las niñas!",
+  },
+  routine_school_leave: {
+    label: "Leaving for School",
+    text: "Attention Garcia Family! Time to leave for school. ¡Hora de salir para la escuela!",
+  },
+  routine_school_prep: {
+    label: "School Prep",
+    text: "Time to get ready for school! ¡A prepararse para la escuela!",
   },
   routine_dogs: {
     label: "Take Dogs Out",
@@ -61,12 +87,16 @@ export const VOICE_CALLOUT_DESCRIPTIONS: Record<VoiceCalloutKey, { label: string
     text: "Snack time! ¡Hora de la merienda para todos!",
   },
   routine_mom: {
-    label: "Mom Off Work",
-    text: "Attention! Mom is off work. ¡Mamá ya salió del trabajo!",
+    label: "Mom / Rebecca Home",
+    text: "Attention Garcia Family! Mom is on her way home from work. ¡Mamá ya viene en camino del trabajo!",
   },
   routine_bedtime: {
     label: "Bedtime Wind Down",
     text: "Goodnight Garcia Family! Time to wind down. ¡Hora de descansar!",
+  },
+  routine_schedule_summary: {
+    label: "Daily Schedule Summary",
+    text: "Attention Garcia Family! Here is today's daily schedule. ¡Atención familia Garcia! Este es el horario de hoy.",
   },
   task_dishwasher: {
     label: "Unload Dishwasher",
@@ -117,6 +147,7 @@ export function resolveVoiceCallout(
 ): VoiceCalloutKey {
   const text = `${title} ${body}`.toLowerCase();
 
+  // 1. Weather alerts
   if (
     category === "weather" ||
     text.includes("weather") ||
@@ -128,16 +159,68 @@ export function resolveVoiceCallout(
     return "weather_alert";
   }
 
-  if (text.includes("dinner") || text.includes("cena") || text.includes("cenar")) {
-    return "dinner_ready";
+  // 2. Daily Schedule Summary ("Speak Schedule")
+  if (
+    text.includes("daily schedule") ||
+    text.includes("schedule summary") ||
+    text.includes("today's schedule") ||
+    text.includes("horario") ||
+    text.includes("agenda")
+  ) {
+    return "routine_schedule_summary";
+  }
+
+  // 3. Meals: Breakfast, Lunch, Dinner, Snack
+  if (text.includes("breakfast") || text.includes("desayuno") || text.includes("desayunar")) {
+    return "routine_breakfast";
   }
 
   if (text.includes("lunch") || text.includes("almuerzo") || text.includes("comida")) {
     return "routine_lunch";
   }
 
+  if (text.includes("dinner") || text.includes("cena") || text.includes("cenar")) {
+    return "dinner_ready";
+  }
+
+  if (text.includes("snack") || text.includes("merienda")) {
+    return "routine_snack";
+  }
+
+  // 4. Family Commute & Work: Mom/Rebecca, Papá
+  if (
+    text.includes("mom") ||
+    text.includes("mamá") ||
+    text.includes("mama") ||
+    text.includes("rebecca")
+  ) {
+    return "routine_mom";
+  }
+
+  if (
+    (text.includes("papá") || text.includes("papa")) &&
+    (text.includes("leave") || text.includes("leaving") || text.includes("sale") || text.includes("to work"))
+  ) {
+    return "routine_papa_leave";
+  }
+
   if (text.includes("papá") || text.includes("papa") || text.includes("dad")) {
     return "routine_papa";
+  }
+
+  // 5. School routines: Leaving vs Getting Ready vs Pick up
+  if (
+    (text.includes("leave") || text.includes("leaving") || text.includes("salir")) &&
+    (text.includes("school") || text.includes("escuela"))
+  ) {
+    return "routine_school_leave";
+  }
+
+  if (
+    (text.includes("ready") || text.includes("preparar") || text.includes("prep")) &&
+    (text.includes("school") || text.includes("escuela"))
+  ) {
+    return "routine_school_prep";
   }
 
   if (
@@ -149,34 +232,33 @@ export function resolveVoiceCallout(
     return "routine_school";
   }
 
+  // 6. Pets / Dogs
   if (
     text.includes("dog") ||
     text.includes("dogs") ||
     text.includes("perro") ||
-    text.includes("perros")
+    text.includes("perros") ||
+    text.includes("pasear")
   ) {
     return "routine_dogs";
   }
 
-  if (text.includes("snack") || text.includes("merienda")) {
-    return "routine_snack";
-  }
-
-  if (text.includes("mom") || text.includes("mamá") || text.includes("mama")) {
-    return "routine_mom";
-  }
-
+  // 7. Bedtime & Sleep
   if (
     text.includes("bedtime") ||
     text.includes("reading") ||
     text.includes("wind-down") ||
     text.includes("wind down") ||
     text.includes("dormir") ||
-    text.includes("descansar")
+    text.includes("descansar") ||
+    text.includes("lights out") ||
+    text.includes("bed!") ||
+    text.includes("in bed")
   ) {
     return "routine_bedtime";
   }
 
+  // 8. Chores & Tasks
   if (
     text.includes("dishwasher") ||
     text.includes("lavavajillas") ||

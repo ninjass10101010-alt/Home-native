@@ -15,6 +15,8 @@ import {
   SCHEDULE_RAIL_TOKENS,
   schedulesForDay,
 } from "../../calendar/events-merge";
+import { postActiveNotification } from "../../native/notificationFeed";
+import { playNotificationAudio } from "../../native/voiceCallouts";
 import type { WallSpan } from "../widgets";
 
 export interface ScheduleWidgetProps {
@@ -84,6 +86,32 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
       ? `${upcomingRoutines.length} upcoming`
       : "";
 
+  const handleAnnounceSchedule = () => {
+    const nextRoutines = upcomingRoutines.slice(0, 3);
+    const bodyText =
+      nextRoutines.length > 0
+        ? nextRoutines.map((r) => `${r.time || "Today"}: ${r.title}`).join(" • ")
+        : "All routines completed for today!";
+
+    postActiveNotification({
+      id: `sched-announce-${Date.now()}`,
+      category: "routines",
+      title: `📅 Today's Schedule (${upcomingRoutines.length} upcoming)`,
+      body: bodyText,
+      timing: "start",
+      timestamp: Date.now(),
+    });
+
+    void playNotificationAudio({
+      sound: "chime",
+      volume: 0.85,
+      soundMode: "tone_and_voice",
+      category: "routines",
+      title: "Daily Schedule",
+      body: "Today's daily schedule summary",
+    });
+  };
+
   return (
     <WidgetFrame
       id="schedule"
@@ -96,6 +124,42 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
       hasData={Boolean(data)}
       stale={stale}
       onRetry={retry}
+      headerRight={
+        upcomingRoutines.length > 0 ? (
+          <Pressable
+            testID="schedule-announce-btn"
+            onPress={handleAnnounceSchedule}
+            accessibilityRole="button"
+            accessibilityLabel="Announce daily schedule out loud"
+            hitSlop={8}
+            style={({ pressed }) => ({
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: RADII.sm,
+              backgroundColor: pressed ? mix(cyan, "transparent", 30) : mix(cyan, "transparent", 15),
+              borderWidth: 1,
+              borderColor: mix(cyan, "transparent", 35),
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              marginTop: 4,
+              marginRight: 6,
+            })}
+          >
+            <Text style={{ fontSize: 13 }}>🔊</Text>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color: cyan,
+                letterSpacing: 0.3,
+              }}
+            >
+              Speak
+            </Text>
+          </Pressable>
+        ) : null
+      }
     >
       <View testID="schedule-widget" style={{ flex: 1, paddingHorizontal: 12, paddingBottom: 10 }}>
         {/* The household clock DayLine */}

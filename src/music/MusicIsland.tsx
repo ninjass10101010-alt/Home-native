@@ -195,7 +195,7 @@ export function MusicIsland() {
     setAlertStage("large");
     largeTimerRef.current = setTimeout(() => {
       setAlertStage("minimized");
-    }, 5000);
+    }, 16000);
   }, []);
 
   // Subscribe directly to external notification feed
@@ -210,7 +210,7 @@ export function MusicIsland() {
 
         largeTimerRef.current = setTimeout(() => {
           setAlertStage("minimized");
-        }, 5000);
+        }, 16000);
       } else {
         setAlertStage("idle");
         setActiveAlert(null);
@@ -902,78 +902,79 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 20,
   },
-  // Large Alert Window
+  // Large Alert Window (Room-Scale: Viewable across 15.6" display)
   alertLarge: {
     width: "100%",
-    maxWidth: 520,
-    padding: 16,
-    borderRadius: 28,
+    maxWidth: 840,
+    padding: 24,
+    borderRadius: 32,
     borderWidth: 1.5,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.7,
-    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.75,
+    shadowRadius: 24,
     elevation: 20,
   },
   alertHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 8,
+    marginBottom: 12,
   },
   alertCategoryPill: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 14,
+    gap: 8,
   },
   alertCategoryIcon: {
-    fontSize: 14,
+    fontSize: 22,
   },
   alertCategoryLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    letterSpacing: 0.8,
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: 1,
   },
   alertDismissBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },
   alertDismissText: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 22,
+    fontWeight: "700",
   },
   alertBodyPressable: {
-    marginTop: 2,
+    marginTop: 4,
   },
   alertTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    letterSpacing: -0.3,
-    marginBottom: 4,
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    lineHeight: 34,
+    marginBottom: 6,
   },
   alertBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "500",
+    fontSize: 20,
+    lineHeight: 28,
+    fontWeight: "600",
   },
   alertAffordanceRow: {
     alignItems: "center",
-    marginTop: 10,
-    gap: 4,
+    marginTop: 14,
+    gap: 6,
   },
   alertSwipeBar: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+    width: 48,
+    height: 5,
+    borderRadius: 3,
   },
   alertAffordanceText: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: 15,
+    fontWeight: "600",
   },
   alertPillIconContainer: {
     marginRight: 8,
