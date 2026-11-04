@@ -144,6 +144,31 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
       if (e instanceof ApiError && Array.isArray((e.body as any)?.events)) {
         googleRows = (e.body as any).events as GoogleEventRow[];
       }
+      if (googleFailure === "unauthorised") {
+        try {
+          const ss = await api<{
+            ok?: boolean;
+            events?: { title: string; time: string; allDay?: boolean }[];
+          }>("/api/consuela/screensaver");
+          if (ss?.ok && Array.isArray(ss.events)) {
+            const today = localDateISO(clock);
+            const ssRows: GoogleEventRow[] = ss.events.map((ev, idx) => ({
+              google_id: `ss_${idx}`,
+              calendar_id: "screensaver",
+              title: ev.title,
+              start_time: ev.allDay ? `${today}T00:00:00Z` : `${today}T${ev.time || "12:00"}:00Z`,
+              all_day: !!ev.allDay,
+              status: "confirmed",
+            }));
+            googleRows = ssRows;
+            googleFailure = null;
+          } else {
+            googleFailure = null;
+          }
+        } catch {
+          googleFailure = null;
+        }
+      }
     }
 
     let schedules: ScheduleRow[] = [];

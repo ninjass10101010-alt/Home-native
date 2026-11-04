@@ -352,6 +352,23 @@ describe("TodayEventsWidget — guest / signed-out wall (unlocked calendar)", ()
     expect(queryByTestId("todayEvents-google-pill")).toBeNull();
     expect(queryByText(/Sign in with your PIN/)).toBeNull();
   });
+
+  it("a signed-out wall falls back to screensaver when /api/google-calendar 401s", async () => {
+    mockMember = null;
+    route({
+      "/api/db/events": { items: [] },
+      "/api/google-calendar": new ApiError({ message: "unauthorized", status: 401, code: "unauthorized" }),
+      "/api/consuela/screensaver": {
+        ok: true,
+        events: [{ title: "Bailey & Emily at home!", time: "2:40 PM", allDay: false }],
+      },
+    });
+    const { findByText, queryByText, queryByTestId } = render(<TodayEventsWidget />, { wrapper: wrap });
+    expect(await findByText("Bailey & Emily at home!")).toBeTruthy();
+    expect(await findByText("1 event on the family calendar")).toBeTruthy();
+    expect(queryByTestId("todayEvents-google-pill")).toBeNull();
+    expect(queryByText(/Sign in with your PIN/)).toBeNull();
+  });
 });
 
 describe("TodayEventsWidget — the amber pill ink clears AA in both themes", () => {

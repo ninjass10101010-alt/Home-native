@@ -335,7 +335,13 @@ export function HomeWall({
   const { colors, accentColor, theme } = useTheme();
   const { member, hydrated } = useAuth();
   const router = useRouter();
-  const now = greetingNow ?? new Date();
+  const [clock, setClock] = React.useState(() => greetingNow ?? new Date());
+  React.useEffect(() => {
+    if (greetingNow) return;
+    const id = setInterval(() => setClock(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, [greetingNow]);
+  const now = greetingNow ?? clock;
   const greeting = greetingFor(now.getHours());
   const day = now.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
   const date = now.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();

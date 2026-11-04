@@ -220,5 +220,19 @@ describe("music library", () => {
       // Favorited artist is excluded from recommendations
       expect(recs.some((r) => r.name.toLowerCase() === "taylor swift")).toBe(false);
     });
+
+    it("rejects duration timestamps and invalid names as artists", () => {
+      const historyWithDurations = [
+        { ...track("1"), artist: "4:18", artworkUrl: null },
+        { ...track("2"), artist: "02:59", artworkUrl: null },
+        { ...track("3"), artist: "Unknown", artworkUrl: null },
+        { ...track("4"), artist: "Adele", artworkUrl: null },
+      ];
+      const recs = getRecommendedArtists(historyWithDurations, []);
+      expect(recs.some((r) => r.name === "4:18")).toBe(false);
+      expect(recs.some((r) => r.name === "02:59")).toBe(false);
+      expect(recs.some((r) => r.name === "Unknown")).toBe(false);
+      expect(recs[0].name).toBe("Adele");
+    });
   });
 });

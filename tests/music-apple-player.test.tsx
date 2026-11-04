@@ -89,6 +89,18 @@ jest.mock("../src/state/AuthProvider", () => ({
 
 jest.mock("../modules/youtube-engine", () => ({
   search: (...args: any[]) => mockSearch(...args),
+  related: jest.fn().mockResolvedValue([
+    {
+      id: "related1",
+      title: "Anti-Hero",
+      artist: "Taylor Swift",
+      album: "Midnights",
+      durationSeconds: 200,
+      artworkUrl: "https://lh3.googleusercontent.com/test",
+      explicit: false,
+      source: "youtube_music",
+    },
+  ]),
   artworkColors: jest.fn().mockResolvedValue({ dominant: "#E11D48", vibrant: null }),
   artworkBlurred: jest.fn().mockResolvedValue("file:///cache/blur.jpg"),
 }));
@@ -147,6 +159,156 @@ describe("Apple Music Player enhancements", () => {
     await waitFor(() => {
       expect(getByTestId("music-favorite-artists-shelf")).toBeTruthy();
       expect(getByTestId("music-recommended-artists-shelf")).toBeTruthy();
+    });
+  });
+
+  it("renders 'Create Station' button on the stage and triggers station playback", async () => {
+    mockSearch.mockResolvedValueOnce({
+      tracks: [
+        {
+          id: "station1",
+          title: "Style",
+          artist: "Taylor Swift",
+          album: "1989",
+          durationSeconds: 231,
+          artworkUrl: null,
+          explicit: false,
+          source: "youtube_music",
+        },
+      ],
+      explicitKnown: true,
+    });
+
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(getByTestId("np-create-station")).toBeTruthy());
+
+    fireEvent.press(getByTestId("np-create-station"));
+
+    await waitFor(() => {
+      expect(mockPlay).toHaveBeenCalled();
+    });
+  });
+
+  it("renders Browse Stations carousel and plays station on tap", async () => {
+    mockSearch.mockResolvedValue({
+      tracks: [
+        {
+          id: "hit1",
+          title: "Espresso",
+          artist: "Sabrina Carpenter",
+          album: "Short n' Sweet",
+          durationSeconds: 175,
+          artworkUrl: null,
+          explicit: false,
+          source: "youtube_music",
+        },
+      ],
+      explicitKnown: true,
+    });
+
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(getByTestId("music-stations-shelf")).toBeTruthy());
+    expect(getByTestId("music-station-todays-hits")).toBeTruthy();
+
+    fireEvent.press(getByTestId("music-station-todays-hits"));
+
+    await waitFor(() => {
+      expect(mockSearch).toHaveBeenCalledWith("today's top hits", 25);
+      expect(mockPlay).toHaveBeenCalled();
+    });
+  });
+
+  it("renders Family Mixes shelf and plays mix on tap", async () => {
+    mockCurrent = null;
+    mockSearch.mockResolvedValue({
+      tracks: [
+        {
+          id: "fam1",
+          title: "Can't Stop the Feeling!",
+          artist: "Justin Timberlake",
+          album: "Trolls",
+          durationSeconds: 236,
+          artworkUrl: null,
+          explicit: false,
+          source: "youtube_music",
+        },
+      ],
+      explicitKnown: true,
+    });
+
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(getByTestId("music-family-mixes-shelf")).toBeTruthy());
+    expect(getByTestId("music-family-mix-family-favorites")).toBeTruthy();
+
+    fireEvent.press(getByTestId("music-family-mix-family-favorites"));
+
+    await waitFor(() => {
+      expect(mockSearch).toHaveBeenCalledWith("family friendly pop hits", 25);
+      expect(mockPlay).toHaveBeenCalled();
+    });
+  });
+
+  it("opens Artist Profile modal on artist tap and can play top hits", async () => {
+    mockSearch.mockResolvedValue({
+      tracks: [
+        {
+          id: "top1",
+          title: "Anti-Hero",
+          artist: "Taylor Swift",
+          album: "Midnights",
+          durationSeconds: 200,
+          artworkUrl: null,
+          explicit: false,
+          source: "youtube_music",
+        },
+      ],
+      explicitKnown: true,
+    });
+
+    const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(getByTestId("np-artist-name")).toBeTruthy());
+
+    // Tap Taylor Swift artist on stage
+    fireEvent.press(getByTestId("np-artist-name"));
+
+    await waitFor(() => {
+      expect(getByTestId("music-artist-modal")).toBeTruthy();
+      expect(getByTestId("music-artist-modal-play")).toBeTruthy();
+      expect(getByTestId("music-artist-modal-shuffle")).toBeTruthy();
+      expect(getByTestId("music-artist-modal-radio")).toBeTruthy();
+    });
+
+    // Play hits
+    fireEvent.press(getByTestId("music-artist-modal-play"));
+    await waitFor(() => {
+      expect(mockPlay).toHaveBeenCalled();
+    });
+  });
+
+  it("supports category filtering in Library mode", async () => {
+    const { getByTestId, getByText, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(getByTestId("music-mode")).toBeTruthy());
+
+    // Switch to Library
+    fireEvent.press(getByText("Library"));
+
+    await waitFor(() => {
+      expect(getByTestId("music-library-filter")).toBeTruthy();
+      expect(getByTestId("music-family-mixes-shelf")).toBeTruthy();
+    });
+
+    // Tap "Artists" filter
+    fireEvent.press(getByText("Artists"));
+    await waitFor(() => {
+      expect(getByTestId("music-favorite-artists-shelf")).toBeTruthy();
+      expect(queryByTestId("music-family-mixes-shelf")).toBeNull();
+    });
+
+    // Tap "Mixes" filter
+    fireEvent.press(getByText("Mixes"));
+    await waitFor(() => {
+      expect(getByTestId("music-family-mixes-shelf")).toBeTruthy();
+      expect(queryByTestId("music-favorite-artists-shelf")).toBeNull();
     });
   });
 });

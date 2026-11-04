@@ -40,7 +40,13 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
     { guestVisible: true }
   );
 
-  const now = useMemo(() => new Date(), []);
+  const [clock, setClock] = React.useState(() => new Date());
+  React.useEffect(() => {
+    const id = setInterval(() => setClock(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const now = clock;
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
   const { todayRoutines, upcomingRoutines, markers } = useMemo(() => {
@@ -107,13 +113,35 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
             style={{ flex: 1 }}
           />
         ) : upcomingRoutines.length === 0 ? (
-          <EmptyState
-            flat
-            icon="🎉"
-            title="All done"
-            body="All routines completed for today."
-            style={{ flex: 1 }}
-          />
+          <View style={{ flex: 1, justifyContent: "center" }}>
+            <EmptyState
+              flat
+              icon="🎉"
+              title="All done"
+              body="All routines completed for today."
+              style={{ flex: 1 }}
+            />
+            <Pressable
+              onPress={() => router.push("/calendar")}
+              accessibilityRole="button"
+              accessibilityLabel="View today's schedule in calendar"
+              style={({ pressed }) => ({
+                paddingTop: 4,
+                alignItems: "center",
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  fontWeight: "600",
+                  color: colors["color-accent-cyan"],
+                }}
+              >
+                {"See today's schedule →"}
+              </Text>
+            </Pressable>
+          </View>
         ) : (
           <View style={{ flex: 1, gap: 6 }}>
             {visibleRoutines.map((routine) => {

@@ -254,12 +254,12 @@ object MusicSearch {
       val endpoint = run["navigationEndpoint"] as? JsonObject
       endpoint != null && endpoint["browseEndpoint"] != null
     }
-    linked?.getString("text")?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    linked?.getString("text")?.trim()?.takeIf { it.isNotEmpty() && parseDuration(it) == null }?.let { return it }
 
     val parts = (columnText(item, 1) ?: "")
       .split("•")
       .map { it.trim() }
-      .filter { it.isNotEmpty() }
+      .filter { it.isNotEmpty() && parseDuration(it) == null }
     return parts.dropWhile { it.lowercase() in ITEM_KINDS }.firstOrNull() ?: ""
   }
 

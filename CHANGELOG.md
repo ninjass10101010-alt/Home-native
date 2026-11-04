@@ -4,6 +4,33 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-04 — feat(music,home): Apple Music-style interactive discovery overhaul with Spanish & Latin stations, guest calendar & schedule unlocking, live ticking clock, and artist duration sanitation (`MusicPlayer.tsx`, `stations.ts`, `library.ts`, `MusicSearch.kt`, `TodayEventsWidget.tsx`, `ScheduleWidget.tsx`, `HomeWall.tsx`, `SyncManager.tsx`).
+  **What changed:**
+  - **Spanish & Latin Music Stations & Mixes (`src/music/stations.ts`, `src/music/library.ts`)**:
+    - **Prominent Spanish & Latin Quick-Browse Stations**: Added high-energy Latin stations with curated queries: `Reggaeton Fuego` (Bad Bunny, Feid, Karol G), `Cumbias Pa' Bailar` (Los Ángeles Azules, Selena), `Cumbias & Norteñas` (Grupo Frontera, Kumbia Kings), `Regional Mexicano` (Carin León, Nodal, Frontera), `Latin Pop & Hits` (Shakira, Camilo, Enrique), `Reggaeton Clásico` (Daddy Yankee, Don Omar, Wisin), `Bachata Sensual` (Romeo Santos, Aventura), `Salsa con Sabor` (Marc Anthony, Celia Cruz), and `Rock en Español` (Maná, Soda Stereo, Caifanes), alongside existing hit, mood, and family stations.
+    - **Spanish Family Mixes**: Added curated household mixes for the Family Library: `Fiesta de Cumbias`, `Noche de Perreo`, `Para la Carne Asada`, and `Viejitas Pero Bonitas`.
+    - **Curated Latin Artist Recommendations**: Enriched `CURATED_ARTISTS` in `library.ts` with Latin and Spanish leaders (`Bad Bunny`, `Grupo Frontera`, `Karol G`, `Los Ángeles Azules`, `Carin León`, `Selena`, `Feid`, `Romeo Santos`, `Daddy Yankee`, `Peso Pluma`, `Maná`), ensuring Latin discovery cards appear prominently in the artist recommendations carousel.
+  - **Apple Music-Style Interactive Discovery Overhaul (`src/music/MusicPlayer.tsx`, `src/music/stations.ts`)**:
+    - **Browse Stations & Moods Carousel**: Curated Apple Music-style station cards with quick badges and vibrant emoji styling. Tapping any station instantly loads and plays the station queue with rich station metadata.
+    - **"✨ Create Station" & Algorithmic Discovery**: Added prominent `Create Station` button on the Now Playing stage powered by YouTube's native recommendation engine (`related(track.id)` via NewPipe extractor). Populates a dynamic `More Like This` horizontal shelf under Now Playing.
+    - **Interactive Artist Profile Modal (`ArtistModal`)**: Tapping any artist name or avatar across Now Playing, recommendations, favorites, search, or similar tracks opens an interactive artist profile sheet with high-resolution artwork, one-tap `★ Favorite` toggle, `▶ Play Hits`, `🔀 Shuffle`, `📻 Radio`, and a full scrollable list of top tracks.
+    - **Interactive Library View with Category Filter**: Upgraded `mode === "library"` to support category segment switching (`Overview`, `Artists`, `Mixes`, `History`, `Downloads`) alongside household mixes (`Family Favorites`, `Weekend Dance Party`, `Road Trip Anthems`, `Bedtime Wind Down`).
+  - **Artist Name Timestamp Sanitation (`modules/youtube-engine/android/src/main/java/expo/modules/youtubeengine/MusicSearch.kt`, `src/music/library.ts`)**:
+    - Fixed bug where YouTube duration runs (e.g. `"4:18"`, `"2:59"`) were parsed as artist names when YouTube omitted metadata.
+    - Added `parseDuration(it) == null` check in Kotlin `MusicSearch.kt` so duration timestamps are never returned as artists.
+    - Added `isValidArtistName()` in TypeScript `library.ts` to reject duration patterns (`/^\d{1,2}:\d{2}(:\d{2})?$/`) and generic/empty labels across favorites, history, and recommendations.
+  - **Dashboard Unlocking for Signed-Out Guest Wall (`TodayEventsWidget.tsx`, `CalendarPage.tsx`, `ScheduleWidget.tsx`, `HomeWall.tsx`, `SyncManager.tsx`)**:
+    - Configured Google Calendar events on `TodayEventsWidget` and `CalendarPage` to fall back to `/api/consuela/screensaver` when signed out (guest mode 401), clearing stale banners and lock indicators so the family calendar is visible to everyone in the household.
+    - In `ScheduleWidget`, replaced static mount memo with a 30-second live interval (`clock`), added active schedule routine progress, and provided a direct `"See today's schedule →"` link when routines are complete.
+    - Added 30-second live clock ticker to `HomeWall.tsx` greeting header.
+    - Added 60-second guest pulse in `SyncManager.tsx` so public guest widgets re-poll without requiring PIN login.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (0 token literal violations).
+  - `npx tsc --noEmit`: CLEAN (0 type errors).
+  - `npx expo lint`: CLEAN (0 errors, 0 warnings).
+  - `npx jest`: All 30 tests in `music-apple-player.test.tsx` and `music-library.test.ts` passed cleanly.
+  - Built release APK (`./scripts/build-apk.sh`) and deployed to ApoloSign 15.6" panel (`192.168.0.112:38777`). Screen capture confirmed unlocked calendar events, unlocked daily schedule, active live clock, and verified interactive stations, artist profile modal, and Now Playing playback live on tablet.
+
 - 2026-11-02 — fix(photos): guard against unmounted state updates during batch refresh (`PhotosWidget.tsx`, `photos-widget.test.tsx`).
   **What changed:**
   - Added an unmount guard (`mountedRef`) to `PhotosWidget`.

@@ -42,6 +42,13 @@ import {
   toggleFavoriteArtist,
   totalDownloadBytes,
 } from "./library";
+import {
+  fetchSimilarTracks,
+  FAMILY_MIXES,
+  MUSIC_STATIONS,
+  type FamilyMix,
+  type MusicStation,
+} from "./stations";
 import { toHighResArtworkUrl } from "./artwork";
 import { LYRIC_CURRENT_SCALE, LYRIC_TYPE, STAGE_TYPE } from "./stage-type";
 import type { DownloadEntry, FavoriteArtist, MediaTrack, RecommendedArtist, RepeatMode } from "./types";
@@ -100,6 +107,14 @@ export function MusicPlayer() {
   const [denyOpen, setDenyOpen] = React.useState(false);
   const [denyTerm, setDenyTerm] = React.useState("");
 
+  const [similarTrackState, setSimilarTrackState] = React.useState<{ id: string; tracks: MediaTrack[] } | null>(null);
+  const [activeArtist, setActiveArtist] = React.useState<{ name: string; artworkUrl?: string | null } | null>(null);
+  const [artistTracks, setArtistTracks] = React.useState<MediaTrack[]>([]);
+  const [loadingArtistTracks, setLoadingArtistTracks] = React.useState(false);
+  const [artistModalOpen, setArtistModalOpen] = React.useState(false);
+  type LibraryTab = "all" | "artists" | "mixes" | "history" | "downloads";
+  const [libraryTab, setLibraryTab] = React.useState<LibraryTab>("all");
+
   const [favoriteArtists, setFavoriteArtists] = React.useState<FavoriteArtist[]>([]);
 
   React.useEffect(() => {
@@ -134,6 +149,25 @@ export function MusicPlayer() {
   // is the same rule on the same screen).
   const visibleCurrent = current && !isContentHidden(current, policy) ? current : null;
 
+  // Live algorithmic recommendations for currently playing track
+  React.useEffect(() => {
+    if (!visibleCurrent) return;
+    let alive = true;
+    void fetchSimilarTracks(visibleCurrent)
+      .then((sim) => {
+        if (alive) {
+          const vis = visibleTracks(sim, policy);
+          setSimilarTrackState({ id: visibleCurrent.id, tracks: vis });
+        }
+      })
+      .catch(() => {
+        if (alive) setSimilarTrackState({ id: visibleCurrent.id, tracks: [] });
+      });
+    return () => { alive = false; };
+  }, [visibleCurrent, policy]);
+
+  const similarTracks = visibleCurrent && similarTrackState?.id === visibleCurrent.id ? similarTrackState.tracks : [];
+
   const isCurrentArtistFavorite = visibleCurrent
     ? isFavoriteArtist(favoriteArtists, visibleCurrent.artist)
     : false;
@@ -143,25 +177,78 @@ export function MusicPlayer() {
     [visibleHistory, favoriteArtists]
   );
 
-  const selectArtist = async (artistName: string) => {
-    setQuery(artistName);
-    setSearchOpen(true);
+  const openArtistProfile = async (artistName: string, artworkUrl?: string | null) => {
+    const trimmed = artistName.trim();
+    if (!trimmed) return;
+    setActiveArtist({ name: trimmed, artworkUrl: artworkUrl ?? null });
+    setLoadingArtistTracks(true);
+    setArtistModalOpen(true);
+    try {
+      const outcome = await engineSearch(trimmed, 25);
+      const vis = visibleTracks(outcome.tracks, policy);
+      setArtistTracks(vis);
+    } catch {
+      setArtistTracks([]);
+    } finally {
+      setLoadingArtistTracks(false);
+    }
+  };
+
+  const handleCreateStation = async (track: MediaTrack) => {
+    setSearching(true);
+    try {
+      const similar = await fetchSimilarTracks(track, 25);
+      const vis = visibleTracks(similar, policy);
+      if (vis.length > 0) {
+        await play(vis[0], vis);
+        setMode("stage");
+      }
+    } catch {
+      // station fallback
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const selectStation = async (station: MusicStation) => {
+    setQuery(station.query);
+    setSearchOpen(false);
     setSearching(true);
     setSearchError(null);
     try {
-      const outcome = await engineSearch(artistName, 20);
+      const outcome = await engineSearch(station.query, 25);
       setTracks(outcome.tracks);
       setExplicitKnown(outcome.explicitKnown);
       setHasSearched(true);
       const vis = visibleTracks(outcome.tracks, policy);
       if (vis.length > 0) {
         await play(vis[0], vis);
+        setMode("stage");
       }
     } catch (e) {
-      setSearchError(e instanceof Error ? e.message : "search_failed");
-      setTracks([]);
-      setExplicitKnown(false);
+      setSearchError(e instanceof Error ? e.message : "station_failed");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const selectMix = async (mixItem: FamilyMix) => {
+    setQuery(mixItem.query);
+    setSearchOpen(false);
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const outcome = await engineSearch(mixItem.query, 25);
+      setTracks(outcome.tracks);
+      setExplicitKnown(outcome.explicitKnown);
       setHasSearched(true);
+      const vis = visibleTracks(outcome.tracks, policy);
+      if (vis.length > 0) {
+        await play(vis[0], vis);
+        setMode("stage");
+      }
+    } catch (e) {
+      setSearchError(e instanceof Error ? e.message : "mix_failed");
     } finally {
       setSearching(false);
     }
@@ -520,40 +607,61 @@ export function MusicPlayer() {
             </View>
 
             {mode === "stage" ? (
-              <NowPlayingStage
-                track={visibleCurrent}
-                tokens={tokens}
-                reduceMotion={reduceMotion}
-                playing={casting ? cast.playing : playing}
-                position={casting ? cast.position : position}
-                duration={casting ? (cast.duration ?? 0) : duration}
-                repeat={repeat}
-                shuffle={shuffle}
-                downloaded={downloaded}
-                casting={casting}
-                player={player}
-                /*
-                 * THE CODEC CHIP may only speak for the track that is
-                 * playing: a resolution belonging to another track is ignored
-                 * (and the chip then says nothing at all).
-                 */
-                streamFormat={
-                  streamFormat && streamFormat.id === visibleCurrent.id
-                    ? streamFormat
-                    : null
-                }
-                onToggle={casting ? (cast.playing ? cast.pause : cast.play) : toggle}
-                onNext={casting ? () => void cast.advance(false) : () => void next()}
-                onPrevious={casting ? () => void cast.previous() : () => void previous()}
-                onSeek={casting ? (seconds) => void cast.seek(seconds) : (seconds) => void seek(seconds)}
-                onToggleShuffle={toggleShuffleMode}
-                onCycleRepeat={cycleRepeatMode}
-                onDownload={() => void downloadCurrent()}
-                isFavorite={isCurrentArtistFavorite}
-                onToggleFavorite={() => handleToggleFavoriteArtist(visibleCurrent.artist, visibleCurrent.artworkUrl)}
-                onOpenLyrics={() => setMode("lyrics")}
-                onOpenQueue={() => setMode("queue")}
-              />
+              <>
+                <NowPlayingStage
+                  track={visibleCurrent}
+                  tokens={tokens}
+                  reduceMotion={reduceMotion}
+                  playing={casting ? cast.playing : playing}
+                  position={casting ? cast.position : position}
+                  duration={casting ? (cast.duration ?? 0) : duration}
+                  repeat={repeat}
+                  shuffle={shuffle}
+                  downloaded={downloaded}
+                  casting={casting}
+                  player={player}
+                  /*
+                   * THE CODEC CHIP may only speak for the track that is
+                   * playing: a resolution belonging to another track is ignored
+                   * (and the chip then says nothing at all).
+                   */
+                  streamFormat={
+                    streamFormat && streamFormat.id === visibleCurrent.id
+                      ? streamFormat
+                      : null
+                  }
+                  onToggle={casting ? (cast.playing ? cast.pause : cast.play) : toggle}
+                  onNext={casting ? () => void cast.advance(false) : () => void next()}
+                  onPrevious={casting ? () => void cast.previous() : () => void previous()}
+                  onSeek={casting ? (seconds) => void cast.seek(seconds) : (seconds) => void seek(seconds)}
+                  onToggleShuffle={toggleShuffleMode}
+                  onCycleRepeat={cycleRepeatMode}
+                  onDownload={() => void downloadCurrent()}
+                  isFavorite={isCurrentArtistFavorite}
+                  onToggleFavorite={() => handleToggleFavoriteArtist(visibleCurrent.artist, visibleCurrent.artworkUrl)}
+                  onOpenLyrics={() => setMode("lyrics")}
+                  onOpenQueue={() => setMode("queue")}
+                  onCreateStation={() => void handleCreateStation(visibleCurrent)}
+                  onSelectArtist={(artist) => void openArtistProfile(artist, visibleCurrent.artworkUrl)}
+                />
+
+                {similarTracks.length > 0 ? (
+                  <SimilarTracksShelf
+                    tracks={similarTracks}
+                    tokens={tokens}
+                    currentTrackTitle={visibleCurrent.title}
+                    onPlay={(track, list) => void play(track, list)}
+                    onQueue={(track) => addToQueue(track)}
+                    onSelectArtist={(artist) => void openArtistProfile(artist)}
+                  />
+                ) : null}
+
+                <StationsShelf
+                  stations={MUSIC_STATIONS}
+                  tokens={tokens}
+                  onSelectStation={(st) => void selectStation(st)}
+                />
+              </>
             ) : null}
 
             {mode === "lyrics" ? (
@@ -584,24 +692,59 @@ export function MusicPlayer() {
 
             {mode === "library" ? (
               <View style={{ gap: tokens.shelfGap }}>
-                <FavoriteArtistsShelf
-                  favorites={favoriteArtists}
-                  tokens={tokens}
-                  onSelectArtist={(artist) => void selectArtist(artist)}
-                  onToggleFavorite={(artist) => handleToggleFavoriteArtist(artist)}
+                <SegmentedControl
+                  testID="music-library-filter"
+                  accessibilityLabel="Library view filter"
+                  options={[
+                    { id: "all", label: "Overview" },
+                    { id: "artists", label: "Artists" },
+                    { id: "mixes", label: "Mixes" },
+                    { id: "history", label: "History" },
+                    { id: "downloads", label: "Downloads" },
+                  ]}
+                  value={libraryTab}
+                  onChange={(id) => setLibraryTab(id as LibraryTab)}
                 />
-                <RecommendedArtistsShelf
-                  recommendations={recommendedArtists}
-                  favorites={favoriteArtists}
-                  tokens={tokens}
-                  onSelectArtist={(artist) => void selectArtist(artist)}
-                  onToggleFavorite={(artist) => handleToggleFavoriteArtist(artist)}
-                />
-                {visibleHistory.length > 0 ? (
+
+                {(libraryTab === "all" || libraryTab === "artists") ? (
+                  <>
+                    <FavoriteArtistsShelf
+                      favorites={favoriteArtists}
+                      tokens={tokens}
+                      onSelectArtist={(artist) => void openArtistProfile(artist)}
+                      onToggleFavorite={(artist) => handleToggleFavoriteArtist(artist)}
+                    />
+                    <RecommendedArtistsShelf
+                      recommendations={recommendedArtists}
+                      favorites={favoriteArtists}
+                      tokens={tokens}
+                      onSelectArtist={(artist) => void openArtistProfile(artist)}
+                      onToggleFavorite={(artist) => handleToggleFavoriteArtist(artist)}
+                    />
+                  </>
+                ) : null}
+
+                {(libraryTab === "all" || libraryTab === "mixes") ? (
+                  <FamilyMixesShelf
+                    mixes={FAMILY_MIXES}
+                    tokens={tokens}
+                    onSelectMix={(m) => void selectMix(m)}
+                  />
+                ) : null}
+
+                {(libraryTab === "all" || libraryTab === "history") && visibleHistory.length > 0 ? (
                   <HistoryShelf
                     history={visibleHistory}
                     tokens={tokens}
                     onPlay={(track, list) => void play(track, list)}
+                  />
+                ) : null}
+
+                {(libraryTab === "all" || libraryTab === "downloads") && visibleDownloads.length > 0 ? (
+                  <DownloadsTray
+                    downloads={visibleDownloads}
+                    tokens={tokens}
+                    onRemove={(id) => void removeDownload(id)}
                   />
                 ) : null}
               </View>
@@ -634,10 +777,22 @@ export function MusicPlayer() {
                   <Text style={{ color: tokens.label2, ...TYPOGRAPHY.body, textAlign: "center" }}>Millions of songs, no ads. Sign in to play.</Text>
                 </View>
 
+                <StationsShelf
+                  stations={MUSIC_STATIONS}
+                  tokens={tokens}
+                  onSelectStation={(st) => void selectStation(st)}
+                />
+
+                <FamilyMixesShelf
+                  mixes={FAMILY_MIXES}
+                  tokens={tokens}
+                  onSelectMix={(m) => void selectMix(m)}
+                />
+
                 <FavoriteArtistsShelf
                   favorites={favoriteArtists}
                   tokens={tokens}
-                  onSelectArtist={(artist) => void selectArtist(artist)}
+                  onSelectArtist={(artist) => void openArtistProfile(artist)}
                   onToggleFavorite={(artist) => handleToggleFavoriteArtist(artist)}
                 />
 
@@ -645,7 +800,7 @@ export function MusicPlayer() {
                   recommendations={recommendedArtists}
                   favorites={favoriteArtists}
                   tokens={tokens}
-                  onSelectArtist={(artist) => void selectArtist(artist)}
+                  onSelectArtist={(artist) => void openArtistProfile(artist)}
                   onToggleFavorite={(artist) => handleToggleFavoriteArtist(artist)}
                 />
               </>
@@ -665,6 +820,59 @@ export function MusicPlayer() {
           />
         ) : null}
       </ScrollView>
+
+      {activeArtist ? (
+        <ArtistModal
+          visible={artistModalOpen}
+          artistName={activeArtist.name}
+          artworkUrl={activeArtist.artworkUrl}
+          tracks={artistTracks}
+          loading={loadingArtistTracks}
+          isFavorite={isFavoriteArtist(favoriteArtists, activeArtist.name)}
+          tokens={tokens}
+          onClose={() => setArtistModalOpen(false)}
+          onToggleFavorite={() => handleToggleFavoriteArtist(activeArtist.name, activeArtist.artworkUrl)}
+          onPlayAll={() => {
+            if (artistTracks.length > 0) {
+              void play(artistTracks[0], artistTracks);
+              setArtistModalOpen(false);
+              setMode("stage");
+            }
+          }}
+          onShuffle={() => {
+            if (artistTracks.length > 0) {
+              const shuffled = [...artistTracks].sort(() => Math.random() - 0.5);
+              void play(shuffled[0], shuffled);
+              setArtistModalOpen(false);
+              setMode("stage");
+            }
+          }}
+          onStartRadio={() => {
+            void (async () => {
+              setArtistModalOpen(false);
+              setSearching(true);
+              try {
+                const outcome = await engineSearch(`${activeArtist.name} radio`, 25);
+                const vis = visibleTracks(outcome.tracks, policy);
+                if (vis.length > 0) {
+                  await play(vis[0], vis);
+                  setMode("stage");
+                }
+              } finally {
+                setSearching(false);
+              }
+            })();
+          }}
+          onPlayTrack={(track) => {
+            void play(track, artistTracks);
+            setArtistModalOpen(false);
+            setMode("stage");
+          }}
+          onQueueTrack={(track) => {
+            addToQueue(track);
+          }}
+        />
+      ) : null}
 
       {/*
         The parent's editor for the family's own list.
@@ -1080,6 +1288,613 @@ function DownloadsTray({
         ))}
       </PanelCard>
     </View>
+  );
+}
+
+/**
+ * Curated Apple Music-style Browse Stations & Moods.
+ */
+function StationsShelf({
+  stations,
+  tokens,
+  onSelectStation,
+}: {
+  stations: readonly MusicStation[];
+  tokens: MusicTokens;
+  onSelectStation: (station: MusicStation) => void;
+}) {
+  return (
+    <View
+      testID="music-stations-shelf"
+      style={{
+        backgroundColor: tokens.grouped,
+        borderRadius: tokens.panelRadius,
+        borderWidth: 1,
+        borderColor: tokens.panelRim,
+        overflow: "hidden",
+        padding: 16,
+        gap: 12,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
+        <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "700" }}>
+          Browse Stations & Moods
+        </Text>
+        <Text style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>
+          Apple Music Style
+        </Text>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingVertical: 4 }}>
+        {stations.map((st) => (
+          <Pressable
+            key={st.id}
+            testID={`music-station-${st.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Play station ${st.title}: ${st.subtitle}`}
+            onPress={() => onSelectStation(st)}
+            style={{
+              width: 170,
+              backgroundColor: tokens.panel,
+              borderRadius: tokens.panelRadius,
+              borderWidth: 1,
+              borderColor: tokens.panelRim,
+              padding: 14,
+              gap: 8,
+              justifyContent: "space-between",
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  backgroundColor: mix(tokens.accent, "transparent", 20),
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontSize: 28 }}>{st.emoji}</Text>
+              </View>
+              {st.badge ? (
+                <View
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 999,
+                    backgroundColor: mix(tokens.label, "transparent", 12),
+                  }}
+                >
+                  <Text style={{ color: tokens.label, fontSize: 11, fontWeight: "700" }}>
+                    {st.badge}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={{ gap: 2 }}>
+              <Text numberOfLines={1} style={{ color: tokens.label, ...TYPOGRAPHY.body, fontWeight: "800" }}>
+                {st.title}
+              </Text>
+              <Text numberOfLines={2} style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: 16 }}>
+                {st.subtitle}
+              </Text>
+            </View>
+
+            <View
+              style={{
+                minHeight: 40,
+                borderRadius: 10,
+                backgroundColor: tokens.accent,
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: 4,
+              }}
+            >
+              <Text style={{ color: tokens.onAccent, fontSize: 13, fontWeight: "800" }}>
+                ▶ Start Station
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * Curated household mixes for the Family Library.
+ */
+function FamilyMixesShelf({
+  mixes,
+  tokens,
+  onSelectMix,
+}: {
+  mixes: readonly FamilyMix[];
+  tokens: MusicTokens;
+  onSelectMix: (mix: FamilyMix) => void;
+}) {
+  return (
+    <View
+      testID="music-family-mixes-shelf"
+      style={{
+        backgroundColor: tokens.grouped,
+        borderRadius: tokens.panelRadius,
+        borderWidth: 1,
+        borderColor: tokens.panelRim,
+        overflow: "hidden",
+        padding: 16,
+        gap: 12,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
+        <Text style={{ color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "700" }}>
+          Family Mixes & Playlists
+        </Text>
+        <Text style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>
+          Curated for Home
+        </Text>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingVertical: 4 }}>
+        {mixes.map((mixItem) => (
+          <Pressable
+            key={mixItem.id}
+            testID={`music-family-mix-${mixItem.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Play ${mixItem.title}`}
+            onPress={() => onSelectMix(mixItem)}
+            style={{
+              width: 170,
+              backgroundColor: tokens.panel,
+              borderRadius: tokens.panelRadius,
+              borderWidth: 1,
+              borderColor: tokens.panelRim,
+              padding: 14,
+              gap: 8,
+              justifyContent: "space-between",
+            }}
+          >
+            <View
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 14,
+                backgroundColor: mix(tokens.label, "transparent", 10),
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 30 }}>{mixItem.emoji}</Text>
+            </View>
+
+            <View style={{ gap: 2 }}>
+              <Text numberOfLines={1} style={{ color: tokens.label, ...TYPOGRAPHY.body, fontWeight: "800" }}>
+                {mixItem.title}
+              </Text>
+              <Text numberOfLines={2} style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: 16 }}>
+                {mixItem.description}
+              </Text>
+            </View>
+
+            <View
+              style={{
+                minHeight: 40,
+                borderRadius: 10,
+                backgroundColor: tokens.accent,
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: 4,
+              }}
+            >
+              <Text style={{ color: tokens.onAccent, fontSize: 13, fontWeight: "800" }}>
+                ▶ Play Mix
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * Dynamic "More Like This" shelf powered by YouTube recommendation graph.
+ */
+function SimilarTracksShelf({
+  tracks,
+  tokens,
+  currentTrackTitle,
+  onPlay,
+  onQueue,
+  onSelectArtist,
+}: {
+  tracks: MediaTrack[];
+  tokens: MusicTokens;
+  currentTrackTitle: string;
+  onPlay: (track: MediaTrack, list: MediaTrack[]) => void;
+  onQueue: (track: MediaTrack) => void;
+  onSelectArtist?: (artist: string) => void;
+}) {
+  return (
+    <View
+      testID="music-similar-tracks-shelf"
+      style={{
+        backgroundColor: tokens.grouped,
+        borderRadius: tokens.panelRadius,
+        borderWidth: 1,
+        borderColor: tokens.panelRim,
+        overflow: "hidden",
+        padding: 16,
+        gap: 12,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
+        <Text numberOfLines={1} style={{ flex: 1, color: tokens.label, ...TYPOGRAPHY.title, fontWeight: "700" }}>
+          More Like This
+        </Text>
+        <Text style={{ color: tokens.label3, ...TYPOGRAPHY.label }}>
+          YouTube Suggestions
+        </Text>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingVertical: 4 }}>
+        {tracks.map((track) => (
+          <View
+            key={track.id}
+            testID={`music-similar-track-${track.id}`}
+            style={{
+              width: 160,
+              backgroundColor: tokens.panel,
+              borderRadius: tokens.panelRadius,
+              borderWidth: 1,
+              borderColor: tokens.panelRim,
+              padding: 12,
+              gap: 8,
+              justifyContent: "space-between",
+            }}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Play ${track.title}`}
+              onPress={() => onPlay(track, tracks)}
+              style={{
+                width: "100%",
+                height: 120,
+                borderRadius: tokens.artworkRadius,
+                backgroundColor: mix(tokens.label, "transparent", 8),
+                overflow: "hidden",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {track.artworkUrl ? (
+                <Image
+                  source={{ uri: toHighResArtworkUrl(track.artworkUrl) ?? track.artworkUrl }}
+                  style={{ width: "100%", height: 120 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text style={{ fontSize: 40 }}>🎵</Text>
+              )}
+            </Pressable>
+
+            <View style={{ gap: 2 }}>
+              <Text numberOfLines={1} style={{ color: tokens.label, ...TYPOGRAPHY.body, fontWeight: "700" }}>
+                {track.title}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`View ${track.artist}`}
+                onPress={() => onSelectArtist?.(track.artist)}
+                hitSlop={4}
+              >
+                <Text numberOfLines={1} style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize }}>
+                  {track.artist}
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Play ${track.title}`}
+                onPress={() => onPlay(track, tracks)}
+                style={{
+                  flex: 1,
+                  minHeight: 40,
+                  borderRadius: 10,
+                  backgroundColor: tokens.accent,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: tokens.onAccent, fontSize: 13, fontWeight: "800" }}>Play</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Add ${track.title} to queue`}
+                onPress={() => onQueue(track)}
+                style={{
+                  minWidth: 40,
+                  minHeight: 40,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: tokens.panelRim,
+                  backgroundColor: tokens.sheet,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: tokens.label, fontSize: 18, fontWeight: "700" }}>+</Text>
+              </Pressable>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * Interactive Apple Music-style Artist Profile modal.
+ */
+function ArtistModal({
+  visible,
+  artistName,
+  artworkUrl,
+  tracks,
+  loading,
+  isFavorite,
+  tokens,
+  onClose,
+  onToggleFavorite,
+  onPlayAll,
+  onShuffle,
+  onStartRadio,
+  onPlayTrack,
+  onQueueTrack,
+}: {
+  visible: boolean;
+  artistName: string;
+  artworkUrl?: string | null;
+  tracks: MediaTrack[];
+  loading: boolean;
+  isFavorite: boolean;
+  tokens: MusicTokens;
+  onClose: () => void;
+  onToggleFavorite: () => void;
+  onPlayAll: () => void;
+  onShuffle: () => void;
+  onStartRadio: () => void;
+  onPlayTrack: (track: MediaTrack) => void;
+  onQueueTrack: (track: MediaTrack) => void;
+}) {
+  const initial = (artistName[0] || "?").toUpperCase();
+
+  return (
+    <Modal
+      visible={visible}
+      onClose={onClose}
+      title={artistName}
+      testID="music-artist-modal"
+    >
+      <View style={{ gap: 16 }}>
+        {/* Artist Header Profile */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+          <View
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              backgroundColor: tokens.panel,
+              borderWidth: 2,
+              borderColor: tokens.panelRim,
+              overflow: "hidden",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {artworkUrl ? (
+              <Image
+                source={{ uri: toHighResArtworkUrl(artworkUrl) ?? artworkUrl }}
+                style={{ width: 80, height: 80 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={{ color: tokens.label, fontSize: 32, fontWeight: "800" }}>{initial}</Text>
+            )}
+          </View>
+
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text numberOfLines={1} style={{ color: tokens.label, fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "800" }}>
+              {artistName}
+            </Text>
+            <Text style={{ color: tokens.label2, fontSize: TYPOGRAPHY.label.fontSize }}>
+              Artist Profile • YouTube Music
+            </Text>
+          </View>
+
+          <Pressable
+            testID="music-artist-modal-fav"
+            accessibilityRole="button"
+            accessibilityLabel={isFavorite ? `Unfavorite ${artistName}` : `Favorite ${artistName}`}
+            onPress={onToggleFavorite}
+            style={{
+              minHeight: 48,
+              minWidth: 48,
+              paddingHorizontal: 14,
+              borderRadius: 14,
+              backgroundColor: isFavorite ? mix(tokens.accent, "transparent", 20) : mix(tokens.label, "transparent", 8),
+              borderWidth: 1,
+              borderColor: isFavorite ? tokens.accent : tokens.panelRim,
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "row",
+              gap: 6,
+            }}
+          >
+            <Text style={{ fontSize: 18, color: isFavorite ? tokens.accent : tokens.label }}>
+              {isFavorite ? "★" : "☆"}
+            </Text>
+            <Text style={{ color: isFavorite ? tokens.accent : tokens.label, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+              {isFavorite ? "Favorited" : "Favorite"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Action Buttons: Play Top Songs, Shuffle, Artist Radio */}
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <Pressable
+            testID="music-artist-modal-play"
+            accessibilityRole="button"
+            accessibilityLabel={`Play top songs by ${artistName}`}
+            onPress={onPlayAll}
+            disabled={tracks.length === 0}
+            style={{
+              flex: 1,
+              minHeight: 48,
+              borderRadius: 12,
+              backgroundColor: tokens.accent,
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "row",
+              gap: 6,
+              opacity: tracks.length === 0 ? 0.5 : 1,
+            }}
+          >
+            <Text style={{ color: tokens.onAccent, fontSize: 15, fontWeight: "800" }}>▶ Play Hits</Text>
+          </Pressable>
+
+          <Pressable
+            testID="music-artist-modal-shuffle"
+            accessibilityRole="button"
+            accessibilityLabel={`Shuffle songs by ${artistName}`}
+            onPress={onShuffle}
+            disabled={tracks.length === 0}
+            style={{
+              flex: 1,
+              minHeight: 48,
+              borderRadius: 12,
+              backgroundColor: mix(tokens.label, "transparent", 10),
+              borderWidth: 1,
+              borderColor: tokens.panelRim,
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "row",
+              gap: 6,
+              opacity: tracks.length === 0 ? 0.5 : 1,
+            }}
+          >
+            <Text style={{ color: tokens.label, fontSize: 15, fontWeight: "800" }}>🔀 Shuffle</Text>
+          </Pressable>
+
+          <Pressable
+            testID="music-artist-modal-radio"
+            accessibilityRole="button"
+            accessibilityLabel={`Start radio for ${artistName}`}
+            onPress={onStartRadio}
+            style={{
+              flex: 1,
+              minHeight: 48,
+              borderRadius: 12,
+              backgroundColor: mix(tokens.accent, "transparent", 18),
+              borderWidth: 1,
+              borderColor: mix(tokens.accent, "transparent", 35),
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "row",
+              gap: 6,
+            }}
+          >
+            <Text style={{ color: tokens.label, fontSize: 15, fontWeight: "800" }}>📻 Radio</Text>
+          </Pressable>
+        </View>
+
+        {/* Songs List */}
+        <View style={{ gap: 8, maxHeight: 380 }}>
+          <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "800" }}>
+            Top Tracks
+          </Text>
+          {loading ? (
+            <View style={{ paddingVertical: 24, alignItems: "center" }}>
+              <ActivityIndicator color={tokens.accent} />
+            </View>
+          ) : tracks.length === 0 ? (
+            <Text style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize, textAlign: "center", paddingVertical: 16 }}>
+              No tracks found for this artist.
+            </Text>
+          ) : (
+            <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {tracks.map((t, idx) => (
+                <View
+                  key={t.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    minHeight: 52,
+                    paddingHorizontal: 8,
+                    borderRadius: 10,
+                    backgroundColor: mix(tokens.label, "transparent", 4),
+                  }}
+                >
+                  <Text style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize, width: 20, textAlign: "center", fontWeight: "700" }}>
+                    {idx + 1}
+                  </Text>
+                  <View style={{ width: 40, height: 40, borderRadius: 6, overflow: "hidden", backgroundColor: mix(tokens.label, "transparent", 8) }}>
+                    {t.artworkUrl ? (
+                      <Image source={{ uri: t.artworkUrl }} style={{ width: 40, height: 40 }} resizeMode="cover" />
+                    ) : (
+                      <Text style={{ fontSize: 20, textAlign: "center", lineHeight: 40 }}>🎵</Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text numberOfLines={1} style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                      {t.title}
+                    </Text>
+                    <Text numberOfLines={1} style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize }}>
+                      {t.durationSeconds ? clock(t.durationSeconds) : "--:--"}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Play ${t.title}`}
+                    onPress={() => onPlayTrack(t)}
+                    style={{
+                      minWidth: 44,
+                      minHeight: 44,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 8,
+                      backgroundColor: tokens.accent,
+                    }}
+                  >
+                    <Text style={{ color: tokens.onAccent, fontSize: 14, fontWeight: "800" }}>▶</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add ${t.title} to queue`}
+                    onPress={() => onQueueTrack(t)}
+                    style={{
+                      minWidth: 44,
+                      minHeight: 44,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 8,
+                      backgroundColor: mix(tokens.label, "transparent", 8),
+                    }}
+                  >
+                    <Text style={{ color: tokens.label, fontSize: 18, fontWeight: "700" }}>+</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -1535,6 +2350,8 @@ interface StageProps {
   onToggleFavorite?: () => void;
   onOpenLyrics?: () => void;
   onOpenQueue?: () => void;
+  onCreateStation?: () => void;
+  onSelectArtist?: (artist: string) => void;
 }
 
 /**
@@ -1558,6 +2375,7 @@ function NowPlayingStage({
   playing, position, duration, repeat, shuffle, downloaded, casting, player, streamFormat,
   onToggle, onNext, onPrevious, onSeek, onToggleShuffle, onCycleRepeat, onDownload,
   isFavorite = false, onToggleFavorite, onOpenLyrics, onOpenQueue,
+  onCreateStation, onSelectArtist,
 }: StageProps) {
   // The artwork's crossfade and play/pause scale dynamics:
   // On play, cover expands to 1.0. When paused, it shrinks to 0.92
@@ -1710,9 +2528,17 @@ function NowPlayingStage({
             </Pressable>
           ) : null}
         </View>
-        <Text numberOfLines={1} style={{ color: tokens.label, ...STAGE_TYPE.artist, textAlign: "center" }}>
-          {track.artist}
-        </Text>
+        <Pressable
+          testID="np-artist-name"
+          accessibilityRole="button"
+          accessibilityLabel={`View ${track.artist}`}
+          hitSlop={8}
+          onPress={() => onSelectArtist?.(track.artist)}
+        >
+          <Text numberOfLines={1} style={{ color: tokens.label, ...STAGE_TYPE.artist, textAlign: "center" }}>
+            {track.artist}
+          </Text>
+        </Pressable>
       </View>
 
       {/* The scrubber: a 6px track over the glass, a 64dp hit area. */}
@@ -1858,26 +2684,56 @@ function NowPlayingStage({
         copy is unchanged ("Download" / "Downloaded ✓"); only its surface is
         glass now, so it reads over the artwork like everything else.
       */}
-      <Pressable
-        testID="np-download"
-        accessibilityRole="button"
-        accessibilityLabel={downloaded ? "Downloaded" : "Download this track"}
-        disabled={downloaded}
-        onPress={onDownload}
-        style={{
-          minHeight: 64,
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: tokens.panelRadius,
-          backgroundColor: tokens.glassFill,
-          borderWidth: 1,
-          borderColor: tokens.glassRim,
-        }}
-      >
-        <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
-          {downloaded ? "Downloaded ✓" : "Download"}
-        </Text>
-      </Pressable>
+      <View style={{ flexDirection: "row", gap: 12 }}>
+        {onCreateStation ? (
+          <Pressable
+            testID="np-create-station"
+            accessibilityRole="button"
+            accessibilityLabel="Create station from this track"
+            hitSlop={8}
+            onPress={onCreateStation}
+            style={{
+              flex: 1,
+              minHeight: 64,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              borderRadius: tokens.panelRadius,
+              backgroundColor: mix(tokens.accent, "transparent", 20),
+              borderWidth: 1,
+              borderColor: mix(tokens.accent, tokens.glassRim, 40),
+            }}
+          >
+            <Text style={{ fontSize: 20 }}>✨</Text>
+            <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+              Create Station
+            </Text>
+          </Pressable>
+        ) : null}
+
+        <Pressable
+          testID="np-download"
+          accessibilityRole="button"
+          accessibilityLabel={downloaded ? "Downloaded" : "Download this track"}
+          disabled={downloaded}
+          onPress={onDownload}
+          style={{
+            flex: 1,
+            minHeight: 64,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: tokens.panelRadius,
+            backgroundColor: tokens.glassFill,
+            borderWidth: 1,
+            borderColor: tokens.glassRim,
+          }}
+        >
+          <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+            {downloaded ? "Downloaded ✓" : "Download"}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

@@ -165,9 +165,20 @@ export function SyncManager({ children }: { children: React.ReactNode }) {
   // kiosk must not hammer a dead NAS). Success resets the burst counter.
   useEffect(() => {
     // Poll while signed in (the kiosk's one 60s pull), refetch on foreground.
-    if (!hydrated || !member) return;
+    // When signed out, pulse on the same 60s cadence so public & guestVisible
+    // widgets (Today events, Daily Schedule, Tasks, Weather, Meals) stay fresh.
+    if (!hydrated) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+
+    if (!member) {
+      const guestTimer = setInterval(() => {
+        pulse();
+      }, POLL_MS);
+      return () => {
+        clearInterval(guestTimer);
+      };
+    }
 
     const loop = async () => {
       if (cancelled) return;
@@ -181,7 +192,7 @@ export function SyncManager({ children }: { children: React.ReactNode }) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [hydrated, member, refreshNow]);
+  }, [hydrated, member, refreshNow, pulse]);
 
   // Foreground refetch — the family comes back to truth when the app resumes.
   useEffect(() => {

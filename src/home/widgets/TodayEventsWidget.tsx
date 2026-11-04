@@ -22,6 +22,7 @@ import {
   googleEventsForDay,
   FAMILY_RAIL_TOKEN,
   GOOGLE_RAIL_TOKEN,
+  scheduleTimeMinutes,
   type DbEventRow,
   type GoogleEventRow,
   type WallEvent,
@@ -267,6 +268,38 @@ export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
         // unauthorised (401/403): the rows are no longer ours to show.
         google = [];
         lastGoodGoogleRef.current = [];
+      }
+    }
+
+    if (googleFailure === "unauthorised") {
+      try {
+        const ss = await api<{
+          ok?: boolean;
+          events?: { title: string; time: string; allDay?: boolean }[];
+        }>("/api/consuela/screensaver");
+        if (ss?.ok && Array.isArray(ss.events)) {
+          const ssEvents: WallEvent[] = ss.events.map((ev, idx) => {
+            const minutes = ev.allDay ? -1 : scheduleTimeMinutes(ev.time);
+            return {
+              id: `ss_${idx}`,
+              title: ev.title,
+              time: ev.allDay ? "All day" : ev.time || "All day",
+              icon: "📅",
+              sortMinutes: ev.allDay ? -1 : minutes ?? 540,
+              railToken: GOOGLE_RAIL_TOKEN,
+              member: "Google",
+            };
+          });
+          google = ssEvents;
+          lastGoodGoogleRef.current = google;
+          googleFailure = null;
+        } else if (guest) {
+          googleFailure = null;
+        }
+      } catch {
+        if (guest) {
+          googleFailure = null;
+        }
       }
     }
 

@@ -101,6 +101,7 @@ describe("ScheduleWidget", () => {
     const { findByText } = render(<ScheduleWidget />, { wrapper: wrap });
     expect(await findByText("All done")).toBeTruthy();
     expect(await findByText("All routines completed for today.")).toBeTruthy();
+    expect(await findByText("See today's schedule →")).toBeTruthy();
   });
 
   it("renders up to 6 routines when span is 2 (bigger widget)", async () => {

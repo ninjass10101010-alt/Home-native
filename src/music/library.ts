@@ -181,12 +181,27 @@ export function saveDenylist(list: DenyEntry[]): Promise<void> {
 }
 
 /**
+ * Test whether an artist name is valid and readable (not a duration timestamp
+ * like "4:18" or an empty/generic label).
+ */
+export function isValidArtistName(name: string | null | undefined): boolean {
+  if (!name) return false;
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return false;
+  // Match durations like "4:18" or "1:02:45"
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) return false;
+  const lower = trimmed.toLowerCase();
+  if (["unknown", "unknown artist", "song", "video", "album", "single"].includes(lower)) return false;
+  return true;
+}
+
+/**
  * Load the family's saved favorite artists from storage.
  */
 export async function loadFavoriteArtists(): Promise<FavoriteArtist[]> {
   const list = await readJson<FavoriteArtist[]>(FAVORITE_ARTISTS_KEY, []);
   return Array.isArray(list)
-    ? list.filter((a) => typeof a?.name === "string" && a.name.trim().length > 0)
+    ? list.filter((a) => isValidArtistName(a?.name))
     : [];
 }
 
@@ -201,7 +216,7 @@ export function saveFavoriteArtists(list: FavoriteArtist[]): Promise<void> {
  * Test whether an artist is in the favorites list (case-insensitive).
  */
 export function isFavoriteArtist(list: FavoriteArtist[], artistName: string): boolean {
-  if (!artistName) return false;
+  if (!isValidArtistName(artistName)) return false;
   const target = artistName.trim().toLowerCase();
   return list.some((a) => a.name.trim().toLowerCase() === target);
 }
@@ -215,7 +230,7 @@ export function toggleFavoriteArtist(
   artworkUrl?: string | null
 ): FavoriteArtist[] {
   const trimmed = artistName.trim();
-  if (!trimmed) return list;
+  if (!isValidArtistName(trimmed)) return list;
   const target = trimmed.toLowerCase();
   const exists = list.some((a) => a.name.trim().toLowerCase() === target);
   if (exists) {
@@ -228,12 +243,22 @@ export function toggleFavoriteArtist(
  * Hand-curated genre leaders for intelligent discovery recommendations.
  */
 export const CURATED_ARTISTS: readonly Omit<RecommendedArtist, "reason">[] = [
+  { name: "Bad Bunny", genre: "Reggaeton / Latin" },
+  { name: "Grupo Frontera", genre: "Norteño / Cumbia" },
+  { name: "Karol G", genre: "Reggaeton / Latin Pop" },
+  { name: "Los Ángeles Azules", genre: "Cumbia Sonidera" },
+  { name: "Carin León", genre: "Regional Mexicano" },
+  { name: "Selena", genre: "Cumbia / Tejano" },
+  { name: "Feid", genre: "Reggaeton / Urban" },
+  { name: "Romeo Santos", genre: "Bachata" },
   { name: "Taylor Swift", genre: "Pop" },
+  { name: "Daddy Yankee", genre: "Reggaeton Clásico" },
+  { name: "Peso Pluma", genre: "Corridos / Regional" },
+  { name: "Maná", genre: "Rock en Español" },
   { name: "The Weeknd", genre: "R&B / Pop" },
   { name: "Kendrick Lamar", genre: "Hip-Hop" },
   { name: "Billie Eilish", genre: "Alternative" },
   { name: "Drake", genre: "Hip-Hop / Rap" },
-  { name: "Bad Bunny", genre: "Latin / Urban" },
   { name: "SZA", genre: "R&B / Soul" },
   { name: "Ed Sheeran", genre: "Acoustic / Pop" },
   { name: "Bruno Mars", genre: "Funk / Soul" },
@@ -258,7 +283,7 @@ export function getRecommendedArtists(
   // Extract distinct artists from recently played history
   for (const track of history) {
     const raw = track.artist.trim();
-    if (!raw) continue;
+    if (!isValidArtistName(raw)) continue;
     const lower = raw.toLowerCase();
     if (!favoriteNames.has(lower) && !historyArtists.has(lower)) {
       historyArtists.set(lower, { name: raw, artworkUrl: track.artworkUrl });
