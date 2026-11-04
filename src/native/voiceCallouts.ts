@@ -1,0 +1,301 @@
+import { Platform } from "react-native";
+import { playNotificationSound, type NotificationSound } from "./soundEffects";
+
+export const VOICE_CALLOUT_KEYS = [
+  "dinner_ready",
+  "routine_lunch",
+  "routine_papa",
+  "routine_school",
+  "routine_dogs",
+  "routine_snack",
+  "routine_mom",
+  "routine_bedtime",
+  "task_dishwasher",
+  "task_bed",
+  "task_generic",
+  "calendar_event",
+  "weather_alert",
+] as const;
+
+export type VoiceCalloutKey = (typeof VOICE_CALLOUT_KEYS)[number];
+
+export const VOICE_CALLOUT_ASSETS: Record<VoiceCalloutKey, number> = {
+  dinner_ready: require("../../assets/sounds/voices/dinner_ready.mp3"),
+  routine_lunch: require("../../assets/sounds/voices/routine_lunch.mp3"),
+  routine_papa: require("../../assets/sounds/voices/routine_papa.mp3"),
+  routine_school: require("../../assets/sounds/voices/routine_school.mp3"),
+  routine_dogs: require("../../assets/sounds/voices/routine_dogs.mp3"),
+  routine_snack: require("../../assets/sounds/voices/routine_snack.mp3"),
+  routine_mom: require("../../assets/sounds/voices/routine_mom.mp3"),
+  routine_bedtime: require("../../assets/sounds/voices/routine_bedtime.mp3"),
+  task_dishwasher: require("../../assets/sounds/voices/task_dishwasher.mp3"),
+  task_bed: require("../../assets/sounds/voices/task_bed.mp3"),
+  task_generic: require("../../assets/sounds/voices/task_generic.mp3"),
+  calendar_event: require("../../assets/sounds/voices/calendar_event.mp3"),
+  weather_alert: require("../../assets/sounds/voices/weather_alert.mp3"),
+};
+
+export const VOICE_CALLOUT_DESCRIPTIONS: Record<VoiceCalloutKey, { label: string; text: string }> = {
+  dinner_ready: {
+    label: "Dinner Ready",
+    text: "Attention Garcia Family! Dinner is ready. ¡La cena está lista, a comer!",
+  },
+  routine_lunch: {
+    label: "Lunch Time",
+    text: "Attention Garcia Family! Lunch time. ¡Hora del almuerzo!",
+  },
+  routine_papa: {
+    label: "Papá Coming Home",
+    text: "Attention! Papá is on his way home. ¡Papá ya viene en camino!",
+  },
+  routine_school: {
+    label: "Kids From School",
+    text: "Reminder: Time to pick up the kids from school. ¡Hora de recoger a las niñas!",
+  },
+  routine_dogs: {
+    label: "Take Dogs Out",
+    text: "Time to take the dogs out! ¡A sacar a pasear a los perritos!",
+  },
+  routine_snack: {
+    label: "Snack Time",
+    text: "Snack time! ¡Hora de la merienda para todos!",
+  },
+  routine_mom: {
+    label: "Mom Off Work",
+    text: "Attention! Mom is off work. ¡Mamá ya salió del trabajo!",
+  },
+  routine_bedtime: {
+    label: "Bedtime Wind Down",
+    text: "Goodnight Garcia Family! Time to wind down. ¡Hora de descansar!",
+  },
+  task_dishwasher: {
+    label: "Unload Dishwasher",
+    text: "Task reminder: Time to unload the dishwasher. ¡A vaciar el lavavajillas!",
+  },
+  task_bed: {
+    label: "Make Bed",
+    text: "Task reminder: Time to make your bed. ¡A tender la cama!",
+  },
+  task_generic: {
+    label: "Family Chore",
+    text: "Family reminder: You have a task on the board. ¡Tienes una tarea pendiente!",
+  },
+  calendar_event: {
+    label: "Calendar Event",
+    text: "Calendar reminder: You have an event on the schedule. ¡Tienes un evento en el calendario!",
+  },
+  weather_alert: {
+    label: "Weather Alert",
+    text: "Weather advisory for the Garcia Family. ¡Aviso importante del clima!",
+  },
+};
+
+type AudioModuleType = typeof import("expo-audio");
+
+let audioModuleCached: AudioModuleType | null = null;
+
+function getAudioModule(): AudioModuleType | null {
+  if (Platform.OS === "web") return null;
+  if (!audioModuleCached) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      audioModuleCached = require("expo-audio") as AudioModuleType;
+    } catch {
+      return null;
+    }
+  }
+  return audioModuleCached;
+}
+
+/**
+ * Maps notification details to a Sarah bilingual voice call-out key.
+ */
+export function resolveVoiceCallout(
+  category: string,
+  title: string,
+  body: string
+): VoiceCalloutKey {
+  const text = `${title} ${body}`.toLowerCase();
+
+  if (
+    category === "weather" ||
+    text.includes("weather") ||
+    text.includes("clima") ||
+    text.includes("snow") ||
+    text.includes("storm") ||
+    (!text.includes("wind-down") && !text.includes("wind down") && /\b(wind|winds|windy|viento)\b/i.test(text))
+  ) {
+    return "weather_alert";
+  }
+
+  if (text.includes("dinner") || text.includes("cena") || text.includes("cenar")) {
+    return "dinner_ready";
+  }
+
+  if (text.includes("lunch") || text.includes("almuerzo") || text.includes("comida")) {
+    return "routine_lunch";
+  }
+
+  if (text.includes("papá") || text.includes("papa") || text.includes("dad")) {
+    return "routine_papa";
+  }
+
+  if (
+    text.includes("school") ||
+    text.includes("escuela") ||
+    text.includes("kids") ||
+    text.includes("niñas")
+  ) {
+    return "routine_school";
+  }
+
+  if (
+    text.includes("dog") ||
+    text.includes("dogs") ||
+    text.includes("perro") ||
+    text.includes("perros")
+  ) {
+    return "routine_dogs";
+  }
+
+  if (text.includes("snack") || text.includes("merienda")) {
+    return "routine_snack";
+  }
+
+  if (text.includes("mom") || text.includes("mamá") || text.includes("mama")) {
+    return "routine_mom";
+  }
+
+  if (
+    text.includes("bedtime") ||
+    text.includes("reading") ||
+    text.includes("wind-down") ||
+    text.includes("wind down") ||
+    text.includes("dormir") ||
+    text.includes("descansar")
+  ) {
+    return "routine_bedtime";
+  }
+
+  if (
+    text.includes("dishwasher") ||
+    text.includes("lavavajillas") ||
+    text.includes("platos")
+  ) {
+    return "task_dishwasher";
+  }
+
+  if (text.includes("bed") || text.includes("cama")) {
+    return "task_bed";
+  }
+
+  if (
+    category === "calendar" ||
+    text.includes("calendar") ||
+    text.includes("event") ||
+    text.includes("starting now") ||
+    text.includes("starts in") ||
+    text.includes("gymnastics") ||
+    text.includes("soccer") ||
+    text.includes("practice")
+  ) {
+    return "calendar_event";
+  }
+
+  if (
+    category === "tasks" ||
+    text.includes("task") ||
+    text.includes("tarea") ||
+    text.includes("chore") ||
+    text.includes("pending")
+  ) {
+    return "task_generic";
+  }
+
+  return "calendar_event";
+}
+
+/**
+ * Plays a bilingual voice call-out by key.
+ */
+export async function playVoiceCallout(
+  calloutKey: VoiceCalloutKey,
+  volume = 0.85
+): Promise<void> {
+  const mod = getAudioModule();
+  if (!mod || typeof mod.createAudioPlayer !== "function") return;
+
+  const asset = VOICE_CALLOUT_ASSETS[calloutKey];
+  if (!asset) return;
+
+  try {
+    const player = mod.createAudioPlayer(asset);
+    const clampedVol = Math.max(0, Math.min(1, volume));
+    (player as any).volume = clampedVol;
+    player.play();
+
+    // Auto cleanup after 6.5s
+    setTimeout(() => {
+      try {
+        if (typeof player.remove === "function") {
+          player.remove();
+        }
+      } catch {
+        // ignore
+      }
+    }, 6500);
+  } catch {
+    // ignore
+  }
+}
+
+export type SoundMode = "tone_and_voice" | "voice_only" | "tone_only";
+
+export interface PlayNotificationAudioParams {
+  sound: NotificationSound;
+  volume: number;
+  soundMode?: SoundMode;
+  category: string;
+  title: string;
+  body: string;
+}
+
+export const voiceCalloutPlayer = {
+  playVoiceCallout,
+};
+
+/**
+ * Dispatches notification audio respecting the user's preferred SoundMode:
+ * - "tone_and_voice": Plays the gentle alert chime first, followed 750ms later by Sarah's voice announcement.
+ * - "voice_only": Plays Sarah's voice announcement immediately.
+ * - "tone_only": Plays the traditional alert chime only.
+ */
+export async function playNotificationAudio({
+  sound,
+  volume,
+  soundMode = "tone_and_voice",
+  category,
+  title,
+  body,
+}: PlayNotificationAudioParams): Promise<void> {
+  const calloutKey = resolveVoiceCallout(category, title, body);
+
+  if (soundMode === "voice_only") {
+    await voiceCalloutPlayer.playVoiceCallout(calloutKey, volume);
+    return;
+  }
+
+  if (soundMode === "tone_only") {
+    await playNotificationSound(sound, volume);
+    return;
+  }
+
+  // Default: Tone + Voice Announcement
+  // 1. Play the alert tone so no one gets spooked by unexpected voices
+  await playNotificationSound(sound, volume);
+
+  // 2. Follow up after 750ms with Sarah's warm bilingual spoken announcement
+  setTimeout(() => {
+    void voiceCalloutPlayer.playVoiceCallout(calloutKey, volume);
+  }, 750);
+}

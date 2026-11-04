@@ -20,6 +20,11 @@ import {
   playNotificationSound,
   type NotificationSound,
 } from "../native/soundEffects";
+import {
+  playVoiceCallout,
+  resolveVoiceCallout,
+  type SoundMode,
+} from "../native/voiceCallouts";
 import { dispatchNotification } from "../native/notifications";
 
 const VOLUME_STEPS = [0.25, 0.5, 0.75, 1.0];
@@ -73,6 +78,16 @@ export function NotificationsCard() {
 
   const handlePreviewSound = (sound: NotificationSound, volume: number) => {
     void playNotificationSound(sound, volume);
+  };
+
+  const handlePreviewVoice = (
+    category: NotificationCategory,
+    timing: TimingStage,
+    volume: number
+  ) => {
+    const sample = SAMPLE_COPY[category][timing];
+    const key = resolveVoiceCallout(category, sample.title, sample.body);
+    void playVoiceCallout(key, volume);
   };
 
   const handleTestNotification = async (
@@ -144,6 +159,12 @@ export function NotificationsCard() {
               ? config.advanceVolume ?? config.volume
               : config.startVolume ?? 0.8
             : config.volume;
+
+          const currentSoundMode: SoundMode = meta.hasTimingStages
+            ? isAdvance
+              ? config.advanceSoundMode ?? config.soundMode ?? "tone_and_voice"
+              : config.startSoundMode ?? config.soundMode ?? "tone_and_voice"
+            : config.soundMode ?? "tone_and_voice";
 
           const timingSubtitle = meta.hasTimingStages
             ? isAdvance
@@ -242,6 +263,59 @@ export function NotificationsCard() {
                       )}
                     </View>
                   )}
+
+                  {/* Announcement Style (Tone + ElevenLabs Voice Call-Out) */}
+                  <View style={{ gap: 8 }}>
+                    <Text
+                      style={{
+                        color: colors["color-text-secondary"],
+                        fontSize: TYPOGRAPHY.label.fontSize,
+                        fontWeight: "600",
+                        letterSpacing: 1,
+                      }}
+                    >
+                      ANNOUNCEMENT STYLE
+                    </Text>
+                    <SegmentedControl
+                      testID={`notif-mode-switch-${cat}`}
+                      options={[
+                        { id: "tone_and_voice", label: "🔔 + 🗣️ Tone & Voice" },
+                        { id: "voice_only", label: "🗣️ Voice Only" },
+                        { id: "tone_only", label: "🎵 Tone Only" },
+                      ]}
+                      value={currentSoundMode}
+                      onChange={(val) => {
+                        const nextMode = val as SoundMode;
+                        if (meta.hasTimingStages) {
+                          if (isAdvance) {
+                            updateCategory(cat, {
+                              advanceSoundMode: nextMode,
+                              soundMode: nextMode,
+                            });
+                          } else {
+                            updateCategory(cat, {
+                              startSoundMode: nextMode,
+                            });
+                          }
+                        } else {
+                          updateCategory(cat, { soundMode: nextMode });
+                        }
+                      }}
+                    />
+                    <Text
+                      style={{
+                        color: colors["color-text-muted"],
+                        fontSize: TYPOGRAPHY.label.fontSize,
+                        marginTop: 2,
+                      }}
+                    >
+                      {currentSoundMode === "tone_and_voice"
+                        ? "Plays a gentle tone first, followed by Sarah's warm bilingual voice call-out."
+                        : currentSoundMode === "voice_only"
+                          ? "Plays Sarah's bilingual voice announcement directly."
+                          : "Plays the classic notification tone only."}
+                    </Text>
+                  </View>
 
                   {/* Sound Tone Picker */}
                   <View style={{ gap: 8 }}>
@@ -379,7 +453,7 @@ export function NotificationsCard() {
                   </View>
 
                   {/* Actions Row: Preview & Send Test */}
-                  <View style={{ flexDirection: "row", gap: 12, marginTop: 4 }}>
+                  <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
                     <View style={{ flex: 1 }}>
                       <SoftButton
                         variant="secondary"
@@ -388,7 +462,18 @@ export function NotificationsCard() {
                         accessibilityLabel={`Preview ${SOUND_LABELS[currentSound]} tone`}
                         onPress={() => handlePreviewSound(currentSound, currentVolume)}
                       >
-                        Preview Tone 🔊
+                        Tone 🔊
+                      </SoftButton>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <SoftButton
+                        variant="secondary"
+                        size="sm"
+                        testID={`notif-preview-voice-${cat}`}
+                        accessibilityLabel="Preview Sarah bilingual voice call-out"
+                        onPress={() => handlePreviewVoice(cat, currentTiming, currentVolume)}
+                      >
+                        Voice 🗣️
                       </SoftButton>
                     </View>
                     <View style={{ flex: 1 }}>
@@ -400,11 +485,7 @@ export function NotificationsCard() {
                         accessibilityLabel={`Send test ${meta.title} notification`}
                         onPress={() => void handleTestNotification(cat, currentTiming)}
                       >
-                        {meta.hasTimingStages
-                          ? isAdvance
-                            ? "Test 15m Tone 🔔"
-                            : "Test Start Tone 🔔"
-                          : "Send Test 🔔"}
+                        Test 🔔
                       </SoftButton>
                     </View>
                   </View>

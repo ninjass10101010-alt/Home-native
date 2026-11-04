@@ -3,7 +3,7 @@ import {
   loadNotificationPreferences,
   type NotificationCategory,
 } from "./notificationPrefs";
-import { playNotificationSound } from "./soundEffects";
+import { playNotificationAudio } from "./voiceCallouts";
 import { postActiveNotification } from "./notificationFeed";
 import { TOKENS } from "../theme/tokens";
 
@@ -115,18 +115,28 @@ export async function dispatchNotification({
       if (config.advanceEnabled === false) return null;
       const sound = config.advanceSound ?? config.sound;
       const volume = config.advanceVolume ?? config.volume;
-      void playNotificationSound(sound, volume);
+      const soundMode = config.advanceSoundMode ?? config.soundMode ?? "tone_and_voice";
+      void playNotificationAudio({ sound, volume, soundMode, category, title, body });
     } else if (timing === "start") {
       if (config.startEnabled === false) return null;
       const sound = config.startSound ?? config.sound;
       const volume = config.startVolume ?? config.volume;
-      void playNotificationSound(sound, volume);
+      const soundMode = config.startSoundMode ?? config.soundMode ?? "tone_and_voice";
+      void playNotificationAudio({ sound, volume, soundMode, category, title, body });
     } else {
-      // Play default category audio tone at configured volume
-      void playNotificationSound(config.sound, config.volume);
+      // Play category audio respecting soundMode (tone + Sarah voice call-out)
+      const soundMode = config.soundMode ?? "tone_and_voice";
+      void playNotificationAudio({ sound: config.sound, volume: config.volume, soundMode, category, title, body });
     }
   } else if (category === "emergency") {
-    void playNotificationSound("radar", 1.0);
+    void playNotificationAudio({
+      sound: "radar",
+      volume: 1.0,
+      soundMode: "tone_and_voice",
+      category: "emergency",
+      title,
+      body,
+    });
   }
 
   const notifId = `notif-${Date.now()}-${Math.floor(Math.random() * 10000)}`;

@@ -4,6 +4,42 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-04 — feat(notifications): ElevenLabs bilingual voice call-outs (Sarah) with Tone + Voice non-spook delivery and Settings announcement controls (`voiceCallouts.ts`, `notificationPrefs.ts`, `notifications.ts`, `NotificationsCard.tsx`, `assets/sounds/voices/`).
+  **What changed:**
+  - **ElevenLabs Bilingual Voice Call-Outs (`src/native/voiceCallouts.ts`, `assets/sounds/voices/`)**:
+    - Integrated high-definition voice call-outs generated with ElevenLabs Sarah persona (`EXAVITQu4vr4xnSDxMaL`, `eleven_multilingual_v2`), providing warm, clear Consuela companion announcements tailored for the Garcia household.
+    - Added 13 bilingual (Spanish & English) announcement audio assets in `assets/sounds/voices/`:
+      - Dinner: *"Attention Garcia Family! Dinner is ready. ¡La cena está lista, a comer!"* (`dinner_ready.mp3`).
+      - Lunch: *"Attention Garcia Family! Lunch time. ¡Hora del almuerzo!"* (`routine_lunch.mp3`).
+      - Papá Home: *"Attention! Papá is on his way home. ¡Papá ya viene en camino!"* (`routine_papa.mp3`).
+      - Kids from School: *"Reminder: Time to pick up the kids from school. ¡Hora de recoger a las niñas!"* (`routine_school.mp3`).
+      - Dogs: *"Time to take the dogs out! ¡A sacar a pasear a los perritos!"* (`routine_dogs.mp3`).
+      - Snack: *"Snack time! ¡Hora de la merienda para todos!"* (`routine_snack.mp3`).
+      - Mom Off Work: *"Attention! Mom is off work. ¡Mamá ya salió del trabajo!"* (`routine_mom.mp3`).
+      - Bedtime: *"Goodnight Garcia Family! Time to wind down. ¡Hora de descansar!"* (`routine_bedtime.mp3`).
+      - Dishwasher: *"Task reminder: Time to unload the dishwasher. ¡A vaciar el lavavajillas!"* (`task_dishwasher.mp3`).
+      - Make Bed: *"Task reminder: Time to make your bed. ¡A tender la cama!"* (`task_bed.mp3`).
+      - Tasks Generic: *"Family reminder: You have a task on the board. ¡Tienes una tarea pendiente!"* (`task_generic.mp3`).
+      - Calendar Event: *"Calendar reminder: You have an event on the schedule. ¡Tienes un evento en el calendario!"* (`calendar_event.mp3`).
+      - Weather Advisory: *"Weather advisory for the Garcia Family. ¡Aviso importante del clima!"* (`weather_alert.mp3`).
+    - Implemented context-aware resolver `resolveVoiceCallout()` that maps notification category, routine titles, task titles, weather summaries, and calendar events to the appropriate bilingual audio announcement.
+  - **"No-Spook" Tone + Voice Delivery (`src/native/voiceCallouts.ts`, `src/native/notifications.ts`)**:
+    - Implemented `tone_and_voice` sound mode (default for all notification categories): plays a subtle notification tone first to gently draw attention, followed by a 750ms breathing gap before Sarah's bilingual voice call-out speaks. This prevents the family from being startled when the wall tablet speaks into a quiet room.
+    - Supports `tone_and_voice`, `voice_only`, and `tone_only` sound modes configurable per category and timing stage.
+    - Updated notification dispatcher `dispatchNotification()` to invoke unified `playNotificationAudio()` respecting sound mode, volume, and timing stages (15-min advance vs start/due).
+  - **Settings UI Controls (`src/settings/NotificationsCard.tsx`, `src/native/notificationPrefs.ts`)**:
+    - Added `soundMode`, `advanceSoundMode`, and `startSoundMode` fields to `CategoryNotificationConfig`.
+    - Added `ANNOUNCEMENT STYLE` segmented control (`🔔 + 🗣️ Tone & Voice`, `🗣️ Voice Only`, `🎵 Tone Only`) for each category and advance/start timing sub-card in Settings > Notifications.
+    - Added dedicated `Voice 🗣️` preview button in the action row alongside `Tone 🔊` and `Test 🔔`, allowing instant testing of the Sarah bilingual announcement on tablet speakers.
+  - **Test Suite (`tests/voice-callouts.test.ts`)**:
+    - Created 8 unit tests covering keyword matching, timing pauses, fallback resolution, volume passing, and mock audio playback.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (0 token literal violations).
+  - `npx tsc --noEmit`: CLEAN (0 type errors).
+  - `npx expo lint`: CLEAN (0 errors, 0 warnings).
+  - `npx jest`: All tests in `tests/voice-callouts.test.ts`, `tests/notifications-prefs.test.ts`, and `tests/notifications-card.test.tsx` passed (17/17 passed).
+  - Built release APK (`./scripts/build-apk.sh`) and installed on ApoloSign 15.6" panel (`192.168.0.112:38777`). Verified Settings UI segmented controls, tested voice preview, and confirmed audio playback of tone + Sarah bilingual voice call-out on device hardware.
+
 - 2026-11-04 — feat(music,home): Apple Music-style interactive discovery overhaul with Spanish & Latin stations, guest calendar & schedule unlocking, live ticking clock, and artist duration sanitation (`MusicPlayer.tsx`, `stations.ts`, `library.ts`, `MusicSearch.kt`, `TodayEventsWidget.tsx`, `ScheduleWidget.tsx`, `HomeWall.tsx`, `SyncManager.tsx`).
   **What changed:**
   - **Spanish & Latin Music Stations & Mixes (`src/music/stations.ts`, `src/music/library.ts`)**:

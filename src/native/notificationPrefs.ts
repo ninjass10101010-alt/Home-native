@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { NotificationSound } from "./soundEffects";
+import type { SoundMode } from "./voiceCallouts";
 
 export type NotificationCategory = "weather" | "calendar" | "routines";
 
@@ -8,14 +9,17 @@ export interface CategoryNotificationConfig {
   enabled: boolean;
   sound: NotificationSound;
   volume: number; // 0.0 to 1.0
+  soundMode?: SoundMode; // "tone_and_voice" | "voice_only" | "tone_only"
   // Advance (15-min) notice configuration
   advanceEnabled?: boolean;
   advanceSound?: NotificationSound;
   advanceVolume?: number;
+  advanceSoundMode?: SoundMode;
   // Event start / routine due configuration
   startEnabled?: boolean;
   startSound?: NotificationSound;
   startVolume?: number;
+  startSoundMode?: SoundMode;
 }
 
 export interface NotificationPreferences {
@@ -68,28 +72,35 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
     enabled: true,
     sound: "radar",
     volume: 0.8,
+    soundMode: "tone_and_voice",
   },
   calendar: {
     enabled: true,
     sound: "chime",
     volume: 0.7,
+    soundMode: "tone_and_voice",
     advanceEnabled: true,
     advanceSound: "chime",
     advanceVolume: 0.7,
+    advanceSoundMode: "tone_and_voice",
     startEnabled: true,
     startSound: "beacon",
     startVolume: 0.8,
+    startSoundMode: "tone_and_voice",
   },
   routines: {
     enabled: true,
     sound: "harp",
     volume: 0.7,
+    soundMode: "tone_and_voice",
     advanceEnabled: true,
     advanceSound: "harp",
     advanceVolume: 0.7,
+    advanceSoundMode: "tone_and_voice",
     startEnabled: true,
     startSound: "bell",
     startVolume: 0.8,
+    startSoundMode: "tone_and_voice",
   },
 };
 
