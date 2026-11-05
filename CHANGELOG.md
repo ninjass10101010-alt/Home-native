@@ -4,6 +4,25 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-05 — feat(tasks): two-way sync for family routine checklists between Home-native tablet and Home-ai webapp (`routines-api.ts`, `client.ts`, `routines-api.test.ts`).
+  **What changed:**
+  - **Two-way sync with Home-ai LAN backend (`src/tasks/routines-api.ts`)**:
+    - Connected `loadRoutines()` to fetch current routines from `GET /api/routines`, write them to local `AsyncStorage` cache, and fall back cleanly to local cache or defaults if the server is offline.
+    - Connected `saveRoutines()` to persist locally and dispatch `PUT /api/routines` so additions, edits, and re-orderings made on the tablet immediately update the central database.
+    - Connected `loadRoutineProgress(dateISO)` to fetch daily progress from `GET /api/routines/progress?date=YYYY-MM-DD`, merging local offline ticks with server progress so neither client drops checks.
+    - Connected `saveRoutineProgress(dateISO, progress)` to dispatch `PUT /api/routines/progress` in addition to `AsyncStorage`.
+    - Added `"PUT"` method support to `ApiInit` in `src/api/client.ts`.
+  - **Webapp Integration (`Home-ai`)**:
+    - Added `FamilyRoutine` types in `Home-ai/src/types/routines.ts`.
+    - Added `/api/routines` and `/api/routines/progress` endpoints backed by PocketBase `consuela_state` key-value collection with public wall read exemption in `middleware.ts`.
+    - Added `RoutinesPanel.tsx` in `Home-ai` with slot filters ("Morning", "After School", "Bedtime", "Weekend"), interactive step checkboxes with audio/toast feedback, real-time progress bars, and full routine composer modal.
+    - Added "Routines" tab in `TasksStats.tsx` view switcher and wired `<RoutinesPanel />` in `Home-ai/src/app/tasks/page.tsx`.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (app src, 0 token-literal violations).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+  - Unit tests: all 12 tests across `tests/routines-api.test.ts` and `tests/routines-and-more.test.tsx` in `Home-native` passed; 6/6 tests in `Home-ai/tests/unit/routines-route.test.ts` passed.
+
 - 2026-11-05 — feat(notifications): Quiet Hours (Do Not Disturb, 11:00 PM – 5:00 AM), precise arrival vs wake keyword matching, and audio suppression during family sleep (`notificationPrefs.ts`, `notifications.ts`, `useNotificationMonitor.ts`, `voiceCallouts.ts`, `NotificationsCard.tsx`).
   **What changed:**
   - **Quiet Hours / Do Not Disturb (11:00 PM – 5:00 AM)**:

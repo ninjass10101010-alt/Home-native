@@ -33,7 +33,7 @@ export class ApiError extends Error {
 }
 
 export interface ApiInit {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PATCH" | "DELETE" | "PUT";
   body?: unknown;
   timeoutMs?: number;
   headers?: Record<string, string>;

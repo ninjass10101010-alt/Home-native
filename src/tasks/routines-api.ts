@@ -116,36 +116,15 @@ export async function loadRoutines(): Promise<FamilyRoutine[]> {
   }
 
   try {
-    const res = await api<any>("/api/schedules");
-    const serverRows = Array.isArray(res?.schedules)
-      ? res.schedules
-      : Array.isArray(res)
-        ? res
-        : [];
-    if (serverRows.length > 0 && !local) {
-      const mapped: FamilyRoutine[] = serverRows.map((r: any, idx: number) => ({
-        id: String(r.id ?? `srv-${idx}`),
-        title: String(r.title || r.name || "Routine"),
-        emoji: typeof r.emoji === "string" && r.emoji.trim() ? r.emoji : "⏰",
-        slot:
-          r.slot === "morning" || r.slot === "afternoon" || r.slot === "evening" || r.slot === "weekend"
-            ? r.slot
-            : "morning",
-        time: typeof r.time === "string" && r.time ? r.time : "08:00",
-        assignee: typeof r.assignee === "string" && r.assignee ? r.assignee : "All",
-        points: Number(r.points) || 15,
-        steps: Array.isArray(r.steps) && r.steps.length > 0
-          ? r.steps.map((s: any, sIdx: number) => ({
-              id: String(s.id ?? `step-${sIdx}`),
-              title: String(typeof s === "string" ? s : s.title || "Step"),
-              emoji: typeof s?.emoji === "string" ? s.emoji : "✓",
-            }))
-          : DEFAULT_ROUTINES[0].steps,
-      }));
-      return mapped;
+    const res = await api<{ ok?: boolean; routines?: FamilyRoutine[] }>("/api/routines", {
+      timeoutMs: 4000,
+    });
+    if (res?.ok && Array.isArray(res.routines) && res.routines.length > 0) {
+      void AsyncStorage.setItem(ROUTINES_STORAGE_KEY, JSON.stringify(res.routines)).catch(() => {});
+      return res.routines;
     }
   } catch {
-    // server optional; fallback to local or defaults
+    // server optional / unreachable; fallback to local or defaults
   }
 
   return local ?? DEFAULT_ROUTINES;
@@ -157,15 +136,26 @@ export async function saveRoutines(routines: FamilyRoutine[]): Promise<void> {
   } catch {
     // ignore
   }
+
+  try {
+    await api("/api/routines", {
+      method: "PUT",
+      body: { routines },
+      timeoutMs: 5000,
+    });
+  } catch {
+    // best-effort remote sync
+  }
 }
 
 export async function loadRoutineProgress(dateISO: string): Promise<DailyRoutineProgress> {
+  let localProgress: DailyRoutineProgress = { checkedSteps: {}, completedRoutines: {} };
   try {
     const raw = await AsyncStorage.getItem(`${ROUTINE_PROGRESS_PREFIX}${dateISO}`);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
-        return {
+        localProgress = {
           checkedSteps: parsed.checkedSteps ?? {},
           completedRoutines: parsed.completedRoutines ?? {},
         };
@@ -174,7 +164,36 @@ export async function loadRoutineProgress(dateISO: string): Promise<DailyRoutine
   } catch {
     // ignore
   }
-  return { checkedSteps: {}, completedRoutines: {} };
+
+  try {
+    const res = await api<{ ok?: boolean; progress?: DailyRoutineProgress }>(
+      `/api/routines/progress?date=${encodeURIComponent(dateISO)}`,
+      { timeoutMs: 4000 },
+    );
+    if (res?.ok && res.progress) {
+      const serverChecked = res.progress.checkedSteps || {};
+      const serverCompleted = res.progress.completedRoutines || {};
+      const mergedChecked: Record<string, string[]> = { ...serverChecked };
+      for (const [rId, steps] of Object.entries(localProgress.checkedSteps)) {
+        const set = new Set([...(mergedChecked[rId] || []), ...steps]);
+        mergedChecked[rId] = Array.from(set);
+      }
+      const mergedCompleted: Record<string, boolean> = {
+        ...serverCompleted,
+        ...localProgress.completedRoutines,
+      };
+      const merged: DailyRoutineProgress = {
+        checkedSteps: mergedChecked,
+        completedRoutines: mergedCompleted,
+      };
+      void AsyncStorage.setItem(`${ROUTINE_PROGRESS_PREFIX}${dateISO}`, JSON.stringify(merged)).catch(() => {});
+      return merged;
+    }
+  } catch {
+    // server unreachable; return local
+  }
+
+  return localProgress;
 }
 
 export async function saveRoutineProgress(
@@ -185,5 +204,15 @@ export async function saveRoutineProgress(
     await AsyncStorage.setItem(`${ROUTINE_PROGRESS_PREFIX}${dateISO}`, JSON.stringify(progress));
   } catch {
     // ignore
+  }
+
+  try {
+    await api("/api/routines/progress", {
+      method: "PUT",
+      body: { date: dateISO, progress },
+      timeoutMs: 5000,
+    });
+  } catch {
+    // best-effort remote sync
   }
 }
