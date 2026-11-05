@@ -2,6 +2,10 @@ import React, { useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { dispatchNotification } from "./notifications";
 import {
+  isWithinQuietHours,
+  loadNotificationPreferences,
+} from "./notificationPrefs";
+import {
   type ScheduleRow,
   scheduleCoversWeekday,
   scheduleTimeMinutes,
@@ -100,6 +104,14 @@ export function useNotificationMonitor({
       const now = nowProvider();
       const todayISO = now.toISOString().slice(0, 10);
 
+      let quiet = false;
+      try {
+        const prefs = await loadNotificationPreferences();
+        quiet = isWithinQuietHours(now, prefs.quietHours);
+      } catch {
+        quiet = isWithinQuietHours(now);
+      }
+
       // 1. Check Weather
       try {
         const weatherRes = (await api("/api/weather/live")) as any;
@@ -133,11 +145,20 @@ export function useNotificationMonitor({
 
         for (const ev of events) {
           const key = String(ev.id);
+          const advanceDue = isStartingSoon(ev.start, now, 15) && !isDueNow(ev.start, now, 2);
+          const startDue = isDueNow(ev.start, now, 2);
+
+          // During quiet hours (11 PM - 5 AM), suppress calendar alerts and mark handled
+          if (quiet) {
+            if (advanceDue) alertedCalendarAdvanceIds.current.add(key);
+            if (startDue) alertedCalendarStartIds.current.add(key);
+            continue;
+          }
+
           // 15-min advance notification
           if (
             !alertedCalendarAdvanceIds.current.has(key) &&
-            isStartingSoon(ev.start, now, 15) &&
-            !isDueNow(ev.start, now, 2)
+            advanceDue
           ) {
             alertedCalendarAdvanceIds.current.add(key);
             void dispatchNotification({
@@ -152,7 +173,7 @@ export function useNotificationMonitor({
           // Event starting now notification
           if (
             !alertedCalendarStartIds.current.has(key) &&
-            isDueNow(ev.start, now, 2)
+            startDue
           ) {
             alertedCalendarStartIds.current.add(key);
             void dispatchNotification({
@@ -200,6 +221,13 @@ export function useNotificationMonitor({
 
           const key = `${todayISO}-${rt.id}`;
           const memberInfo = rt.member ? ` for ${rt.member.split(" ")[0]}` : "";
+
+          // During quiet hours (11 PM - 5 AM), suppress routine alarms and mark handled for today
+          if (quiet) {
+            if (advanceDue) alertedRoutineAdvanceIds.current.add(key);
+            if (startDue) alertedRoutineStartIds.current.add(key);
+            continue;
+          }
 
           // 15-min advance notification
           if (!alertedRoutineAdvanceIds.current.has(key) && advanceDue) {

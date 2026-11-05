@@ -144,7 +144,7 @@ export function resolveVoiceCallout(
   category: string,
   title: string,
   body: string
-): VoiceCalloutKey {
+): VoiceCalloutKey | null {
   const text = `${title} ${body}`.toLowerCase();
 
   // 1. Weather alerts
@@ -198,13 +198,18 @@ export function resolveVoiceCallout(
   }
 
   if (
-    (text.includes("papá") || text.includes("papa")) &&
-    (text.includes("leave") || text.includes("leaving") || text.includes("sale") || text.includes("to work"))
+    (text.includes("papá") || text.includes("papa") || text.includes("dad")) &&
+    (text.includes("leave") || text.includes("leaving") || text.includes("sale") || text.includes("to work") || text.includes("trabajo"))
   ) {
     return "routine_papa_leave";
   }
 
-  if (text.includes("papá") || text.includes("papa") || text.includes("dad")) {
+  if (
+    (text.includes("papá") || text.includes("papa") || text.includes("dad")) &&
+    (text.includes("home") || text.includes("casa") || text.includes("camino") || text.includes("lleg") || text.includes("arriving") || text.includes("gets home")) &&
+    !text.includes("wake") &&
+    !text.includes("despertar")
+  ) {
     return "routine_papa";
   }
 
@@ -274,9 +279,9 @@ export function resolveVoiceCallout(
   if (
     category === "calendar" ||
     text.includes("calendar") ||
+    text.includes("calendario") ||
+    text.includes("evento") ||
     text.includes("event") ||
-    text.includes("starting now") ||
-    text.includes("starts in") ||
     text.includes("gymnastics") ||
     text.includes("soccer") ||
     text.includes("practice")
@@ -294,7 +299,7 @@ export function resolveVoiceCallout(
     return "task_generic";
   }
 
-  return "calendar_event";
+  return null;
 }
 
 /**
@@ -348,8 +353,8 @@ export const voiceCalloutPlayer = {
 
 /**
  * Dispatches notification audio respecting the user's preferred SoundMode:
- * - "tone_and_voice": Plays the gentle alert chime first, followed 750ms later by Sarah's voice announcement.
- * - "voice_only": Plays Sarah's voice announcement immediately.
+ * - "tone_and_voice": Plays the gentle alert chime first, followed 750ms later by Sarah's voice announcement if matched.
+ * - "voice_only": Plays Sarah's voice announcement immediately (or chime if no voice is available).
  * - "tone_only": Plays the traditional alert chime only.
  */
 export async function playNotificationAudio({
@@ -363,7 +368,11 @@ export async function playNotificationAudio({
   const calloutKey = resolveVoiceCallout(category, title, body);
 
   if (soundMode === "voice_only") {
-    await voiceCalloutPlayer.playVoiceCallout(calloutKey, volume);
+    if (calloutKey) {
+      await voiceCalloutPlayer.playVoiceCallout(calloutKey, volume);
+    } else {
+      await playNotificationSound(sound, volume);
+    }
     return;
   }
 
@@ -376,8 +385,10 @@ export async function playNotificationAudio({
   // 1. Play the alert tone so no one gets spooked by unexpected voices
   await playNotificationSound(sound, volume);
 
-  // 2. Follow up after 750ms with Sarah's warm bilingual spoken announcement
-  setTimeout(() => {
-    void voiceCalloutPlayer.playVoiceCallout(calloutKey, volume);
-  }, 750);
+  // 2. Follow up after 750ms with Sarah's warm bilingual spoken announcement if matched
+  if (calloutKey) {
+    setTimeout(() => {
+      void voiceCalloutPlayer.playVoiceCallout(calloutKey, volume);
+    }, 750);
+  }
 }

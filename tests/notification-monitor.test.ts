@@ -7,6 +7,7 @@ import {
   isStartingSoon,
   isDueNow,
 } from "../src/native/useNotificationMonitor";
+import { isWithinQuietHours } from "../src/native/notificationPrefs";
 
 describe("useNotificationMonitor logic", () => {
   describe("isSevereWeather", () => {
@@ -86,5 +87,29 @@ describe("useNotificationMonitor routine integration", () => {
     const now = new Date(2026, 9, 26, 17, 0, 0); // 5:00 PM
     expect(isStartingSoon("17:10", now, 15)).toBe(true);
     expect(isStartingSoon("17:20", now, 15)).toBe(false);
+  });
+
+  it("suppresses routine alerts at 4:35 AM and 4:50 AM due to quiet hours", () => {
+    // 4:35 AM: advance due for 4:50 AM routine
+    const advanceNow = new Date("2026-11-05T04:35:00");
+    expect(isStartingSoon("04:50", advanceNow, 15)).toBe(true);
+    expect(isWithinQuietHours(advanceNow)).toBe(true);
+
+    // 4:50 AM: start due for 4:50 AM routine
+    const startNow = new Date("2026-11-05T04:50:00");
+    expect(isDueNow("04:50", startNow, 2)).toBe(true);
+    expect(isWithinQuietHours(startNow)).toBe(true);
+  });
+
+  it("allows routine alerts after 5:00 AM (e.g. 5:40 AM Papa Leaving to work)", () => {
+    // 5:25 AM: advance notice for 5:40 AM
+    const advanceNow = new Date("2026-11-05T05:25:00");
+    expect(isStartingSoon("05:40", advanceNow, 15)).toBe(true);
+    expect(isWithinQuietHours(advanceNow)).toBe(false); // Quiet hours ended at 5:00 AM!
+
+    // 5:40 AM: start due for 5:40 AM
+    const startNow = new Date("2026-11-05T05:40:00");
+    expect(isDueNow("05:40", startNow, 2)).toBe(true);
+    expect(isWithinQuietHours(startNow)).toBe(false);
   });
 });

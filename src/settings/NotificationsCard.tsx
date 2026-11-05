@@ -31,6 +31,13 @@ const VOLUME_STEPS = [0.25, 0.5, 0.75, 1.0];
 
 type TimingStage = "advance" | "start";
 
+function formatHour(h: number): string {
+  if (h === 0) return "12:00 AM";
+  if (h === 12) return "12:00 PM";
+  if (h > 12) return `${h - 12}:00 PM`;
+  return `${h}:00 AM`;
+}
+
 const SAMPLE_COPY: Record<
   NotificationCategory,
   Record<TimingStage, { title: string; body: string }>
@@ -69,7 +76,7 @@ const SAMPLE_COPY: Record<
 
 export function NotificationsCard() {
   const { colors, accentColor } = useTheme();
-  const { prefs, updateCategory } = useNotificationPreferences();
+  const { prefs, updateCategory, updateQuietHours } = useNotificationPreferences();
   const [testingCategory, setTestingCategory] = useState<NotificationCategory | null>(null);
   const [timingMap, setTimingMap] = useState<Record<string, TimingStage>>({
     calendar: "advance",
@@ -87,7 +94,9 @@ export function NotificationsCard() {
   ) => {
     const sample = SAMPLE_COPY[category][timing];
     const key = resolveVoiceCallout(category, sample.title, sample.body);
-    void playVoiceCallout(key, volume);
+    if (key) {
+      void playVoiceCallout(key, volume);
+    }
   };
 
   const handleTestNotification = async (
@@ -138,6 +147,118 @@ export function NotificationsCard() {
       </View>
 
       <View style={{ gap: 20 }}>
+        {/* Quiet Hours / Do Not Disturb Section */}
+        <Material
+          tier="thin"
+          testID="quiet-hours-card"
+          style={{
+            borderRadius: 20,
+            padding: 18,
+            gap: 16,
+            borderWidth: 1,
+            borderColor: colors["color-border-subtle"],
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+            }}
+          >
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text
+                style={{
+                  color: colors["color-text-primary"],
+                  fontSize: TYPOGRAPHY.title.fontSize,
+                  fontWeight: "600",
+                }}
+              >
+                🌙 Quiet Hours (Do Not Disturb)
+              </Text>
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.body.fontSize,
+                }}
+              >
+                {prefs.quietHours.enabled
+                  ? `Silences routine and calendar notification audio during family sleep (${formatHour(prefs.quietHours.startHour)} – ${formatHour(prefs.quietHours.endHour)}).`
+                  : "Silences routine and calendar notification audio during family sleep."}
+              </Text>
+            </View>
+            <Toggle
+              value={prefs.quietHours.enabled}
+              onChange={(enabled) => updateQuietHours({ enabled })}
+              testID="quiet-hours-toggle"
+              accessibilityLabel="Enable Quiet Hours Do Not Disturb"
+            />
+          </View>
+
+          {prefs.quietHours.enabled && (
+            <View style={{ gap: 14, paddingTop: 4 }}>
+              {/* Start Time Selection */}
+              <View style={{ gap: 8 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "600",
+                    letterSpacing: 1,
+                  }}
+                >
+                  QUIET HOURS START
+                </Text>
+                <SegmentedControl
+                  options={[
+                    { id: "22", label: "10:00 PM" },
+                    { id: "23", label: "11:00 PM (Default)" },
+                    { id: "0", label: "12:00 AM" },
+                  ]}
+                  value={String(prefs.quietHours.startHour)}
+                  onChange={(val) => updateQuietHours({ startHour: Number(val) })}
+                  testID="quiet-hours-start-selector"
+                />
+              </View>
+
+              {/* End Time Selection */}
+              <View style={{ gap: 8 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "600",
+                    letterSpacing: 1,
+                  }}
+                >
+                  QUIET HOURS END (MORNING)
+                </Text>
+                <SegmentedControl
+                  options={[
+                    { id: "5", label: "5:00 AM (Default)" },
+                    { id: "6", label: "6:00 AM" },
+                    { id: "7", label: "7:00 AM" },
+                  ]}
+                  value={String(prefs.quietHours.endHour)}
+                  onChange={(val) => updateQuietHours({ endHour: Number(val) })}
+                  testID="quiet-hours-end-selector"
+                />
+              </View>
+
+              <Text
+                style={{
+                  color: colors["color-text-muted"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  lineHeight: 18,
+                }}
+              >
+                Morning routines like &quot;PAPA Leaving to work&quot; at 5:40 AM alert right on schedule after 5:00 AM. Severe weather warnings always remain active.
+              </Text>
+            </View>
+          )}
+        </Material>
+
         {NOTIFICATION_CATEGORIES.map((cat) => {
           const meta = CATEGORY_META[cat];
           const config = prefs[cat];

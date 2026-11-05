@@ -67,6 +67,12 @@ describe("voiceCallouts", () => {
       expect(resolveVoiceCallout("routines", "Daily Schedule", "Today's daily schedule summary")).toBe("routine_schedule_summary");
     });
 
+    it("does not falsely map wake-up routines to Papa Coming Home", () => {
+      expect(resolveVoiceCallout("routines", "🔔 Routine Starting", "PAPA Wake up!")).toBeNull();
+      expect(resolveVoiceCallout("routines", "⏰ Routine Soon", "Papa wake up in 15 minutes")).toBeNull();
+      expect(resolveVoiceCallout("routines", "Despertar", "Dad wake up")).toBeNull();
+    });
+
     it("resolves chore and task reminders", () => {
       expect(resolveVoiceCallout("tasks", "Task Due", "Unload Dishwasher")).toBe("task_dishwasher");
       expect(resolveVoiceCallout("tasks", "Task Due", "Make your Bed")).toBe("task_bed");
@@ -128,6 +134,21 @@ describe("voiceCallouts", () => {
       // Voice triggers after 750ms so family is not spooked
       jest.advanceTimersByTime(750);
       expect(playVoiceSpy).toHaveBeenCalledWith("routine_papa", 0.75);
+    });
+
+    it("plays tone without voice announcement when no specific voice matches", async () => {
+      await playNotificationAudio({
+        sound: "harp",
+        volume: 0.7,
+        soundMode: "tone_and_voice",
+        category: "routines",
+        title: "🔔 Routine Starting",
+        body: '"PAPA Wake up!" is starting now.',
+      });
+
+      expect(playToneSpy).toHaveBeenCalledWith("harp", 0.7);
+      jest.advanceTimersByTime(1500);
+      expect(playVoiceSpy).not.toHaveBeenCalled();
     });
   });
 });

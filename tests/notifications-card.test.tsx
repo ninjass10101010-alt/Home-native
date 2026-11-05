@@ -125,4 +125,27 @@ describe("NotificationsCard", () => {
 
     expect(playSoundSpy).toHaveBeenCalledWith("beacon", expect.any(Number));
   });
+
+  it("renders the Quiet Hours card and toggles it off and on", async () => {
+    const { getByTestId, queryByTestId, findByText } = render(<NotificationsCard />, {
+      wrapper: wrap,
+    });
+
+    expect(await findByText("🌙 Quiet Hours (Do Not Disturb)")).toBeTruthy();
+    expect(getByTestId("quiet-hours-card")).toBeTruthy();
+    expect(getByTestId("quiet-hours-toggle")).toBeTruthy();
+    expect(getByTestId("quiet-hours-start-selector")).toBeTruthy();
+    expect(getByTestId("quiet-hours-end-selector")).toBeTruthy();
+
+    // Toggle Quiet Hours off
+    const toggle = getByTestId("quiet-hours-toggle");
+    await act(async () => {
+      fireEvent.press(toggle);
+    });
+
+    await waitFor(() => {
+      expect(queryByTestId("quiet-hours-start-selector")).toBeNull();
+      expect(queryByTestId("quiet-hours-end-selector")).toBeNull();
+    });
+  });
 });

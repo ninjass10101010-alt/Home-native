@@ -22,10 +22,19 @@ export interface CategoryNotificationConfig {
   startSoundMode?: SoundMode;
 }
 
+export interface QuietHoursConfig {
+  enabled: boolean;
+  startHour: number; // 0-23 (default 23 = 11 PM)
+  startMinute: number; // 0-59 (default 0)
+  endHour: number; // 0-23 (default 5 = 5 AM)
+  endMinute: number; // 0-59 (default 0)
+}
+
 export interface NotificationPreferences {
   weather: CategoryNotificationConfig;
   calendar: CategoryNotificationConfig;
   routines: CategoryNotificationConfig;
+  quietHours: QuietHoursConfig;
 }
 
 export const NOTIFICATION_CATEGORIES: readonly NotificationCategory[] = [
@@ -67,6 +76,37 @@ export const CATEGORY_META: Record<
   },
 };
 
+export const DEFAULT_QUIET_HOURS: QuietHoursConfig = {
+  enabled: true,
+  startHour: 23, // 11:00 PM
+  startMinute: 0,
+  endHour: 5, // 5:00 AM
+  endMinute: 0,
+};
+
+/**
+ * Returns true if the given date falls within the configured Quiet Hours window.
+ * Handles crossing midnight cleanly (e.g. 11:00 PM to 5:00 AM).
+ */
+export function isWithinQuietHours(
+  date: Date = new Date(),
+  config: QuietHoursConfig = DEFAULT_QUIET_HOURS
+): boolean {
+  if (!config.enabled) return false;
+  const currentMinutes = date.getHours() * 60 + date.getMinutes();
+  const startMinutes = config.startHour * 60 + config.startMinute;
+  const endMinutes = config.endHour * 60 + config.endMinute;
+
+  if (startMinutes > endMinutes) {
+    // Spans midnight, e.g. 23:00 (11 PM) to 05:00 (5 AM)
+    return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+  } else if (startMinutes < endMinutes) {
+    // Same day window, e.g. 01:00 to 05:00
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  }
+  return false;
+}
+
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
   weather: {
     enabled: true,
@@ -102,6 +142,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
     startVolume: 0.8,
     startSoundMode: "tone_and_voice",
   },
+  quietHours: { ...DEFAULT_QUIET_HOURS },
 };
 
 export const STORAGE_KEY_NOTIFICATION_PREFS = "@consuela/notification_preferences";
@@ -125,6 +166,7 @@ export function resetNotificationPreferencesCache(): void {
     weather: { ...DEFAULT_NOTIFICATION_PREFS.weather },
     calendar: { ...DEFAULT_NOTIFICATION_PREFS.calendar },
     routines: { ...DEFAULT_NOTIFICATION_PREFS.routines },
+    quietHours: { ...DEFAULT_NOTIFICATION_PREFS.quietHours },
   };
 }
 
@@ -150,6 +192,10 @@ export async function loadNotificationPreferences(): Promise<NotificationPrefere
       routines: {
         ...DEFAULT_NOTIFICATION_PREFS.routines,
         ...(parsed.routines ?? {}),
+      },
+      quietHours: {
+        ...DEFAULT_NOTIFICATION_PREFS.quietHours,
+        ...(parsed.quietHours ?? {}),
       },
     };
     memoryCachedPrefs = merged;
@@ -221,5 +267,21 @@ export function useNotificationPreferences() {
     []
   );
 
-  return { prefs, loading, updateCategory };
+  const updateQuietHours = useCallback(
+    (patch: Partial<QuietHoursConfig>) => {
+      const next: NotificationPreferences = {
+        ...memoryCachedPrefs,
+        quietHours: {
+          ...memoryCachedPrefs.quietHours,
+          ...patch,
+        },
+      };
+      memoryCachedPrefs = next;
+      setPrefs(next);
+      void saveNotificationPreferences(next);
+    },
+    []
+  );
+
+  return { prefs, loading, updateCategory, updateQuietHours };
 }

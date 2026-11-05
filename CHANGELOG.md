@@ -4,6 +4,26 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-05 — feat(notifications): Quiet Hours (Do Not Disturb, 11:00 PM – 5:00 AM), precise arrival vs wake keyword matching, and audio suppression during family sleep (`notificationPrefs.ts`, `notifications.ts`, `useNotificationMonitor.ts`, `voiceCallouts.ts`, `NotificationsCard.tsx`).
+  **What changed:**
+  - **Quiet Hours / Do Not Disturb (11:00 PM – 5:00 AM)**:
+    - Added `QuietHoursConfig` and `isWithinQuietHours()` in `src/native/notificationPrefs.ts` (enabled by default, 11:00 PM start to 5:00 AM end) with robust midnight-spanning time math.
+    - Added `updateQuietHours()` in `useNotificationPreferences()` to persist family quiet hour schedules in AsyncStorage (`@consuela/notification_preferences`).
+    - Added dedicated Quiet Hours card in `src/settings/NotificationsCard.tsx` with a master toggle, start time selector (10 PM, 11 PM default, 12 AM), and end time selector (5 AM default, 6 AM, 7 AM), along with an explanatory caption confirming morning routines like "PAPA Leaving to work" at 5:40 AM will alert right on schedule after 5:00 AM.
+  - **Quiet Hours Notification & Monitor Audio Suppression (`src/native/notifications.ts`, `src/native/useNotificationMonitor.ts`)**:
+    - Updated `dispatchNotification()` in `notifications.ts` to check `isWithinQuietHours()`. Non-emergency routine and calendar audio alerts (both tone chimes and Sarah bilingual voice announcements) are silenced during quiet hours.
+    - Updated `useNotificationMonitor.ts` to check quiet hours before evaluating routines and calendar events. During quiet hours, routine alerts (such as a 4:50 AM wake-up or its 4:35 AM advance warning) are suppressed and cleanly marked handled for the day so they never blast retroactively when quiet hours end.
+    - Preserved safety: severe weather advisories and emergency notifications always bypass quiet hours.
+  - **Precise Voice Call-Out Keyword Matching (`src/native/voiceCallouts.ts`)**:
+    - Fixed false mapping in `resolveVoiceCallout()` where any routine mentioning "papa" that was not leaving for work fell into `routine_papa` ("Attention! Papá is on his way home. ¡Papá ya viene en camino!").
+    - `routine_papa` now strictly requires arrival keywords (`"home"`, `"casa"`, `"camino"`, `"arriving"`, `"gets home"`) and explicitly excludes wake-up keywords (`"wake"`, `"despertar"`).
+    - Unmatched routine titles (e.g. "PAPA Wake up!") return `null` instead of falling through to calendar events or unrelated voice announcements; `playNotificationAudio()` plays the selected chime tone without speaking an inaccurate voice callout.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (app src, 0 token-literal violations).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+  - Unit tests: all 35 tests across `tests/voice-callouts.test.ts`, `tests/notifications-prefs.test.ts`, `tests/notification-monitor.test.ts`, and `tests/notifications-card.test.tsx` passed.
+
 - 2026-11-04 — feat(schedule,notifications,cast): room-scale popups, schedule deduplication, ElevenLabs daily schedule announcements, and spacious Cast modal (`MusicIsland.tsx`, `ScheduleWidget.tsx`, `events-merge.ts`, `voiceCallouts.ts`, `CastControl.tsx`, `Modal.tsx`).
   **What changed:**
   - **Room-Scale Notification Alert Card & Duration (`src/music/MusicIsland.tsx`)**:

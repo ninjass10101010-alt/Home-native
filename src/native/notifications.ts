@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import {
+  isWithinQuietHours,
   loadNotificationPreferences,
   type NotificationCategory,
 } from "./notificationPrefs";
@@ -105,28 +106,32 @@ export async function dispatchNotification({
   data,
   timing,
 }: PostNotificationParams): Promise<string | null> {
+  let isQuiet = false;
   if (category !== "emergency" && category !== "general") {
     const prefs = await loadNotificationPreferences();
     const config = prefs[category];
     if (!config.enabled) {
       return null;
     }
-    if (timing === "advance") {
-      if (config.advanceEnabled === false) return null;
-      const sound = config.advanceSound ?? config.sound;
-      const volume = config.advanceVolume ?? config.volume;
-      const soundMode = config.advanceSoundMode ?? config.soundMode ?? "tone_and_voice";
-      void playNotificationAudio({ sound, volume, soundMode, category, title, body });
-    } else if (timing === "start") {
-      if (config.startEnabled === false) return null;
-      const sound = config.startSound ?? config.sound;
-      const volume = config.startVolume ?? config.volume;
-      const soundMode = config.startSoundMode ?? config.soundMode ?? "tone_and_voice";
-      void playNotificationAudio({ sound, volume, soundMode, category, title, body });
-    } else {
-      // Play category audio respecting soundMode (tone + Sarah voice call-out)
-      const soundMode = config.soundMode ?? "tone_and_voice";
-      void playNotificationAudio({ sound: config.sound, volume: config.volume, soundMode, category, title, body });
+    isQuiet = category !== "weather" && isWithinQuietHours(new Date(), prefs.quietHours);
+    if (!isQuiet) {
+      if (timing === "advance") {
+        if (config.advanceEnabled === false) return null;
+        const sound = config.advanceSound ?? config.sound;
+        const volume = config.advanceVolume ?? config.volume;
+        const soundMode = config.advanceSoundMode ?? config.soundMode ?? "tone_and_voice";
+        void playNotificationAudio({ sound, volume, soundMode, category, title, body });
+      } else if (timing === "start") {
+        if (config.startEnabled === false) return null;
+        const sound = config.startSound ?? config.sound;
+        const volume = config.startVolume ?? config.volume;
+        const soundMode = config.startSoundMode ?? config.soundMode ?? "tone_and_voice";
+        void playNotificationAudio({ sound, volume, soundMode, category, title, body });
+      } else {
+        // Play category audio respecting soundMode (tone + Sarah voice call-out)
+        const soundMode = config.soundMode ?? "tone_and_voice";
+        void playNotificationAudio({ sound: config.sound, volume: config.volume, soundMode, category, title, body });
+      }
     }
   } else if (category === "emergency") {
     void playNotificationAudio({
@@ -164,7 +169,7 @@ export async function dispatchNotification({
         title,
         body,
         data: data ?? {},
-        sound: true,
+        sound: !isQuiet,
         ...(Platform.OS === "android" ? { channelId: channel.id } : {}),
       },
       trigger: null, // immediate
