@@ -10,7 +10,7 @@ import { musicTokensFor } from "../../theme/music-tokens";
 import { SPECULAR_AT } from "../../theme/materials";
 import { HomeWidgetIcon } from "../../ui/HomeWidgetIcon";
 import { WidgetFrame, HEADER_BAND_H } from "./WidgetFrame";
-import { usePlayback } from "../../music/playback";
+import { usePlaybackCore } from "../../music/playback";
 import { useCast } from "../../music/CastProvider";
 import { isContentHidden } from "../../music/explicit";
 
@@ -116,10 +116,10 @@ export function MusicWidget() {
   const tokens = React.useMemo(() => musicTokensFor(theme, boost), [theme, boost]);
   const router = useRouter();
   const { member, hydrated } = useAuth();
-  const { current, playing, toggle, next, policy } = usePlayback();
+  const { current, playing, toggle, next, policy } = usePlaybackCore();
   const cast = useCast();
   const guest = hydrated && !member;
-  const open = () => router.push("/music" as never);
+  const open = () => router.replace("/music" as never);
 
   /**
    * The wall card is a track surface too: a track the viewer may not see is

@@ -14,7 +14,7 @@ import { useAuth } from "../src/state/AuthProvider";
  * pattern as app/meals.tsx / app/calendar.tsx).
  */
 export default function SettingsRoute() {
-  const { role: capabilityRole, hydrated, poke } = useAuth();
+  const { role: capabilityRole, hydrated } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = React.useState(false);
@@ -34,13 +34,13 @@ export default function SettingsRoute() {
         role={role}
         hydrated={hydrated}
         pathname={pathname}
-        onNavigate={(p) => { poke(); router.push(p as never); }}
+        onNavigate={(p) => { router.replace(p as never); }}
       />
       <MoreSheet
         visible={moreOpen}
         onClose={() => setMoreOpen(false)}
         role={role}
-        onNavigate={(p) => { poke(); router.push(p as never); }}
+        onNavigate={(p) => { router.replace(p as never); }}
       />
     </Screen>
   );

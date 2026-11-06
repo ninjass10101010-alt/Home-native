@@ -76,6 +76,18 @@ export interface WidgetDataOptions {
    * The reference guest capture shows the weather card live.
    */
   guestVisible?: boolean;
+  /**
+   * Optional cache key for in-memory stale-while-revalidate persistence across
+   * tab switching. When set, returning to the widget mounts immediately with
+   * the cached data (0ms skeleton flash) and silently revalidates in the background.
+   */
+  cacheKey?: string;
+}
+
+const widgetMemoryCache = new Map<string, { data: unknown; timestamp: number }>();
+
+export function clearWidgetMemoryCache(): void {
+  widgetMemoryCache.clear();
 }
 
 /**
@@ -93,11 +105,17 @@ export interface WidgetDataOptions {
 export function useWidgetData<T>(load: () => Promise<T>, opts: WidgetDataOptions = {}): WidgetData<T> {
   const { member, hydrated } = useAuth();
   const sync = useSync();
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [data, setData] = useState<T | null>(null);
+  const cacheKey = opts.cacheKey;
+  const cached = cacheKey
+    ? (widgetMemoryCache.get(cacheKey) as { data: T; timestamp: number } | undefined)
+    : undefined;
+  const initialData = cached?.data ?? null;
+
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(initialData ? "ready" : "loading");
+  const [data, setData] = useState<T | null>(initialData);
   const [failure, setFailure] = useState<ReadFailure | null>(null);
 
-  const hasDataRef = useRef(false);
+  const hasDataRef = useRef(initialData !== null);
   const loadRef = useRef(load);
   /** U5.5 unmount guard — false between cleanup and the next mount. */
   const aliveRef = useRef(false);
@@ -121,6 +139,9 @@ export function useWidgetData<T>(load: () => Promise<T>, opts: WidgetDataOptions
       const d = await loadRef.current();
       if (!aliveRef.current) return; // unmounted mid-read — never setState (U5.5)
       hasDataRef.current = true;
+      if (cacheKey) {
+        widgetMemoryCache.set(cacheKey, { data: d, timestamp: Date.now() });
+      }
       setData(() => d);
       setFailure(null);
       setStatus("ready");
@@ -133,7 +154,7 @@ export function useWidgetData<T>(load: () => Promise<T>, opts: WidgetDataOptions
     } finally {
       firstRunSettledRef.current = true;
     }
-  }, []);
+  }, [cacheKey]);
 
   useEffect(() => {
     if (!hydrated) return;

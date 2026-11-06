@@ -10,7 +10,7 @@ import { useAuth } from "../src/state/AuthProvider";
  * every role — same Screen + CapsuleDock + MoreSheet pattern as app/tasks.tsx).
  */
 export default function CalendarRoute() {
-  const { role: capabilityRole, hydrated, poke } = useAuth();
+  const { role: capabilityRole, hydrated } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   // The nav role follows the CAPABILITY (a live-verified session), never the
@@ -25,7 +25,7 @@ export default function CalendarRoute() {
         role={role}
         hydrated={hydrated}
         pathname={pathname}
-        onNavigate={(p) => { poke(); router.push(p as never); }}
+        onNavigate={(p) => { router.replace(p as never); }}
       />
     </Screen>
   );

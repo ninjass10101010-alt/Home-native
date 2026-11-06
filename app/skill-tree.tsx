@@ -93,7 +93,7 @@ export default function SkillTreeRoute() {
   const toast = useToast();
   const pathname = usePathname();
   const router = useRouter();
-  const { member, role: capabilityRole, hydrated, poke } = useAuth();
+  const { member, role: capabilityRole, hydrated } = useAuth();
   const { snapshot } = useSync();
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -201,7 +201,7 @@ export default function SkillTreeRoute() {
               size="sm"
               testID="skill-tree-to-tasks"
               accessibilityLabel="Go to Tasks and Routines"
-              onPress={() => router.push("/tasks" as never)}
+              onPress={() => router.replace("/tasks" as never)}
             >
               ✅ Go to Quests & Routines
             </SoftButton>
@@ -403,8 +403,7 @@ export default function SkillTreeRoute() {
         hydrated={hydrated}
         pathname={pathname}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
       <MoreSheet
@@ -412,8 +411,7 @@ export default function SkillTreeRoute() {
         onClose={() => setMoreOpen(false)}
         role={navRole}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
     </Screen>

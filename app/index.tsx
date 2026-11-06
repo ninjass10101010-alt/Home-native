@@ -124,7 +124,7 @@ export default function HomePlaceholder() {
       // /soon fallback (dock alive) instead of a toast dead end.
       homeSecurity: () => (
         <HomeSecurityWidget
-          onOpenHomeControls={() => router.push(resolveRoute("/ha", "House") as never)}
+          onOpenHomeControls={() => router.replace(resolveRoute("/ha", "House") as never)}
         />
       ),
       });
@@ -296,7 +296,7 @@ export default function HomePlaceholder() {
           onSelectMember={(m) => void onSelect(m)}
           onSignOut={member ? () => void signOut() : undefined}
           widgets={wallWidgets}
-          onSelectDay={(dayId) => router.push(`/meals?day=${dayId}` as never)}
+          onSelectDay={(dayId) => router.replace(`/meals?day=${dayId}` as never)}
           onOpenMore={() => setMoreOpen(true)}
           hasSavedRoster={hasSavedRoster}
           rosterUnreachable={roster.reason === "unreachable"}
@@ -351,13 +351,13 @@ export default function HomePlaceholder() {
         role={navRole}
         hydrated={hydrated}
         pathname={pathname}
-        onNavigate={(p) => { poke(); router.push(p as never); }}
+        onNavigate={(p) => { router.replace(p as never); }}
       />
       <MoreSheet
         visible={moreOpen}
         onClose={() => setMoreOpen(false)}
         role={navRole}
-        onNavigate={(p) => { poke(); router.push(p as never); }}
+        onNavigate={(p) => { router.replace(p as never); }}
       />
 
       <Modal visible={!!pinTarget} onClose={() => !busy && setPinTarget(null)} title="Sign in" dismissable={!busy}>

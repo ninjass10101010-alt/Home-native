@@ -89,7 +89,11 @@ jest.mock("react-native-google-cast", () => ({
   useMediaStatus: () => mockStatus,
 }));
 
-jest.mock("../src/music/playback", () => ({ usePlayback: () => mockPlayback }));
+jest.mock("../src/music/playback", () => ({
+  usePlayback: () => mockPlayback,
+  usePlaybackCore: () => mockPlayback,
+  usePlaybackPosition: () => mockPlayback.position ?? 0,
+}));
 jest.mock("../modules/youtube-engine", () => ({
   resolveAudio: (id: string) => mockResolveAudio(id),
   // The last resolution (the codec chip's truth) and its subscription.

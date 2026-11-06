@@ -56,12 +56,15 @@ export function BriefingWidget() {
   const [acked, setAcked] = React.useState(false);
   const [ackBusy, setAckBusy] = React.useState(false);
 
-  const { status, data, failure, stale, retry } = useWidgetData(async () => {
-    // Body-over-status: ok:false means the read is not truth even on a 200.
-    const res = await api<BriefingBody>(`/api/consuela/briefing?scopeDate=${localTodayISO()}`);
-    if (!res || res.ok === false) throw new Error("briefing not ok");
-    return res.briefing ?? null;
-  });
+  const { status, data, failure, stale, retry } = useWidgetData(
+    async () => {
+      // Body-over-status: ok:false means the read is not truth even on a 200.
+      const res = await api<BriefingBody>(`/api/consuela/briefing?scopeDate=${localTodayISO()}`);
+      if (!res || res.ok === false) throw new Error("briefing not ok");
+      return res.briefing ?? null;
+    },
+    { cacheKey: "morningBriefing" }
+  );
 
   const briefing = data;
   const summary = briefing?.summary ?? null;

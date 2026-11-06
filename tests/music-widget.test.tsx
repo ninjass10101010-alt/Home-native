@@ -11,9 +11,14 @@ let mockState = {
 };
 /** The role-aware content policy the viewer is under. */
 let mockPolicy: { isParent: boolean; filterOn: boolean; denied: string[] } = { isParent: false, filterOn: true, denied: [] };
-jest.mock("../src/music/playback", () => ({
-  usePlayback: () => ({ ...mockState, policy: mockPolicy, toggle: mockToggle, next: mockNext }),
-}));
+jest.mock("../src/music/playback", () => {
+  const get = () => ({ ...mockState, policy: mockPolicy, toggle: mockToggle, next: mockNext });
+  return {
+    usePlayback: get,
+    usePlaybackCore: get,
+    usePlaybackPosition: () => 0,
+  };
+});
 function idleCast() {
   return {
     state: "notConnected",
@@ -42,7 +47,7 @@ function idleCast() {
 }
 let mockCastState: any = idleCast();
 jest.mock("../src/music/CastProvider", () => ({ useCast: () => mockCastState }));
-jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush }) }));
+jest.mock("expo-router", () => ({ useRouter: () => ({ push: mockPush, replace: mockPush }) }));
 
 import React from "react";
 import { StyleSheet } from "react-native";

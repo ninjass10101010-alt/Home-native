@@ -88,6 +88,16 @@ describe("CapsuleDock", () => {
     expect(disc).toBeTruthy();
     expect(disc.props.style.borderColor).toBe("transparent");
   });
+
+  it("tapping an already-active cap does not trigger navigation (0ms no-op)", () => {
+    const onNavigate = jest.fn();
+    const { getByLabelText } = render(
+      <CapsuleDock role="parent" hydrated pathname="/" onNavigate={onNavigate} />,
+      { wrapper: wrap }
+    );
+    fireEvent.press(getByLabelText("Home"));
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
 });
 
 describe("MoreSheet", () => {

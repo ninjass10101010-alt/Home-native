@@ -4,6 +4,29 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-05 — perf(nav,music,widgets): flat navigation stack replacement, decoupled high-frequency playback position context, active-tab guard, and in-memory widget caching (`app/*.tsx`, `playback.tsx`, `CapsuleDock.tsx`, `data.ts`, `MusicPlayer.tsx`, `MusicWidget.tsx`, `MiniPlayer.tsx`, `CastProvider.tsx`).
+  **What changed:**
+  - **Flat Navigation Stack via `router.replace` across All Route Manifests (`app/*.tsx`)**:
+    - Replaced all tab/dock `router.push(path)` calls with `router.replace(path)` across all 19 app screens (`index`, `music`, `tasks`, `calendar`, `weather`, `ha`, `photos`, `rewards`, `emergency`, `settings`, `meals`, `chat`, `grocery`, `analytics`, `skill-tree`, `money-mountain`, `time-capsule`, `memory`, `soon`).
+    - Eliminates unbounded stack growth and background screen accumulation in memory as users switch between tabs, maintaining a flat navigation stack depth of 1.
+  - **Decoupled High-Frequency Playback Position (`src/music/playback.tsx`, `src/music/MusicPlayer.tsx`, `src/music/CastProvider.tsx`, `src/home/widgets/MusicWidget.tsx`, `src/music/MiniPlayer.tsx`)**:
+    - Separated the rapid 250ms `position` ticks from static/core playback state into distinct React contexts (`CoreCtx` providing `PlaybackCoreValue` and `PositionCtx` providing `position`).
+    - Introduced `usePlaybackCore()` and `usePlaybackPosition()` hooks. Subscribed `CastProvider`, `MusicWidget`, and `MiniPlayer` to `usePlaybackCore()`, eliminating redundant 4Hz re-renders during active music playback across these background/dashboard components.
+    - Memoized `<ScrubberSection>` and wrapped `NowPlayingStage` in `React.memo` inside `MusicPlayer.tsx` so only the scrubber and lyric line subscribe to live position updates while the rest of the stage remains stable.
+  - **Active Tab Guard (0ms No-Op Navigation) (`src/nav/CapsuleDock.tsx`)**:
+    - Added an immediate early-return active check in `CapsuleDock.tsx` (`if (active) return;`) to suppress unneeded re-renders and router transitions when tapping the already active tab.
+    - Removed redundant `poke()` calls on navigation across routes since session keep-alive is already managed through screen touches and whoami.
+  - **In-Memory Stale-While-Revalidate Widget Cache (`src/home/widgets/data.ts`)**:
+    - Added synchronous in-memory caching (`widgetMemoryCache` with `cacheKey`) to `useWidgetData` across all core wall widgets (`TodayEventsWidget`, `CurrentMealWidget`, `BriefingWidget`, `PhotosWidget`, `ScheduleWidget`, and `WidgetHero`).
+    - Eliminates skeleton flashes and network wait states when returning to the Home dashboard, instantly painting previous data while background revalidations occur.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (app src, 0 token-literal violations).
+  - `npm run a11y:audit`: CLEAN (app src, 14sp floor & 64dp tap floor honored).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors, 0 warnings).
+  - Unit tests: all 87 test suites (1,391 tests) passed cleanly with `--maxWorkers=2` in `package.json`.
+
+
 - 2026-11-05 — feat(music,perf): music stream pre-fetching & engine caching, live search suggestions & auto-complete, and instant dashboard tab switching (`Engine.kt`, `modules/youtube-engine/index.ts`, `playback.tsx`, `suggestions.ts`, `MusicPlayer.tsx`, `AuthProvider.tsx`, `CapsuleDock.tsx`, `MoreSheet.tsx`, `app/_layout.tsx`).
   **What changed:**
   - **YouTube Engine Concurrency & In-Memory Stream/Search Caching (`modules/youtube-engine/android/src/main/java/expo/modules/youtubeengine/Engine.kt`, `modules/youtube-engine/index.ts`)**:

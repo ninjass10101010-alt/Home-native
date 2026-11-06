@@ -167,7 +167,7 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
     // Reference guest capture: the meal card renders LIVE signed-out (the
     // db-gateway reads are public). Guests see the honest "No meal planned
     // yet" — never a PIN gate.
-    { guestVisible: true }
+    { guestVisible: true, cacheKey: "currentMeal" }
   );
 
   const now = injectedNow ?? tickNow ?? new Date();

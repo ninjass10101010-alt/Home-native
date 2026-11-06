@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 import { act, fireEvent, render } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
@@ -538,5 +538,29 @@ describe("useWidgetData read contract (U5.4/U5.5/U5.9)", () => {
     });
     expect(getByTestId("probe-body")).toBeTruthy(); // last-good stays on screen…
     expect(getByTestId("probe-stale")).toBeTruthy(); // …badged, never silently faked
+  });
+
+  it("cacheKey provides instant (0ms) mount without skeleton flash on remount", async () => {
+    route({ "/api/probe": { ok: true, name: "Garcia" } });
+    const CachedProbe = () => {
+      const { status, data } = useWidgetData<any>(() => api("/api/probe"), { cacheKey: "testProbe" });
+      return (
+        <View testID="cached-probe">
+          <Text testID="cached-probe-status">{status}</Text>
+          <Text testID="cached-probe-name">{data?.name ?? "empty"}</Text>
+        </View>
+      );
+    };
+
+    // First mount: loads fresh
+    const { unmount, getByTestId, findByText } = render(<CachedProbe />, { wrapper: wrap });
+    expect(await findByText("Garcia")).toBeTruthy();
+    expect(getByTestId("cached-probe-status").props.children).toBe("ready");
+    unmount();
+
+    // Second mount: instantly ready with data from memory cache
+    const second = render(<CachedProbe />, { wrapper: wrap });
+    expect(second.getByTestId("cached-probe-status").props.children).toBe("ready");
+    expect(second.getByTestId("cached-probe-name").props.children).toBe("Garcia");
   });
 });

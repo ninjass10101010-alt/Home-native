@@ -32,7 +32,7 @@ import { weekStartMondayISO } from "../src/home/widgets/data";
  */
 export default function GroceryRoute() {
   const { colors } = useTheme();
-  const { role: capabilityRole, hydrated, poke } = useAuth();
+  const { role: capabilityRole, hydrated } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -217,7 +217,7 @@ export default function GroceryRoute() {
                 </Text>
               </View>
             </View>
-            <SoftButton variant="secondary" size="sm" onPress={() => router.push("/meals" as never)}>
+            <SoftButton variant="secondary" size="sm" onPress={() => router.replace("/meals" as never)}>
               🍽️ Meal Plan
             </SoftButton>
           </View>
@@ -260,8 +260,7 @@ export default function GroceryRoute() {
         hydrated={hydrated}
         pathname={pathname}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
       <MoreSheet
@@ -269,8 +268,7 @@ export default function GroceryRoute() {
         onClose={() => setMoreOpen(false)}
         role={role}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
     </Screen>

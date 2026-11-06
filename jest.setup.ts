@@ -173,3 +173,12 @@ jest.mock("./modules/youtube-engine", () => ({
   // The living backdrop's image: the artwork, blurred on-device.
   artworkBlurred: jest.fn(async () => null),
 }));
+
+beforeEach(() => {
+  try {
+    const { clearWidgetMemoryCache } = require("./src/home/widgets/data");
+    clearWidgetMemoryCache();
+  } catch {
+    // Ignore if not loaded
+  }
+});

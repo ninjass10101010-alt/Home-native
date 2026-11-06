@@ -77,7 +77,7 @@ export default function FamilyMemoryRoute() {
   const toast = useToast();
   const pathname = usePathname();
   const router = useRouter();
-  const { role: capabilityRole, hydrated, poke } = useAuth();
+  const { role: capabilityRole, hydrated } = useAuth();
   const [moreOpen, setMoreOpen] = useState(false);
 
   const [items, setItems] = useState<MemoryItem[]>(DEFAULT_MEMORY_ITEMS);
@@ -366,8 +366,7 @@ export default function FamilyMemoryRoute() {
         hydrated={hydrated}
         pathname={pathname}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
       <MoreSheet
@@ -375,8 +374,7 @@ export default function FamilyMemoryRoute() {
         onClose={() => setMoreOpen(false)}
         role={navRole}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
     </Screen>

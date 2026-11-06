@@ -1760,7 +1760,7 @@ describe("the floating glass dock", () => {
   it("still routes every tab — same labels, same destinations", () => {
     const onNavigate = jest.fn();
     const { getByLabelText } = render(
-      <CapsuleDock role="parent" hydrated pathname="/" onNavigate={onNavigate} />,
+      <CapsuleDock role="parent" hydrated pathname="/other" onNavigate={onNavigate} />,
       { wrapper: wrap }
     );
     const routes: [string, string][] = [

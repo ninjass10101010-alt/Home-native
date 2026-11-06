@@ -11,9 +11,14 @@ let mockState: any = {
 };
 /** The role-aware content policy the viewer is under. */
 let mockPolicy: any = { isParent: false, filterOn: true, denied: [] };
-jest.mock("../src/music/playback", () => ({
-  usePlayback: () => ({ ...mockState, policy: mockPolicy, toggle: mockToggle, next: mockNext }),
-}));
+jest.mock("../src/music/playback", () => {
+  const get = () => ({ ...mockState, policy: mockPolicy, toggle: mockToggle, next: mockNext });
+  return {
+    usePlayback: get,
+    usePlaybackCore: get,
+    usePlaybackPosition: () => mockState.position ?? 0,
+  };
+});
 function idleCast() {
   return {
     state: "notConnected",

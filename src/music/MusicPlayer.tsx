@@ -2620,6 +2620,56 @@ interface StageProps {
   onSelectArtist?: (artist: string) => void;
 }
 
+interface ScrubberSectionProps {
+  position: number;
+  duration: number;
+  tokens: MusicTokens;
+  onSeek: (seconds: number) => void;
+}
+
+const ScrubberSection = React.memo(function ScrubberSection({
+  position,
+  duration,
+  tokens,
+  onSeek,
+}: ScrubberSectionProps) {
+  const [seekWidth, setSeekWidth] = React.useState(0);
+  const progress = duration > 0 ? Math.min(1, Math.max(0, position / duration)) : 0;
+
+  return (
+    <>
+      {/* The scrubber: a 6px track over the glass, a 64dp hit area. */}
+      <Pressable
+        testID="np-seek"
+        accessibilityRole="adjustable"
+        accessibilityLabel="Seek"
+        onLayout={(e) => setSeekWidth(e.nativeEvent.layout.width)}
+        onPress={(e) => {
+          if (seekWidth > 0 && duration > 0) onSeek((e.nativeEvent.locationX / seekWidth) * duration);
+        }}
+        style={{ height: 64, justifyContent: "center" }}
+      >
+        <View style={{ height: 6, borderRadius: 3, backgroundColor: mix(tokens.label, "transparent", 30), overflow: "hidden" }}>
+          <View style={{ width: `${Math.round(progress * 100)}%`, height: 6, backgroundColor: tokens.accent }} />
+        </View>
+      </Pressable>
+      {/*
+        THE TIMES read the full label token too — the smallest step on the
+        panel, where the dim tier measured ~2.6:1. Size and weight carry the
+        hierarchy; colour never does.
+      */}
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}>
+          {clock(position)}
+        </Text>
+        <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}>
+          {duration > 0 ? clock(duration) : "--:--"}
+        </Text>
+      </View>
+    </>
+  );
+});
+
 /**
  * The Now Playing STAGE — the glass panel ON the living artwork backdrop.
  *
@@ -2636,7 +2686,7 @@ interface StageProps {
  * format. Every colour comes from the music tokens; the artwork's colour
  * arrives through the backdrop, already banded (see legibilityTint).
  */
-function NowPlayingStage({
+const NowPlayingStage = React.memo(function NowPlayingStage({
   track, tokens, reduceMotion,
   playing, position, duration, repeat, shuffle, downloaded, casting, player, streamFormat,
   onToggle, onNext, onPrevious, onSeek, onToggleShuffle, onCycleRepeat, onDownload,
@@ -2673,9 +2723,6 @@ function NowPlayingStage({
   // wide wall never grows a giant cover.
   const windowWidth = Dimensions.get("window").width;
   const artworkEdge = Math.min(windowWidth - 2 * tokens.pageMargin, STAGE_MAX_ARTWORK_EDGE);
-
-  const [seekWidth, setSeekWidth] = React.useState(0);
-  const progress = duration > 0 ? Math.min(1, position / duration) : 0;
 
   return (
     <View
@@ -2807,33 +2854,12 @@ function NowPlayingStage({
         </Pressable>
       </View>
 
-      {/* The scrubber: a 6px track over the glass, a 64dp hit area. */}
-      <Pressable
-        testID="np-seek"
-        accessibilityRole="adjustable"
-        accessibilityLabel="Seek"
-        onLayout={(e) => setSeekWidth(e.nativeEvent.layout.width)}
-        onPress={(e) => { if (seekWidth > 0 && duration > 0) onSeek((e.nativeEvent.locationX / seekWidth) * duration); }}
-        style={{ height: 64, justifyContent: "center" }}
-      >
-        {/*
-          THE TRACK is a faint wash of the label's own ink (white in the dark
-          theme, black in the light one), so it reads on the glass in both
-          themes — the old panel fill was invisible over an artwork.
-        */}
-        <View style={{ height: 6, borderRadius: 3, backgroundColor: mix(tokens.label, "transparent", 30), overflow: "hidden" }}>
-          <View style={{ width: `${Math.round(progress * 100)}%`, height: 6, backgroundColor: tokens.accent }} />
-        </View>
-      </Pressable>
-      {/*
-        THE TIMES read the full label token too — the smallest step on the
-        panel, where the dim tier measured ~2.6:1. Size and weight carry the
-        hierarchy; colour never does.
-      */}
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}>{clock(position)}</Text>
-        <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}>{duration > 0 ? clock(duration) : "--:--"}</Text>
-      </View>
+      <ScrubberSection
+        position={position}
+        duration={duration}
+        tokens={tokens}
+        onSeek={onSeek}
+      />
 
       {/*
         THE CODEC CHIP — what the stream REALLY is, centred above the pill.
@@ -3002,7 +3028,7 @@ function NowPlayingStage({
       </View>
     </View>
   );
-}
+});
 
 function clock(seconds: number): string {
   const safe = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;

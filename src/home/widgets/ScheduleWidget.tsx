@@ -39,7 +39,7 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
         schedules: Array.isArray(res?.items) ? res.items : [],
       };
     },
-    { guestVisible: true }
+    { guestVisible: true, cacheKey: "scheduleWidget" }
   );
 
   const [clock, setClock] = React.useState(() => new Date());

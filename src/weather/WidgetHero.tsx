@@ -614,6 +614,7 @@ export function WeatherHeroCell({ span = 1 }: { span?: WallSpan }) {
   const { colors } = useTheme();
   const { status, data, failure, stale, retry } = useWidgetData<WeatherSnapshot>(fetchWeather, {
     guestVisible: true, // Open-Meteo is public; the guest wall sees weather (reference parity)
+    cacheKey: "weatherHero",
   });
 
   // Direct render when data is available — full-bleed, no header disc gap

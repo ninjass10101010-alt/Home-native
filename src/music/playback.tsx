@@ -173,7 +173,11 @@ export interface PlaybackValue {
   stopAndClear: () => void;
 }
 
+export type PlaybackCoreValue = Omit<PlaybackValue, "position">;
+
 const Ctx = React.createContext<PlaybackValue | null>(null);
+const CoreCtx = React.createContext<PlaybackCoreValue | null>(null);
+const PositionCtx = React.createContext<number>(0);
 
 function localFileFor(id: string): File {
   return new File(musicDir(), `${id}.m4a`);
@@ -685,8 +689,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     return track;
   }, [policy, queue]);
 
+  const positionRef = React.useRef(position);
+  React.useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
+
   const previous = React.useCallback(async () => {
-    if (position > 3) {
+    if (positionRef.current > 3) {
       // Past three seconds "previous" restarts. While casting, the receiver
       // gets the reload, never the paused local player.
       const sink = castSinkRef.current;
@@ -706,7 +715,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     await goTo(target);
-  }, [goTo, player, policy, position, queue]);
+  }, [goTo, player, policy, queue]);
 
   /**
    * The auto-advance effect's REF VIEW of "a start is in flight".
@@ -945,13 +954,12 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   );
 
   /* eslint-disable react-hooks/refs -- the transport callbacks read the player/cast refs only when a user action invokes them, never during render */
-  const value = React.useMemo<PlaybackValue>(
+  const coreValue = React.useMemo<PlaybackCoreValue>(
     () => ({
       current,
       queue: visibleTracks(queue.tracks, policy),
       index: queue.index,
       playing,
-      position,
       duration,
       buffering: !!status?.isBuffering,
       repeat: queue.repeat,
@@ -993,7 +1001,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     [
       addDenied, addToQueue, advanceForCast, current, cycleRepeatMode, downloadCurrent, duration,
       error, denylist, moveQueueItem, next, parkLocal, pauseLocal, play, playQueueAt, playing, policy,
-      position, previous,
+      previous,
       previousForCast,
       queue.index,
       queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,
@@ -1002,13 +1010,42 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       visibleDownloads, visibleHistory, stopAndClear, player,
     ]
   );
+
+  const value = React.useMemo<PlaybackValue>(
+    () => ({
+      ...coreValue,
+      position,
+    }),
+    [coreValue, position]
+  );
   /* eslint-enable react-hooks/refs */
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <CoreCtx.Provider value={coreValue}>
+      <PositionCtx.Provider value={position}>
+        <Ctx.Provider value={value}>{children}</Ctx.Provider>
+      </PositionCtx.Provider>
+    </CoreCtx.Provider>
+  );
 }
 
 export function usePlayback(): PlaybackValue {
   const value = React.useContext(Ctx);
   if (!value) throw new Error("usePlayback must be used inside PlaybackProvider");
   return value;
+}
+
+export function usePlaybackCore(): PlaybackCoreValue {
+  const core = React.useContext(CoreCtx);
+  const pb = React.useContext(Ctx);
+  if (core) return core;
+  if (pb) return pb;
+  throw new Error("usePlaybackCore must be used inside PlaybackProvider");
+}
+
+export function usePlaybackPosition(): number {
+  const live = React.useContext(PositionCtx);
+  const pb = React.useContext(Ctx);
+  if (live !== 0) return live;
+  return pb?.position ?? 0;
 }

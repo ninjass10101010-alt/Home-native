@@ -58,7 +58,7 @@ export default function TimeCapsuleRoute() {
   const toast = useToast();
   const pathname = usePathname();
   const router = useRouter();
-  const { member, role: capabilityRole, hydrated, poke } = useAuth();
+  const { member, role: capabilityRole, hydrated } = useAuth();
   const [moreOpen, setMoreOpen] = useState(false);
 
   const [capsules, setCapsules] = useState<TimeCapsuleEntry[]>(DEFAULT_CAPSULES);
@@ -367,8 +367,7 @@ export default function TimeCapsuleRoute() {
         hydrated={hydrated}
         pathname={pathname}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
       <MoreSheet
@@ -376,8 +375,7 @@ export default function TimeCapsuleRoute() {
         onClose={() => setMoreOpen(false)}
         role={navRole}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
     </Screen>

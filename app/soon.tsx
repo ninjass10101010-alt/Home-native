@@ -21,7 +21,7 @@ export default function Soon() {
   const params = useLocalSearchParams<{ label?: string }>();
   const pathname = usePathname();
   const router = useRouter();
-  const { role: capabilityRole, hydrated, poke } = useAuth();
+  const { role: capabilityRole, hydrated } = useAuth();
   const [moreOpen, setMoreOpen] = React.useState(false);
 
   // The nav role follows the CAPABILITY (a live-verified session), never the
@@ -38,7 +38,7 @@ export default function Soon() {
           title={`${label} arrives in the next wave`}
           body="The wall's core is live — this surface ships with Wave 2."
           actionLabel="Back to Home"
-          onAction={() => router.push("/" as never)}
+          onAction={() => router.replace("/" as never)}
         />
         <Text
           style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 12, textAlign: "center" }}
@@ -54,8 +54,7 @@ export default function Soon() {
         hydrated={hydrated}
         pathname={pathname}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
       <MoreSheet
@@ -63,8 +62,7 @@ export default function Soon() {
         onClose={() => setMoreOpen(false)}
         role={role}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
     </Screen>

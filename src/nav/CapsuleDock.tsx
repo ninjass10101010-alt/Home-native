@@ -184,7 +184,10 @@ export const CapsuleDock = React.memo(function CapsuleDock({ role, hydrated, pat
               idleGlyphColor={colors["color-text-secondary"]}
               activeLabelInk={colors["color-text-primary"]}
               inactiveInk={colors["color-text-secondary"]}
-              onPress={() => onNavigate(resolveRoute(item.path, item.label))}
+              onPress={() => {
+                if (active) return;
+                onNavigate(resolveRoute(item.path, item.label));
+              }}
               reduceMotion={reduceMotion}
               testID={`dock-${item.label.toLowerCase()}`}
             />
@@ -254,12 +257,10 @@ const DockCap = React.memo(function DockCap({
         onPress={onPress}
         onPressIn={() => {
           if (!reduceMotion) {
-            // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write is the idiom
             scale.value = withTiming(0.96, { duration: MOTION.fast });
           }
         }}
         onPressOut={() => {
-          // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write is the idiom
           scale.value = withTiming(1, { duration: MOTION.fast });
         }}
         style={{

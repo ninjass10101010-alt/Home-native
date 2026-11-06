@@ -88,7 +88,10 @@ export function PhotosWidget() {
     };
   }, []);
 
-  const { status, data: batch, failure, stale, retry } = useWidgetData<PhotosState>(() => loadPhotos(), { guestVisible: true });
+  const { status, data: batch, failure, stale, retry } = useWidgetData<PhotosState>(() => loadPhotos(), {
+    guestVisible: true,
+    cacheKey: "photosWidget",
+  });
 
   const [override, setOverride] = React.useState<PhotosState | null>(null);
   const data = override ?? batch;

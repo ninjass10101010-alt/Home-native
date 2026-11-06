@@ -5,7 +5,7 @@ import { useTheme } from "../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
 import { musicTokensFor } from "../theme/music-tokens";
-import { usePlayback } from "./playback";
+import { usePlaybackCore } from "./playback";
 import { useCast } from "./CastProvider";
 import { isContentHidden } from "./explicit";
 import { DOCK_TOP_OFFSET } from "../nav/CapsuleDock";
@@ -35,7 +35,7 @@ export function MiniPlayer() {
   const tokens = React.useMemo(() => musicTokensFor(theme, boost), [theme, boost]);
   const pathname = usePathname();
   const router = useRouter();
-  const { current, playing, toggle, next, policy } = usePlayback();
+  const { current, playing, toggle, next, policy } = usePlaybackCore();
   const cast = useCast();
 
   if (!current) return null;
@@ -111,7 +111,7 @@ export function MiniPlayer() {
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <Pressable testID="mini-player" accessibilityRole="button" accessibilityLabel={hidden ? "Open music. Nothing playing" : `Open music. ${current.title} by ${current.artist}`} onPress={() => router.push("/music" as never)} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12, minHeight: 64 }}>
+          <Pressable testID="mini-player" accessibilityRole="button" accessibilityLabel={hidden ? "Open music. Nothing playing" : `Open music. ${current.title} by ${current.artist}`} onPress={() => router.replace("/music" as never)} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12, minHeight: 64 }}>
             {/*
               THE ARTWORK — a 48dp tile on the Liquid radius, on the grouped
               ground. A hidden track paints NO artwork: the tile wears the

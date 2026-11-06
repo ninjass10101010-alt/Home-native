@@ -53,7 +53,7 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
-    "test": "npm run tokens:check && jest --watchAll=false && npm run a11y:audit && npm run paint:audit",
+    "test": "npm run tokens:check && jest --watchAll=false --maxWorkers=2 && npm run a11y:audit && npm run paint:audit",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "tokens:gen": "node scripts/gen-tokens.mjs",

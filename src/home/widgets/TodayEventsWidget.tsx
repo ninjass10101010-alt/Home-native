@@ -307,7 +307,10 @@ export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
     return { events, googleFailure, familyAnswered };
   }, [guest]);
 
-  const { status, data, failure, stale, retry } = useWidgetData<TodayPayload>(load, { guestVisible: true });
+  const { status, data, failure, stale, retry } = useWidgetData<TodayPayload>(load, {
+    guestVisible: true,
+    cacheKey: "todayEvents",
+  });
 
   const events = data?.events ?? [];
   const googleFailure = data?.googleFailure ?? null;

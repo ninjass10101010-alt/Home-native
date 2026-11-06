@@ -26,7 +26,7 @@ export default function AnalyticsRoute() {
   const { colors, accentColor } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
-  const { role: capabilityRole, hydrated, poke } = useAuth();
+  const { role: capabilityRole, hydrated } = useAuth();
   const { snapshot } = useSync();
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -179,7 +179,7 @@ export default function AnalyticsRoute() {
                 variant="ghost"
                 size="sm"
                 testID="insights-open-routines"
-                onPress={() => router.push("/tasks" as never)}
+                onPress={() => router.replace("/tasks" as never)}
               >
                 Open Routines →
               </SoftButton>
@@ -268,8 +268,7 @@ export default function AnalyticsRoute() {
         hydrated={hydrated}
         pathname={pathname}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
       <MoreSheet
@@ -277,8 +276,7 @@ export default function AnalyticsRoute() {
         onClose={() => setMoreOpen(false)}
         role={navRole}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
     </Screen>

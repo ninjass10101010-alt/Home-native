@@ -18,7 +18,7 @@ import {
   type CastTarget,
 } from "./cast";
 import { isContentHidden } from "./explicit";
-import { usePlayback } from "./playback";
+import { usePlaybackCore } from "./playback";
 import type { MediaTrack } from "./types";
 
 export interface CastValue {
@@ -147,7 +147,7 @@ const CastContextValue = React.createContext<CastValue | null>(null);
 type CastMediaStatus = { mediaSessionId?: number | null };
 
 export function CastProvider({ children }: { children: React.ReactNode }) {
-  const playback = usePlayback();
+  const playback = usePlaybackCore();
   const advanceForCast = playback.advanceForCast;
   const previousForCast = playback.previousForCast;
   const rawState = useCastState();

@@ -46,7 +46,7 @@ export default function MoneyMountainRoute() {
   const toast = useToast();
   const pathname = usePathname();
   const router = useRouter();
-  const { member, role: capabilityRole, hydrated, poke } = useAuth();
+  const { member, role: capabilityRole, hydrated } = useAuth();
   const { snapshot } = useSync();
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -319,8 +319,7 @@ export default function MoneyMountainRoute() {
         hydrated={hydrated}
         pathname={pathname}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
       <MoreSheet
@@ -328,8 +327,7 @@ export default function MoneyMountainRoute() {
         onClose={() => setMoreOpen(false)}
         role={navRole}
         onNavigate={(p) => {
-          poke();
-          router.push(p as never);
+          router.replace(p as never);
         }}
       />
     </Screen>

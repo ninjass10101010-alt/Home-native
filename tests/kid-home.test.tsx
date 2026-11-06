@@ -11,8 +11,8 @@ import HomeRoute from "../app/index";
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
-jest.mock("../src/music/playback", () => ({
-  usePlayback: () => ({
+jest.mock("../src/music/playback", () => {
+  const get = () => ({
     current: null, queue: [], index: -1, playing: false, position: 0, duration: 0,
     buffering: false, repeat: "off", shuffle: false, error: null,
     downloads: [], downloadBytes: 0, history: [],
@@ -23,8 +23,13 @@ jest.mock("../src/music/playback", () => ({
     cycleRepeatMode: jest.fn(), toggleShuffleMode: jest.fn(), addToQueue: jest.fn(),
     removeFromQueue: jest.fn(), moveQueueItem: jest.fn(), downloadCurrent: jest.fn(),
     removeDownload: jest.fn(), setExplicitFilter: jest.fn(),
-  }),
-}));
+  });
+  return {
+    usePlayback: get,
+    usePlaybackCore: get,
+    usePlaybackPosition: () => 0,
+  };
+});
 jest.mock("../src/music/CastProvider", () => ({
   useCast: () => ({
     state: "notConnected", devices: [], target: null, casting: false, playing: false,
