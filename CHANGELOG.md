@@ -4,6 +4,29 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-05 — feat(music,perf): music stream pre-fetching & engine caching, live search suggestions & auto-complete, and instant dashboard tab switching (`Engine.kt`, `modules/youtube-engine/index.ts`, `playback.tsx`, `suggestions.ts`, `MusicPlayer.tsx`, `AuthProvider.tsx`, `CapsuleDock.tsx`, `MoreSheet.tsx`, `app/_layout.tsx`).
+  **What changed:**
+  - **YouTube Engine Concurrency & In-Memory Stream/Search Caching (`modules/youtube-engine/android/src/main/java/expo/modules/youtubeengine/Engine.kt`, `modules/youtube-engine/index.ts`)**:
+    - Expanded `engineExecutor` thread pool from 2 to 4 worker threads and moved `artworkColorsAsync` palette extraction onto the dedicated `artworkExecutor` so thumbnail color sampling never blocks audio stream resolution or search queries.
+    - Added bounded TTL caches and in-flight Promise deduplication in `modules/youtube-engine/index.ts` for `search(query, limit)` (5-minute TTL, max 50 entries), `related(id)` (10-minute TTL, max 50 entries), and `resolveAudio(id)` (valid until 60 seconds before stream `expiresAt`, max 50 entries).
+    - Added `prefetchAudio(id)` to silently resolve and cache audio streams in the background without mutating `lastStream` or firing active `streamListeners` until `resolveAudio(id)` is invoked for playback.
+  - **Proactive Queue & Search Result Pre-Fetching (`src/music/playback.tsx`, `src/music/MusicPlayer.tsx`)**:
+    - Added automatic queue pre-fetching in `PlaybackProvider` that resolves the next 1–2 visible tracks in the queue (`findVisibleIndex`) into the engine's stream cache as soon as playback starts or advances, making track skipping and auto-advance instantaneous.
+    - Added automatic `prefetchAudio` for the top visible search result and top artist profile track so tapping "Play" starts audio immediately.
+  - **Live Search Suggestions, Auto-Complete & Recent Search History (`src/music/suggestions.ts`, `src/music/MusicPlayer.tsx`)**:
+    - Created `src/music/suggestions.ts` with device-local recent search persistence (`AsyncStorage` key `music.search.recent`, max 8 entries, with individual removal and one-tap clear) and 0ms `buildSearchSuggestions(query, ctx)` ranking prefix matches ahead of substring matches across recent searches, favorite artists, curated artists, stations, family mixes, and visible playback history.
+    - Added `SearchSuggestionsStrip` in `MusicPlayer.tsx` displaying recent searches and discovery pills when the search box is focused/idle, and live auto-complete pills (Recent, Artist, Station, Mix, Song) as you type.
+    - Added a 320ms debounced live search as you type (for queries ≥ 2 characters), an instant `✕` clear search button (`music-search-clear`), and memoized shelf components (`SearchResults`, `DownloadsTray`, `StationsShelf`, `FamilyMixesShelf`, `SimilarTracksShelf`, `FavoriteArtistsShelf`, `RecommendedArtistsShelf`, `HistoryShelf`) plus a stabilized `ContentPolicy` memo to eliminate redundant re-renders.
+  - **Dashboard Snappiness & Instant Tab Switching (`src/state/AuthProvider.tsx`, `src/nav/CapsuleDock.tsx`, `src/nav/MoreSheet.tsx`, `app/_layout.tsx`)**:
+    - Throttled `AuthProvider.poke()` to a 3-second window when `sessionWarn` is inactive and avoided redundant state updates so every screen touch no longer triggers top-level context work.
+    - Wrapped `CapsuleDock`, `DockCap`, `MoreButton`, and `MoreSheet` in `React.memo` and configured `Stack` in `app/_layout.tsx` with `animation: "none"` for zero-latency tab transitions.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (app src, 0 token-literal violations).
+  - `npm run a11y:audit`: CLEAN (app src, 14sp floor & 64dp tap targets honored).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+  - Unit tests: all 87 test suites (1,389 tests) passed, including new tests in `modules/youtube-engine/index.test.ts` and `tests/music-apple-player.test.tsx`.
+
 - 2026-11-05 — feat(tasks): two-way sync for family routine checklists between Home-native tablet and Home-ai webapp (`routines-api.ts`, `client.ts`, `routines-api.test.ts`).
   **What changed:**
   - **Two-way sync with Home-ai LAN backend (`src/tasks/routines-api.ts`)**:

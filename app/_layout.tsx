@@ -70,7 +70,13 @@ export default function RootLayout() {
                   <NavigationBar hidden />
                   <NotificationMonitor />
                   <PokeBoundary>
-                    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "transparent" } }} />
+                    <Stack
+                      screenOptions={{
+                        headerShown: false,
+                        animation: "none",
+                        contentStyle: { backgroundColor: "transparent" },
+                      }}
+                    />
                     {/*
                       THE FLOATING CHROME (SP3-B Task 5).
 

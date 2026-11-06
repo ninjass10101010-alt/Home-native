@@ -15,8 +15,12 @@
 import {
   artworkBlurred,
   artworkColors,
+  clearEngineCaches,
   lastStreamFormat,
+  prefetchAudio,
+  related,
   resolveAudio,
+  search,
   subscribeStreamFormat,
 } from "./index";
 
@@ -34,12 +38,17 @@ const native = {
   artworkColors: jest.fn(),
   artworkBlurred: jest.fn(),
   resolveAudio: jest.fn(),
+  search: jest.fn(),
+  related: jest.fn(),
 };
 
 beforeEach(() => {
+  clearEngineCaches();
   native.artworkColors.mockReset();
   native.artworkBlurred.mockReset();
   native.resolveAudio.mockReset();
+  native.search.mockReset();
+  native.related.mockReset();
   jest
     .spyOn(ExpoModulesCore, "requireNativeModule")
     .mockReturnValue(native as never);
@@ -272,5 +281,85 @@ describe("resolveAudio", () => {
     native.resolveAudio.mockResolvedValue({ ...RESOLVED, bitrate: 99000 });
     await resolveAudio("track000002");
     expect(seen).toHaveLength(1);
+  });
+
+  it("prefetchAudio caches a live stream silently and resolveAudio serves it in 0ms while notifying listeners", async () => {
+    const seen: unknown[] = [];
+    const stop = subscribeStreamFormat((format) => seen.push(format));
+    const futureExpiry = Date.now() + 6 * 60 * 60 * 1000;
+    native.resolveAudio.mockResolvedValue({
+      ...RESOLVED,
+      expiresAt: futureExpiry,
+      bitrate: 160000,
+      codec: "opus",
+    });
+
+    // Background pre-fetch resolves the stream into the cache WITHOUT firing
+    // streamListeners for whatever track is currently playing.
+    const prefetched = await prefetchAudio("nextTrack01");
+    expect(prefetched).toEqual(
+      expect.objectContaining({
+        url: "https://stream.invalid/audio.m4a",
+        bitrate: 160000,
+        codec: "opus",
+      })
+    );
+    expect(native.resolveAudio).toHaveBeenCalledTimes(1);
+    expect(seen).toHaveLength(0);
+
+    // When playback advances to nextTrack01, resolveAudio serves the cached
+    // stream without hitting native again AND notifies streamListeners.
+    const active = await resolveAudio("nextTrack01");
+    expect(active).toEqual(prefetched);
+    expect(native.resolveAudio).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([
+      {
+        id: "nextTrack01",
+        mimeType: "audio/mp4",
+        bitrate: 160000,
+        codec: "opus",
+      },
+    ]);
+    stop();
+  });
+
+  it("caches authoritative search results and related tracks to avoid duplicate round-trips", async () => {
+    native.search.mockResolvedValue({
+      tracks: [
+        {
+          id: "t1",
+          title: "Bluey Theme",
+          artist: "Bluey",
+          album: "",
+          durationSeconds: 60,
+          artworkUrl: null,
+          explicit: false,
+          source: "youtube_music",
+        },
+      ],
+      explicitKnown: true,
+    });
+
+    const first = await search("Bluey", 20);
+    const second = await search("  bluey ", 20);
+    expect(first.tracks).toHaveLength(1);
+    expect(second.tracks).toHaveLength(1);
+    expect(native.search).toHaveBeenCalledTimes(1);
+
+    native.related.mockResolvedValue([
+      {
+        id: "rel1",
+        title: "Keepy Uppy",
+        artist: "Bluey",
+        album: "",
+        durationSeconds: 120,
+        artworkUrl: null,
+        explicit: null,
+        source: "youtube_music",
+      },
+    ]);
+    await related("t1");
+    await related("t1");
+    expect(native.related).toHaveBeenCalledTimes(1);
   });
 });

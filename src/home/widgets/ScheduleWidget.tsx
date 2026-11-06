@@ -146,10 +146,10 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
               marginRight: 6,
             })}
           >
-            <Text style={{ fontSize: 13 }}>🔊</Text>
+            <Text style={{ fontSize: 14 }}>🔊</Text>
             <Text
               style={{
-                fontSize: 11,
+                fontSize: 14,
                 fontWeight: "700",
                 color: cyan,
                 letterSpacing: 0.3,

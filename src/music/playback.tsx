@@ -2,7 +2,12 @@ import React from "react";
 import { Directory, File, Paths } from "expo-file-system";
 import { AudioModule, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import type { AudioPlayer } from "expo-audio";
-import { resolveAudio, subscribeStreamFormat, type StreamFormat } from "../../modules/youtube-engine";
+import {
+  prefetchAudio,
+  resolveAudio,
+  subscribeStreamFormat,
+  type StreamFormat,
+} from "../../modules/youtube-engine";
 import { useAuth } from "../state/AuthProvider";
 import {
   appendHistory,
@@ -303,6 +308,37 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => { playerRef.current = player; }, [player]);
   React.useEffect(() => { queueRef.current = queue; }, [queue]);
+
+  /**
+   * Pre-resolve the next 1–2 visible tracks in the queue in the background so
+   * pressing Next or auto-advancing starts audio playback instantaneously.
+   */
+  React.useEffect(() => {
+    if (queue.index < 0 || queue.tracks.length <= 1) return;
+    if (typeof prefetchAudio !== "function") return;
+    const downloadedIds = new Set(downloads.map((d) => d.id));
+    let cursor = queue.index;
+    let count = 0;
+    const seen = new Set<string>();
+    while (count < 2) {
+      const candidateIdx = findVisibleIndex(
+        queue.tracks,
+        cursor + 1,
+        policy,
+        1,
+        queue.repeat === "all"
+      );
+      if (candidateIdx < 0 || candidateIdx === queue.index) break;
+      const candidate = queue.tracks[candidateIdx];
+      if (!candidate || seen.has(candidate.id)) break;
+      seen.add(candidate.id);
+      cursor = candidateIdx;
+      count += 1;
+      if (!downloadedIds.has(candidate.id)) {
+        void prefetchAudio(candidate.id);
+      }
+    }
+  }, [queue.tracks, queue.index, queue.repeat, policy, downloads]);
 
   /**
    * THE LAST RESOLUTION, mirrored into state.

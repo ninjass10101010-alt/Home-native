@@ -106,12 +106,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastArmAt = useRef<number>(0);
 
   const clearTimers = useCallback(() => {
     if (idleTimer.current) clearTimeout(idleTimer.current);
     if (warnTimer.current) clearTimeout(warnTimer.current);
     idleTimer.current = null;
     warnTimer.current = null;
+    lastArmAt.current = 0;
   }, []);
 
   /** Persist the signed-out-visible profile (display cache, never identity). */
@@ -132,8 +134,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const armTimers = useCallback(
     (m: ServerMember | null) => {
       clearTimers();
-      setSessionWarn(false);
+      setSessionWarn((prev) => (prev ? false : prev));
       if (!m) return;
+      lastArmAt.current = Date.now();
       const { idle, warn } = timeoutsFor(m);
       warnTimer.current = setTimeout(() => setSessionWarn(true), idle - warn);
       idleTimer.current = setTimeout(() => {
@@ -226,10 +229,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Wall presses ARE session activity: the web's idle clock re-arms on wall
   // interaction, so every touch on the panel re-arms it here too. Reads the
   // member from the closure — NO side effects inside a state updater (a
-  // double-invoked updater would double-arm the timers).
+  // double-invoked updater would double-arm the timers). Throttled to 3s when
+  // no warning is showing so rapid scrolling/tapping does not churn timers on
+  // every touch event.
   const poke = useCallback(() => {
-    if (member) armTimers(member);
-  }, [armTimers, member]);
+    if (!member) return;
+    const now = Date.now();
+    if (!sessionWarn && lastArmAt.current > 0 && now - lastArmAt.current < 3_000) {
+      return;
+    }
+    armTimers(member);
+  }, [armTimers, member, sessionWarn]);
 
   const signIn = useCallback(
     async (name: string, pin?: string) => {

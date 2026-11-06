@@ -17,7 +17,13 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { artworkBlurred, artworkColors, search as engineSearch, type StreamFormat } from "../../modules/youtube-engine";
+import {
+  artworkBlurred,
+  artworkColors,
+  prefetchAudio,
+  search as engineSearch,
+  type StreamFormat,
+} from "../../modules/youtube-engine";
 import { useTheme } from "../theme/ThemeProvider";
 import { FONTS, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
@@ -49,6 +55,13 @@ import {
   type FamilyMix,
   type MusicStation,
 } from "./stations";
+import {
+  buildSearchSuggestions,
+  clearRecentSearches,
+  loadRecentSearches,
+  saveRecentSearch,
+  type SearchSuggestion,
+} from "./suggestions";
 import { toHighResArtworkUrl } from "./artwork";
 import { LYRIC_CURRENT_SCALE, LYRIC_TYPE, STAGE_TYPE } from "./stage-type";
 import type { DownloadEntry, FavoriteArtist, MediaTrack, RecommendedArtist, RepeatMode } from "./types";
@@ -116,38 +129,67 @@ export function MusicPlayer() {
   const [libraryTab, setLibraryTab] = React.useState<LibraryTab>("all");
 
   const [favoriteArtists, setFavoriteArtists] = React.useState<FavoriteArtist[]>([]);
+  const [recentSearches, setRecentSearches] = React.useState<string[]>([]);
+  const [submittedQuery, setSubmittedQuery] = React.useState("");
+  const liveSearchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSearchedTermRef = React.useRef("");
 
   React.useEffect(() => {
     let alive = true;
     void loadFavoriteArtists().then((list) => {
-      if (alive) setFavoriteArtists(list);
+      if (alive && list.length > 0) setFavoriteArtists(list);
+    });
+    void loadRecentSearches().then((recent) => {
+      if (alive && recent.length > 0) setRecentSearches(recent);
     });
     return () => { alive = false; };
   }, []);
 
-  const handleToggleFavoriteArtist = (artistName: string, artworkUrl?: string | null) => {
+  const handleToggleFavoriteArtist = React.useCallback((artistName: string, artworkUrl?: string | null) => {
     setFavoriteArtists((prev) => {
       const updated = toggleFavoriteArtist(prev, artistName, artworkUrl);
       void saveFavoriteArtists(updated);
       return updated;
     });
-  };
+  }, []);
 
   // The role-aware policy comes from the provider — it knows who is watching
   // (a parent sees everything; a kid role and a signed-out guest fail
   // closed). See src/music/explicit.ts.
-  const isParent = policy.isParent;
-  const visible = visibleTracks(tracks, policy);
+  // Stabilize the policy object reference across renders when its values
+  // haven't changed (e.g. if a caller/test provides an inline object literal).
+  const deniedKey = (policy.denied ?? []).join("\u0000");
+  const stablePolicy = React.useMemo(
+    () => ({
+      isParent: policy.isParent,
+      filterOn: policy.filterOn,
+      denied: policy.denied,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [policy.isParent, policy.filterOn, deniedKey]
+  );
+  const isParent = stablePolicy.isParent;
+  const visible = React.useMemo(() => visibleTracks(tracks, stablePolicy), [tracks, stablePolicy]);
   // The queue, the history and the downloads tray are track surfaces too:
   // the policy covers every place a kid can SEE a track, not just the search
   // results.
-  const visibleQueue = visibleTracks(queue, policy);
-  const visibleHistory = visibleTracks(history, policy);
-  const visibleDownloads = visibleTracks(downloads, policy);
+  const visibleQueue = React.useMemo(() => visibleTracks(queue, stablePolicy), [queue, stablePolicy]);
+  const visibleHistory = React.useMemo(() => visibleTracks(history, stablePolicy), [history, stablePolicy]);
+  const visibleDownloads = React.useMemo(() => visibleTracks(downloads, stablePolicy), [downloads, stablePolicy]);
   // The Now Playing panel is a surface as well: a track the viewer may not
   // see is never painted here either (the provider already stops it — this
   // is the same rule on the same screen).
-  const visibleCurrent = current && !isContentHidden(current, policy) ? current : null;
+  const visibleCurrent = current && !isContentHidden(current, stablePolicy) ? current : null;
+
+  const suggestions = React.useMemo(
+    () =>
+      buildSearchSuggestions(query, {
+        recentSearches,
+        favoriteArtists,
+        history: visibleHistory,
+      }),
+    [query, recentSearches, favoriteArtists, visibleHistory]
+  );
 
   // Live algorithmic recommendations for currently playing track
   React.useEffect(() => {
@@ -156,7 +198,7 @@ export function MusicPlayer() {
     void fetchSimilarTracks(visibleCurrent)
       .then((sim) => {
         if (alive) {
-          const vis = visibleTracks(sim, policy);
+          const vis = visibleTracks(sim, stablePolicy);
           setSimilarTrackState({ id: visibleCurrent.id, tracks: vis });
         }
       })
@@ -164,7 +206,7 @@ export function MusicPlayer() {
         if (alive) setSimilarTrackState({ id: visibleCurrent.id, tracks: [] });
       });
     return () => { alive = false; };
-  }, [visibleCurrent, policy]);
+  }, [visibleCurrent, stablePolicy]);
 
   const similarTracks = visibleCurrent && similarTrackState?.id === visibleCurrent.id ? similarTrackState.tracks : [];
 
@@ -177,7 +219,7 @@ export function MusicPlayer() {
     [visibleHistory, favoriteArtists]
   );
 
-  const openArtistProfile = async (artistName: string, artworkUrl?: string | null) => {
+  const openArtistProfile = React.useCallback(async (artistName: string, artworkUrl?: string | null) => {
     const trimmed = artistName.trim();
     if (!trimmed) return;
     setActiveArtist({ name: trimmed, artworkUrl: artworkUrl ?? null });
@@ -187,12 +229,15 @@ export function MusicPlayer() {
       const outcome = await engineSearch(trimmed, 25);
       const vis = visibleTracks(outcome.tracks, policy);
       setArtistTracks(vis);
+      if (vis.length > 0 && typeof prefetchAudio === "function") {
+        void prefetchAudio(vis[0].id);
+      }
     } catch {
       setArtistTracks([]);
     } finally {
       setLoadingArtistTracks(false);
     }
-  };
+  }, [policy]);
 
   const handleCreateStation = async (track: MediaTrack) => {
     setSearching(true);
@@ -210,8 +255,10 @@ export function MusicPlayer() {
     }
   };
 
-  const selectStation = async (station: MusicStation) => {
+  const selectStation = React.useCallback(async (station: MusicStation) => {
     setQuery(station.query);
+    setSubmittedQuery(station.query);
+    lastSearchedTermRef.current = station.query;
     setSearchOpen(false);
     setSearching(true);
     setSearchError(null);
@@ -230,10 +277,12 @@ export function MusicPlayer() {
     } finally {
       setSearching(false);
     }
-  };
+  }, [play, policy]);
 
-  const selectMix = async (mixItem: FamilyMix) => {
+  const selectMix = React.useCallback(async (mixItem: FamilyMix) => {
     setQuery(mixItem.query);
+    setSubmittedQuery(mixItem.query);
+    lastSearchedTermRef.current = mixItem.query;
     setSearchOpen(false);
     setSearching(true);
     setSearchError(null);
@@ -252,7 +301,8 @@ export function MusicPlayer() {
     } finally {
       setSearching(false);
     }
-  };
+  }, [play, policy]);
+
   const unrated = countUnrated(tracks);
   const note =
     hasSearched && !searching && !searchError
@@ -268,27 +318,97 @@ export function MusicPlayer() {
 
   const lyrics = visibleCurrent && lyricsFor?.id === visibleCurrent.id ? lyricsFor.lines : null;
 
+  const runSearch = React.useCallback(
+    async (rawTerm: string, options?: { saveRecent?: boolean; markSubmitted?: boolean }) => {
+      const term = rawTerm.trim();
+      if (!term) return;
+      if (liveSearchTimerRef.current) {
+        clearTimeout(liveSearchTimerRef.current);
+        liveSearchTimerRef.current = null;
+      }
+      lastSearchedTermRef.current = term;
+      if (options?.markSubmitted !== false) {
+        setSubmittedQuery(term);
+      }
+      if (options?.saveRecent !== false) {
+        void saveRecentSearch(term).then((updated) => setRecentSearches(updated));
+      }
+      setSearching(true);
+      setSearchError(null);
+      try {
+        const outcome = await engineSearch(term, 20);
+        setTracks(outcome.tracks);
+        setExplicitKnown(outcome.explicitKnown);
+        setHasSearched(true);
+        const vis = visibleTracks(outcome.tracks, policy);
+        if (vis.length > 0 && typeof prefetchAudio === "function") {
+          void prefetchAudio(vis[0].id);
+        }
+      } catch (e) {
+        setSearchError(e instanceof Error ? e.message : "search_failed");
+        setTracks([]);
+        // The search FAILED: it never established any rating, so the ratings
+        // are NOT authoritative. Never claim authority a failed search lacks.
+        setExplicitKnown(false);
+        setHasSearched(true);
+      } finally {
+        setSearching(false);
+      }
+    },
+    [policy]
+  );
+
   const search = async () => {
-    const term = query.trim();
-    if (!term) return;
-    setSearching(true);
-    setSearchError(null);
-    try {
-      const outcome = await engineSearch(term, 20);
-      setTracks(outcome.tracks);
-      setExplicitKnown(outcome.explicitKnown);
-      setHasSearched(true);
-    } catch (e) {
-      setSearchError(e instanceof Error ? e.message : "search_failed");
-      setTracks([]);
-      // The search FAILED: it never established any rating, so the ratings
-      // are NOT authoritative. Never claim authority a failed search lacks.
-      setExplicitKnown(false);
-      setHasSearched(true);
-    } finally {
-      setSearching(false);
-    }
+    await runSearch(query, { saveRecent: true, markSubmitted: true });
   };
+
+  const handleClearSearch = () => {
+    if (liveSearchTimerRef.current) {
+      clearTimeout(liveSearchTimerRef.current);
+      liveSearchTimerRef.current = null;
+    }
+    lastSearchedTermRef.current = "";
+    setSubmittedQuery("");
+    setQuery("");
+    setTracks([]);
+    setHasSearched(false);
+    setSearchError(null);
+  };
+
+  const handleSelectSuggestion = (suggestion: SearchSuggestion) => {
+    setQuery(suggestion.query);
+    void runSearch(suggestion.query, { saveRecent: true, markSubmitted: true });
+  };
+
+  const handleClearRecentSearches = () => {
+    setRecentSearches([]);
+    void clearRecentSearches();
+  };
+
+  // Debounced live search-as-you-type: when the user pauses typing for 320ms on
+  // a query of 3+ chars, stream results automatically without waiting for "Go".
+  React.useEffect(() => {
+    const term = query.trim();
+    if (liveSearchTimerRef.current) {
+      clearTimeout(liveSearchTimerRef.current);
+      liveSearchTimerRef.current = null;
+    }
+    if (term.length < 3 || term === lastSearchedTermRef.current) {
+      return;
+    }
+    liveSearchTimerRef.current = setTimeout(() => {
+      liveSearchTimerRef.current = null;
+      if (term !== lastSearchedTermRef.current) {
+        void runSearch(term, { saveRecent: false, markSubmitted: false });
+      }
+    }, 320);
+    return () => {
+      if (liveSearchTimerRef.current) {
+        clearTimeout(liveSearchTimerRef.current);
+        liveSearchTimerRef.current = null;
+      }
+    };
+  }, [query, runSearch]);
 
   // While casting, the receiver owns the clock: the lyric follow must read
   // the SAME position the stage and the seek do, never the paused tablet's.
@@ -456,6 +576,27 @@ export function MusicPlayer() {
                   fontSize: TYPOGRAPHY.body.fontSize,
                 }}
               />
+              {query.length > 0 ? (
+                <Pressable
+                  testID="music-search-clear"
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  onPress={handleClearSearch}
+                  style={{
+                    minHeight: 64,
+                    minWidth: 64,
+                    paddingHorizontal: 16,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: tokens.panelRim,
+                    backgroundColor: tokens.sheet,
+                  }}
+                >
+                  <Text style={{ color: tokens.label2, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>✕</Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 testID="music-search-submit"
                 accessibilityRole="button"
@@ -480,6 +621,24 @@ export function MusicPlayer() {
                 <Text style={{ color: tokens.onAccent, fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "800" }}>Go</Text>
               </Pressable>
             </View>
+            {query.trim().length > 0 && query.trim() !== submittedQuery && suggestions.length > 0 ? (
+              <SearchSuggestionsStrip
+                testID="music-search-suggestions"
+                title="Suggestions"
+                suggestions={suggestions}
+                tokens={tokens}
+                onSelect={handleSelectSuggestion}
+              />
+            ) : query.trim().length === 0 && recentSearches.length > 0 && !hasSearched ? (
+              <SearchSuggestionsStrip
+                testID="music-recent-searches"
+                title="Recent searches"
+                suggestions={suggestions.filter((s) => s.kind === "recent")}
+                tokens={tokens}
+                onSelect={handleSelectSuggestion}
+                onClearRecent={handleClearRecentSearches}
+              />
+            ) : null}
             {searching ? <ActivityIndicator color={tokens.label2} /> : null}
             {searchError ? (
               <Text style={{ color: colors["color-accent-rose"], ...TYPOGRAPHY.body }}>{searchError}</Text>
@@ -945,6 +1104,113 @@ export function MusicPlayer() {
   );
 }
 
+function suggestionGlyph(kind: SearchSuggestion["kind"]): string {
+  switch (kind) {
+    case "recent":
+      return "🕘";
+    case "artist":
+      return "🎤";
+    case "station":
+      return "📻";
+    case "mix":
+      return "✨";
+    case "track":
+    default:
+      return "🎵";
+  }
+}
+
+/**
+ * Live search suggestions & auto-complete strip.
+ */
+const SearchSuggestionsStrip = React.memo(function SearchSuggestionsStrip({
+  testID,
+  title,
+  suggestions,
+  tokens,
+  onSelect,
+  onClearRecent,
+}: {
+  testID: string;
+  title: string;
+  suggestions: SearchSuggestion[];
+  tokens: MusicTokens;
+  onSelect: (suggestion: SearchSuggestion) => void;
+  onClearRecent?: () => void;
+}) {
+  if (suggestions.length === 0) return null;
+  return (
+    <View
+      testID={testID}
+      style={{
+        backgroundColor: tokens.panel,
+        borderRadius: tokens.panelRadius,
+        borderWidth: 1,
+        borderColor: tokens.panelRim,
+        padding: 12,
+        gap: 10,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ color: tokens.label2, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+          {title}
+        </Text>
+        {onClearRecent ? (
+          <Pressable
+            testID="music-clear-recent-searches"
+            accessibilityRole="button"
+            accessibilityLabel="Clear recent searches"
+            hitSlop={8}
+            onPress={onClearRecent}
+          >
+            <Text style={{ color: tokens.accent, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+              Clear
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ gap: 10 }}
+      >
+        {suggestions.map((item) => (
+          <Pressable
+            key={item.id}
+            testID={`music-search-suggestion-${item.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Search ${item.label}`}
+            onPress={() => onSelect(item)}
+            style={{
+              minHeight: 52,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: tokens.panelRim,
+              backgroundColor: tokens.sheet,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Text style={{ fontSize: 16 }}>{suggestionGlyph(item.kind)}</Text>
+            <View>
+              <Text numberOfLines={1} style={{ color: tokens.label, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+                {item.label}
+              </Text>
+              <Text numberOfLines={1} style={{ color: tokens.label3, fontSize: TYPOGRAPHY.label.fontSize }}>
+                {item.subtitle}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+});
+
 /**
  * The search RESULTS — a Top Result card and the rows below it.
  *
@@ -956,7 +1222,7 @@ export function MusicPlayer() {
  * a track this viewer may not see is never painted — for a kid and for a
  * guest alike.
  */
-function SearchResults({
+const SearchResults = React.memo(function SearchResults({
   tracks, tokens, isParent, denied, onPlay, onQueue,
 }: {
   tracks: MediaTrack[];
@@ -997,7 +1263,7 @@ function SearchResults({
       ) : null}
     </View>
   );
-}
+});
 
 /**
  * The TOP RESULT card — the first visible result, artwork-led.
@@ -1228,7 +1494,7 @@ function Marker({
  * the tracks THIS viewer may see. The rows are panel rows, and the delete is
  * a thumb-sized control of its own.
  */
-function DownloadsTray({
+const DownloadsTray = React.memo(function DownloadsTray({
   downloads, tokens, onRemove,
 }: {
   downloads: DownloadEntry[];
@@ -1289,12 +1555,12 @@ function DownloadsTray({
       </PanelCard>
     </View>
   );
-}
+});
 
 /**
  * Curated Apple Music-style Browse Stations & Moods.
  */
-function StationsShelf({
+const StationsShelf = React.memo(function StationsShelf({
   stations,
   tokens,
   onSelectStation,
@@ -1366,7 +1632,7 @@ function StationsShelf({
                     backgroundColor: mix(tokens.label, "transparent", 12),
                   }}
                 >
-                  <Text style={{ color: tokens.label, fontSize: 11, fontWeight: "700" }}>
+                  <Text style={{ color: tokens.label, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
                     {st.badge}
                   </Text>
                 </View>
@@ -1392,7 +1658,7 @@ function StationsShelf({
                 marginTop: 4,
               }}
             >
-              <Text style={{ color: tokens.onAccent, fontSize: 13, fontWeight: "800" }}>
+              <Text style={{ color: tokens.onAccent, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "800" }}>
                 ▶ Start Station
               </Text>
             </View>
@@ -1401,12 +1667,12 @@ function StationsShelf({
       </ScrollView>
     </View>
   );
-}
+});
 
 /**
  * Curated household mixes for the Family Library.
  */
-function FamilyMixesShelf({
+const FamilyMixesShelf = React.memo(function FamilyMixesShelf({
   mixes,
   tokens,
   onSelectMix,
@@ -1488,7 +1754,7 @@ function FamilyMixesShelf({
                 marginTop: 4,
               }}
             >
-              <Text style={{ color: tokens.onAccent, fontSize: 13, fontWeight: "800" }}>
+              <Text style={{ color: tokens.onAccent, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "800" }}>
                 ▶ Play Mix
               </Text>
             </View>
@@ -1497,12 +1763,12 @@ function FamilyMixesShelf({
       </ScrollView>
     </View>
   );
-}
+});
 
 /**
  * Dynamic "More Like This" shelf powered by YouTube recommendation graph.
  */
-function SimilarTracksShelf({
+const SimilarTracksShelf = React.memo(function SimilarTracksShelf({
   tracks,
   tokens,
   currentTrackTitle,
@@ -1610,7 +1876,7 @@ function SimilarTracksShelf({
                   justifyContent: "center",
                 }}
               >
-                <Text style={{ color: tokens.onAccent, fontSize: 13, fontWeight: "800" }}>Play</Text>
+                <Text style={{ color: tokens.onAccent, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "800" }}>Play</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -1635,7 +1901,7 @@ function SimilarTracksShelf({
       </ScrollView>
     </View>
   );
-}
+});
 
 /**
  * Interactive Apple Music-style Artist Profile modal.
@@ -1904,7 +2170,7 @@ function ArtistModal({
  * Artists are displayed with circular avatars, names, and one-tap access to
  * explore their music or toggle favorite status.
  */
-function FavoriteArtistsShelf({
+const FavoriteArtistsShelf = React.memo(function FavoriteArtistsShelf({
   favorites,
   tokens,
   onSelectArtist,
@@ -2020,13 +2286,13 @@ function FavoriteArtistsShelf({
       )}
     </View>
   );
-}
+});
 
 /**
  * The RECOMMENDED ARTISTS shelf — smart suggestions combining recent listening
  * and curated chart leaders with Apple Music style cards.
  */
-function RecommendedArtistsShelf({
+const RecommendedArtistsShelf = React.memo(function RecommendedArtistsShelf({
   recommendations,
   favorites,
   tokens,
@@ -2177,7 +2443,7 @@ function RecommendedArtistsShelf({
       </ScrollView>
     </View>
   );
-}
+});
 
 /**
  * The RECENTLY PLAYED shelf — the visible history, on the grouped ground.
@@ -2186,7 +2452,7 @@ function RecommendedArtistsShelf({
  * the shelf reads as a raised section of the page. The play behaviour is the
  * one it always had: the row plays the track through the VISIBLE history.
  */
-function HistoryShelf({
+const HistoryShelf = React.memo(function HistoryShelf({
   history, tokens, onPlay,
 }: {
   history: MediaTrack[];
@@ -2246,7 +2512,7 @@ function HistoryShelf({
       )}
     </View>
   );
-}
+});
 
 /**
  * A PANEL — the Liquid card the rows live in.

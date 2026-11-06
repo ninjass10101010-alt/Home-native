@@ -281,7 +281,7 @@ describe("MusicIsland", () => {
     });
   });
 
-  it("pops up notification in large window, then auto-minimizes to island after 5s and disappears after 60s", () => {
+  it("pops up notification in large window, then auto-minimizes to island after 16s and disappears after 60s", () => {
     jest.useFakeTimers();
     (usePlayback as jest.Mock).mockReturnValue({ current: null });
 
@@ -300,14 +300,14 @@ describe("MusicIsland", () => {
       });
     });
 
-    // 1. Large window pop-up for 5 seconds
+    // 1. Large window pop-up for 16 seconds
     expect(getByTestId("notification-alert-large")).toBeTruthy();
     expect(getByTestId("notification-alert-title").props.children).toBe("Soccer Practice");
     expect(getByTestId("notification-alert-body").props.children).toBe("Event starts in 15 minutes.");
 
-    // 2. Advance by 5 seconds -> minimizes into Island
+    // 2. Advance by 16 seconds -> minimizes into Island
     act(() => {
-      jest.advanceTimersByTime(5000);
+      jest.advanceTimersByTime(16000);
     });
 
     expect(queryByTestId("notification-alert-large")).toBeNull();
@@ -320,7 +320,7 @@ describe("MusicIsland", () => {
 
     // 4. Minimize again
     act(() => {
-      jest.advanceTimersByTime(5000);
+      jest.advanceTimersByTime(16000);
     });
     expect(queryByTestId("notification-alert-large")).toBeNull();
     expect(getByTestId("music-island-collapsed")).toBeTruthy();

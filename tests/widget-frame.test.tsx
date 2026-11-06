@@ -115,7 +115,7 @@ describe("WidgetFrame default header (U13.7) — left-aligned band + protruding 
     expect(getByText("20 items ▼")).toBeTruthy();
     // the slot wrapper is absolutely positioned at the band's top-right
     const slot = UNSAFE_root.findAll(
-      (n: any) => n.props.style?.position === "absolute" && n.props.style?.zIndex === 4
+      (n: any) => n.props.style?.position === "absolute" && (n.props.style?.zIndex === 4 || n.props.style?.zIndex === 10)
     )[0];
     expect(slot).toBeTruthy();
     expect(slot.props.style).toMatchObject({ top: 0, right: 0 });

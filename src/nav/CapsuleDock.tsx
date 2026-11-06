@@ -108,7 +108,7 @@ const CAP_LABEL = 17;
 const CAP_LABEL_PAD_LEFT = 10; // the label's px-2.5 — the gap after the disc
 const CAP_LABEL_PAD_RIGHT = 6; // …and before the next cap (the reference's 16 total)
 
-export function CapsuleDock({ role, hydrated, pathname, onNavigate, style, testID }: CapsuleDockProps) {
+export const CapsuleDock = React.memo(function CapsuleDock({ role, hydrated, pathname, onNavigate, style, testID }: CapsuleDockProps) {
   const { colors, accentColor, reduceMotion } = useTheme();
   if (!hydrated) return null;
 
@@ -193,7 +193,7 @@ export function CapsuleDock({ role, hydrated, pathname, onNavigate, style, testI
       </Material>
     </View>
   );
-}
+});
 
 interface DockCapProps {
   iconKey: NavIconKey;
@@ -214,7 +214,7 @@ interface DockCapProps {
   testID?: string;
 }
 
-function DockCap({
+const DockCap = React.memo(function DockCap({
   iconKey,
   label,
   active,
@@ -331,7 +331,7 @@ function DockCap({
       </Pressable>
     </Animated.View>
   );
-}
+});
 
 export default CapsuleDock;
 
@@ -340,7 +340,7 @@ export default CapsuleDock;
  * destinations live in the More — sheet, and the web opens it from Home's
  * own action row, NOT the dock (the dock is the 7 primary caps only).
  */
-export function MoreButton({ onPress, style }: { onPress: () => void; style?: ViewStyle }) {
+export const MoreButton = React.memo(function MoreButton({ onPress, style }: { onPress: () => void; style?: ViewStyle }) {
   const { colors } = useTheme();
   return (
     <SoftButton
@@ -366,4 +366,4 @@ export function MoreButton({ onPress, style }: { onPress: () => void; style?: Vi
       </Text>
     </SoftButton>
   );
-}
+});

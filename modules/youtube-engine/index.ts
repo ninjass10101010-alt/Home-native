@@ -29,19 +29,52 @@ export interface SearchOutcome {
   explicitKnown: boolean;
 }
 
+const SEARCH_CACHE_LIMIT = 50;
+const SEARCH_CACHE_TTL_MS = 5 * 60 * 1000;
+const searchCache = new Map<string, { outcome: SearchOutcome; expiresAt: number }>();
+const inFlightSearch = new Map<string, Promise<SearchOutcome>>();
+
 export async function search(query: string, limit = 20): Promise<SearchOutcome> {
   const q = query.trim();
   if (!q) return { tracks: [], explicitKnown: true };
-  const result = (await native().search(q, limit)) as Partial<SearchOutcome> & {
-    tracks?: MediaTrack[];
-  };
-  const tracks = Array.isArray(result?.tracks) ? result.tracks : [];
-  // A shape mismatch (a missing or non-boolean flag) means the ratings are NOT
-  // known — never claim authority the native result did not give.
-  return {
-    tracks,
-    explicitKnown: typeof result?.explicitKnown === "boolean" ? result.explicitKnown : false,
-  };
+  const cacheKey = `${q.toLowerCase()}#${limit}`;
+  const now = Date.now();
+  const cached = searchCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.outcome;
+  }
+  const existing = inFlightSearch.get(cacheKey);
+  if (existing) return existing;
+
+  const task = (async (): Promise<SearchOutcome> => {
+    const result = (await native().search(q, limit)) as Partial<SearchOutcome> & {
+      tracks?: MediaTrack[];
+    };
+    const tracks = Array.isArray(result?.tracks) ? result.tracks : [];
+    // A shape mismatch (a missing or non-boolean flag) means the ratings are NOT
+    // known — never claim authority the native result did not give.
+    const outcome: SearchOutcome = {
+      tracks,
+      explicitKnown: typeof result?.explicitKnown === "boolean" ? result.explicitKnown : false,
+    };
+    // Cache only authoritative non-empty outcomes so a degraded fallback or transient
+    // empty result never sticks in memory.
+    if (outcome.explicitKnown && outcome.tracks.length > 0) {
+      if (searchCache.size >= SEARCH_CACHE_LIMIT) {
+        const oldest = searchCache.keys().next().value;
+        if (oldest !== undefined) searchCache.delete(oldest);
+      }
+      searchCache.set(cacheKey, { outcome, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
+    }
+    return outcome;
+  })();
+
+  inFlightSearch.set(cacheKey, task);
+  try {
+    return await task;
+  } finally {
+    inFlightSearch.delete(cacheKey);
+  }
 }
 
 /**
@@ -95,6 +128,74 @@ export function subscribeStreamFormat(
   };
 }
 
+const AUDIO_CACHE_LIMIT = 50;
+const STREAM_EXPIRY_SAFETY_MS = 60 * 1000;
+
+interface CachedStream {
+  audio: ResolvedAudio;
+  format: StreamFormat;
+  expiresAt: number;
+}
+
+const audioCache = new Map<string, CachedStream>();
+const inFlightAudio = new Map<string, Promise<{ raw: ResolvedAudio; entry: CachedStream | null }>>();
+
+async function resolveAudioInternal(
+  id: string
+): Promise<{ raw: ResolvedAudio; entry: CachedStream | null }> {
+  const cached = audioCache.get(id);
+  if (cached && cached.expiresAt > Date.now() + STREAM_EXPIRY_SAFETY_MS) {
+    return { raw: cached.audio, entry: cached };
+  }
+  const existing = inFlightAudio.get(id);
+  if (existing) return existing;
+
+  const task = (async () => {
+    const raw = (await native().resolveAudio(id)) as ResolvedAudio;
+    const answer = raw && typeof raw === "object" ? raw : null;
+    const bitrate =
+      typeof answer?.bitrate === "number" && Number.isFinite(answer.bitrate)
+        ? answer.bitrate
+        : null;
+    const codec =
+      typeof answer?.codec === "string" && answer.codec.length > 0 ? answer.codec : null;
+    const format: StreamFormat = {
+      id,
+      mimeType: typeof answer?.mimeType === "string" ? answer.mimeType : null,
+      bitrate,
+      codec,
+    };
+    if (!answer) {
+      return { raw, entry: null };
+    }
+    const normalized: ResolvedAudio = { ...answer, bitrate, codec };
+    const expiresAt =
+      typeof answer.expiresAt === "number" && Number.isFinite(answer.expiresAt)
+        ? answer.expiresAt
+        : 0;
+    const entry: CachedStream = { audio: normalized, format, expiresAt };
+    if (
+      typeof normalized.url === "string" &&
+      normalized.url.length > 0 &&
+      expiresAt > Date.now() + STREAM_EXPIRY_SAFETY_MS
+    ) {
+      if (audioCache.size >= AUDIO_CACHE_LIMIT) {
+        const oldest = audioCache.keys().next().value;
+        if (oldest !== undefined) audioCache.delete(oldest);
+      }
+      audioCache.set(id, entry);
+    }
+    return { raw: normalized, entry };
+  })();
+
+  inFlightAudio.set(id, task);
+  try {
+    return await task;
+  } finally {
+    inFlightAudio.delete(id);
+  }
+}
+
 /**
  * The playable URL for one track, and the stream's own truth.
  *
@@ -104,27 +205,46 @@ export function subscribeStreamFormat(
  * cast path's media info is byte-identical to what it always was.
  */
 export async function resolveAudio(id: string): Promise<ResolvedAudio> {
-  const raw = (await native().resolveAudio(id)) as ResolvedAudio;
-  const answer = raw && typeof raw === "object" ? raw : null;
-  const bitrate =
-    typeof answer?.bitrate === "number" && Number.isFinite(answer.bitrate)
-      ? answer.bitrate
-      : null;
-  const codec =
-    typeof answer?.codec === "string" && answer.codec.length > 0 ? answer.codec : null;
-  const format: StreamFormat = {
-    id,
-    mimeType: typeof answer?.mimeType === "string" ? answer.mimeType : null,
-    bitrate,
-    codec,
-  };
+  const { raw, entry } = await resolveAudioInternal(id);
+  const format: StreamFormat = entry
+    ? entry.format
+    : {
+        id,
+        mimeType: null,
+        bitrate: null,
+        codec: null,
+      };
   lastStream = format;
   for (const listener of streamListeners) listener(format);
   // A native answer that is not an answer is passed through untouched: the
   // caller must see the SAME failure it always saw (no stream at all), never
   // a half-built one with a missing URL.
-  return answer ? { ...answer, bitrate, codec } : raw;
+  return entry ? entry.audio : raw;
 }
+
+/**
+ * Pre-resolves a track's playable stream in the background into the bounded
+ * stream cache without mutating `lastStream` or firing `streamListeners` for
+ * whatever is currently playing on the stage.
+ *
+ * When `resolveAudio(id)` is later called for playback, the cached stream is
+ * returned in 0ms and `streamListeners` are notified at that moment.
+ */
+export async function prefetchAudio(id: string): Promise<ResolvedAudio | null> {
+  const key = id.trim();
+  if (!key) return null;
+  try {
+    const { entry } = await resolveAudioInternal(key);
+    return entry ? entry.audio : null;
+  } catch {
+    return null;
+  }
+}
+
+const RELATED_CACHE_LIMIT = 50;
+const RELATED_CACHE_TTL_MS = 10 * 60 * 1000;
+const relatedCache = new Map<string, { tracks: MediaTrack[]; expiresAt: number }>();
+const inFlightRelated = new Map<string, Promise<MediaTrack[]>>();
 
 /**
  * The related tracks for one video.
@@ -134,8 +254,48 @@ export async function resolveAudio(id: string): Promise<ResolvedAudio> {
  * a plain array — a related row is never authoritative.
  */
 export async function related(id: string): Promise<MediaTrack[]> {
-  const tracks = (await native().related(id)) as MediaTrack[];
-  return Array.isArray(tracks) ? tracks : [];
+  const key = id.trim();
+  if (!key) return [];
+  const now = Date.now();
+  const cached = relatedCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return cached.tracks;
+  }
+  const existing = inFlightRelated.get(key);
+  if (existing) return existing;
+
+  const task = (async (): Promise<MediaTrack[]> => {
+    const tracks = (await native().related(key)) as MediaTrack[];
+    const list = Array.isArray(tracks) ? tracks : [];
+    if (list.length > 0) {
+      if (relatedCache.size >= RELATED_CACHE_LIMIT) {
+        const oldest = relatedCache.keys().next().value;
+        if (oldest !== undefined) relatedCache.delete(oldest);
+      }
+      relatedCache.set(key, { tracks: list, expiresAt: Date.now() + RELATED_CACHE_TTL_MS });
+    }
+    return list;
+  })();
+
+  inFlightRelated.set(key, task);
+  try {
+    return await task;
+  } finally {
+    inFlightRelated.delete(key);
+  }
+}
+
+/**
+ * Clears in-memory search, related, and resolved-stream caches (used by tests
+ * or on explicit cache reset).
+ */
+export function clearEngineCaches(): void {
+  searchCache.clear();
+  inFlightSearch.clear();
+  audioCache.clear();
+  inFlightAudio.clear();
+  relatedCache.clear();
+  inFlightRelated.clear();
 }
 
 /**

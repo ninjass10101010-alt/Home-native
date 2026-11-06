@@ -84,10 +84,10 @@ object Engine {
    * runs its network work on a pool of its own instead: a rotten client
    * version can then only ever delay the engine itself.
    *
-   * Two threads, so a stalled search never blocks a playback resolution (and
-   * the other way round).
+   * Four threads, so concurrent search, related-track discovery, stream
+   * pre-fetching and playback resolution never block each other.
    */
-  private val engineExecutor: ExecutorService = Executors.newFixedThreadPool(2) { runnable ->
+  private val engineExecutor: ExecutorService = Executors.newFixedThreadPool(4) { runnable ->
     Thread(runnable, "youtube-engine-${threadCounter.incrementAndGet()}").apply {
       isDaemon = true
     }
@@ -248,10 +248,23 @@ object Engine {
     onEngineThread(promise) { related(id) }
 
   /**
-   * Reads the artwork's own colours, off Expo's shared async queue.
+   * Reads the artwork's own colours, off Expo's shared async queue and off
+   * the playback/search engine threads so thumbnail fetches never compete
+   * with stream resolution.
    */
-  fun artworkColorsAsync(url: String, promise: Promise) =
-    onEngineThread(promise) { artworkColors(url) }
+  fun artworkColorsAsync(url: String, promise: Promise) {
+    try {
+      artworkExecutor.execute {
+        try {
+          promise.resolve(artworkColors(url))
+        } catch (_: Throwable) {
+          promise.resolve(mapOf("dominant" to null, "vibrant" to null))
+        }
+      }
+    } catch (_: RejectedExecutionException) {
+      promise.resolve(mapOf("dominant" to null, "vibrant" to null))
+    }
+  }
 
   /**
    * The blurred artwork at [url], off Expo's shared async queue.

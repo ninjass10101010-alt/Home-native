@@ -2,6 +2,12 @@ import React from "react";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { MusicPlayer } from "../src/music/MusicPlayer";
+import {
+  buildSearchSuggestions,
+  clearRecentSearches,
+  loadRecentSearches,
+  saveRecentSearch,
+} from "../src/music/suggestions";
 import type { MediaTrack } from "../src/music/types";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
@@ -310,5 +316,63 @@ describe("Apple Music Player enhancements", () => {
       expect(getByTestId("music-family-mixes-shelf")).toBeTruthy();
       expect(queryByTestId("music-favorite-artists-shelf")).toBeNull();
     });
+  });
+
+  it("shows live search suggestions as you type and executes search on pill tap", async () => {
+    mockCurrent = null;
+    mockSearch.mockResolvedValue({
+      tracks: [MOCK_TRACK],
+      explicitKnown: true,
+    });
+
+    const { getByTestId, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+    await waitFor(() => expect(getByTestId("music-search-input")).toBeTruthy());
+
+    // Type "Tay" into search input
+    fireEvent.changeText(getByTestId("music-search-input"), "Tay");
+
+    // Live suggestions strip and clear button appear immediately
+    await waitFor(() => {
+      expect(getByTestId("music-search-suggestions")).toBeTruthy();
+      expect(getByTestId("music-search-clear")).toBeTruthy();
+      expect(getByTestId("music-search-suggestion-artist-taylor-swift")).toBeTruthy();
+    });
+
+    // Tap the Taylor Swift suggestion pill
+    fireEvent.press(getByTestId("music-search-suggestion-artist-taylor-swift"));
+
+    await waitFor(() => {
+      expect(mockSearch).toHaveBeenCalledWith("Taylor Swift", 20);
+      expect(getByTestId("music-top-result")).toBeTruthy();
+    });
+
+    // Tapping the clear button resets query and results
+    fireEvent.press(getByTestId("music-search-clear"));
+    expect(queryByTestId("music-top-result")).toBeNull();
+  });
+
+  it("persists and ranks recent searches and discovery suggestions", async () => {
+    await clearRecentSearches();
+    expect(await loadRecentSearches()).toEqual([]);
+
+    await saveRecentSearch("Bluey");
+    await saveRecentSearch("Disney Hits");
+    const recents = await loadRecentSearches();
+    expect(recents).toEqual(["Disney Hits", "Bluey"]);
+
+    const emptyQuerySuggestions = buildSearchSuggestions("", {
+      recentSearches: recents,
+      favoriteArtists: [],
+      history: [MOCK_TRACK],
+    });
+    expect(emptyQuerySuggestions[0].label).toBe("Disney Hits");
+    expect(emptyQuerySuggestions[0].kind).toBe("recent");
+
+    const typedSuggestions = buildSearchSuggestions("cruel", {
+      recentSearches: recents,
+      favoriteArtists: [],
+      history: [MOCK_TRACK],
+    });
+    expect(typedSuggestions.some((s) => s.label === "Cruel Summer")).toBe(true);
   });
 });

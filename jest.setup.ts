@@ -162,6 +162,8 @@ jest.mock("./modules/youtube-engine", () => ({
     bitrate: 128000,
     codec: "mp4a.40.2",
   })),
+  prefetchAudio: jest.fn(async () => null),
+  clearEngineCaches: jest.fn(),
   // The stream the engine resolved last (the codec chip's truth) and the
   // subscription the playback provider mirrors it through.
   lastStreamFormat: jest.fn(() => null),
