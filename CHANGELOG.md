@@ -4,6 +4,26 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-07 — fix(music,modal): remove bogus Android modal downscaling, restore 1:1 crisp modal rendering, and add spacious bottom clearance to Cast modal options (`Modal.tsx`, `CastControl.tsx`, `MusicPlayer.tsx`).
+  **What changed:**
+  - **Removed Bogus `modalScale` in `src/ui/Modal.tsx`**:
+    - Identified root cause of the Cast pop-up window shrinking and appearing compressed on the physical ApoloSign tablet: `modalScale` evaluated `width < 960` against `useWindowDimensions()`. Because Android reports logical dp (720×1280dp on the 1080×1920 panel with 1.5x density), `modalScale` computed `720 / 1080 = 0.667` (a 33% downscale on Android hardware), causing pop-ups to shrink to 66% and clip/compress their contents.
+    - Removed `modalScale` entirely. Restored crisp 1:1 scale with `width: "100%"`, `maxHeight: "100%"`, and centered alignment in `panelStyle`.
+    - Increased `Material` base `maxHeight` from `85%` to `92%`.
+    - Added `contentContainerStyle={{ paddingBottom: 32 }}` and `flexShrink: 1` to `Modal`'s `ScrollView`.
+  - **Spacious Cast Modal Options (`src/music/CastControl.tsx`)**:
+    - Updated Cast Modal to `width: "94%"`, `maxWidth: 780`, `maxHeight: "90%"`, and `padding: 28`.
+    - Added `paddingBottom: 36` to the Cast modal content container (`<View style={{ gap: 16, paddingBottom: 36 }}>`) so the bottom-most elements ("Stop casting", "Mute" / "Unmute", volume slider, and device rows) have generous clearance, never collide with the curved card boundary, and remain fully visible and comfortable to tap.
+  - **Tap Floor Floor Upgrades (`src/music/MusicPlayer.tsx`)**:
+    - Upgraded Now Playing stage lyrics and queue buttons (`np-open-lyrics`, `np-open-queue`) from 56dp to `minWidth: 64, minHeight: 64, borderRadius: 16` conforming to the 64dp tap floor contract.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (app src, 0 token-literal violations).
+  - `npm run a11y:audit`: CLEAN (app src, 14sp floor & 64dp tap targets honored).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+  - Unit tests: all 87 test suites (1,400 tests) passed.
+
+
 - 2026-11-06 — feat(kid-home,ui): Kids Mode top-bar Log Out + Cookie Run Kingdom-style companion unlocking showcase, and Critical/High UI audit fixes across the app (`KidHome.tsx`, `kid-characters.ts`, `skill-tree.tsx`, `MusicIsland.tsx`, `PhotosPage.tsx`, `ChatPage.tsx`, `app/chat.tsx`, `app/calendar.tsx`, `ListRow.tsx`, `SignedOutBanner.tsx`, `TextField.tsx`, `HousePage.tsx`, `SettingsPage.tsx`, `HomeSection.tsx`, `CalendarPage.tsx`).
   **What changed:**
   - **Kids Mode Overhaul — Prominent Log Out & Interactive Kingdom Companions (`src/home/KidHome.tsx`, `src/home/kid-characters.ts`)**:

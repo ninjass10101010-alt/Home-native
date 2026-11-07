@@ -105,12 +105,13 @@ export function CastControl({ track }: CastControlProps) {
         testID="cast-modal"
         style={{
           maxWidth: 780,
-          width: "92%",
-          padding: 32,
+          width: "94%",
+          maxHeight: "90%",
+          padding: 28,
           borderRadius: 32,
         }}
       >
-        <View style={{ gap: 16 }}>
+        <View style={{ gap: 16, paddingBottom: 36 }}>
           {cast.error ? (
             <Text
               testID="cast-error"

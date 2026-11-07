@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from "react";
 import {
   Modal as RNModal,
-  Platform,
   Pressable,
   ScrollView,
   Text,
-  useWindowDimensions,
   View,
   ViewStyle,
 } from "react-native";
@@ -46,15 +44,6 @@ export function Modal({
   testID,
 }: ModalProps) {
   const { colors, reduceMotion } = useTheme();
-  const { width, height } = useWindowDimensions();
-  const modalScale =
-    typeof jest === "undefined" &&
-    Platform.OS === "android" &&
-    width > 0 &&
-    height > 0 &&
-    (width < 960 || height < 1600)
-      ? Math.min(1, Math.min(width / 1080, height / 1920))
-      : 1;
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(24);
   const [mounted, setMounted] = useState(visible);
@@ -82,12 +71,11 @@ export function Modal({
   const scrimStyle = useAnimatedStyle(() => ({ opacity: opacity.value * 0.5 }));
   const panelStyle = useAnimatedStyle(() => ({
     width: "100%",
+    maxHeight: "100%",
     alignItems: "center",
+    justifyContent: "center",
     opacity: opacity.value,
-    transform:
-      modalScale !== 1
-        ? [{ translateY: translateY.value }, { scale: modalScale }]
-        : [{ translateY: translateY.value }],
+    transform: [{ translateY: translateY.value }],
   }));
 
   if (!mounted) return null;
@@ -120,7 +108,7 @@ export function Modal({
             tier="thick"
             style={[
               {
-                maxHeight: "85%",
+                maxHeight: "92%",
                 borderRadius: 28,
                 padding: 24,
                 maxWidth: 640,
@@ -153,7 +141,14 @@ export function Modal({
                 </Text>
               ) : null}
             </View>
-            <ScrollView style={{ flexShrink: 1 }}>{children}</ScrollView>
+            <ScrollView
+              style={{ flexShrink: 1, width: "100%" }}
+              contentContainerStyle={{ paddingBottom: 32 }}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {children}
+            </ScrollView>
             {footer ? (
               <View
                 style={{

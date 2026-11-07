@@ -2940,11 +2940,11 @@ const NowPlayingStage = React.memo(function NowPlayingStage({
           accessibilityLabel="Lyrics view"
           onPress={onOpenLyrics}
           style={{
-            minWidth: 56,
-            minHeight: 56,
+            minWidth: 64,
+            minHeight: 64,
             alignItems: "center",
             justifyContent: "center",
-            borderRadius: 14,
+            borderRadius: 16,
             backgroundColor: mix(tokens.label, "transparent", 8),
           }}
         >
@@ -2959,11 +2959,11 @@ const NowPlayingStage = React.memo(function NowPlayingStage({
           accessibilityLabel="Queue view"
           onPress={onOpenQueue}
           style={{
-            minWidth: 56,
-            minHeight: 56,
+            minWidth: 64,
+            minHeight: 64,
             alignItems: "center",
             justifyContent: "center",
-            borderRadius: 14,
+            borderRadius: 16,
             backgroundColor: mix(tokens.label, "transparent", 8),
           }}
         >
