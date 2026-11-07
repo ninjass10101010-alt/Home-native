@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from "react";
-import { Image, ScrollView, Text, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../theme/tokens";
 import { Material } from "../theme/Material";
@@ -19,6 +19,7 @@ import { HomeWidgetIcon } from "../ui/HomeWidgetIcon";
 import { AnimatedEmoji } from "../ui/AnimatedEmoji";
 import { isPhotoUri } from "../ui/MemberRail";
 import { READ_COPY_STALE } from "./widgets/data";
+import { pendingSurface } from "./widgets/WidgetFrame";
 import {
   submitClaim,
   taskRefusalCopy,
@@ -32,16 +33,30 @@ import {
   kidQuestsFor,
   kidStreak,
 } from "./kid-quest";
+import {
+  KID_CHARACTERS,
+  defaultKingdomState,
+  effectiveUnlockPoints,
+  isCharacterUnlocked,
+  loadKingdomState,
+  nextLockedCharacterFor,
+  resolveActiveCharacter,
+  saveKingdomState,
+  unlockedCharactersFor,
+  type KidCharacter,
+  type KidKingdomState,
+} from "./kid-characters";
 
 /**
  * Kid Home (WS-4 / WS-5) — the gamified wall a signed-in child/pet gets INSTEAD
  * of the family bento (the mode switch lives in app/index.tsx). Ported from the
- * web's modes/kid/KidHome.tsx hero + quest structure:
+ * web's modes/kid/KidHome.tsx hero + quest structure, extended with:
+ * - Prominent top-bar "🚪 Log Out" button so kids can always exit Kids Mode cleanly
  * - Center hero with 120×120dp glowing circular avatar disc supporting real photos
  * - Toned hero card with level XP progress bar and switch member affordance
+ * - Cookie Run Kingdom-inspired "Consuela Kingdom Heroes" companion & point-unlock showcase
  * - Toned regular-tier .widget-card wrapping "🎯 Your Quests" with HomeWidgetIcon
  * - Emergency shield top-right across all modes
- * - MoreButton in top header row
  */
 
 const KID_DONE_TOAST = "Nice work — sent for approval.";
@@ -69,9 +84,24 @@ function pointsTone(points: number): "success" | "warning" | "danger" {
   return "success";
 }
 
-export interface KidHomeProps { onOpenMore?: () => void; }
+function renderTaskAvatar(emoji: string | undefined) {
+  if (emoji && isPhotoUri(emoji)) {
+    return (
+      <Image
+        source={{ uri: emoji }}
+        style={{ width: 32, height: 32, borderRadius: 16 }}
+        resizeMode="cover"
+      />
+    );
+  }
+  return <Text style={{ fontSize: 28 }}>{kidEmoji(emoji)}</Text>;
+}
+
+export interface KidHomeProps {
+  onOpenMore?: () => void;
+}
 export function KidHome({ onOpenMore }: KidHomeProps = {}) {
-  const { colors, accentColor } = useTheme();
+  const { colors, accentColor, theme } = useTheme();
   const toast = useToast();
   const { member, signOut, pinRequiredFor } = useAuth();
   const { snapshot, stale, lastSyncAt, refreshNow } = useSync();
@@ -105,6 +135,89 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
   const xpProgress = xpInLevel / POINTS_PER_LEVEL;
 
   const hasPhoto = member?.emoji ? isPhotoUri(member.emoji) : false;
+
+  // Kingdom companion state (persisted per kid in AsyncStorage + auto-unlocked by points)
+  const [kingdomState, setKingdomState] = useState<KidKingdomState>(() =>
+    defaultKingdomState(points)
+  );
+  const [quoteIdx, setQuoteIdx] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!name) return;
+    void loadKingdomState(name).then((saved) => {
+      if (cancelled) return;
+      if (saved) {
+        const nextHighest = effectiveUnlockPoints(points, saved.highestPoints);
+        setKingdomState({
+          ...saved,
+          highestPoints: nextHighest,
+        });
+      } else {
+        setKingdomState(defaultKingdomState(points));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [name, points]);
+
+  const unlockPointsTotal = effectiveUnlockPoints(points, kingdomState.highestPoints);
+  const unlockedHeroes = useMemo(
+    () => unlockedCharactersFor(unlockPointsTotal),
+    [unlockPointsTotal]
+  );
+  const nextLockedHero = useMemo(
+    () => nextLockedCharacterFor(unlockPointsTotal),
+    [unlockPointsTotal]
+  );
+  const activeHero = useMemo(
+    () => resolveActiveCharacter(kingdomState.selectedId, unlockPointsTotal),
+    [kingdomState.selectedId, unlockPointsTotal]
+  );
+
+  const activeHeroTone = colors[activeHero.toneKey] ?? accentColor;
+  const activeHeroCheers = kingdomState.cheers[activeHero.id] ?? 0;
+  const bondLevel = Math.floor(activeHeroCheers / 3) + 1;
+  const activeQuote =
+    activeHero.catchphrases[quoteIdx % activeHero.catchphrases.length] ??
+    activeHero.catchphrases[0];
+
+  const handleSelectCharacter = (char: KidCharacter) => {
+    const unlocked = isCharacterUnlocked(char, unlockPointsTotal);
+    if (!unlocked) {
+      const needed = Math.max(1, char.unlockPoints - unlockPointsTotal);
+      toast.show(
+        `Earn ${needed} more pts to unlock ${char.emoji} ${char.name}!`,
+        { intent: "info" }
+      );
+      return;
+    }
+    const nextState: KidKingdomState = {
+      ...kingdomState,
+      selectedId: char.id,
+      highestPoints: unlockPointsTotal,
+    };
+    setKingdomState(nextState);
+    setQuoteIdx(0);
+    void saveKingdomState(name, nextState);
+  };
+
+  const handleCheerCompanion = () => {
+    const nextCount = (kingdomState.cheers[activeHero.id] ?? 0) + 1;
+    const nextState: KidKingdomState = {
+      ...kingdomState,
+      selectedId: activeHero.id,
+      highestPoints: unlockPointsTotal,
+      cheers: {
+        ...kingdomState.cheers,
+        [activeHero.id]: nextCount,
+      },
+    };
+    setKingdomState(nextState);
+    setQuoteIdx((prev) => prev + 1);
+    void saveKingdomState(name, nextState);
+  };
 
   // Sync-state honesty (TasksPage parity): no snapshot before the first poll
   // landed = loading; no snapshot after a failed poll = a visible error with a
@@ -188,17 +301,27 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
       {/* Emergency shield: always mounted top-right across all modes */}
       <EmergencyShield style={{ zIndex: 10 }} />
 
-      {/* Top action row: clears floating shield column (paddingRight: 88) */}
+      {/* Top action row: prominent Log Out button on the left + More… button clearing shield column */}
       <View
         style={{
           flexDirection: "row",
-          justifyContent: "flex-end",
+          justifyContent: "space-between",
           alignItems: "center",
           paddingRight: 88,
-          minHeight: 48,
+          minHeight: 64,
           marginBottom: 8,
+          gap: 12,
         }}
       >
+        <SoftButton
+          variant="secondary"
+          size="sm"
+          testID="kid-logout"
+          onPress={() => void signOut()}
+          accessibilityLabel="Log out of kid mode"
+        >
+          🚪 Log Out
+        </SoftButton>
         {onOpenMore ? <MoreButton onPress={onOpenMore} /> : null}
       </View>
 
@@ -207,38 +330,59 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
         contentContainerStyle={{ paddingBottom: 180, gap: 16 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Centered Hero: glowing avatar disc supporting real photos */}
+        {/* Centered Hero: glowing avatar disc supporting real photos + active companion badge */}
         <View style={{ alignItems: "center", marginTop: 4, marginBottom: 8 }}>
-          <View
-            style={{
-              width: 120,
-              height: 120,
-              borderRadius: 60,
-              borderWidth: 3,
-              borderColor: mix(accentColor, "transparent", 55),
-              backgroundColor: mix(accentColor, "transparent", 18),
-              alignItems: "center",
-              justifyContent: "center",
-              shadowColor: accentColor,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.35,
-              shadowRadius: 20,
-              elevation: 6,
-            }}
-          >
-            {hasPhoto ? (
-              <Image
-                source={{ uri: member!.emoji }}
-                style={{ width: 114, height: 114, borderRadius: 57 }}
-                resizeMode="cover"
+          <View style={{ position: "relative", alignItems: "center", justifyContent: "center" }}>
+            <View
+              style={{
+                width: 120,
+                height: 120,
+                borderRadius: 60,
+                borderWidth: 3,
+                borderColor: mix(accentColor, "transparent", 55),
+                backgroundColor: mix(accentColor, "transparent", 18),
+                alignItems: "center",
+                justifyContent: "center",
+                shadowColor: accentColor,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.35,
+                shadowRadius: 20,
+                elevation: 6,
+              }}
+            >
+              {hasPhoto ? (
+                <Image
+                  source={{ uri: member!.emoji }}
+                  style={{ width: 114, height: 114, borderRadius: 57 }}
+                  resizeMode="cover"
+                />
+              ) : null}
+              <AnimatedEmoji
+                emoji={kidEmoji(member?.emoji)}
+                size={64}
+                style={hasPhoto ? { position: "absolute", width: 0, height: 0, opacity: 0 } : undefined}
+                testID="kid-emoji"
               />
-            ) : null}
-            <AnimatedEmoji
-              emoji={kidEmoji(member?.emoji)}
-              size={64}
-              style={hasPhoto ? { position: "absolute", width: 0, height: 0, opacity: 0 } : undefined}
-              testID="kid-emoji"
-            />
+            </View>
+            {/* Floating Kingdom Companion Mini Badge */}
+            <View
+              testID="kid-hero-companion-badge"
+              style={{
+                position: "absolute",
+                right: -10,
+                bottom: -4,
+                width: 46,
+                height: 46,
+                borderRadius: 23,
+                borderWidth: 2,
+                borderColor: activeHeroTone,
+                backgroundColor: colors["color-surface-1"],
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 24 }}>{activeHero.emoji}</Text>
+            </View>
           </View>
           <Text
             style={{
@@ -249,6 +393,16 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
             }}
           >
             Hey {first}! 👋
+          </Text>
+          <Text
+            style={{
+              color: colors["color-text-secondary"],
+              fontSize: TYPOGRAPHY.label.fontSize,
+              fontWeight: "600",
+              marginTop: 2,
+            }}
+          >
+            {activeHero.emoji} {activeHero.name} · {activeHero.title}
           </Text>
         </View>
 
@@ -340,7 +494,7 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
           <Text
             testID="kid-stale"
             style={{
-              color: colors["color-accent-amber"] ?? accentColor,
+              color: colors["color-accent-ink-amber"] ?? colors["color-accent-amber"] ?? accentColor,
               fontSize: TYPOGRAPHY.label.fontSize,
               fontWeight: "600",
               marginBottom: 4,
@@ -349,6 +503,258 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
             {READ_COPY_STALE}
           </Text>
         ) : null}
+
+        {/* Kingdom Companion & Character Unlocking Card (Cookie Run Kingdom style) */}
+        <Material
+          tier="regular"
+          tone={activeHeroTone}
+          testID="kid-kingdom-card"
+          style={{
+            borderRadius: 28,
+            padding: 20,
+            gap: 16,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Text style={{ fontSize: 26 }}>🏰</Text>
+              <View>
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.title.fontSize,
+                    fontWeight: "700",
+                  }}
+                >
+                  Kingdom Companions
+                </Text>
+                <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                  Complete quests to earn points & unlock new heroes!
+                </Text>
+              </View>
+            </View>
+            <Chip
+              as="span"
+              size="sm"
+              tone={activeHero.chipTone}
+              label={`${unlockedHeroes.length} / ${KID_CHARACTERS.length} Unlocked`}
+            />
+          </View>
+
+          {/* Active Companion Interactive Stage */}
+          <View
+            style={{
+              borderRadius: 22,
+              padding: 16,
+              backgroundColor: mix(activeHeroTone, colors["color-surface-2"] ?? "transparent", 16),
+              borderWidth: 1,
+              borderColor: mix(activeHeroTone, "transparent", 38),
+              gap: 12,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+              <View
+                testID="kid-companion-avatar"
+                style={{
+                  width: 76,
+                  height: 76,
+                  borderRadius: 38,
+                  borderWidth: 2,
+                  borderColor: mix(activeHeroTone, "transparent", 60),
+                  backgroundColor: mix(activeHeroTone, "transparent", 22),
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <AnimatedEmoji emoji={activeHero.emoji} size={42} />
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <Text
+                    testID="kid-companion-name"
+                    style={{
+                      color: colors["color-text-primary"],
+                      fontSize: TYPOGRAPHY.title.fontSize,
+                      fontWeight: "800",
+                    }}
+                  >
+                    {activeHero.name}
+                  </Text>
+                  <Chip as="span" size="sm" tone={activeHero.chipTone} label={activeHero.rarity} />
+                  <Chip as="span" size="sm" tone="danger" label={`❤️ Bond Lv. ${bondLevel}`} />
+                </View>
+                <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+                  {activeHero.title} · {activeHero.specialty}
+                </Text>
+              </View>
+            </View>
+
+            {/* Companion Speech Bubble + Star Jelly Cheer Action */}
+            <View
+              style={{
+                borderRadius: 16,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                backgroundColor: colors["color-surface-1"],
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <Text
+                testID="kid-companion-quote"
+                style={{
+                  flex: 1,
+                  color: colors["color-text-primary"],
+                  fontSize: TYPOGRAPHY.body.fontSize,
+                  fontWeight: "600",
+                }}
+              >
+                “{activeQuote}”
+              </Text>
+              <SoftButton
+                variant="primary"
+                size="sm"
+                testID="kid-companion-cheer"
+                onPress={handleCheerCompanion}
+                accessibilityLabel={`Feed Star Jelly to ${activeHero.name}`}
+              >
+                🌟 Star Jelly
+              </SoftButton>
+            </View>
+
+            {/* Next Character Unlock Milestone Bar */}
+            {nextLockedHero ? (
+              <View testID="kid-next-unlock" style={{ gap: 6 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+                    Next Hero: {nextLockedHero.emoji} {nextLockedHero.name} ({nextLockedHero.rarity})
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors["color-text-primary"],
+                      fontSize: TYPOGRAPHY.label.fontSize,
+                      fontWeight: "700",
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {Math.max(0, nextLockedHero.unlockPoints - unlockPointsTotal)} pts to unlock
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: colors["color-surface-1"],
+                    overflow: "hidden",
+                    width: "100%",
+                  }}
+                >
+                  <View
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.max(
+                          6,
+                          Math.round((unlockPointsTotal / Math.max(1, nextLockedHero.unlockPoints)) * 100)
+                        )
+                      )}%`,
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: activeHeroTone,
+                    }}
+                  />
+                </View>
+              </View>
+            ) : (
+              <Text
+                testID="kid-next-unlock"
+                style={{
+                  color: colors["color-text-primary"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  fontWeight: "700",
+                }}
+              >
+                🏆 All {KID_CHARACTERS.length} Kingdom Heroes Unlocked! You are a Grand Champion!
+              </Text>
+            )}
+          </View>
+
+          {/* Character Roster Grid (Tap unlocked to equip, tap locked to view goal) */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            {KID_CHARACTERS.map((char) => {
+              const unlocked = isCharacterUnlocked(char, unlockPointsTotal);
+              const isSelected = activeHero.id === char.id;
+              const charTone = colors[char.toneKey] ?? accentColor;
+              return (
+                <Pressable
+                  key={char.id}
+                  testID={`kid-character-${char.id}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected, disabled: !unlocked }}
+                  accessibilityLabel={
+                    unlocked
+                      ? `${char.name}, ${char.rarity} companion${isSelected ? ", active" : ""}`
+                      : `${char.name}, locked, unlocks at ${char.unlockPoints} points`
+                  }
+                  onPress={() => handleSelectCharacter(char)}
+                  style={{
+                    width: "31.5%",
+                    minHeight: 96,
+                    borderRadius: 20,
+                    padding: 12,
+                    borderWidth: isSelected ? 2 : 1,
+                    borderColor: isSelected
+                      ? charTone
+                      : unlocked
+                        ? mix(charTone, "transparent", 40)
+                        : colors["color-border-subtle"],
+                    backgroundColor: isSelected
+                      ? mix(charTone, colors["color-surface-2"] ?? "transparent", 22)
+                      : unlocked
+                        ? colors["color-surface-2"]
+                        : colors["color-surface-1"],
+                    opacity: unlocked ? 1 : 0.68,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 30 }}>{unlocked ? char.emoji : "🔒"}</Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      color: colors["color-text-primary"],
+                      fontSize: TYPOGRAPHY.label.fontSize,
+                      fontWeight: "700",
+                      textAlign: "center",
+                    }}
+                  >
+                    {char.name}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      color: isSelected
+                        ? colors["color-text-primary"]
+                        : colors["color-text-secondary"],
+                      fontSize: TYPOGRAPHY.label.fontSize,
+                      fontWeight: isSelected ? "700" : "600",
+                      textAlign: "center",
+                    }}
+                  >
+                    {unlocked
+                      ? isSelected
+                        ? "✨ Companion"
+                        : char.rarity
+                      : `${char.unlockPoints} pts`}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Material>
 
         {/* Quests Widget Card */}
         <Material
@@ -377,7 +783,14 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
             {loading ? (
               <View testID="kid-loading" accessibilityLabel={LOADING_LABEL_TEXT} style={{ gap: 12 }}>
                 {[0, 1].map((i) => (
-                  <View key={i} style={{ height: 64, borderRadius: 20, backgroundColor: colors["color-surface-2"] }} />
+                  <View
+                    key={i}
+                    style={{
+                      height: 64,
+                      borderRadius: 20,
+                      backgroundColor: pendingSurface(colors, theme),
+                    }}
+                  />
                 ))}
               </View>
             ) : loadFailed ? (
@@ -415,7 +828,7 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
                         paddingVertical: 12,
                       }}
                     >
-                      <Text style={{ fontSize: 28 }}>{t.assigneeEmoji}</Text>
+                      {renderTaskAvatar(t.assigneeEmoji)}
                       <Text
                         numberOfLines={2}
                         style={{ flex: 1, color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}
@@ -432,7 +845,7 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
                     key={t.id}
                     testID={`kid-quest-${t.id}`}
                     accessibilityLabel={awaiting ? `${t.title} — waiting for approval` : `Complete ${t.title}`}
-                    leading={<Text style={{ fontSize: 28 }}>{t.assigneeEmoji}</Text>}
+                    leading={renderTaskAvatar(t.assigneeEmoji)}
                     title={t.title}
                     subtitle={awaiting ? WAITING_COPY : undefined}
                     trailing={

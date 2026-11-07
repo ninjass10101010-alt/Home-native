@@ -59,24 +59,32 @@ export function ListRow({
         />
       ) : null}
       {leading ? (
-        /* The reference seats `leading` in a 44dp tinted circle (badge fill +
-           ring), not bare. A bare emoji glyph reads as text, not as an icon
-           well — and a 28sp glyph with no plate crowds the row's rhythm. */
-        <View
-          style={{
-            width: LEADING_BADGE_DP,
-            height: LEADING_BADGE_DP,
-            borderRadius: LEADING_BADGE_DP / 2,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: mixAlpha(leftRailColor ?? accentColor, 0.16),
-            borderWidth: 1,
-            borderColor: mixAlpha(leftRailColor ?? accentColor, 0.28),
-          }}
-          testID="listrow-leading-badge"
-        >
-          {leading}
-        </View>
+        React.isValidElement(leading) &&
+        typeof (leading.props as { style?: { width?: unknown; backgroundColor?: unknown } })?.style === "object" &&
+        (leading.props as { style?: { width?: unknown; backgroundColor?: unknown } })?.style !== null &&
+        typeof (leading.props as { style?: { width?: unknown; backgroundColor?: unknown } }).style?.width === "number" &&
+        typeof (leading.props as { style?: { width?: unknown; backgroundColor?: unknown } }).style?.backgroundColor === "string" ? (
+          <View testID="listrow-leading-badge">{leading}</View>
+        ) : (
+          /* The reference seats `leading` in a 44dp tinted circle (badge fill +
+             ring), not bare. A bare emoji glyph reads as text, not as an icon
+             well — and a 28sp glyph with no plate crowds the row's rhythm. */
+          <View
+            style={{
+              width: LEADING_BADGE_DP,
+              height: LEADING_BADGE_DP,
+              borderRadius: LEADING_BADGE_DP / 2,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: mixAlpha(leftRailColor ?? accentColor, 0.16),
+              borderWidth: 1,
+              borderColor: mixAlpha(leftRailColor ?? accentColor, 0.28),
+            }}
+            testID="listrow-leading-badge"
+          >
+            {leading}
+          </View>
+        )
       ) : null}
       <View style={{ flex: 1, minWidth: 0 }}>
         {typeof title === "string" ? (

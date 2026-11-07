@@ -7,6 +7,7 @@ import { TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
 import { useAuth } from "../state/AuthProvider";
 import { localTodayISO } from "../home/widgets/data";
+import { pendingSurface } from "../home/widgets/WidgetFrame";
 import { Modal } from "../ui/Modal";
 import { PinPad } from "../ui/PinPad";
 
@@ -17,8 +18,8 @@ const ERROR_COPY = "Couldn't load this right now.";
 
 type ChatMessage = { id: string; role: string; content: string; proposals?: any[] };
 
-export function ChatPage() {
-  const { colors, accentColor } = useTheme();
+export function ChatPage({ headerRight }: { headerRight?: React.ReactNode } = {}) {
+  const { colors, accentColor, theme } = useTheme();
   const { member, hydrated, poke } = useAuth();
   const params = useLocalSearchParams<{ prompt?: string }>();
   const promptParam = Array.isArray(params.prompt) ? params.prompt[0] : params.prompt;
@@ -176,13 +177,16 @@ export function ChatPage() {
 
   return (
     <View testID="chat-page" style={{ flex: 1 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-        <Text style={{ fontSize: 22 }}>✨</Text>
-        <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>Consuela</Text>
-        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors["color-accent-mint"] ?? accentColor }} />
-        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>AI Family Assistant</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Text style={{ fontSize: 22 }}>✨</Text>
+          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>Consuela</Text>
+          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors["color-accent-mint"] ?? accentColor }} />
+          <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>AI Family Assistant</Text>
+        </View>
+        {headerRight ? <View>{headerRight}</View> : null}
       </View>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 120 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: member && status === "ready" ? 24 : 120 }}>
         {/* proactive suggestions strip */}
         {member && suggestions.length > 0 ? (
           <View testID="chat-suggestions" style={{ gap: 8 }}>
@@ -198,7 +202,7 @@ export function ChatPage() {
                   testID={`chat-suggestion-act-${String(s?.id)}`}
                   accessibilityRole="button"
                   onPress={() => setPinTarget({ kind: "act", suggestion: s })}
-                  style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: "center" }}
+                  style={{ minHeight: 64, paddingHorizontal: 12, justifyContent: "center" }}
                 >
                   <Text style={{ color: accentColor, fontWeight: "700" }}>Act</Text>
                 </Pressable>
@@ -206,7 +210,7 @@ export function ChatPage() {
                   testID={`chat-suggestion-dismiss-${String(s?.id)}`}
                   accessibilityRole="button"
                   onPress={() => setPinTarget({ kind: "dismiss", suggestion: s })}
-                  style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: "center" }}
+                  style={{ minHeight: 64, paddingHorizontal: 12, justifyContent: "center" }}
                 >
                   <Text style={{ color: colors["color-text-secondary"], fontWeight: "700" }}>Dismiss</Text>
                 </Pressable>
@@ -223,15 +227,15 @@ export function ChatPage() {
           </View>
         ) : status === "loading" ? (
           <View testID="chat-loading" style={{ flex: 1, gap: 12 }}>
-            <View style={{ height: 64, borderRadius: 20, backgroundColor: colors["color-surface-2"] }} />
-            <View style={{ height: 64, borderRadius: 20, backgroundColor: colors["color-surface-2"] }} />
+            <View style={{ height: 64, borderRadius: 20, backgroundColor: pendingSurface(colors, theme) }} />
+            <View style={{ height: 64, borderRadius: 20, backgroundColor: pendingSurface(colors, theme) }} />
           </View>
         ) : status === "error" ? (
           <View testID="chat-error" style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 8 }}>
             <Text style={{ color: colors["color-accent-rose"] ?? colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, textAlign: "center" }}>
               {errorText}
             </Text>
-            <Pressable testID="chat-retry" accessibilityRole="button" onPress={retry} style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: "center" }}>
+            <Pressable testID="chat-retry" accessibilityRole="button" onPress={retry} style={{ minHeight: 64, paddingHorizontal: 12, justifyContent: "center" }}>
               <Text style={{ color: accentColor, fontWeight: "700" }}>Try again</Text>
             </Pressable>
           </View>
@@ -288,6 +292,7 @@ export function ChatPage() {
             value={input}
             onChangeText={setInput}
             placeholder="Ask Consuela…"
+            placeholderTextColor={colors["color-text-secondary"]}
             style={{ flex: 1, minHeight: 64, borderWidth: 1, borderColor: colors["color-border"], borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize }}
           />
           <Pressable

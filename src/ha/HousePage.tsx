@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { mix } from "../theme/mix";
-import { MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
+import { FONTS, MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { useAuth } from "../state/AuthProvider";
 import { useToast } from "../ui/Toast";
 import { Chip } from "../ui/Chip";
@@ -172,7 +172,7 @@ export function HousePage() {
           <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: mix(accentColor, "transparent", 18) }}>
             <Text style={{ fontSize: 24 }}>🏠</Text>
           </View>
-          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", fontFamily: "serif" }}>Home Controls</Text>
+          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", fontFamily: FONTS.display }}>Home Controls</Text>
           <View style={{ flex: 1 }} />
           <View
             testID="ha-connection-pill"

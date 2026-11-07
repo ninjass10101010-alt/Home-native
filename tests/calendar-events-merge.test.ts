@@ -13,6 +13,8 @@ import {
   googleEventsForDay,
   mergeDayRows,
   schedulesForDay,
+  resolveRoutineMealSlot,
+  findPlannedMealForSlot,
 } from "../src/calendar/events-merge";
 
 test("google all-day UTC buckets by date part", () => {
@@ -62,4 +64,56 @@ test("schedulesForDay deduplicates mom out of work and rebecca get home from wor
   expect(result.filter((r) => r.title.includes("Rebecca") || r.title.includes("MOM"))).toHaveLength(1);
   expect(result.filter((r) => r.title.toLowerCase().includes("breakfast"))).toHaveLength(1);
   expect(result.filter((r) => r.title.toLowerCase().includes("school"))).toHaveLength(1);
+});
+
+test("resolveRoutineMealSlot detects breakfast, lunch, and dinner routines via mealType or title", () => {
+  expect(resolveRoutineMealSlot({ title: "Dinner", mealType: "dinner" })).toBe("dinner");
+  expect(resolveRoutineMealSlot({ title: "Family Dinner Time" })).toBe("dinner");
+  expect(resolveRoutineMealSlot({ title: "Lunch Break" })).toBe("lunch");
+  expect(resolveRoutineMealSlot({ title: "Morning Breakfast!" })).toBe("breakfast");
+  expect(resolveRoutineMealSlot({ title: "Afternoon Snack" })).toBeNull();
+  expect(resolveRoutineMealSlot({ title: "Take Dogs Out" })).toBeNull();
+  expect(resolveRoutineMealSlot({ title: "Dinner", mealType: "none" })).toBeNull();
+});
+
+test("schedulesForDay hides meal routines (Breakfast, Lunch, Dinner) when no meal is planned and enriches them when planned", () => {
+  // Friday Nov 6, 2026 (Monday of that week is 2026-11-02)
+  const friday = new Date(2026, 10, 6, 12, 0, 0);
+  const routines = [
+    { id: "r1", title: "Breakfast", time: "07:00", days: "all", icon: "🍳" },
+    { id: "r2", title: "Leaving for School", time: "07:30", days: "weekdays", icon: "🎒" },
+    { id: "r3", title: "Lunch", time: "12:30", days: "all", icon: "🥪" },
+    { id: "r4", title: "Dinner", time: "18:15", days: "all", icon: "🍽️" },
+    { id: "r5", title: "Take Dogs Out", time: "19:00", days: "all", icon: "🐶" },
+  ];
+
+  // 1. When meals array is empty -> Breakfast, Lunch, Dinner are hidden; School & Dogs remain
+  const emptyMealPlanResult = schedulesForDay(routines, friday, []);
+  expect(emptyMealPlanResult.map((r) => r.title)).toEqual([
+    "Leaving for School",
+    "Take Dogs Out",
+  ]);
+
+  // 2. When Dinner is planned for Friday -> Dinner is included and enriched with the meal name & emoji
+  const plannedMeals = [
+    {
+      id: "m1",
+      name: "Chicken Fajitas",
+      emoji: "🌮",
+      time: "Fri",
+      mealType: "dinner",
+      weekOf: "2026-11-02",
+    },
+  ];
+  expect(findPlannedMealForSlot(plannedMeals, friday, "dinner")?.name).toBe("Chicken Fajitas");
+  expect(findPlannedMealForSlot(plannedMeals, friday, "breakfast")).toBeNull();
+
+  const withDinnerResult = schedulesForDay(routines, friday, plannedMeals);
+  expect(withDinnerResult.map((r) => r.title)).toEqual([
+    "Leaving for School",
+    "Dinner: Chicken Fajitas",
+    "Take Dogs Out",
+  ]);
+  const dinnerRow = withDinnerResult.find((r) => r.id === "s_r4");
+  expect(dinnerRow?.icon).toBe("🌮");
 });

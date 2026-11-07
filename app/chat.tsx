@@ -1,5 +1,4 @@
 import React from "react";
-import { View } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 import { Screen } from "../src/theme/Screen";
 import { ChatPage } from "../src/chat/ChatPage";
@@ -19,10 +18,7 @@ export default function ChatRoute() {
 
   return (
     <Screen testID="chat-route">
-      <ChatPage />
-      <View style={{ position: "absolute", left: 0, right: 0, bottom: 116, alignItems: "center" }} pointerEvents="box-none">
-        <MoreButton onPress={() => setMoreOpen(true)} />
-      </View>
+      <ChatPage headerRight={<MoreButton onPress={() => setMoreOpen(true)} />} />
       <CapsuleDock
         role={role}
         hydrated={hydrated}

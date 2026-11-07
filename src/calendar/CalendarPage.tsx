@@ -6,7 +6,7 @@ import type { DbListEnvelope, ServerMember } from "../api/types";
 import { useTheme } from "../theme/ThemeProvider";
 import { accentDeepened } from "../theme/mix";
 import { Material } from "../theme/Material";
-import { MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
+import { FONTS, MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { useAuth } from "../state/AuthProvider";
 import { useSync } from "../state/SyncManager";
 import { Chip } from "../ui/Chip";
@@ -23,6 +23,7 @@ import {
   useWidgetData,
   type ReadFailure,
 } from "../home/widgets/data";
+import { pendingSurface } from "../home/widgets/WidgetFrame";
 import {
   familyEventsForDay,
   googleEventsForDay,
@@ -30,6 +31,7 @@ import {
   schedulesForDay,
   type DbEventRow,
   type GoogleEventRow,
+  type MealPlanEntryRow,
   type ScheduleRow,
   type WallEvent,
 } from "./events-merge";
@@ -78,6 +80,7 @@ interface CalendarLoad {
   dbEvents: DbEventRow[];
   googleRows: GoogleEventRow[];
   schedules: ScheduleRow[];
+  meals: MealPlanEntryRow[] | null;
   googleFailure: ReadFailure | null;
   schedulesFailure: boolean;
 }
@@ -180,7 +183,15 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
       schedulesFailure = true;
     }
 
-    return { dbEvents, googleRows, schedules, googleFailure, schedulesFailure };
+    let meals: MealPlanEntryRow[] | null = null;
+    try {
+      const mealsRes = await api<DbListEnvelope<MealPlanEntryRow>>("/api/db/meal_plan_entries");
+      meals = Array.isArray(mealsRes?.items) ? mealsRes.items : null;
+    } catch {
+      meals = null;
+    }
+
+    return { dbEvents, googleRows, schedules, meals, googleFailure, schedulesFailure };
   }, { guestVisible: true });
 
   const stale = dataStale || syncStale;
@@ -203,7 +214,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     return mergeDayRows(
       familyEventsForDay(dbEvents, iso),
       googleEventsForDay(data.googleRows, iso),
-      schedulesForDay(data.schedules, isoToDate(iso))
+      schedulesForDay(data.schedules, isoToDate(iso), data.meals)
     );
   }, [data, dbEvents]);
 
@@ -709,7 +720,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
         {status === "loading" && !data ? (
           <View testID="calendar-loading" accessibilityLabel={LOADING_COPY} style={{ gap: 12 }}>
             {[0, 1, 2].map((i) => (
-              <View key={i} style={{ height: 64, borderRadius: 20, backgroundColor: colors["color-surface-2"] }} />
+              <View key={i} style={{ height: 64, borderRadius: 20, backgroundColor: pendingSurface(colors, theme) }} />
             ))}
           </View>
         ) : view === "week" ? (
@@ -734,7 +745,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                       color: colors["color-text-primary"],
                       fontSize: 22,
                       fontWeight: "700",
-                      fontFamily: "serif",
+                      fontFamily: FONTS.display,
                     }}
                   >
                     {MONTH_NAMES[viewMonth]} {viewYear}

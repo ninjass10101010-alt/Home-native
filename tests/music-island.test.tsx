@@ -359,4 +359,18 @@ describe("MusicIsland", () => {
 
     jest.useRealTimers();
   });
+
+  it("never paints a track hidden by the viewer's explicit/deny policy", () => {
+    (usePlayback as jest.Mock).mockReturnValue({
+      current: { ...mockTrack, explicit: true },
+      policy: { isParent: false, filterOn: true, denyTerms: [] },
+      playing: true,
+      position: 10,
+      duration: 120,
+    });
+
+    const { queryByTestId } = render(<MusicIsland />);
+    expect(queryByTestId("music-island")).toBeNull();
+    expect(queryByTestId("music-island-title")).toBeNull();
+  });
 });

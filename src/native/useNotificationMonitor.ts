@@ -6,7 +6,11 @@ import {
   loadNotificationPreferences,
 } from "./notificationPrefs";
 import {
+  type MealPlanEntryRow,
   type ScheduleRow,
+  findPlannedMealForSlot,
+  formatMealRoutineTitle,
+  resolveRoutineMealSlot,
   scheduleCoversWeekday,
   scheduleTimeMinutes,
 } from "../calendar/events-merge";
@@ -81,6 +85,43 @@ export function isDueNow(
   const diffMs = eventTime.getTime() - now.getTime();
   const diffMinutes = diffMs / (60 * 1000);
   return diffMinutes >= -1 && diffMinutes <= windowMinutes;
+}
+
+/**
+ * Evaluates whether a routine should be called out based on the family's meal plan.
+ * If the routine is a meal routine (breakfast, lunch, or dinner) and `meals` is loaded,
+ * it only calls out the schedule when a meal is actually planned for that slot today.
+ */
+export function evaluateRoutineMealGate(
+  rt: ScheduleRow,
+  now: Date,
+  meals?: MealPlanEntryRow[] | null
+): { shouldCallOut: boolean; displayTitle: string; displayIcon: string } {
+  const defaultTitle = rt.title || "Daily routine";
+  const defaultIcon = rt.icon || "⏰";
+  const mealSlot = resolveRoutineMealSlot(rt);
+
+  if (mealSlot !== null && Array.isArray(meals)) {
+    const planned = findPlannedMealForSlot(meals, now, mealSlot);
+    if (!planned) {
+      return {
+        shouldCallOut: false,
+        displayTitle: defaultTitle,
+        displayIcon: defaultIcon,
+      };
+    }
+    return {
+      shouldCallOut: true,
+      displayTitle: formatMealRoutineTitle(rt.title, planned.name),
+      displayIcon: planned.emoji || rt.icon || "🍽️",
+    };
+  }
+
+  return {
+    shouldCallOut: true,
+    displayTitle: defaultTitle,
+    displayIcon: defaultIcon,
+  };
 }
 
 export function useNotificationMonitor({
@@ -189,9 +230,12 @@ export function useNotificationMonitor({
         // offline or unmapped
       }
 
-      // 3. Check Routines & Daily Schedules
+      // 3. Check Routines & Daily Schedules (cross-checked with Meal Plan)
       try {
-        const schedRes = (await api("/api/db/schedules")) as any;
+        const [schedRes, mealsRes] = await Promise.all([
+          api("/api/db/schedules") as Promise<any>,
+          (api("/api/db/meal_plan_entries") as Promise<any>).catch(() => null),
+        ]);
         const routines: ScheduleRow[] = Array.isArray(schedRes?.items)
           ? schedRes.items
           : Array.isArray(schedRes?.schedules)
@@ -199,6 +243,13 @@ export function useNotificationMonitor({
             : Array.isArray(schedRes)
               ? schedRes
               : [];
+        const meals: MealPlanEntryRow[] | null = Array.isArray(mealsRes?.items)
+          ? mealsRes.items
+          : Array.isArray(mealsRes?.meals)
+            ? mealsRes.meals
+            : Array.isArray(mealsRes)
+              ? mealsRes
+              : null;
 
         const weekdayShort = now.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase();
         const weekdayIndex = now.getDay();
@@ -206,6 +257,15 @@ export function useNotificationMonitor({
 
         for (const rt of routines) {
           if (!scheduleCoversWeekday(rt.days, weekdayShort, weekdayIndex)) {
+            continue;
+          }
+
+          const { shouldCallOut, displayTitle, displayIcon } = evaluateRoutineMealGate(
+            rt,
+            now,
+            meals
+          );
+          if (!shouldCallOut) {
             continue;
           }
 
@@ -234,8 +294,8 @@ export function useNotificationMonitor({
             alertedRoutineAdvanceIds.current.add(key);
             void dispatchNotification({
               category: "routines",
-              title: `${rt.icon || "⏰"} Routine Soon`,
-              body: `"${rt.title || "Daily routine"}"${memberInfo} starts in 15 minutes.`,
+              title: `${displayIcon} Routine Soon`,
+              body: `"${displayTitle}"${memberInfo} starts in 15 minutes.`,
               data: { routineId: rt.id, member: rt.member },
               timing: "advance",
             });
@@ -247,7 +307,7 @@ export function useNotificationMonitor({
             void dispatchNotification({
               category: "routines",
               title: "🔔 Routine Starting",
-              body: `"${rt.title || "Daily routine"}"${memberInfo} is starting now.`,
+              body: `"${displayTitle}"${memberInfo} is starting now.`,
               data: { routineId: rt.id, member: rt.member },
               timing: "start",
             });

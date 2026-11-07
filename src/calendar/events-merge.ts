@@ -49,7 +49,20 @@ export interface ScheduleRow {
   color?: string;
   member?: string;
   days?: string;
+  mealType?: string;
 }
+
+/** Meal plan entry row subset for linking meal routines to planned meals. */
+export interface MealPlanEntryRow {
+  id?: string | number;
+  name?: string;
+  emoji?: string;
+  time?: string; // Weekday short: "Mon".."Sun"
+  mealType?: string; // "breakfast" | "lunch" | "snack" | "dinner"
+  weekOf?: string; // "YYYY-MM-DD" (Monday of the week)
+}
+
+export type MealRoutineSlot = "breakfast" | "lunch" | "dinner";
 
 export interface WallEvent {
   id: string;
@@ -344,25 +357,116 @@ export function deduplicateScheduleEvents(events: WallEvent[]): WallEvent[] {
   return result;
 }
 
-/** Routines that land on the given calendar day (weekday scope + time sort + smart deduplication). */
-export function schedulesForDay(rows: ScheduleRow[], date: Date): WallEvent[] {
+/**
+ * Resolves whether a schedule routine corresponds to a primary meal slot
+ * ("breakfast" | "lunch" | "dinner") via explicit mealType or title keywords.
+ */
+export function resolveRoutineMealSlot(
+  row: { mealType?: string; title?: string } | null | undefined
+): MealRoutineSlot | null {
+  if (!row) return null;
+  const mt = String(row.mealType ?? "").trim().toLowerCase();
+  if (mt === "none") return null;
+  if (mt === "breakfast" || mt === "lunch" || mt === "dinner") {
+    return mt;
+  }
+  const semantic = normalizeRoutineSemanticKey(row.title ?? "");
+  if (semantic === "breakfast" || semantic === "lunch" || semantic === "dinner") {
+    return semantic;
+  }
+  return null;
+}
+
+function weekMondayISO(date: Date): string {
+  const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dow = copy.getDay(); // 0 = Sun .. 6 = Sat
+  const offset = dow === 0 ? -6 : 1 - dow;
+  copy.setDate(copy.getDate() + offset);
+  return localTodayISO(copy);
+}
+
+/**
+ * Finds the planned meal entry for a given date and meal slot ("breakfast" | "lunch" | "dinner").
+ * Returns null if no meal is planned for that slot on that date's weekday in that week.
+ */
+export function findPlannedMealForSlot(
+  meals: MealPlanEntryRow[] | null | undefined,
+  date: Date,
+  slot: MealRoutineSlot
+): MealPlanEntryRow | null {
+  if (!Array.isArray(meals) || meals.length === 0) return null;
+  const weekMonday = weekMondayISO(date);
+  const weekdayShort = date.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase();
+
+  const match = meals.find((m) => {
+    const name = typeof m?.name === "string" ? m.name.trim() : "";
+    if (!name) return false;
+    const rowWeek = typeof m.weekOf === "string" && m.weekOf.trim() ? m.weekOf.trim() : weekMonday;
+    if (rowWeek !== weekMonday) return false;
+    if (String(m.time ?? "").trim().toLowerCase() !== weekdayShort) return false;
+    if (String(m.mealType ?? "").trim().toLowerCase() !== slot) return false;
+    return true;
+  });
+
+  return match ?? null;
+}
+
+/**
+ * Formats a meal routine title with the planned meal name when available.
+ */
+export function formatMealRoutineTitle(baseTitle: string | undefined, mealName: string | undefined): string {
+  const cleanBase = (baseTitle || "Meal").trim();
+  const cleanMeal = (mealName || "").trim();
+  if (!cleanMeal) return cleanBase;
+  if (cleanBase.toLowerCase().includes(cleanMeal.toLowerCase())) return cleanBase;
+  return `${cleanBase}: ${cleanMeal}`;
+}
+
+/**
+ * Routines that land on the given calendar day (weekday scope + time sort + smart deduplication).
+ * When `meals` is provided (an array of MealPlanEntryRow), meal routines (Breakfast, Lunch, Dinner)
+ * are only included if a meal is actually scheduled for that slot on `date`, and their title/icon
+ * are enriched with the planned meal.
+ */
+export function schedulesForDay(
+  rows: ScheduleRow[],
+  date: Date,
+  meals?: MealPlanEntryRow[] | null
+): WallEvent[] {
   const weekdayShort = date.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase();
   const weekdayIndex = date.getDay();
-  const rawList = rows
-    .filter((s) => scheduleCoversWeekday(s.days, weekdayShort, weekdayIndex))
-    .map((s, i) => {
-      const display = formatScheduleTime12h(s.time);
-      return {
-        id: `s_${String(s.id ?? i)}`,
-        title: s.title || "Untitled routine",
-        time: display || undefined,
-        sortMinutes: scheduleTimeMinutes(s.time) ?? UNKNOWN_SORT_MINUTES,
-        icon: s.icon || "⏰",
-        member: s.member || undefined,
-        railToken: s.color ? SCHEDULE_RAIL_TOKENS[s.color] : undefined,
-        isRoutine: true,
-      };
+  const checkMeals = Array.isArray(meals);
+
+  const rawList: WallEvent[] = [];
+  rows.forEach((s, i) => {
+    if (!scheduleCoversWeekday(s.days, weekdayShort, weekdayIndex)) return;
+
+    const mealSlot = resolveRoutineMealSlot(s);
+    let title = s.title || "Untitled routine";
+    let icon = s.icon || "⏰";
+
+    if (checkMeals && mealSlot !== null) {
+      const planned = findPlannedMealForSlot(meals, date, mealSlot);
+      if (!planned) {
+        // Nothing scheduled for this meal slot today — omit from the schedule
+        return;
+      }
+      title = formatMealRoutineTitle(s.title, planned.name);
+      icon = planned.emoji || s.icon || "🍽️";
+    }
+
+    const display = formatScheduleTime12h(s.time);
+    rawList.push({
+      id: `s_${String(s.id ?? i)}`,
+      title,
+      time: display || undefined,
+      sortMinutes: scheduleTimeMinutes(s.time) ?? UNKNOWN_SORT_MINUTES,
+      icon,
+      member: s.member || undefined,
+      railToken: s.color ? SCHEDULE_RAIL_TOKENS[s.color] : undefined,
+      isRoutine: true,
     });
+  });
 
   return deduplicateScheduleEvents(rawList);
 }
@@ -385,14 +489,15 @@ export function mergedEventsForDay(
   dbEvents: DbEventRow[],
   googleRows: GoogleEventRow[],
   schedules: ScheduleRow[],
-  dayISO: string
+  dayISO: string,
+  meals?: MealPlanEntryRow[] | null
 ): WallEvent[] {
   const [y, m, d] = dayISO.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   return mergeDayRows(
     familyEventsForDay(dbEvents, dayISO),
     googleEventsForDay(googleRows, dayISO),
-    schedulesForDay(schedules, date)
+    schedulesForDay(schedules, date, meals)
   );
 }
 

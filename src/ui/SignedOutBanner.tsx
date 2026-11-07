@@ -1,9 +1,9 @@
 import React from "react";
-import { StyleProp, Text, View, ViewStyle } from "react-native";
+import { Pressable, StyleProp, Text, ViewStyle } from "react-native";
 import { Material } from "../theme/Material";
 import { useTheme } from "../theme/ThemeProvider";
 import { mix } from "../theme/mix";
-import { RADII, TYPOGRAPHY } from "../theme/tokens";
+import { MIN_TARGET_DP, RADII, TYPOGRAPHY } from "../theme/tokens";
 
 /**
  * The signed-out / saved-copy banner — the web's SyncStatusBanner pill.
@@ -95,9 +95,15 @@ export function SignedOutBanner({
 
   if (!onPress) return body;
   return (
-    <View accessibilityRole="link" accessibilityLabel={accessibilityLabel} onTouchEnd={onPress}>
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      onTouchEnd={onPress}
+      style={{ minHeight: MIN_TARGET_DP, justifyContent: "center" }}
+    >
       {body}
-    </View>
+    </Pressable>
   );
 }
 

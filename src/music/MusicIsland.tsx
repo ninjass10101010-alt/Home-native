@@ -21,6 +21,7 @@ import {
 } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 import { usePlayback } from "./playback";
+import { isContentHidden } from "./explicit";
 import { useCast } from "./CastProvider";
 import { useTheme } from "../theme/ThemeProvider";
 import { musicTokensFor } from "../theme/music-tokens";
@@ -56,7 +57,7 @@ function categoryMeta(category: string, timing?: string) {
       return {
         icon: "⏰",
         label: timing === "advance" ? "15-MIN ROUTINE REMINDER" : "ROUTINE DUE",
-        colorKey: "color-accent-emerald" as const,
+        colorKey: "color-accent-mint" as const,
       };
     default:
       return { icon: "🔔", label: "REMINDER", colorKey: "color-accent-amber" as const };
@@ -158,7 +159,8 @@ export function WaveformBars({
 export function MusicIsland() {
   const router = useRouter();
   const pathname = usePathname();
-  const { current, playing, position, duration, toggle, next, previous, stopAndClear, player } = usePlayback();
+  const { current: rawCurrent, policy, playing, position, duration, toggle, next, previous, stopAndClear, player } = usePlayback();
+  const current = rawCurrent && policy && isContentHidden(rawCurrent, policy) ? null : rawCurrent;
   const cast = useCast();
   const volume = useOutputVolume(player);
   const { colors, theme, boost, reduceMotion } = useTheme();
@@ -695,6 +697,7 @@ export function MusicIsland() {
             <View style={styles.controls}>
               <Pressable
                 testID="music-island-prev"
+                hitSlop={10}
                 onPress={() => (cast.casting ? cast.previous() : previous())}
                 style={({ pressed }) => [
                   styles.controlButton,
@@ -708,6 +711,7 @@ export function MusicIsland() {
 
               <Pressable
                 testID="music-island-play"
+                hitSlop={8}
                 onPress={() => (cast.casting ? (cast.playing ? cast.pause() : cast.play()) : toggle())}
                 style={({ pressed }) => [
                   styles.playButton,
@@ -726,6 +730,7 @@ export function MusicIsland() {
 
               <Pressable
                 testID="music-island-next"
+                hitSlop={10}
                 onPress={() => (cast.casting ? cast.advance(false) : next())}
                 style={({ pressed }) => [
                   styles.controlButton,
@@ -770,6 +775,7 @@ export function MusicIsland() {
 
                 <Pressable
                   testID="music-island-mute"
+                  hitSlop={14}
                   onPress={() => volume?.toggleMute()}
                   style={[styles.muteButton, { backgroundColor: tokens.panel }]}
                   accessibilityLabel={volume?.muted ? "Unmute" : "Mute"}
@@ -784,6 +790,7 @@ export function MusicIsland() {
             {/* Stop / Clear Action */}
             <Pressable
               testID="music-island-stop"
+              hitSlop={10}
               onPress={handleStopPress}
               style={[
                 styles.stopButton,
@@ -791,7 +798,7 @@ export function MusicIsland() {
               ]}
               accessibilityLabel={stopArmed ? "Confirm stop" : "Stop"}
             >
-              <Text style={[styles.stopButtonText, { color: tokens.label }]}>
+              <Text style={[styles.stopButtonText, { color: stopArmed ? tokens.onAccent : tokens.label }]}>
                 {stopArmed ? "Confirm" : "Stop"}
               </Text>
             </Pressable>

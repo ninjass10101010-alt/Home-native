@@ -6,6 +6,7 @@ import {
   isSevereWeather,
   isStartingSoon,
   isDueNow,
+  evaluateRoutineMealGate,
 } from "../src/native/useNotificationMonitor";
 import { isWithinQuietHours } from "../src/native/notificationPrefs";
 
@@ -111,5 +112,39 @@ describe("useNotificationMonitor routine integration", () => {
     const startNow = new Date("2026-11-05T05:40:00");
     expect(isDueNow("05:40", startNow, 2)).toBe(true);
     expect(isWithinQuietHours(startNow)).toBe(false);
+  });
+
+  it("suppresses Dinner, Lunch, and Breakfast call-outs when no meal is scheduled for that slot today", () => {
+    const friday = new Date(2026, 10, 6, 18, 0, 0); // Friday Nov 6, 2026
+    const dinnerRoutine = { id: "d1", title: "Dinner", time: "18:15", icon: "🍽️" };
+    const lunchRoutine = { id: "l1", title: "Lunch", time: "12:30", icon: "🥪" };
+    const breakfastRoutine = { id: "b1", title: "Breakfast", time: "07:00", icon: "🍳" };
+    const dogsRoutine = { id: "g1", title: "Take Dogs Out", time: "19:00", icon: "🐶" };
+
+    // Empty meal plan -> meal routines suppressed, non-meal routine allowed
+    expect(evaluateRoutineMealGate(dinnerRoutine, friday, []).shouldCallOut).toBe(false);
+    expect(evaluateRoutineMealGate(lunchRoutine, friday, []).shouldCallOut).toBe(false);
+    expect(evaluateRoutineMealGate(breakfastRoutine, friday, []).shouldCallOut).toBe(false);
+    expect(evaluateRoutineMealGate(dogsRoutine, friday, []).shouldCallOut).toBe(true);
+  });
+
+  it("allows and enriches meal routine call-out when a meal IS scheduled for that slot today", () => {
+    const friday = new Date(2026, 10, 6, 18, 0, 0); // Friday Nov 6, 2026 (weekOf 2026-11-02)
+    const dinnerRoutine = { id: "d1", title: "Dinner", time: "18:15", icon: "🍽️" };
+    const plannedMeals = [
+      {
+        id: "m1",
+        name: "Lasagna",
+        emoji: "🍝",
+        time: "Fri",
+        mealType: "dinner",
+        weekOf: "2026-11-02",
+      },
+    ];
+
+    const res = evaluateRoutineMealGate(dinnerRoutine, friday, plannedMeals);
+    expect(res.shouldCallOut).toBe(true);
+    expect(res.displayTitle).toBe("Dinner: Lasagna");
+    expect(res.displayIcon).toBe("🍝");
   });
 });

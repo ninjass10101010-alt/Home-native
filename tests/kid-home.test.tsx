@@ -496,7 +496,7 @@ describe("KidHome — quests", () => {
   });
 });
 
-describe("KidHome — Switch member", () => {
+describe("KidHome — Switch member & Log out", () => {
   it("the Switch member control signs out to the family rail", async () => {
     mockMember = kidUnder10;
     kidSnapshot();
@@ -507,6 +507,55 @@ describe("KidHome — Switch member", () => {
       await Promise.resolve();
     });
     expect(mockSignOut).toHaveBeenCalled();
+  });
+
+  it("the top-bar Log Out button signs out of Kid Mode cleanly", async () => {
+    mockMember = kidUnder10;
+    kidSnapshot();
+    const { findByText, getByTestId } = render(<KidHome />, { wrapper: wrap });
+    await findByText("Make bed");
+    await act(async () => {
+      fireEvent.press(getByTestId("kid-logout"));
+      await Promise.resolve();
+    });
+    expect(mockSignOut).toHaveBeenCalled();
+  });
+});
+
+describe("KidHome — Kingdom Companions & Character Unlocking", () => {
+  it("unlocks Kingdom Heroes based on points and allows selecting & cheering companions", async () => {
+    mockMember = kidUnder10; // Aurora has 108 pts in WEEK_DATA -> unlocks 0, 25, 50, 100 pt heroes
+    kidSnapshot();
+    const { findByText, getByTestId, getByText } = render(<KidHome />, { wrapper: wrap });
+    await findByText("Make bed");
+
+    expect(getByTestId("kid-kingdom-card")).toBeTruthy();
+    expect(getByText("4 / 6 Unlocked")).toBeTruthy();
+    // Default active companion for 108 pts is the highest unlocked hero: Sir Cinnamon Shield (100 pts)
+    expect(getByTestId("kid-companion-name").props.children).toBe("Sir Cinnamon Shield");
+
+    // Tap an unlocked character (Sproutberry Knight, 25 pts) to equip as active companion
+    await act(async () => {
+      fireEvent.press(getByTestId("kid-character-sprout-berry"));
+      await Promise.resolve();
+    });
+    expect(getByTestId("kid-companion-name").props.children).toBe("Sproutberry Knight");
+
+    // Tap Star Jelly cheer button to rotate companion quote & increase bond
+    const initialQuote = getByTestId("kid-companion-quote").props.children;
+    await act(async () => {
+      fireEvent.press(getByTestId("kid-companion-cheer"));
+      await Promise.resolve();
+    });
+    expect(getByTestId("kid-companion-quote").props.children).not.toEqual(initialQuote);
+
+    // Tap a locked character (Princess Cloud Mochi, 150 pts) -> keeps current companion and shows pts needed
+    await act(async () => {
+      fireEvent.press(getByTestId("kid-character-princess-mochi"));
+      await Promise.resolve();
+    });
+    expect(getByTestId("kid-companion-name").props.children).toBe("Sproutberry Knight");
+    expect(await findByText(/Earn 42 more pts to unlock/)).toBeTruthy();
   });
 });
 

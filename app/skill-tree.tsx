@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { usePathname, useRouter } from "expo-router";
 import { Screen } from "../src/theme/Screen";
@@ -12,6 +12,7 @@ import { MoreSheet } from "../src/nav/MoreSheet";
 import { useAuth } from "../src/state/AuthProvider";
 import { useSync } from "../src/state/SyncManager";
 import { SoftButton } from "../src/ui/SoftButton";
+import { isPhotoUri } from "../src/ui/MemberRail";
 import { useToast } from "../src/ui/Toast";
 import { kidLevel, POINTS_PER_LEVEL } from "../src/home/KidHome";
 
@@ -223,7 +224,15 @@ export default function SkillTreeRoute() {
                     borderColor: accentColor,
                   }}
                 >
-                  <Text style={{ fontSize: 28 }}>{member?.emoji || "🧙"}</Text>
+                  {member?.emoji && isPhotoUri(member.emoji) ? (
+                    <Image
+                      source={{ uri: member.emoji }}
+                      style={{ width: 52, height: 52, borderRadius: 26 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={{ fontSize: 28 }}>{member?.emoji || "🧙"}</Text>
+                  )}
                 </View>
                 <View>
                   <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.cardTitle.fontSize, fontWeight: "700" }}>

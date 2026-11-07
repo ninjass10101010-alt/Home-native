@@ -5,7 +5,7 @@ import { getBaseUrl, LAN_BASE_URLS, setBaseUrl } from "../api/config";
 import type { ServerMember } from "../api/types";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
-import { ACCENTS, TYPOGRAPHY } from "../theme/tokens";
+import { ACCENTS, FONTS, TYPOGRAPHY } from "../theme/tokens";
 import { useAuth, type CapabilityRole } from "../state/AuthProvider";
 import { useLocalSearchParams } from "expo-router";
 import { useSync } from "../state/SyncManager";
@@ -158,13 +158,13 @@ export function SettingsPage() {
         </Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
           <Text style={{ fontSize: 40 }}>⚙️</Text>
-          <Text style={{ color: colors["color-text-primary"], fontSize: 40, fontWeight: "700", fontFamily: "serif" }}>Settings</Text>
+          <Text style={{ color: colors["color-text-primary"], fontSize: 40, fontWeight: "700", fontFamily: FONTS.display }}>Settings</Text>
         </View>
         {stale && member ? (
           <Text
             testID="settings-stale"
             style={{
-              color: colors["color-accent-amber"] ?? accentColor,
+              color: colors["color-accent-ink-amber"] ?? colors["color-accent-amber"] ?? accentColor,
               fontSize: TYPOGRAPHY.label.fontSize,
               fontWeight: "600",
               marginTop: 6,

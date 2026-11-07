@@ -101,7 +101,7 @@ export function HomeSection() {
             accessibilityRole="button"
             accessibilityLabel="Reset the widget layout"
             onPress={reset}
-            style={{ minHeight: 44, justifyContent: "center" }}
+            style={{ minHeight: 64, paddingHorizontal: 8, justifyContent: "center" }}
           >
             <Text style={{ color: colors["color-accent-selected"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
               Reset
@@ -318,17 +318,19 @@ export function HomeSection() {
                       <View style={{ flexDirection: "row", gap: 6 }}>
                         <Pressable
                           testID="screensaver-start-prev"
+                          hitSlop={14}
                           onPress={() => setScreensaverPrefs((p) => ({ ...p, startHour: (p.startHour + 23) % 24 }))}
                           accessibilityLabel="Earlier start hour"
-                          style={{ minWidth: 36, minHeight: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                          style={{ minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
                         >
                           <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>−</Text>
                         </Pressable>
                         <Pressable
                           testID="screensaver-start-next"
+                          hitSlop={14}
                           onPress={() => setScreensaverPrefs((p) => ({ ...p, startHour: (p.startHour + 1) % 24 }))}
                           accessibilityLabel="Later start hour"
-                          style={{ minWidth: 36, minHeight: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                          style={{ minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
                         >
                           <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>+</Text>
                         </Pressable>
@@ -357,17 +359,19 @@ export function HomeSection() {
                       <View style={{ flexDirection: "row", gap: 6 }}>
                         <Pressable
                           testID="screensaver-end-prev"
+                          hitSlop={14}
                           onPress={() => setScreensaverPrefs((p) => ({ ...p, endHour: (p.endHour + 23) % 24 }))}
                           accessibilityLabel="Earlier wake hour"
-                          style={{ minWidth: 36, minHeight: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                          style={{ minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
                         >
                           <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>−</Text>
                         </Pressable>
                         <Pressable
                           testID="screensaver-end-next"
+                          hitSlop={14}
                           onPress={() => setScreensaverPrefs((p) => ({ ...p, endHour: (p.endHour + 1) % 24 }))}
                           accessibilityLabel="Later wake hour"
-                          style={{ minWidth: 36, minHeight: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                          style={{ minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
                         >
                           <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>+</Text>
                         </Pressable>

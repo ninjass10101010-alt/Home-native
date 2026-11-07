@@ -81,7 +81,9 @@ export function TextField({
             : focused
               ? mix(accentColor, "transparent", 50)
               : colors["color-border"] ?? "transparent",
-          backgroundColor: colors["color-surface-2"],
+          backgroundColor: focused
+            ? mix(accentColor, colors["color-surface-2"], 12)
+            : colors["color-surface-2"],
           paddingHorizontal: 20,
           paddingVertical: 14,
           textAlignVertical: multiline ? "top" : "center",

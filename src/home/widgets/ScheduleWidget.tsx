@@ -11,6 +11,7 @@ import { useWidgetData } from "./data";
 import { DayLine, type DayLineMarker } from "./DayLine";
 import { EmptyState } from "../../ui/EmptyState";
 import {
+  type MealPlanEntryRow,
   type ScheduleRow,
   SCHEDULE_RAIL_TOKENS,
   schedulesForDay,
@@ -21,22 +22,28 @@ import type { WallSpan } from "../widgets";
 
 export interface ScheduleWidgetProps {
   span?: WallSpan;
+  now?: Date;
 }
 
 interface ScheduleData {
   schedules: ScheduleRow[];
+  meals: MealPlanEntryRow[] | null;
 }
 
-export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
+export function ScheduleWidget({ span = 1, now: injectedNow }: ScheduleWidgetProps) {
   const { colors, accentColor } = useTheme();
   const cyan = colors["color-accent-cyan"];
   const router = useRouter();
 
   const { status, data, failure, stale, retry } = useWidgetData<ScheduleData>(
     async () => {
-      const res = await api<DbListEnvelope<ScheduleRow>>("/api/db/schedules");
+      const [res, mealsRes] = await Promise.all([
+        api<DbListEnvelope<ScheduleRow>>("/api/db/schedules"),
+        api<DbListEnvelope<MealPlanEntryRow>>("/api/db/meal_plan_entries").catch(() => null),
+      ]);
       return {
         schedules: Array.isArray(res?.items) ? res.items : [],
+        meals: Array.isArray(mealsRes?.items) ? mealsRes.items : null,
       };
     },
     { guestVisible: true, cacheKey: "scheduleWidget" }
@@ -44,16 +51,17 @@ export function ScheduleWidget({ span = 1 }: ScheduleWidgetProps) {
 
   const [clock, setClock] = React.useState(() => new Date());
   React.useEffect(() => {
+    if (injectedNow) return;
     const id = setInterval(() => setClock(new Date()), 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [injectedNow]);
 
-  const now = clock;
+  const now = injectedNow ?? clock;
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
   const { todayRoutines, upcomingRoutines, markers } = useMemo(() => {
     const all = data?.schedules ?? [];
-    const dayRows = schedulesForDay(all, now);
+    const dayRows = schedulesForDay(all, now, data?.meals);
 
     const upcoming = dayRows.filter((r) => r.sortMinutes >= nowMinutes);
     const sortedUpcoming = [...upcoming].sort((a, b) => a.sortMinutes - b.sortMinutes);

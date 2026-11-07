@@ -21,6 +21,7 @@ import { useToast } from "../ui/Toast";
 import { mixAlpha } from "../ui/SoftButton";
 import { Toggle } from "../ui/Toggle";
 import { READ_COPY, READ_COPY_STALE, READ_RETRY_LABEL, useWidgetData } from "../home/widgets/data";
+import { pendingSurface } from "../home/widgets/WidgetFrame";
 import {
   DEFAULT_PHOTO_SETTINGS,
   getPhotoSettings,
@@ -53,7 +54,7 @@ function fallbackCaption(takenAt?: string): string | null {
 }
 
 export function PhotosPage() {
-  const { colors, accentColor } = useTheme();
+  const { colors, accentColor, theme } = useTheme();
   const toast = useToast();
   const router = useRouter();
   const { member, role } = useAuth();
@@ -327,7 +328,7 @@ export function PhotosPage() {
 
   return (
     <View testID="photos-page" style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
-      <Pressable onPress={() => router.push("/")} style={{ minHeight: 44, alignSelf: "flex-start", justifyContent: "center" }} hitSlop={10}>
+      <Pressable onPress={() => router.push("/")} style={{ minHeight: 64, alignSelf: "flex-start", justifyContent: "center" }} hitSlop={10}>
         <Text style={{ color: accentColor, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>← Back to Home</Text>
       </Pressable>
 
@@ -340,7 +341,7 @@ export function PhotosPage() {
           <Text
             testID="photos-stale"
             style={{
-              color: colors["color-accent-amber"],
+              color: colors["color-accent-ink-amber"] ?? colors["color-accent-amber"],
               fontSize: TYPOGRAPHY.label.fontSize,
               fontWeight: "600",
               marginTop: 6,
@@ -357,7 +358,7 @@ export function PhotosPage() {
           action={
             <Text
               style={{
-                color: colors["color-accent-amber"],
+                color: colors["color-accent-ink-amber"] ?? colors["color-accent-amber"],
                 fontSize: TYPOGRAPHY.label.fontSize,
                 fontWeight: "700",
                 textDecorationLine: "underline",
@@ -387,7 +388,7 @@ export function PhotosPage() {
           {[0, 1, 2, 3].map((i) => (
             <View
               key={i}
-              style={{ width: "15.5%", aspectRatio: 1, borderRadius: 18, backgroundColor: colors["color-surface-2"] }}
+              style={{ width: "15.5%", aspectRatio: 1, borderRadius: 18, backgroundColor: pendingSurface(colors, theme) }}
             />
           ))}
         </View>
@@ -488,7 +489,7 @@ export function PhotosPage() {
                         borderRadius: 8,
                       }}
                     >
-                      <Text style={{ color: colors["color-primary-foreground"], fontSize: TYPOGRAPHY.label.fontSize - 1, fontWeight: "700" }}>
+                      <Text style={{ color: colors["color-primary-foreground"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
                         {((previewIndex % wallPhotos.length) + 1)} / {wallPhotos.length}
                       </Text>
                     </View>
@@ -522,6 +523,8 @@ export function PhotosPage() {
                           disabled={!isParent}
                           onPress={() => handleSelectTransition(opt.id)}
                           style={{
+                            minHeight: 64,
+                            justifyContent: "center",
                             paddingHorizontal: 16,
                             paddingVertical: 10,
                             borderRadius: 14,
@@ -540,7 +543,7 @@ export function PhotosPage() {
                           >
                             {opt.label}
                           </Text>
-                          <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize - 2, marginTop: 2 }}>
+                          <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 2 }}>
                             {opt.description}
                           </Text>
                         </Pressable>
@@ -565,6 +568,8 @@ export function PhotosPage() {
                             disabled={!isParent}
                             onPress={() => handleSelectCadence(p.seconds)}
                             style={{
+                              minHeight: 64,
+                              justifyContent: "center",
                               paddingHorizontal: 12,
                               paddingVertical: 8,
                               borderRadius: 10,
@@ -602,6 +607,8 @@ export function PhotosPage() {
                             disabled={!isParent}
                             onPress={() => handleSelectOrder(ord.id)}
                             style={{
+                              minHeight: 64,
+                              justifyContent: "center",
                               paddingHorizontal: 12,
                               paddingVertical: 8,
                               borderRadius: 10,
@@ -644,6 +651,8 @@ export function PhotosPage() {
                         setPreviewIndex((i) => (i - 1 + wallPhotos.length) % wallPhotos.length);
                       }}
                       style={{
+                        minHeight: 64,
+                        justifyContent: "center",
                         paddingHorizontal: 14,
                         paddingVertical: 8,
                         borderRadius: 10,
@@ -662,6 +671,8 @@ export function PhotosPage() {
                         setPreviewIndex((i) => (i + 1) % wallPhotos.length);
                       }}
                       style={{
+                        minHeight: 64,
+                        justifyContent: "center",
                         paddingHorizontal: 14,
                         paddingVertical: 8,
                         borderRadius: 10,
@@ -701,6 +712,8 @@ export function PhotosPage() {
                       key={mode}
                       onPress={() => setFilterMode(mode)}
                       style={{
+                        minHeight: 64,
+                        justifyContent: "center",
                         paddingHorizontal: 12,
                         paddingVertical: 6,
                         borderRadius: 8,

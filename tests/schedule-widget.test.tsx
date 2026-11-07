@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factory */
 import React from "react";
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import { ScheduleWidget } from "../src/home/widgets/ScheduleWidget";
+import { clearWidgetMemoryCache } from "../src/home/widgets/data";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { AuthProvider } from "../src/state/AuthProvider";
 import * as client from "../src/api/client";
+import * as notificationFeed from "../src/native/notificationFeed";
+import * as voiceCallouts from "../src/native/voiceCallouts";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -39,6 +42,7 @@ function wrap({ children }: { children: React.ReactNode }) {
 describe("ScheduleWidget", () => {
   beforeEach(() => {
     jest.restoreAllMocks();
+    clearWidgetMemoryCache();
   });
 
   it("renders empty state when no routines exist", async () => {
@@ -87,10 +91,10 @@ describe("ScheduleWidget", () => {
     const pastSchedules = [
       {
         id: "p1",
-        title: "Early Breakfast",
+        title: "Early Morning Walk",
         time: "00:01",
         days: "mon,tue,wed,thu,fri,sat,sun",
-        icon: "🍳",
+        icon: "🌅",
         color: "green",
       },
     ];
@@ -122,5 +126,74 @@ describe("ScheduleWidget", () => {
       expect(await findByText(`Routine ${i + 1}`)).toBeTruthy();
       expect(await findByTestId(`schedule-row-s_sched_${i}`)).toBeTruthy();
     }
+  });
+
+  it("hides Dinner/Lunch/Breakfast routines when no meal is scheduled for that slot today", async () => {
+    // Friday Nov 6, 2026 at 10:00 AM
+    const now = new Date(2026, 10, 6, 10, 0, 0);
+    const schedules = [
+      { id: "lunch1", title: "Lunch", time: "12:30", days: "all", icon: "🥪" },
+      { id: "din1", title: "Dinner", time: "18:15", days: "all", icon: "🍽️" },
+      { id: "dogs1", title: "Take Dogs Out", time: "19:00", days: "all", icon: "🐶" },
+    ];
+
+    jest.spyOn(client, "api").mockImplementation(async (path: string) => {
+      if (path.includes("meal_plan_entries")) {
+        return { items: [] } as any;
+      }
+      return { items: schedules } as any;
+    });
+
+    const postSpy = jest.spyOn(notificationFeed, "postActiveNotification");
+    const audioSpy = jest.spyOn(voiceCallouts, "playNotificationAudio").mockResolvedValue();
+
+    const { findByText, queryByText, getByTestId } = render(
+      <ScheduleWidget span={2} now={now} />,
+      { wrapper: wrap }
+    );
+    expect(await findByText("Take Dogs Out")).toBeTruthy();
+    expect(queryByText(/Dinner/)).toBeNull();
+    expect(queryByText(/Lunch/)).toBeNull();
+
+    // Tapping Speak only announces the scheduled non-empty routines
+    fireEvent.press(getByTestId("schedule-announce-btn"));
+    expect(postSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: "7:00 PM: Take Dogs Out",
+      })
+    );
+    expect(audioSpy).toHaveBeenCalled();
+  });
+
+  it("includes Dinner routine with the planned meal name when dinner IS scheduled today", async () => {
+    // Friday Nov 6, 2026 at 10:00 AM (week Monday = 2026-11-02)
+    const now = new Date(2026, 10, 6, 10, 0, 0);
+    const schedules = [
+      { id: "din1", title: "Dinner", time: "18:15", days: "all", icon: "🍽️" },
+      { id: "dogs1", title: "Take Dogs Out", time: "19:00", days: "all", icon: "🐶" },
+    ];
+    const meals = [
+      {
+        id: "m1",
+        name: "Tacos al Pastor",
+        emoji: "🌮",
+        time: "Fri",
+        mealType: "dinner",
+        weekOf: "2026-11-02",
+      },
+    ];
+
+    jest.spyOn(client, "api").mockImplementation(async (path: string) => {
+      if (path.includes("meal_plan_entries")) {
+        return { items: meals } as any;
+      }
+      return { items: schedules } as any;
+    });
+
+    const { findByText } = render(<ScheduleWidget span={2} now={now} />, {
+      wrapper: wrap,
+    });
+    expect(await findByText("Dinner: Tacos al Pastor")).toBeTruthy();
+    expect(await findByText("Take Dogs Out")).toBeTruthy();
   });
 });

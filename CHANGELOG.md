@@ -4,6 +4,28 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-06 — feat(kid-home,ui): Kids Mode top-bar Log Out + Cookie Run Kingdom-style companion unlocking showcase, and Critical/High UI audit fixes across the app (`KidHome.tsx`, `kid-characters.ts`, `skill-tree.tsx`, `MusicIsland.tsx`, `PhotosPage.tsx`, `ChatPage.tsx`, `app/chat.tsx`, `app/calendar.tsx`, `ListRow.tsx`, `SignedOutBanner.tsx`, `TextField.tsx`, `HousePage.tsx`, `SettingsPage.tsx`, `HomeSection.tsx`, `CalendarPage.tsx`).
+  **What changed:**
+  - **Kids Mode Overhaul — Prominent Log Out & Interactive Kingdom Companions (`src/home/KidHome.tsx`, `src/home/kid-characters.ts`)**:
+    - Added a prominent `🚪 Log Out` button (`testID="kid-logout"`, ≥64dp target) in the top header bar alongside `MoreButton` so kids can always exit Kids Mode cleanly back to the family wall (while preserving `testID="kid-switch"` inside the XP card).
+    - Created `src/home/kid-characters.ts` with 6 original Cookie Run: Kingdom-inspired **Kingdom Companions** (`Captain Crisp` 0 pts, `Sproutberry Knight` 25 pts, `Boba Blaze` 50 pts, `Sir Cinnamon Shield` 100 pts, `Princess Cloud Mochi` 150 pts, and `Dragonberry Rex` 250 pts), each with rarity tiers (`Starter`, `Rare`, `Epic`, `Legendary`), token-backed accent palettes, specialties, and interactive catchphrases.
+    - Added the **Kingdom Companions** showcase card (`testID="kid-kingdom-card"`) in `KidHome.tsx` featuring an active companion stage with floating hero badge, bond level (`❤️ Bond Lv.`), interactive speech bubble (`testID="kid-companion-quote"`), `🌟 Star Jelly` cheer button (`testID="kid-companion-cheer"`), next-hero unlock milestone progress bar (`testID="kid-next-unlock"`), and a 6-hero collection grid where kids can tap unlocked heroes to team up or tap locked heroes to check their point goal.
+  - **Critical & High UI Audit Fixes**:
+    - **Photo-URI Avatar Safety (`app/skill-tree.tsx`, `src/home/KidHome.tsx`)**: Guarded `member.emoji` and `t.assigneeEmoji` with `isPhotoUri()` so base64/HTTP photo avatars render via `<Image>` instead of raw `<Text>` (preventing the 1 MiB Android text layout stall).
+    - **MusicIsland Content Policy & Contrast (`src/music/MusicIsland.tsx`)**: Filtered `current` through `isContentHidden(rawCurrent, policy)` so restricted/explicit or family-denied tracks are never painted in the Dynamic Island for kid roles; fixed `"color-accent-emerald"` to valid `"color-accent-mint"`; used `tokens.onAccent` when `stopArmed` is active; added `hitSlop` across transport/mute/stop buttons.
+    - **Typography Floor, Tap Targets & Skeletons (`src/photos/PhotosPage.tsx`, `src/chat/ChatPage.tsx`, `app/chat.tsx`, `app/calendar.tsx`, `src/ui/ListRow.tsx`, `src/ui/SignedOutBanner.tsx`, `src/ui/TextField.tsx`, `src/ha/HousePage.tsx`, `src/settings/SettingsPage.tsx`, `src/settings/HomeSection.tsx`, `src/calendar/CalendarPage.tsx`)**:
+      - Raised sub-14sp font sizes in `PhotosPage.tsx` to `TYPOGRAPHY.label.fontSize` (14sp) and upgraded interactive controls to the 64dp tap target floor.
+      - Moved `MoreButton` into the `ChatPage` header row (`app/chat.tsx`) so it never overlaps `chat-input`, and added `MoreButton` + `MoreSheet` to `app/calendar.tsx`.
+      - Updated `ListRow.tsx` to avoid double-plating custom-styled leading tiles (such as `MoreSheet`'s 48×48 icon plates), converted `SignedOutBanner` link wrapper to a 64dp `Pressable`, applied the 12% accent focus wash in `TextField.tsx`, replaced raw `"serif"` font families with `FONTS.display`, used `color-accent-ink-amber` on light-mode stale notices, and applied `pendingSurface(colors, theme)` to loading skeletons.
+    - **Meal Routine Schedule Gating (`src/calendar/events-merge.ts`, `src/home/widgets/ScheduleWidget.tsx`, `src/native/useNotificationMonitor.ts`, `src/calendar/CalendarPage.tsx`)**:
+      - Filtered meal-slot routines (`Breakfast`, `Lunch`, `Dinner`) against `meal_plan_entries` so unscheduled meal slots are omitted from the schedule and voice announcements, while scheduled meals enrich the routine title and icon (e.g. `Dinner: Tacos al Pastor`).
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (app src, 0 token-literal violations).
+  - `npm run a11y:audit`: CLEAN (app src, 14sp floor & 64dp tap targets honored).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+  - Unit tests: all 87 test suites (1,400 tests) passed.
+
 - 2026-11-05 — perf(nav,music,widgets): flat navigation stack replacement, decoupled high-frequency playback position context, active-tab guard, and in-memory widget caching (`app/*.tsx`, `playback.tsx`, `CapsuleDock.tsx`, `data.ts`, `MusicPlayer.tsx`, `MusicWidget.tsx`, `MiniPlayer.tsx`, `CastProvider.tsx`).
   **What changed:**
   - **Flat Navigation Stack via `router.replace` across All Route Manifests (`app/*.tsx`)**:
