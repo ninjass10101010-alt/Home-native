@@ -5,9 +5,11 @@ import { Material } from "../theme/Material";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useRouter } from "expo-router";
-import { MIN_TARGET_DP, MOTION, TYPOGRAPHY } from "../theme/tokens";
+import { ACCENTS, MIN_TARGET_DP, MOTION, RADII, TYPOGRAPHY } from "../theme/tokens";
 import { accentInk, mix } from "../theme/mix";
 import { memberAccentHex } from "../theme/memberColor";
+import { resolveCharacterForMember, useCharacterTheme } from "../theme/characterTheme";
+import { CelebrationOverlay, CharacterEmblem, type CelebrationEvent } from "../ui/CelebrationOverlay";
 import { useAuth } from "../state/AuthProvider";
 import { useSync, type WeekData } from "../state/SyncManager";
 import { readCachedMembers } from "../api/members";
@@ -49,6 +51,8 @@ import {
   newOperationId,
 } from "./claim";
 import { RoutinesPanel } from "./RoutinesPanel";
+import { resolveMemberStreak, loadLocalStreaks, recordLocalStreakCompletion } from "./streaks";
+import { FamilyNotesCard } from "./FamilyNotesCard";
 
 /**
  * The wall's Tasks surface (WS-7). The board reads ONE shared SyncManager
@@ -585,6 +589,8 @@ export function TasksPage() {
   const toast = useToast();
   const { member, role, pinRequiredFor } = useAuth();
   const { snapshot, stale, lastSyncAt, syncError, refreshNow, onPulse } = useSync();
+  const [characterPrefs] = useCharacterTheme();
+  const [celebrationEvent, setCelebrationEvent] = useState<CelebrationEvent | null>(null);
 
   const tasks = useMemo(() => normalizeSnapshotTasks(snapshot?.tasks), [snapshot]);
   const weekData = (snapshot?.weekData ?? undefined) as WeekData | undefined;
@@ -702,6 +708,28 @@ export function TasksPage() {
   const [filterMember, setFilterMember] = useState<string | null>(null);
   const activeFilter = filterMember ?? options[0]?.id ?? "All";
 
+  const [localStreaks, setLocalStreaks] = useState<Record<string, number>>({});
+  React.useEffect(() => {
+    let alive = true;
+    void loadLocalStreaks().then((res) => {
+      if (alive) setLocalStreaks(res);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  React.useEffect(() => onPulse(() => void loadLocalStreaks().then(setLocalStreaks)), [onPulse]);
+
+  const streakInfo = member
+    ? resolveMemberStreak(
+        weekData,
+        activeFilter !== "All" && activeFilter !== "Open" && activeFilter !== "My Tasks"
+          ? activeFilter
+          : member.name,
+        localStreaks
+      )
+    : null;
+
   const scoped = memberScoped(tasks, activeFilter, me, { myTasksLabel: "My Tasks" });
   const openRows = openBoard(tasks, me, activeFilter);
   const pendingRows = pendingBoard(scoped);
@@ -816,6 +844,18 @@ export function TasksPage() {
       if (finish(outcome, KID_DONE_TOAST)) {
         setPinIntent(null);
         setPinError(null);
+        void recordLocalStreakCompletion(member.name, localTodayISO()).then((cnt) => {
+          setLocalStreaks((prev) => ({ ...prev, [member.name]: cnt }));
+        });
+        if (characterPrefs.enabled && (outcome.kind === "applied" || outcome.kind === "sending")) {
+          const completedRow = tasks.find((t) => t.id === taskId);
+          setCelebrationEvent({
+            kind: "chore",
+            memberName: member.name,
+            title: completedRow?.title ?? "Chore Complete!",
+            points: completedRow?.points,
+          });
+        }
       }
     } finally {
       setBusy(false);
@@ -1206,6 +1246,153 @@ export function TasksPage() {
 
     return (
       <View style={{ gap: 20 }}>
+        {/* ── Chore Streaks & Habit Milestone Card ───────────────────── */}
+        {streakInfo ? (
+          <Material
+            tier="thin"
+            testID="tasks-streak-card"
+            style={{
+              borderRadius: RADII.lg,
+              borderColor: mix(colors["color-accent-amber"] ?? colors["color-accent"], "transparent", theme === "dark" ? 35 : 16),
+              overflow: "hidden",
+              paddingHorizontal: 20,
+              paddingVertical: 18,
+              gap: 14,
+            }}
+          >
+            <LinearGradient
+              colors={[
+                mix(colors["color-accent-amber"] ?? colors["color-accent"], "transparent", theme === "dark" ? 14 : 4),
+                mix(colors["color-accent-amber"] ?? colors["color-accent"], "transparent", theme === "dark" ? 4 : 1),
+              ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+            />
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: mix(colors["color-accent-amber"] ?? colors["color-accent"], "transparent", 20),
+                    borderWidth: 1,
+                    borderColor: mix(colors["color-accent-amber"] ?? colors["color-accent"], "transparent", 40),
+                  }}
+                >
+                  <Text style={{ fontSize: 24 }}>🔥</Text>
+                </View>
+                <View>
+                  <Text
+                    testID="tasks-streak-count"
+                    style={{
+                      color: colors["color-text-primary"],
+                      fontSize: TYPOGRAPHY.title.fontSize,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {streakInfo.count > 0 ? `🔥 ${streakInfo.count}-day streak` : "🔥 Start your daily streak today!"}
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors["color-text-secondary"],
+                      fontSize: TYPOGRAPHY.label.fontSize,
+                      marginTop: 2,
+                    }}
+                  >
+                    {streakInfo.count > 0 ? "Daily chore momentum" : "Complete chores to unlock streak badges"}
+                  </Text>
+                </View>
+              </View>
+
+              {streakInfo.currentMilestone ? (
+                <View
+                  testID="tasks-streak-badge"
+                  style={{
+                    borderRadius: RADII.full,
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    backgroundColor: mix(
+                      ACCENTS[theme === "light" ? "light" : "dark"][streakInfo.currentMilestone.accentKey] ??
+                        colors["color-accent-amber"],
+                      "transparent",
+                      24
+                    ),
+                    borderWidth: 1,
+                    borderColor: mix(
+                      ACCENTS[theme === "light" ? "light" : "dark"][streakInfo.currentMilestone.accentKey] ??
+                        colors["color-accent-amber"],
+                      "transparent",
+                      50
+                    ),
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors["color-text-primary"],
+                      fontSize: TYPOGRAPHY.label.fontSize,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {`${streakInfo.currentMilestone.badge} ${streakInfo.currentMilestone.title} · ${streakInfo.currentMilestone.bonusLabel}`}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Next milestone progress bar */}
+            <View style={{ gap: 6 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Text
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "600",
+                  }}
+                >
+                  {streakInfo.count >= 30
+                    ? "All habit badges unlocked! 🏆"
+                    : `Next badge: ${streakInfo.nextMilestone.title} (${streakInfo.count}/${streakInfo.nextMilestone.days} days)`}
+                </Text>
+                <Text
+                  style={{
+                    color: colors["color-text-muted"] ?? colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "600",
+                  }}
+                >
+                  {`${streakInfo.progressPct}%`}
+                </Text>
+              </View>
+              <View
+                style={{
+                  height: 10,
+                  borderRadius: 5,
+                  backgroundColor: mix(colors["color-text-primary"], "transparent", 8),
+                  overflow: "hidden",
+                }}
+              >
+                <View
+                  style={{
+                    height: "100%",
+                    width: `${Math.min(100, Math.max(0, streakInfo.progressPct))}%`,
+                    borderRadius: 5,
+                    backgroundColor:
+                      ACCENTS[theme === "light" ? "light" : "dark"][streakInfo.nextMilestone.accentKey] ??
+                      colors["color-accent-amber"],
+                  }}
+                />
+              </View>
+            </View>
+          </Material>
+        ) : null}
+
         {/* ── Open board (web SectionCard: 🫳 Open) ─────────────────────── */}
         <SectionCard icon="🫳" title="Open" description="Nobody's claimed these — fastest fingers earn the bonus." testID="tasks-open-card">
           {openRows.length === 0 ? (
@@ -1664,6 +1851,59 @@ export function TasksPage() {
           <StatTile testID="tasks-stat-earned" icon="🏆" value={stats.earnedThisWeek} label="Earned this week" detail={earnedDetail} tone="accent" />
         </View>
 
+        {characterPrefs.enabled && member ? (() => {
+          const companion = resolveCharacterForMember(member.name, characterPrefs);
+          const companionHex =
+            ACCENTS[theme === "light" ? "light" : "dark"][companion.accentKey] ??
+            colors["color-accent-selected"] ??
+            accentColor;
+          return (
+            <Material
+              tier="thin"
+              tone={companionHex}
+              testID="tasks-character-companion"
+              style={{
+                borderRadius: RADII.lg,
+                paddingHorizontal: 18,
+                paddingVertical: 14,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 14,
+                borderWidth: 1,
+                borderColor: mix(companionHex, colors["color-border"] ?? colors["color-text-primary"], 50),
+              }}
+            >
+              <CharacterEmblem
+                motif={companion.motif}
+                accentHex={companionHex}
+                inkHex={colors["color-text-primary"]}
+                size={44}
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.body.fontSize,
+                    fontWeight: "700",
+                  }}
+                >
+                  {`${companion.badgeGlyph} ${companion.name} · ${companion.franchiseLabel}`}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    marginTop: 2,
+                  }}
+                >
+                  {`"${companion.choreCheer}"`}
+                </Text>
+              </View>
+            </Material>
+          );
+        })() : null}
+
         {isParent && queueRows.length > 0 ? (
           <Material tier="thin" testID="tasks-queued-commands-banner" style={{ borderRadius: 16, padding: 12, gap: 8, borderWidth: 1, borderColor: mix(colors["color-accent-amber"], "transparent", 40) }}>
             <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
@@ -1721,6 +1961,9 @@ export function TasksPage() {
         ) : null}
 
         {body()}
+        {!loading && !loadFailed ? (
+          <FamilyNotesCard memberName={member?.name} memberEmoji={member?.emoji} isParent={isParent} />
+        ) : null}
       </ScrollView>
 
       {/* Parent chore management modals */}
@@ -1882,6 +2125,11 @@ export function TasksPage() {
           />
         ) : null}
       </Modal>
+
+      <CelebrationOverlay
+        event={celebrationEvent}
+        onDismiss={() => setCelebrationEvent(null)}
+      />
     </View>
   );
 }

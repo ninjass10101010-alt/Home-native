@@ -36,6 +36,7 @@ import {
   type WallEvent,
 } from "./events-merge";
 import { EventComposer, type EventDraft } from "./EventComposer";
+import { MagicImportModal } from "./MagicImportModal";
 import { addDaysISO, localDateISO, monthGridCells, selectedWeekISO } from "./date-utils";
 
 /**
@@ -100,6 +101,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
   const [roster, setRoster] = useState<ServerMember[]>([]);
 
   const [composerOpen, setComposerOpen] = useState(false);
+  const [magicImportOpen, setMagicImportOpen] = useState(false);
   const [composerSaving, setComposerSaving] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
   const [optimisticRows, setOptimisticRows] = useState<DbEventRow[]>([]);
@@ -267,12 +269,12 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     return restOfWeek
       .map((iso) => {
         const d = isoToDate(iso);
-        const rows = rawRowsForDay(iso);
+        const rows = calendarEventsForDay(iso);
         const weekdayShort = DAY_SHORT[(d.getDay() + 6) % 7].toUpperCase();
         return { iso, date: d, weekdayShort, dayNumber: d.getDate(), rows };
       })
       .filter((item) => item.rows.length > 0);
-  }, [restOfWeek, rawRowsForDay]);
+  }, [restOfWeek, calendarEventsForDay]);
 
   // LATER THIS MONTH: days in the viewed month after the selected date that have calendar events
   const laterThisMonthDays = useMemo(() => {
@@ -326,6 +328,48 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     } finally {
       setComposerSaving(false);
     }
+  };
+
+  const importBatchEvents = async (drafts: EventDraft[]) => {
+    const created: DbEventRow[] = [];
+    for (const draft of drafts) {
+      try {
+        const res = await api<{ ok?: boolean; event?: DbEventRow; google?: { status?: string } }>(
+          "/api/calendar/events",
+          { method: "POST", body: draft },
+        );
+        if (res?.ok && res.event) {
+          created.push(res.event);
+        } else {
+          created.push({
+            id: `magic-opt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            title: draft.title,
+            date: draft.date,
+            time: draft.allDay ? undefined : draft.startTime,
+            member: draft.member !== "All" ? draft.member : undefined,
+            all_day: draft.allDay,
+            location: draft.location,
+            notes: draft.notes,
+          } as DbEventRow);
+        }
+      } catch {
+        created.push({
+          id: `magic-opt-err-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          title: draft.title,
+          date: draft.date,
+          time: draft.allDay ? undefined : draft.startTime,
+          member: draft.member !== "All" ? draft.member : undefined,
+          all_day: draft.allDay,
+          location: draft.location,
+          notes: draft.notes,
+        } as DbEventRow);
+      }
+    }
+    if (created.length > 0) {
+      setOptimisticRows((prev) => [...prev, ...created]);
+    }
+    retry();
+    setMagicImportOpen(false);
   };
 
   const retryGoogle = async (sourceId?: string) => {
@@ -498,9 +542,20 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
           </View>
            <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
             {isParent ? (
-              <SoftButton testID="add-event" accessibilityLabel="Add event" onPress={() => setComposerOpen(true)} size="sm">
-                Add event
-              </SoftButton>
+              <>
+                <SoftButton
+                  testID="magic-import-open"
+                  accessibilityLabel="Magic Import"
+                  variant="secondary"
+                  size="sm"
+                  onPress={() => setMagicImportOpen(true)}
+                >
+                  🪄 Magic Import
+                </SoftButton>
+                <SoftButton testID="add-event" accessibilityLabel="Add event" onPress={() => setComposerOpen(true)} size="sm">
+                  Add event
+                </SoftButton>
+              </>
             ) : (
               <Text style={{ color: colors["color-text-muted"], fontSize: 14 }}>
                 Ask a parent to add or change events.
@@ -615,6 +670,8 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
             style={{
               flexDirection: "row",
               alignItems: "center",
+              justifyContent: "center",
+              minHeight: MIN_TARGET_DP,
               gap: 8,
               paddingHorizontal: 16,
               paddingVertical: 10,
@@ -649,6 +706,8 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: MIN_TARGET_DP,
                   gap: 8,
                   paddingHorizontal: 14,
                   paddingVertical: 8,
@@ -768,12 +827,14 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                         setViewMonth(isoToDate(todayISO).getMonth());
                       }}
                       style={{
-                        paddingHorizontal: 14,
+                        paddingHorizontal: 16,
                         paddingVertical: 8,
                         borderRadius: 18,
                         backgroundColor: colors["color-surface-2"],
                         alignItems: "center",
                         justifyContent: "center",
+                        minHeight: MIN_TARGET_DP,
+                        minWidth: MIN_TARGET_DP,
                       }}
                     >
                       <Text style={{ color: colors["color-text-primary"], fontSize: 14, fontWeight: "600" }}>
@@ -907,12 +968,14 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                     accessibilityLabel="Add event"
                     onPress={() => setComposerOpen(true)}
                     style={{
-                      paddingHorizontal: 14,
+                      paddingHorizontal: 16,
                       paddingVertical: 8,
                       borderRadius: 16,
                       backgroundColor: colors["color-surface-2"],
                       alignItems: "center",
                       justifyContent: "center",
+                      minHeight: MIN_TARGET_DP,
+                      minWidth: MIN_TARGET_DP,
                     }}
                   >
                     <Text style={{ color: colors["color-text-primary"], fontSize: 14, fontWeight: "600" }}>
@@ -989,7 +1052,8 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                           onPress={() => selectDay(item.iso)}
                           style={{
                             flexDirection: "row",
-                            alignItems: "flex-start",
+                            alignItems: "center",
+                            minHeight: MIN_TARGET_DP,
                             gap: 12,
                             paddingVertical: 6,
                           }}
@@ -1102,6 +1166,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                       onPress={() => selectDay(item.iso)}
                       style={{
                         width: 156,
+                        minHeight: MIN_TARGET_DP,
                         borderRadius: 20,
                         padding: 14,
                         backgroundColor: colors["color-surface-2"],
@@ -1191,6 +1256,15 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
           error={composerError}
           onClose={() => { setComposerOpen(false); setComposerError(null); }}
           onSave={saveEvent}
+        />
+      ) : null}
+      {magicImportOpen ? (
+        <MagicImportModal
+          visible={magicImportOpen}
+          defaultDate={selectedISO}
+          members={roster.map((m) => m.name)}
+          onClose={() => setMagicImportOpen(false)}
+          onImportEvents={importBatchEvents}
         />
       ) : null}
     </View>

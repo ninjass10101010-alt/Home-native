@@ -18,6 +18,8 @@ import { EmergencyShield } from "./EmergencyShield";
 import { HomeWidgetIcon } from "../ui/HomeWidgetIcon";
 import { AnimatedEmoji } from "../ui/AnimatedEmoji";
 import { isPhotoUri } from "../ui/MemberRail";
+import { useCharacterTheme } from "../theme/characterTheme";
+import { CelebrationOverlay, type CelebrationEvent } from "../ui/CelebrationOverlay";
 import { READ_COPY_STALE } from "./widgets/data";
 import { pendingSurface } from "./widgets/WidgetFrame";
 import {
@@ -105,6 +107,8 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
   const toast = useToast();
   const { member, signOut, pinRequiredFor } = useAuth();
   const { snapshot, stale, lastSyncAt, refreshNow } = useSync();
+  const [characterPrefs] = useCharacterTheme();
+  const [celebrationEvent, setCelebrationEvent] = useState<CelebrationEvent | null>(null);
 
   // KidHome is mounted only for a signed-in kid/pet (app/index.tsx) — but the
   // component stays honest even mid-sign-out (member flips null same render).
@@ -274,6 +278,15 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
       if (finish(outcome)) {
         setPinTaskId(null);
         setPinError(null);
+        if (characterPrefs.enabled && (outcome.kind === "applied" || outcome.kind === "sending")) {
+          const completedQuest = quests.find((q) => q.id === taskId);
+          setCelebrationEvent({
+            kind: "chore",
+            memberName: member.name,
+            title: completedQuest?.title ?? "Quest Complete!",
+            points: completedQuest?.points,
+          });
+        }
       }
     } finally {
       setBusy(false);
@@ -885,6 +898,11 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
           />
         ) : null}
       </Modal>
+
+      <CelebrationOverlay
+        event={celebrationEvent}
+        onDismiss={() => setCelebrationEvent(null)}
+      />
     </View>
   );
 }

@@ -9,6 +9,8 @@ import { SoftButton } from "../ui/SoftButton";
 import { TextField } from "../ui/TextField";
 import { EmptyState } from "../ui/EmptyState";
 import { useToast } from "../ui/Toast";
+import { useCharacterTheme } from "../theme/characterTheme";
+import { CelebrationOverlay, type CelebrationEvent } from "../ui/CelebrationOverlay";
 import { localTodayISO } from "../home/widgets/data";
 import {
   DEFAULT_ROUTINES,
@@ -38,6 +40,8 @@ export function RoutinesPanel({
 }: RoutinesPanelProps) {
   const { colors, accentColor } = useTheme();
   const toast = useToast();
+  const [characterPrefs] = useCharacterTheme();
+  const [celebrationEvent, setCelebrationEvent] = useState<CelebrationEvent | null>(null);
   const todayISO = useMemo(() => localTodayISO(), []);
 
   const [routines, setRoutines] = useState<FamilyRoutine[]>(DEFAULT_ROUTINES);
@@ -107,9 +111,23 @@ export function RoutinesPanel({
       await saveRoutineProgress(todayISO, nextProgress);
       if (allDone && !progress.completedRoutines[routine.id]) {
         toast.show(`🎉 ${routine.title} complete! +${routine.points} routine pts`, { intent: "success" });
+        if (characterPrefs.enabled) {
+          const targetName =
+            routine.assignee && routine.assignee !== "All"
+              ? routine.assignee
+              : activeMemberFilter && activeMemberFilter !== "All" && activeMemberFilter !== "Open" && activeMemberFilter !== "My Tasks"
+              ? activeMemberFilter
+              : "Family";
+          setCelebrationEvent({
+            kind: "routine",
+            memberName: targetName,
+            title: routine.title,
+            points: routine.points,
+          });
+        }
       }
     },
-    [progress, todayISO, toast],
+    [progress, todayISO, toast, characterPrefs.enabled, activeMemberFilter],
   );
 
   const checkAllSteps = useCallback(
@@ -130,11 +148,25 @@ export function RoutinesPanel({
       await saveRoutineProgress(todayISO, nextProgress);
       if (!alreadyDone) {
         toast.show(`🎉 ${routine.title} complete! +${routine.points} routine pts`, { intent: "success" });
+        if (characterPrefs.enabled) {
+          const targetName =
+            routine.assignee && routine.assignee !== "All"
+              ? routine.assignee
+              : activeMemberFilter && activeMemberFilter !== "All" && activeMemberFilter !== "Open" && activeMemberFilter !== "My Tasks"
+              ? activeMemberFilter
+              : "Family";
+          setCelebrationEvent({
+            kind: "routine",
+            memberName: targetName,
+            title: routine.title,
+            points: routine.points,
+          });
+        }
       } else {
         toast.show(`Reset ${routine.title} for today`, { intent: "info" });
       }
     },
-    [progress, todayISO, toast],
+    [progress, todayISO, toast, characterPrefs.enabled, activeMemberFilter],
   );
 
   const openNewComposer = useCallback(() => {
@@ -812,6 +844,12 @@ export function RoutinesPanel({
           </View>
         </ScrollView>
       </Modal>
+
+      <CelebrationOverlay
+        event={celebrationEvent}
+        onDismiss={() => setCelebrationEvent(null)}
+        testID="routine-celebration-overlay"
+      />
     </View>
   );
 }

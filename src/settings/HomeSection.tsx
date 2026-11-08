@@ -1,7 +1,7 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { Material } from "../theme/Material";
-import { TYPOGRAPHY } from "../theme/tokens";
+import { MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { useTheme } from "../theme/ThemeProvider";
 import { mix } from "../theme/mix";
 import { Chip } from "../ui/Chip";
@@ -259,8 +259,9 @@ export function HomeSection() {
                 </View>
               </View>
 
-              {/* Night Schedule Controls (when night mode selected) */}
-              {screensaverPrefs.mode === "night" ? (
+              {/* Night Schedule Controls (when night mode selected or bedtime blackout active) */}
+              {screensaverPrefs.mode === "night" ||
+              (screensaverPrefs.mode === "always" && Boolean(screensaverPrefs.blackoutAtNight)) ? (
                 <View style={{ gap: 10, paddingTop: 4 }}>
                   {/* Preset Buttons */}
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
@@ -321,7 +322,7 @@ export function HomeSection() {
                           hitSlop={14}
                           onPress={() => setScreensaverPrefs((p) => ({ ...p, startHour: (p.startHour + 23) % 24 }))}
                           accessibilityLabel="Earlier start hour"
-                          style={{ minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                          style={{ minWidth: MIN_TARGET_DP, minHeight: MIN_TARGET_DP, borderRadius: MIN_TARGET_DP / 2, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
                         >
                           <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>−</Text>
                         </Pressable>
@@ -330,7 +331,7 @@ export function HomeSection() {
                           hitSlop={14}
                           onPress={() => setScreensaverPrefs((p) => ({ ...p, startHour: (p.startHour + 1) % 24 }))}
                           accessibilityLabel="Later start hour"
-                          style={{ minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                          style={{ minWidth: MIN_TARGET_DP, minHeight: MIN_TARGET_DP, borderRadius: MIN_TARGET_DP / 2, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
                         >
                           <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>+</Text>
                         </Pressable>
@@ -362,7 +363,7 @@ export function HomeSection() {
                           hitSlop={14}
                           onPress={() => setScreensaverPrefs((p) => ({ ...p, endHour: (p.endHour + 23) % 24 }))}
                           accessibilityLabel="Earlier wake hour"
-                          style={{ minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                          style={{ minWidth: MIN_TARGET_DP, minHeight: MIN_TARGET_DP, borderRadius: MIN_TARGET_DP / 2, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
                         >
                           <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>−</Text>
                         </Pressable>
@@ -371,7 +372,7 @@ export function HomeSection() {
                           hitSlop={14}
                           onPress={() => setScreensaverPrefs((p) => ({ ...p, endHour: (p.endHour + 1) % 24 }))}
                           accessibilityLabel="Later wake hour"
-                          style={{ minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
+                          style={{ minWidth: MIN_TARGET_DP, minHeight: MIN_TARGET_DP, borderRadius: MIN_TARGET_DP / 2, alignItems: "center", justifyContent: "center", backgroundColor: mix(colors["color-text-primary"], "transparent", 10) }}
                         >
                           <Text style={{ color: colors["color-text-primary"], fontSize: 16, fontWeight: "700" }}>+</Text>
                         </Pressable>
@@ -380,6 +381,22 @@ export function HomeSection() {
                   </View>
                 </View>
               ) : null}
+
+              <View
+                style={{
+                  borderTopWidth: 1,
+                  borderTopColor: mix(colors["color-border"] ?? "transparent", "transparent", 40),
+                  paddingTop: 4,
+                }}
+              >
+                <Toggle
+                  testID="screensaver-blackout-toggle"
+                  value={Boolean(screensaverPrefs.blackoutAtNight)}
+                  onChange={(blackoutAtNight) => setScreensaverPrefs((p) => ({ ...p, blackoutAtNight }))}
+                  label="Bedtime blackout (zero-glare sleep mode)"
+                  description="Hide bright dashboard cards during night hours so the room stays dark while sleeping"
+                />
+              </View>
             </View>
           ) : null}
         </View>

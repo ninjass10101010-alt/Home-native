@@ -1,11 +1,13 @@
 import React from "react";
 import { AppState, Platform, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { api } from "../api/client";
-import { TOKENS } from "../theme/tokens";
+import { ACCENTS, TOKENS } from "../theme/tokens";
 import { mixAlpha } from "../ui/SoftButton";
 import { ConditionIcon, MonsterDigit } from "../weather/art";
 import { conditionCode } from "../weather/conditions";
-import { isScreensaverDueNow, useScreensaverPrefs } from "../home/idle";
+import { isBlackoutActiveNow, isScreensaverDueNow, useScreensaverPrefs } from "../home/idle";
+import { charactersForFranchise, useCharacterTheme } from "../theme/characterTheme";
+import { CharacterEmblem } from "../ui/CelebrationOverlay";
 
 /**
  * The wall's ambient idle board (WS-8) — RN port of Home-ai's
@@ -91,6 +93,13 @@ export function Screensaver({ onExit }: ScreensaverProps) {
   // State (not a ref): the dim is READ during render, so it must subscribe.
   const [lastTouch, setLastTouch] = React.useState(() => Date.now());
   const [prefs] = useScreensaverPrefs();
+  const [characterPrefs] = useCharacterTheme();
+  const blackout = isBlackoutActiveNow(prefs, now);
+  const spotlightPool = charactersForFranchise(characterPrefs.franchise);
+  const spotlight =
+    characterPrefs.enabled && characterPrefs.screensaverSpotlight && spotlightPool.length > 0
+      ? spotlightPool[Math.floor(now.getMinutes() / 2) % spotlightPool.length]
+      : null;
 
   // Clock/dim/stale re-render cadence (the clock itself is minute-precision).
   React.useEffect(() => {
@@ -175,7 +184,51 @@ export function Screensaver({ onExit }: ScreensaverProps) {
             : { flex: 1, padding: 40 }
         }
       >
-        <View testID="ss-content" collapsable={false} style={{ flex: 1, opacity: dimmed ? DIM_OPACITY : 1 }}>
+        {blackout ? (
+          <View
+            testID="ss-blackout-stage"
+            style={{
+              flex: 1,
+              backgroundColor: D["color-canvas"],
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <View
+              testID="ss-blackout-clock"
+              style={{
+                opacity: 0.16,
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 16,
+              }}
+            >
+              <Text
+                style={{
+                  color: INK,
+                  fontSize: 96,
+                  fontWeight: "800",
+                  lineHeight: 104,
+                  letterSpacing: -2,
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                {clockLine(now)}
+              </Text>
+              <Text
+                style={{
+                  color: SUB_INK,
+                  fontSize: 20,
+                  fontWeight: "600",
+                  letterSpacing: 0.5,
+                }}
+              >
+                🌙 Sleep Mode · Tap to wake
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View testID="ss-content" collapsable={false} style={{ flex: 1, opacity: dimmed ? DIM_OPACITY : 1 }}>
           {/* header: clock + date (left), weather (right), stale dot (corner) */}
           <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
             <View>
@@ -335,7 +388,71 @@ export function Screensaver({ onExit }: ScreensaverProps) {
               </View>
             </View>
           </View>
+
+          {spotlight ? (() => {
+            const spotHex = ACCENTS.dark[spotlight.accentKey] ?? D["color-accent-selected"];
+            return (
+              <View
+                testID="ss-character-spotlight"
+                style={{
+                  marginTop: 20,
+                  borderRadius: 28,
+                  backgroundColor: PANEL_BG,
+                  borderWidth: 1,
+                  borderColor: mixAlpha(spotHex, 0.35),
+                  paddingHorizontal: 28,
+                  paddingVertical: 20,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 20,
+                }}
+              >
+                <CharacterEmblem
+                  motif={spotlight.motif}
+                  accentHex={spotHex}
+                  inkHex={INK}
+                  size={68}
+                />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text
+                    style={{
+                      color: spotHex,
+                      fontSize: 18,
+                      fontWeight: "700",
+                      letterSpacing: 1.8,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {`${spotlight.screensaverScene.subtitle} · ${spotlight.name}`}
+                  </Text>
+                  <Text
+                    testID="ss-character-spotlight-title"
+                    style={{
+                      color: INK,
+                      fontSize: 28,
+                      lineHeight: 34,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {spotlight.screensaverScene.title}
+                  </Text>
+                  <Text
+                    testID="ss-character-spotlight-quote"
+                    style={{
+                      color: SUB_INK,
+                      fontSize: 22,
+                      lineHeight: 28,
+                      fontWeight: "500",
+                    }}
+                  >
+                    {`"${spotlight.screensaverScene.quote}"`}
+                  </Text>
+                </View>
+              </View>
+            );
+          })() : null}
         </View>
+        )}
       </Pressable>
     </View>
   );

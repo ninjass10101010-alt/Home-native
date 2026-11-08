@@ -5,7 +5,16 @@ import { getBaseUrl, LAN_BASE_URLS, setBaseUrl } from "../api/config";
 import type { ServerMember } from "../api/types";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
-import { ACCENTS, FONTS, TYPOGRAPHY } from "../theme/tokens";
+import { ACCENTS, FONTS, MIN_TARGET_DP, RADII, TYPOGRAPHY } from "../theme/tokens";
+import { mix } from "../theme/mix";
+import {
+  assignCharacterToMember,
+  charactersForFranchise,
+  FRANCHISE_OPTIONS,
+  resolveCharacterForMember,
+  useCharacterTheme,
+} from "../theme/characterTheme";
+import { CelebrationOverlay, CharacterEmblem, type CelebrationEvent } from "../ui/CelebrationOverlay";
 import { useAuth, type CapabilityRole } from "../state/AuthProvider";
 import { useLocalSearchParams } from "expo-router";
 import { useSync } from "../state/SyncManager";
@@ -418,14 +427,19 @@ function ServerConnectionSection() {
 }
 
 function MeSection({ member }: { member: ServerMember }) {
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
   const { signOut } = useAuth();
+  const [characterPrefs] = useCharacterTheme();
   const [pinOpen, setPinOpen] = useState(false);
   const roleLabel =
     typeof member.role === "string" && member.role.length > 0
       ? member.role.charAt(0).toUpperCase() + member.role.slice(1)
       : "Member";
   const hasPhoto = member.emoji ? isPhotoUri(member.emoji) : false;
+  const activeCharacter = characterPrefs.enabled ? resolveCharacterForMember(member.name, characterPrefs) : null;
+  const charAccent = activeCharacter
+    ? ACCENTS[theme === "light" ? "light" : "dark"][activeCharacter.accentKey] ?? colors["color-accent-selected"]
+    : colors["color-accent-selected"];
 
   return (
     <View>
@@ -447,6 +461,40 @@ function MeSection({ member }: { member: ServerMember }) {
             <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, marginTop: 2 }}>
               {roleLabel}
             </Text>
+            {activeCharacter ? (
+              <View
+                testID="settings-me-character-badge"
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  alignSelf: "flex-start",
+                  gap: 8,
+                  marginTop: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: RADII.pill,
+                  backgroundColor: mix(charAccent, colors["color-surface-2"], 25),
+                  borderWidth: 1,
+                  borderColor: mix(charAccent, colors["color-border"] ?? colors["color-text-primary"], 50),
+                }}
+              >
+                <CharacterEmblem
+                  motif={activeCharacter.motif}
+                  accentHex={charAccent}
+                  inkHex={colors["color-text-primary"]}
+                  size={24}
+                />
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "700",
+                  }}
+                >
+                  {`${activeCharacter.badgeGlyph} ${activeCharacter.name} · ${activeCharacter.franchiseLabel}`}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
         <View style={{ marginTop: 24, gap: 12 }}>
@@ -771,7 +819,19 @@ function SafetySection({ member }: { member: ServerMember | null }) {
 
 function AppearanceSection() {
   const { colors, theme, boost, accent, setTheme, setBoost, setAccent } = useTheme();
+  const { member, role } = useAuth();
   const [screensaverPrefs, setScreensaverPrefs] = useScreensaverPrefs();
+  const [characterPrefs, setCharacterPrefs] = useCharacterTheme();
+  const [previewEvent, setPreviewEvent] = useState<CelebrationEvent | null>(null);
+
+  // CAPABILITY gate (AGENTS.md): only a live parent session may toggle the
+  // family-wide character mode or franchise pack; cached display profiles do not.
+  const isParent = role === "parent";
+  const isSignedIn = role !== null && Boolean(member);
+  const availableCharacters = charactersForFranchise(characterPrefs.franchise);
+  const myCharacter = member ? resolveCharacterForMember(member.name, characterPrefs) : null;
+  const palette = ACCENTS[theme === "light" ? "light" : "dark"];
+
   return (
     <View style={{ gap: 16 }}>
       <Material tier="regular" style={{ borderRadius: 28, padding: 24, gap: 20 }}>
@@ -852,6 +912,185 @@ function AppearanceSection() {
         </SoftButton>
       </Material>
 
+      {/* Disney & Character Mode (Skylight parity + Consuela companion picker) */}
+      <Material
+        tier="regular"
+        testID="settings-character-mode-card"
+        style={{ borderRadius: 28, padding: 24, gap: 18 }}
+      >
+        <View style={{ gap: 4 }}>
+          <Text
+            style={{
+              color: colors["color-text-secondary"],
+              fontSize: TYPOGRAPHY.label.fontSize,
+              fontWeight: "700",
+              letterSpacing: 2,
+            }}
+          >
+            DISNEY & CHARACTER MODE
+          </Text>
+          <Text
+            style={{
+              color: colors["color-text-muted"],
+              fontSize: TYPOGRAPHY.label.fontSize,
+            }}
+          >
+            16 character companions, chore & reward celebration bursts, and magical screensaver scenes
+          </Text>
+        </View>
+
+        {isParent ? (
+          <Toggle
+            value={characterPrefs.enabled}
+            onChange={(enabled) => setCharacterPrefs((prev) => ({ ...prev, enabled }))}
+            label="Enable Disney & Character Mode"
+            description="Show character companions and animated celebrations when chores or rewards are completed"
+            testID="settings-character-mode-toggle"
+          />
+        ) : (
+          <Text
+            testID="settings-character-mode-status"
+            style={{
+              color: colors["color-text-secondary"],
+              fontSize: TYPOGRAPHY.body.fontSize,
+            }}
+          >
+            {characterPrefs.enabled
+              ? "✨ Disney & Character Mode is active on this wall."
+              : "Ask a parent to turn on Disney & Character Mode."}
+          </Text>
+        )}
+
+        {characterPrefs.enabled && isParent ? (
+          <View style={{ gap: 14 }}>
+            <View style={{ gap: 8 }}>
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  fontWeight: "700",
+                }}
+              >
+                Franchise world filter
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {FRANCHISE_OPTIONS.map((f) => (
+                  <Chip
+                    key={f.id}
+                    testID={`settings-character-pack-${f.id}`}
+                    label={`${f.badge} ${f.label}`}
+                    tone={characterPrefs.franchise === f.id ? "accent" : "neutral"}
+                    selected={characterPrefs.franchise === f.id}
+                    onPress={() => setCharacterPrefs((prev) => ({ ...prev, franchise: f.id }))}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <Toggle
+              value={characterPrefs.screensaverSpotlight}
+              onChange={(screensaverSpotlight) =>
+                setCharacterPrefs((prev) => ({ ...prev, screensaverSpotlight }))
+              }
+              label="Screensaver character spotlight"
+              description="Display rotating movie moments and quotes on the ambient idle board"
+              testID="settings-character-screensaver-toggle"
+            />
+          </View>
+        ) : null}
+
+        {characterPrefs.enabled && isSignedIn && member && myCharacter ? (
+          <View style={{ gap: 12, marginTop: 4 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.body.fontSize,
+                    fontWeight: "700",
+                  }}
+                >
+                  {`${member.name}'s Companion: ${myCharacter.name}`}
+                </Text>
+                <Text
+                  style={{
+                    color: colors["color-text-muted"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                  }}
+                >
+                  {`${myCharacter.franchiseLabel} · "${myCharacter.choreCheer}"`}
+                </Text>
+              </View>
+              <SoftButton
+                variant="secondary"
+                size="sm"
+                testID="settings-character-preview"
+                onPress={() =>
+                  setPreviewEvent({
+                    kind: "chore",
+                    memberName: member.name,
+                    title: `${myCharacter.name} Team-Up!`,
+                    points: 15,
+                  })
+                }
+              >
+                Preview ✨
+              </SoftButton>
+            </View>
+
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+              {availableCharacters.map((c) => {
+                const selected = myCharacter.id === c.id;
+                const cHex = palette[c.accentKey] ?? colors["color-accent-selected"];
+                return (
+                  <Pressable
+                    key={c.id}
+                    testID={`settings-character-pick-${c.id}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`Choose ${c.name} (${c.franchiseLabel})`}
+                    onPress={() => void assignCharacterToMember(member.name, c.id)}
+                    style={{
+                      width: "23%",
+                      minHeight: MIN_TARGET_DP,
+                      borderRadius: RADII.lg,
+                      paddingVertical: 10,
+                      paddingHorizontal: 8,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                      backgroundColor: selected
+                        ? mix(cHex, colors["color-surface-2"], 30)
+                        : colors["color-surface-1"],
+                      borderWidth: selected ? 2 : 1,
+                      borderColor: selected ? cHex : colors["color-border"],
+                    }}
+                  >
+                    <CharacterEmblem
+                      motif={c.motif}
+                      accentHex={cHex}
+                      inkHex={colors["color-text-primary"]}
+                      size={44}
+                    />
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        color: colors["color-text-primary"],
+                        fontSize: TYPOGRAPHY.label.fontSize,
+                        fontWeight: selected ? "700" : "600",
+                        textAlign: "center",
+                      }}
+                    >
+                      {c.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+      </Material>
+
       <Material tier="regular" style={{ borderRadius: 28, padding: 24 }}>
         <Text
           style={{
@@ -882,11 +1121,11 @@ function AppearanceSection() {
               key={`swatch-${a}`}
               testID={`settings-swatch-${a}`}
               onPress={() => setAccent(a)}
-              style={{ width: "18%" }}
+              style={{ width: "18%", minHeight: MIN_TARGET_DP, justifyContent: "center" }}
             >
               <View
                 style={{
-                  height: 40,
+                  height: MIN_TARGET_DP,
                   borderRadius: 12,
                   backgroundColor: ACCENTS[theme === "light" ? "light" : "dark"][a],
                   borderWidth: accent === a ? 2 : 0,
@@ -897,6 +1136,12 @@ function AppearanceSection() {
           ))}
         </View>
       </Material>
+
+      <CelebrationOverlay
+        event={previewEvent}
+        onDismiss={() => setPreviewEvent(null)}
+        testID="settings-celebration-preview-overlay"
+      />
     </View>
   );
 }

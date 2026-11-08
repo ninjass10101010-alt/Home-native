@@ -13,6 +13,8 @@ import { SoftButton } from "../ui/SoftButton";
 import { TextField } from "../ui/TextField";
 import { EmptyState } from "../ui/EmptyState";
 import { isPhotoUri } from "../ui/MemberRail";
+import { useCharacterTheme } from "../theme/characterTheme";
+import { CelebrationOverlay, type CelebrationEvent } from "../ui/CelebrationOverlay";
 import { readCachedMembers } from "../api/members";
 import {
   celebrateHallOfFame,
@@ -111,6 +113,8 @@ export function RewardsPage() {
   const [parentError, setParentError] = useState<string | null>(null);
 
   const [purchasing, setPurchasing] = useState<RewardRow | null>(null);
+  const [characterPrefs] = useCharacterTheme();
+  const [celebrationEvent, setCelebrationEvent] = useState<CelebrationEvent | null>(null);
 
   const loadConfig = useCallback(async () => {
     const [g, p, h, cRewards, savedPasses, savedGoals] = await Promise.all([
@@ -242,6 +246,14 @@ export function RewardsPage() {
         });
         recordRedeemedPass(reward, member.name);
         setPurchasing(reward);
+        if (characterPrefs.enabled) {
+          setCelebrationEvent({
+            kind: "reward",
+            memberName: member.name,
+            title: rewardTitle(reward),
+            points: rewardCost(reward),
+          });
+        }
         closeRedeem();
         setHighCostReward(null);
         setMemberPin(null);
@@ -264,7 +276,7 @@ export function RewardsPage() {
       }
       void newOperationId;
     },
-    [member, busy, recordRedeemedPass, closeRedeem, highCostReward, refreshNow, toast],
+    [member, busy, recordRedeemedPass, characterPrefs.enabled, closeRedeem, highCostReward, refreshNow, toast],
   );
 
   const openRedeem = useCallback(
@@ -1237,6 +1249,14 @@ export function RewardsPage() {
           <Text style={{ color: colors["color-text-primary"], fontSize: 32, fontWeight: "700" }}>🎉 {rewardTitle(purchasing)} redeemed!</Text>
         </View>
       ) : null}
+
+      <CelebrationOverlay
+        event={celebrationEvent}
+        onDismiss={() => {
+          setCelebrationEvent(null);
+          setPurchasing(null);
+        }}
+      />
     </View>
   );
 }

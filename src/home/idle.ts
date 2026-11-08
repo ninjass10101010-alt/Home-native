@@ -28,12 +28,15 @@ export interface ScreensaverPrefs {
   startHour: number;
   /** End hour for night window (0-23), default 4 (4:00 AM) */
   endHour: number;
+  /** Bedtime blackout (zero-nit sleep mode) during night window */
+  blackoutAtNight?: boolean;
 }
 
 export const DEFAULT_SCREENSAVER_PREFS: ScreensaverPrefs = {
   mode: "always",
   startHour: 23, // 11:00 PM
   endHour: 4,   // 4:00 AM
+  blackoutAtNight: false,
 };
 
 type PrefsListener = (prefs: ScreensaverPrefs) => void;
@@ -80,6 +83,15 @@ export function isScreensaverDueNow(prefs: ScreensaverPrefs, date = new Date()):
   return true;
 }
 
+/** Determines whether bedtime blackout (zero-nit sleep mode) is currently active. */
+export function isBlackoutActiveNow(prefs: ScreensaverPrefs, date = new Date()): boolean {
+  return (
+    prefs.mode !== "off" &&
+    Boolean(prefs.blackoutAtNight) &&
+    isHourInWindow(date.getHours(), prefs.startHour, prefs.endHour)
+  );
+}
+
 /**
  * Load screensaver preferences from AsyncStorage, migrating legacy keys if present.
  */
@@ -101,6 +113,7 @@ export async function loadScreensaverPrefs(): Promise<ScreensaverPrefs> {
           typeof parsed.endHour === "number" && parsed.endHour >= 0 && parsed.endHour <= 23
             ? parsed.endHour
             : DEFAULT_SCREENSAVER_PREFS.endHour,
+        blackoutAtNight: Boolean(parsed.blackoutAtNight),
       };
       memoryCachedPrefs = merged;
       hydrated = true;
