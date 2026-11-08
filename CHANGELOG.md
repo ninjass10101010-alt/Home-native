@@ -4,6 +4,30 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-08 — feat(countdowns,custom-lists,dinner-poll,photo-memories): Skylight Plus / Hearth Display parity Wave 2 — Event Countdowns Ribbon ("Days Until…"), Reusable Custom Checklists & Packing Lists, Family Dinner Poll, Photo Memory Guestbook & Reactions, and Wave 1 Deep Critic Re-Verification (`countdowns.ts`, `CountdownsCard.tsx`, `CalendarPage.tsx`, `custom-lists.ts`, `CustomListsCard.tsx`, `TasksPage.tsx`, `dinner-poll.ts`, `DinnerPollCard.tsx`, `MealsPage.tsx`, `photo-memories.ts`, `PhotosPage.tsx`, `KidHome.tsx`).
+  **What changed:**
+  - **Event Countdowns Ribbon ("Days Until…") (`src/calendar/countdowns.ts`, `src/calendar/CountdownsCard.tsx`, `src/calendar/CalendarPage.tsx`)**:
+    - Built `computeCountdownDays` and `AsyncStorage` (`consuela-calendar-countdowns`) persistence with 5 curated presets (`🏰 Family Vacation`, `🎂 Birthday Party`, `🏖️ Summer Break`, `👵 Grandma Visits`, `🎄 Holiday Gathering`), 5 token-backed accent tones (`amber`, `mint`, `cyan`, `lavender`, `coral`), and defensive `YYYY-MM-DD` validation.
+    - Built `<CountdownsCard />` (`testID="calendar-countdowns-card"`) in `CalendarPage.tsx` with horizontal countdown tiles (`countdown-tile-*`), live day counter badges (`Today! 🎉`, `Tomorrow! ✨`, `14 days`), parent-gated `+ Add Countdown` modal (`countdown-add-modal`), and 64×64dp parent delete targets while remaining readable for the entire family on the wall.
+  - **Reusable Custom Checklists & Packing Lists (`src/tasks/custom-lists.ts`, `src/tasks/CustomListsCard.tsx`, `src/tasks/TasksPage.tsx`)**:
+    - Built `useCustomChecklists` backed by `AsyncStorage` (`consuela-custom-checklists`) seeded with 3 starter lists (`🎒 School Backpack`, `⚽ Sports & Practice Bag`, `🏕️ Weekend Trip Packing`).
+    - Built `<CustomListsCard />` (`testID="custom-lists-card"`) in `TasksPage.tsx` with horizontal list tabs (`custom-list-tab-*`), live packing progress bar (`custom-list-progress`), 64dp checkable item rows (`custom-list-item-*`), one-tap `↺ Reset Checks` (`custom-list-reset`) for reusable morning/weekend packing lists, inline item additions, and parent-gated list creation/deletion (`custom-list-create-modal`).
+  - **Family Dinner Poll (`src/meals/dinner-poll.ts`, `src/meals/DinnerPollCard.tsx`, `src/meals/MealsPage.tsx`)**:
+    - Built `useDinnerPoll` backed by `AsyncStorage` (`consuela-dinner-poll`) with default dinner contenders (`🌮 Taco Fiesta`, `🍕 Homemade Pizza`, `🍝 Creamy Pesto Pasta`), multi-member voting (`toggleDinnerVote`), and leader computation (`computePollWinner`).
+    - Built `<DinnerPollCard />` (`testID="meals-dinner-poll-card"`) in `MealsPage.tsx` with 64dp voteable option rows (`dinner-poll-opt-*`), photo-URI-safe voter avatar discs (`isPhotoUri` via `<Image>`), live vote progress bars, and parent-gated `🏆 Schedule Winner` (`dinner-poll-schedule-winner`) that schedules the winning meal directly into the selected day's Dinner slot.
+  - **Photo Memory Captions & Guestbook Reactions (`src/photos/photo-memories.ts`, `src/photos/PhotosPage.tsx`)**:
+    - Built `usePhotoMemories` backed by `AsyncStorage` (`consuela-photo-memories`) storing per-photo emoji reaction tallies (`❤️ love`, `😂 haha`, `🤩 wow`, `🎉 party`) and custom memory notes (`savePhotoCaption`).
+    - Added the **Photo Memory & Guestbook Bar** (`testID="photo-memories-bar"`) to `PhotosPage.tsx` with 64×64dp reaction buttons (`photo-react-*`), custom story/note input (`photo-caption-input` + `photo-caption-save`), and live projection of saved memory captions onto the active wall preview frame.
+  - **Wave 1 Deep Re-Verification Polish (`src/home/KidHome.tsx`)**:
+    - Wired `recordLocalStreakCompletion(member.name, todayIso)` into `KidHome.tsx` `runComplete` so completing a quest in Kids Mode immediately advances the local chore streak cache alongside the celebration overlay.
+  **Verification:**
+  - Harsh Critic Loop (`docs/critic-loop.md`): Audited by 3 independent Critic subagents (Wave 1 Deep Re-Verification Critic + Wave 2 Critic 1 + Wave 2 Critic 2); all returned **`PASS: zero Critical/High`**.
+  - `npm run tokens:check`: CLEAN (app src, 0 token-literal violations).
+  - `npm run a11y:audit`: CLEAN (app src, 14sp floor & 64dp tap targets honored).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx eslint .`: CLEAN (0 errors).
+  - Unit tests: 94 test suites passed, 1,478 tests passed (`tests/calendar-countdowns.test.tsx`, `tests/custom-lists.test.tsx`, `tests/poll-and-photo-memories.test.tsx` + full suite).
+
 - 2026-11-08 — feat(skylight-parity,character-theme,magic-import,blackout,streaks-notes): Skylight Calendar parity wave — Disney & Character Mode for kids, Magic Import AI Schedule & Flyer Scanner, True Bedtime Blackout Sleep Mode, and Chore Streaks & Family Sticky Notes Board (`characterTheme.ts`, `CelebrationOverlay.tsx`, `magic-import.ts`, `MagicImportModal.tsx`, `CalendarPage.tsx`, `idle.ts`, `Screensaver.tsx`, `HomeSection.tsx`, `streaks.ts`, `FamilyNotesCard.tsx`, `TasksPage.tsx`, `RoutinesPanel.tsx`, `RewardsPage.tsx`, `KidHome.tsx`, `SettingsPage.tsx`).
   **What changed:**
   - **Wave 1 — Disney & Character Mode for Kids (`src/theme/characterTheme.ts`, `src/ui/CelebrationOverlay.tsx`, `src/settings/SettingsPage.tsx`)**:

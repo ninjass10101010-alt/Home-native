@@ -4,13 +4,14 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { api, ApiError } from "../api/client";
 import { useTheme } from "../theme/ThemeProvider";
-import { RADII, TYPOGRAPHY } from "../theme/tokens";
+import { MIN_TARGET_DP, RADII, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
 import { useAuth } from "../state/AuthProvider";
 import { useSync } from "../state/SyncManager";
@@ -20,6 +21,7 @@ import { SignedOutBanner } from "../ui/SignedOutBanner";
 import { useToast } from "../ui/Toast";
 import { mixAlpha } from "../ui/SoftButton";
 import { Toggle } from "../ui/Toggle";
+import { usePhotoMemories } from "./photo-memories";
 import { READ_COPY, READ_COPY_STALE, READ_RETRY_LABEL, useWidgetData } from "../home/widgets/data";
 import { pendingSurface } from "../home/widgets/WidgetFrame";
 import {
@@ -104,6 +106,13 @@ export function PhotosPage() {
   const activePreviewPhoto = wallPhotos.length > 0
     ? wallPhotos[previewIndex % wallPhotos.length]
     : null;
+
+  const { memories, react, saveCaption } = usePhotoMemories();
+  const [captionInputs, setCaptionInputs] = React.useState<Record<string, string>>({});
+  const activePhotoId = activePreviewPhoto?.id ?? null;
+  const currentCaption =
+    (activePhotoId ? captionInputs[activePhotoId] : undefined) ??
+    (activePhotoId ? (memories[activePhotoId]?.customCaption ?? "") : "");
 
   const handleSelectTransition = (trans: PhotoTransition) => {
     if (!isParent || savingSettings) return;
@@ -474,7 +483,10 @@ export function PhotosPage() {
                             fontWeight: "600",
                           }}
                         >
-                          {activePreviewPhoto.caption || fallbackCaption(activePreviewPhoto.takenAt) || "Family photo"}
+                          {(activePhotoId && memories[activePhotoId]?.customCaption) ||
+                            activePreviewPhoto.caption ||
+                            fallbackCaption(activePreviewPhoto.takenAt) ||
+                            "Family photo"}
                         </Text>
                       </>
                     ) : null}
@@ -687,6 +699,138 @@ export function PhotosPage() {
                 </View>
               </View>
             </View>
+
+            {/* Photo Memory & Guestbook Bar */}
+            {activePreviewPhoto ? (
+              <View
+                testID="photo-memories-bar"
+                style={{
+                  marginTop: 16,
+                  paddingTop: 16,
+                  borderTopWidth: 1,
+                  borderTopColor: colors["color-border"],
+                  gap: 12,
+                }}
+              >
+                <View style={{ gap: 2 }}>
+                  <Text
+                    style={{
+                      color: colors["color-text-primary"],
+                      fontSize: TYPOGRAPHY.body.fontSize,
+                      fontWeight: "700",
+                    }}
+                  >
+                    Memory Notes & Guestbook
+                  </Text>
+                  <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                    React to this memory or attach a warm family caption to display on the wall
+                  </Text>
+                </View>
+
+                {/* 4 Reaction Buttons */}
+                <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+                  {(
+                    [
+                      { key: "love", emoji: "❤️", testID: "photo-react-love" },
+                      { key: "haha", emoji: "😂", testID: "photo-react-haha" },
+                      { key: "wow", emoji: "🤩", testID: "photo-react-wow" },
+                      { key: "party", emoji: "🎉", testID: "photo-react-party" },
+                    ] as const
+                  ).map((item) => {
+                    const count = memories[activePreviewPhoto.id]?.reactions?.[item.key] || 0;
+                    return (
+                      <Pressable
+                        key={item.key}
+                        testID={item.testID}
+                        accessibilityRole="button"
+                        accessibilityLabel={`React with ${item.emoji}, currently ${count}`}
+                        onPress={() => void react(activePreviewPhoto.id, item.key)}
+                        style={{
+                          minHeight: MIN_TARGET_DP,
+                          minWidth: MIN_TARGET_DP,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 8,
+                          paddingHorizontal: 16,
+                          paddingVertical: 10,
+                          borderRadius: 14,
+                          backgroundColor: count > 0 ? mix(accentColor, "transparent", 15) : colors["color-surface-1"],
+                          borderWidth: 1,
+                          borderColor: count > 0 ? accentColor : colors["color-border"],
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: count > 0 ? accentColor : colors["color-text-primary"],
+                            fontSize: TYPOGRAPHY.label.fontSize,
+                            fontWeight: "700",
+                          }}
+                        >
+                          {`${item.emoji} ${count}`}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {/* Custom Memory Caption Editor */}
+                <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+                  <TextInput
+                    testID="photo-caption-input"
+                    accessibilityLabel="Custom photo memory note"
+                    placeholder="Attach a warm story or memory note to this photo…"
+                    placeholderTextColor={colors["color-text-muted"]}
+                    value={currentCaption}
+                    onChangeText={(text) => {
+                      if (activePhotoId) {
+                        setCaptionInputs((prev) => ({ ...prev, [activePhotoId]: text }));
+                      }
+                    }}
+                    style={{
+                      minHeight: MIN_TARGET_DP,
+                      flex: 1,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: colors["color-border"],
+                      backgroundColor: colors["color-surface-1"],
+                      paddingHorizontal: 16,
+                      fontSize: TYPOGRAPHY.body.fontSize,
+                      color: colors["color-text-primary"],
+                    }}
+                  />
+                  <Pressable
+                    testID="photo-caption-save"
+                    accessibilityRole="button"
+                    accessibilityLabel="Save Note"
+                    onPress={async () => {
+                      if (!activePreviewPhoto) return;
+                      await saveCaption(activePreviewPhoto.id, currentCaption);
+                      toast.show("Memory note saved! ✨", { intent: "info" });
+                    }}
+                    style={{
+                      minHeight: MIN_TARGET_DP,
+                      minWidth: MIN_TARGET_DP,
+                      paddingHorizontal: 18,
+                      borderRadius: 14,
+                      backgroundColor: accentColor,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors["color-primary-foreground"],
+                        fontSize: TYPOGRAPHY.label.fontSize,
+                        fontWeight: "700",
+                      }}
+                    >
+                      Save Note
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
           </Material>
 
           {/* Section 2: Library Curation & All Photos Grid */}

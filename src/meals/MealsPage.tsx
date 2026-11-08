@@ -60,6 +60,8 @@ import {
 import { MealComposer } from "./MealComposer";
 import { ShopStockTabs } from "./ShopStockTabs";
 import { AiSuggestModal } from "./AiSuggestModal";
+import { DinnerPollCard } from "./DinnerPollCard";
+import type { DinnerPollOption } from "./dinner-poll";
 
 /**
  * The wall's Meals / Kitchen surface (WS-6 & Wave 2 Interactive Kitchen):
@@ -301,6 +303,27 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
       setDetail(null);
     },
     [meals]
+  );
+
+  const handleSchedulePollWinner = useCallback(
+    (option: DinnerPollOption) => {
+      void handleSaveMeal({
+        name: option.name,
+        emoji: option.emoji,
+        time: selectedDay,
+        mealType: "dinner",
+        prepTime: option.prepTime,
+        calories: option.calories,
+        servings: 4,
+        protein: 28,
+        carbs: 45,
+        fat: 18,
+        tags: ["poll-winner", "family-favorite"],
+        ingredients: ["Fresh ingredients", "Seasoning"],
+        weekOf: weekMonday,
+      });
+    },
+    [handleSaveMeal, selectedDay, weekMonday]
   );
 
   const handleApplyAiMeals = useCallback(
@@ -1411,6 +1434,15 @@ export function MealsPage({ now = new Date() }: { now?: Date }) {
                 </Material>
               </View>
             </View>
+
+            {/* Skylight Family Dinner Poll */}
+            <DinnerPollCard
+              voterName={member?.name || "Family"}
+              voterEmoji={member?.emoji || "🍽️"}
+              isParent={isParent}
+              selectedDay={selectedDay}
+              onScheduleWinner={handleSchedulePollWinner}
+            />
 
             {/* Bottom Full-Width Recipe Box Card */}
             <Material

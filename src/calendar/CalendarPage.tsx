@@ -37,6 +37,7 @@ import {
 } from "./events-merge";
 import { EventComposer, type EventDraft } from "./EventComposer";
 import { MagicImportModal } from "./MagicImportModal";
+import { CountdownsCard } from "./CountdownsCard";
 import { addDaysISO, localDateISO, monthGridCells, selectedWeekISO } from "./date-utils";
 
 /**
@@ -746,6 +747,8 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
             );
           })}
         </ScrollView>
+
+        <CountdownsCard now={now} isParent={isParent} defaultDateISO={selectedISO} />
 
         {/* 4. Segmented Control */}
         <SegmentedControl

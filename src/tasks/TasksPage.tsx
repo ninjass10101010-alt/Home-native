@@ -53,6 +53,7 @@ import {
 import { RoutinesPanel } from "./RoutinesPanel";
 import { resolveMemberStreak, loadLocalStreaks, recordLocalStreakCompletion } from "./streaks";
 import { FamilyNotesCard } from "./FamilyNotesCard";
+import { CustomListsCard } from "./CustomListsCard";
 
 /**
  * The wall's Tasks surface (WS-7). The board reads ONE shared SyncManager
@@ -1962,7 +1963,10 @@ export function TasksPage() {
 
         {body()}
         {!loading && !loadFailed ? (
-          <FamilyNotesCard memberName={member?.name} memberEmoji={member?.emoji} isParent={isParent} />
+          <>
+            <FamilyNotesCard memberName={member?.name} memberEmoji={member?.emoji} isParent={isParent} />
+            <CustomListsCard isParent={isParent} canInteract={Boolean(member?.name || isParent)} />
+          </>
         ) : null}
       </ScrollView>
 

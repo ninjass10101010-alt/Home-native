@@ -20,6 +20,7 @@ import { AnimatedEmoji } from "../ui/AnimatedEmoji";
 import { isPhotoUri } from "../ui/MemberRail";
 import { useCharacterTheme } from "../theme/characterTheme";
 import { CelebrationOverlay, type CelebrationEvent } from "../ui/CelebrationOverlay";
+import { recordLocalStreakCompletion } from "../tasks/streaks";
 import { READ_COPY_STALE } from "./widgets/data";
 import { pendingSurface } from "./widgets/WidgetFrame";
 import {
@@ -278,14 +279,18 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
       if (finish(outcome)) {
         setPinTaskId(null);
         setPinError(null);
-        if (characterPrefs.enabled && (outcome.kind === "applied" || outcome.kind === "sending")) {
-          const completedQuest = quests.find((q) => q.id === taskId);
-          setCelebrationEvent({
-            kind: "chore",
-            memberName: member.name,
-            title: completedQuest?.title ?? "Quest Complete!",
-            points: completedQuest?.points,
-          });
+        if (outcome.kind === "applied" || outcome.kind === "sending") {
+          const todayIso = new Date().toISOString().slice(0, 10);
+          void recordLocalStreakCompletion(member.name, todayIso);
+          if (characterPrefs.enabled) {
+            const completedQuest = quests.find((q) => q.id === taskId);
+            setCelebrationEvent({
+              kind: "chore",
+              memberName: member.name,
+              title: completedQuest?.title ?? "Quest Complete!",
+              points: completedQuest?.points,
+            });
+          }
         }
       }
     } finally {
