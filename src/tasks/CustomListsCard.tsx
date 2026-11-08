@@ -25,10 +25,9 @@ const PRESET_EMOJIS = ["🎒", "⚽", "🏕️", "🏖️", "✈️", "🎨", "�
 export function CustomListsCard({
   isParent = false,
   canInteract,
-  memberName,
 }: CustomListsCardProps) {
   const { colors, theme } = useTheme();
-  const canAct = canInteract ?? Boolean(memberName || isParent);
+  const canAct = canInteract ?? Boolean(isParent);
 
   const {
     lists,
@@ -76,6 +75,7 @@ export function CustomListsCard({
       : `${checkedCount} of ${totalCount} packed`;
 
   const handleAddItem = async () => {
+    if (!canAct) return;
     const trimmed = newItemText.trim();
     if (!trimmed || !activeList) return;
     await addItem(activeList.id, trimmed);
@@ -495,44 +495,46 @@ export function CustomListsCard({
                 </View>
 
                 {/* Inline add-item row */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  <TextInput
-                    testID="custom-list-item-input"
-                    placeholder="Add an item…"
-                    placeholderTextColor={colors["color-text-secondary"]}
-                    value={newItemText}
-                    onChangeText={setNewItemText}
-                    onSubmitEditing={() => void handleAddItem()}
+                {canAct ? (
+                  <View
                     style={{
-                      flex: 1,
-                      minHeight: MIN_TARGET_DP,
-                      fontSize: TYPOGRAPHY.body.fontSize,
-                      color: colors["color-text-primary"],
-                      backgroundColor: colors["color-surface-2"],
-                      borderRadius: RADII.lg,
-                      paddingHorizontal: 16,
-                      borderWidth: 1,
-                      borderColor: colors["color-border"],
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                      marginTop: 4,
                     }}
-                  />
-                  <SoftButton
-                    variant="secondary"
-                    size="sm"
-                    testID="custom-list-item-add"
-                    accessibilityLabel="Add item"
-                    onPress={() => void handleAddItem()}
-                    style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
                   >
-                    Add +
-                  </SoftButton>
-                </View>
+                    <TextInput
+                      testID="custom-list-item-input"
+                      placeholder="Add an item…"
+                      placeholderTextColor={colors["color-text-secondary"]}
+                      value={newItemText}
+                      onChangeText={setNewItemText}
+                      onSubmitEditing={() => void handleAddItem()}
+                      style={{
+                        flex: 1,
+                        minHeight: MIN_TARGET_DP,
+                        fontSize: TYPOGRAPHY.body.fontSize,
+                        color: colors["color-text-primary"],
+                        backgroundColor: colors["color-surface-2"],
+                        borderRadius: RADII.lg,
+                        paddingHorizontal: 16,
+                        borderWidth: 1,
+                        borderColor: colors["color-border"],
+                      }}
+                    />
+                    <SoftButton
+                      variant="secondary"
+                      size="sm"
+                      testID="custom-list-item-add"
+                      accessibilityLabel="Add item"
+                      onPress={() => void handleAddItem()}
+                      style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
+                    >
+                      Add +
+                    </SoftButton>
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </View>

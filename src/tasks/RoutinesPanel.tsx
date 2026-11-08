@@ -23,6 +23,7 @@ import {
   type FamilyRoutine,
   type RoutineSlot,
 } from "./routines-api";
+import { FocusTimerModal } from "./FocusTimerModal";
 
 const SLOTS: RoutineSlot[] = ["morning", "afternoon", "evening", "weekend"];
 const POINT_OPTIONS = [10, 15, 20, 30];
@@ -61,6 +62,10 @@ export function RoutinesPanel({
   const [draftAssignee, setDraftAssignee] = useState("All");
   const [draftPoints, setDraftPoints] = useState<number>(15);
   const [draftStepsText, setDraftStepsText] = useState("");
+
+  // Focus timer modal state
+  const [timerOpen, setTimerOpen] = useState(false);
+  const [activeTimerRoutine, setActiveTimerRoutine] = useState<FamilyRoutine | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -290,15 +295,31 @@ export function RoutinesPanel({
             {`${completedTodayCount} of ${routines.length} routines finished today · tap each step as you go`}
           </Text>
         </View>
-        <SoftButton
-          variant="primary"
-          size="sm"
-          testID="routines-add-button"
-          accessibilityLabel="Add new family routine"
-          onPress={openNewComposer}
-        >
-          + Add Routine
-        </SoftButton>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
+          <SoftButton
+            variant="secondary"
+            size="sm"
+            testID="routine-focus-timer-open"
+            accessibilityLabel="Open Focus & Sprint Timer"
+            style={{ minHeight: MIN_TARGET_DP }}
+            onPress={() => {
+              setActiveTimerRoutine(null);
+              setTimerOpen(true);
+            }}
+          >
+            ⏱️ Focus Timer
+          </SoftButton>
+          <SoftButton
+            variant="primary"
+            size="sm"
+            testID="routines-add-button"
+            accessibilityLabel="Add new family routine"
+            style={{ minHeight: MIN_TARGET_DP }}
+            onPress={openNewComposer}
+          >
+            + Add Routine
+          </SoftButton>
+        </View>
       </Material>
 
       {/* Time-of-day filter strip */}
@@ -453,6 +474,19 @@ export function RoutinesPanel({
                   </View>
 
                   <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
+                    <SoftButton
+                      variant="secondary"
+                      size="sm"
+                      testID={`routine-card-timer-${routine.id}`}
+                      accessibilityLabel={`Start focus timer for ${routine.title}`}
+                      style={{ minHeight: MIN_TARGET_DP }}
+                      onPress={() => {
+                        setActiveTimerRoutine(routine);
+                        setTimerOpen(true);
+                      }}
+                    >
+                      ⏱️ Timer
+                    </SoftButton>
                     <SoftButton
                       variant={isComplete ? "success" : "secondary"}
                       size="sm"
@@ -849,6 +883,13 @@ export function RoutinesPanel({
         event={celebrationEvent}
         onDismiss={() => setCelebrationEvent(null)}
         testID="routine-celebration-overlay"
+      />
+
+      <FocusTimerModal
+        visible={timerOpen}
+        onClose={() => setTimerOpen(false)}
+        activeRoutine={activeTimerRoutine}
+        onCompleteRoutine={(r) => void checkAllSteps(r)}
       />
     </View>
   );

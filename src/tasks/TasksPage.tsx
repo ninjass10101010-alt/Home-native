@@ -628,6 +628,7 @@ export function TasksPage() {
   // The CAPABILITY role — the approvals queue is a parent-only surface, so a
   // cached parent profile must not unlock it.
   const isParent = role === "parent";
+  const isSignedIn = role !== null;
   const me = member?.name ?? "";
   // The filter's roster comes from the DEVICE CACHE (never a fetch: a guest
   // read would only 401, and the snapshot poll already owns the signed-in
@@ -1964,8 +1965,8 @@ export function TasksPage() {
         {body()}
         {!loading && !loadFailed ? (
           <>
-            <FamilyNotesCard memberName={member?.name} memberEmoji={member?.emoji} isParent={isParent} />
-            <CustomListsCard isParent={isParent} canInteract={Boolean(member?.name || isParent)} />
+            <FamilyNotesCard memberName={isSignedIn ? member?.name : undefined} memberEmoji={isSignedIn ? member?.emoji : undefined} isParent={isParent} />
+            <CustomListsCard isParent={isParent} canInteract={isSignedIn} />
           </>
         ) : null}
       </ScrollView>

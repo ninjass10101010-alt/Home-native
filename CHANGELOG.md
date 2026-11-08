@@ -4,6 +4,28 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-08 — feat(focus-timer,kudos-jar,staples-shelf): Skylight Plus / Hearth Display parity Wave 3 — Visual Focus & Routine Sprint Timer, Family Kudos & Kindness Shoutout Jar, 1-Tap Kitchen Staples Quick-Add Shelf, and Wave 2 Deep Critic Re-Verification (`focus-timer.ts`, `FocusTimerModal.tsx`, `RoutinesPanel.tsx`, `kudos-jar.ts`, `KudosJarCard.tsx`, `RewardsPage.tsx`, `staples-shelf.ts`, `ShopStockTabs.tsx`, `CustomListsCard.tsx`, `TasksPage.tsx`).
+  **What changed:**
+  - **Visual Focus & Routine Sprint Timer (`src/tasks/focus-timer.ts`, `src/tasks/FocusTimerModal.tsx`, `src/tasks/RoutinesPanel.tsx`)**:
+    - Built `FOCUS_PRESETS` (`🦷 Toothbrush Sprint` 2m, `🧸 5-Min Toy Cleanup` 5m, `🎒 10-Min Morning Dash` 10m, `📚 15-Min Focus Block` 15m, `🌙 20-Min Bedtime Wind-Down` 20m), `formatTimerMMSS`, and `computeTimerProgress`.
+    - Built `<FocusTimerModal />` (`testID="focus-timer-modal"`) with a pure `react-native-svg` 220×220 circular countdown ring (zero `<Defs>` gradient refs), 44sp tabular-nums MM:SS clock (`focus-timer-clock`), coach cheer banner (`focus-timer-cheer`), 64dp preset chips (`focus-preset-*`), Start/Pause (`focus-timer-toggle`), Reset (`focus-timer-reset`), `+1 Min` boost (`focus-timer-plus1`), and 1-tap routine completion (`focus-timer-finish-routine`).
+    - Wired `⏱️ Focus Timer` (`testID="routine-focus-timer-open"`) into the `RoutinesPanel` header and per-routine `⏱️ Timer` buttons (`testID="routine-card-timer-*"`) on each routine card.
+  - **Family Kudos & Kindness Shoutout Jar (`src/rewards/kudos-jar.ts`, `src/rewards/KudosJarCard.tsx`, `src/rewards/RewardsPage.tsx`)**:
+    - Built `useKudosJar` backed by `AsyncStorage` (`consuela-kudos-jar`) with 4 kindness badges (`💖 Kind Heart`, `🤝 Team Player`, `🌟 Super Helper`, `🧠 Bright Spark`) and 4 quick praise presets.
+    - Built `<KudosJarCard />` (`testID="rewards-kudos-jar-card"`) in `RewardsPage.tsx` with live star counter pill (`kudos-jar-count`), photo-URI-safe (`isPhotoUri` via `<Image>`) sender & recipient avatars, 64×64dp parent-only delete buttons (`kudos-delete-*`), `Send Kudos +` modal (`kudos-send-modal`), and `<CelebrationOverlay />` integration when a new kindness star is dropped into the jar.
+  - **1-Tap Household Staples Quick-Add Shelf (`src/meals/staples-shelf.ts`, `src/meals/ShopStockTabs.tsx`)**:
+    - Built `HOUSEHOLD_STAPLES` (10 curated staples: `🥛 Milk`, `🥚 Eggs`, `🍌 Bananas`, `🍞 Sourdough Bread`, `🍓 Strawberries`, `🧀 Shredded Cheese`, `🥑 Avocados`, `🍗 Chicken Breast`, `🍝 Penne Pasta`, `🧈 Butter`) and `isStapleOnList`.
+    - Added the **⚡ 1-Tap Household Staples Shelf** (`testID="grocery-staples-shelf"`) to `ShopStockTabs.tsx` (powering both `Meals` Shop/Stock tabs and `/grocery`) with 64dp staple pills (`staple-quick-*`), live `✓ Added` state detection, and 1-tap addition to either the Shopping List or Pantry Inventory.
+  - **Wave 2 Deep Re-Verification Capability Hardening (`src/tasks/TasksPage.tsx`, `src/tasks/CustomListsCard.tsx`)**:
+    - Enforced `const isSignedIn = role !== null;` in `TasksPage.tsx` (`canInteract={isSignedIn}` on `CustomListsCard` and `memberName={isSignedIn ? member?.name : undefined}` on `FamilyNotesCard`) and guarded `handleAddItem` in `CustomListsCard.tsx` with `if (!canAct) return;` so capability gates strictly follow `useAuth().role` and never fall back to the cached display profile.
+  **Verification:**
+  - Harsh Critic Loop (`docs/critic-loop.md`): Audited by Wave 2 Deep Re-Verification Critic + Wave 3 Critic across all 5 rubric axes; all returned **`PASS: zero Critical/High`**.
+  - `npm run tokens:check`: CLEAN (app src, 0 token-literal violations).
+  - `npm run a11y:audit`: CLEAN (app src, 14sp floor & 64dp tap targets honored).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors, 0 warnings).
+  - Unit tests: **97 test suites passed, 1,503 tests passed** (`tests/focus-timer.test.tsx`, `tests/kudos-jar.test.tsx`, `tests/staples-shelf.test.tsx` + full suite).
+
 - 2026-11-08 — feat(countdowns,custom-lists,dinner-poll,photo-memories): Skylight Plus / Hearth Display parity Wave 2 — Event Countdowns Ribbon ("Days Until…"), Reusable Custom Checklists & Packing Lists, Family Dinner Poll, Photo Memory Guestbook & Reactions, and Wave 1 Deep Critic Re-Verification (`countdowns.ts`, `CountdownsCard.tsx`, `CalendarPage.tsx`, `custom-lists.ts`, `CustomListsCard.tsx`, `TasksPage.tsx`, `dinner-poll.ts`, `DinnerPollCard.tsx`, `MealsPage.tsx`, `photo-memories.ts`, `PhotosPage.tsx`, `KidHome.tsx`).
   **What changed:**
   - **Event Countdowns Ribbon ("Days Until…") (`src/calendar/countdowns.ts`, `src/calendar/CountdownsCard.tsx`, `src/calendar/CalendarPage.tsx`)**:

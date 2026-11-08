@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
-import { mix } from "../theme/mix";
+import { accentDeepened, mix } from "../theme/mix";
 import { MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { TextField } from "../ui/TextField";
 import { SoftButton } from "../ui/SoftButton";
@@ -15,6 +15,7 @@ import {
   type PantryItem,
   type PantryStatus,
 } from "./api";
+import { HOUSEHOLD_STAPLES, isStapleOnList } from "./staples-shelf";
 
 const CATEGORIES: GroceryCategory[] = [
   "Produce",
@@ -63,7 +64,7 @@ export function ShopStockTabs({
   onAddPantry,
   onSendLowPantryToGrocery,
 }: ShopStockTabsProps) {
-  const { colors, accentColor } = useTheme();
+  const { colors, accentColor, theme } = useTheme();
   const [newName, setNewName] = useState("");
   const [newQty, setNewQty] = useState("1");
   const [selectedCat, setSelectedCat] = useState<GroceryCategory | "Auto">("Auto");
@@ -209,7 +210,7 @@ export function ShopStockTabs({
 
         {/* Quick-Add Bar */}
         <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-end" }}>
-          <View style={{ flex: 2 }}>
+          <View style={{ flex: 2 }} testID={mode === "shop" ? "meals-shop-input" : undefined}>
             <TextField
               testID={`${mode}-quick-add-name`}
               label={mode === "shop" ? "Add item to shopping list" : "Add staple to pantry"}
@@ -227,15 +228,17 @@ export function ShopStockTabs({
               onChangeText={setNewQty}
             />
           </View>
-          <SoftButton
-            variant="primary"
-            size="sm"
-            disabled={!newName.trim()}
-            onPress={handleQuickAdd}
-            testID={`${mode}-quick-add-submit`}
-          >
-            + Add
-          </SoftButton>
+          <View testID={mode === "shop" ? "meals-shop-add" : undefined}>
+            <SoftButton
+              variant="primary"
+              size="sm"
+              disabled={!newName.trim()}
+              onPress={handleQuickAdd}
+              testID={`${mode}-quick-add-submit`}
+            >
+              + Add
+            </SoftButton>
+          </View>
         </View>
 
         {/* Category Picker for Quick Add */}
@@ -255,6 +258,133 @@ export function ShopStockTabs({
               />
             ))}
           </View>
+        </ScrollView>
+      </Material>
+
+      {/* ⚡ 1-Tap Household Staples Shelf */}
+      <Material
+        testID="grocery-staples-shelf"
+        tier="regular"
+        tone={mode === "shop" ? colors["color-accent-amber"] ?? accentColor : colors["color-accent-mint"] ?? accentColor}
+        style={{ borderRadius: 24, padding: 18, gap: 12 }}
+      >
+        <View style={{ gap: 4 }}>
+          <Text
+            style={{
+              color: colors["color-text-primary"],
+              fontSize: TYPOGRAPHY.title.fontSize,
+              fontWeight: "700",
+            }}
+          >
+            ⚡ 1-Tap Household Staples
+          </Text>
+          <Text
+            style={{
+              color: colors["color-text-secondary"],
+              fontSize: TYPOGRAPHY.label.fontSize,
+            }}
+          >
+            {mode === "shop"
+              ? "Tap any staple to drop it straight onto the shopping list"
+              : "Tap any staple to add it to your pantry inventory"}
+          </Text>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
+        >
+          {HOUSEHOLD_STAPLES.map((staple) => {
+            const alreadyPresent = isStapleOnList(
+              staple.name,
+              mode === "shop" ? groceryItems : pantryItems
+            );
+            const mintColor = colors["color-accent-mint"] ?? accentColor;
+            const addedInk = theme === "light" ? accentDeepened(mintColor, 28) : mintColor;
+            return (
+              <Pressable
+                key={staple.id}
+                testID={`staple-quick-${staple.id}`}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  alreadyPresent
+                    ? `${staple.name}, already added`
+                    : `Add ${staple.name} (${staple.defaultQty})`
+                }
+                accessibilityState={{ disabled: alreadyPresent }}
+                disabled={alreadyPresent}
+                onPress={() => {
+                  if (alreadyPresent) return;
+                  if (mode === "shop") {
+                    onAddGrocery({
+                      name: staple.name,
+                      category: staple.category,
+                      quantity: staple.defaultQty,
+                    });
+                  } else {
+                    onAddPantry({
+                      name: staple.name,
+                      category: staple.category,
+                      quantity: staple.defaultQty,
+                      status: "stocked",
+                    });
+                  }
+                }}
+                style={({ pressed }) => ({
+                  minHeight: MIN_TARGET_DP,
+                  minWidth: MIN_TARGET_DP,
+                  borderRadius: 20,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  backgroundColor: alreadyPresent
+                    ? colors["color-surface-2"]
+                    : pressed
+                      ? mix(colors["color-surface-2"], colors["color-surface-3"], 50)
+                      : colors["color-surface-0"],
+                  borderWidth: 1,
+                  borderColor: alreadyPresent
+                    ? (colors["color-border"] ?? colors["color-surface-3"])
+                    : colors["color-surface-3"],
+                  opacity: alreadyPresent ? 0.75 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 22 }}>{staple.emoji}</Text>
+                <Text
+                  style={{
+                    color: alreadyPresent ? colors["color-text-muted"] : colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.body.fontSize,
+                    fontWeight: "700",
+                  }}
+                >
+                  {staple.name}
+                </Text>
+                <View
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 12,
+                    backgroundColor: alreadyPresent
+                      ? mix(mintColor, "transparent", 25)
+                      : colors["color-surface-2"],
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: alreadyPresent ? addedInk : colors["color-text-secondary"],
+                      fontSize: TYPOGRAPHY.label.fontSize,
+                      fontWeight: "700",
+                    }}
+                  >
+                    {alreadyPresent ? "✓ Added" : `+ ${staple.defaultQty}`}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       </Material>
 
@@ -302,6 +432,7 @@ export function ShopStockTabs({
                   onPress={() => onToggleGrocery(item.id)}
                   style={{
                     minHeight: MIN_TARGET_DP,
+                    minWidth: MIN_TARGET_DP,
                     borderRadius: 20,
                     paddingHorizontal: 18,
                     paddingVertical: 12,
@@ -376,6 +507,7 @@ export function ShopStockTabs({
                 onPress={() => onCyclePantryStatus(item.id)}
                 style={{
                   minHeight: MIN_TARGET_DP,
+                  minWidth: MIN_TARGET_DP,
                   borderRadius: 20,
                   paddingHorizontal: 18,
                   paddingVertical: 12,

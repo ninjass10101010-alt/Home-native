@@ -15,7 +15,8 @@ import { EmptyState } from "../ui/EmptyState";
 import { isPhotoUri } from "../ui/MemberRail";
 import { useCharacterTheme } from "../theme/characterTheme";
 import { CelebrationOverlay, type CelebrationEvent } from "../ui/CelebrationOverlay";
-import { readCachedMembers } from "../api/members";
+import { FALLBACK_MEMBERS, readCachedMembers } from "../api/members";
+import { KudosJarCard } from "./KudosJarCard";
 import {
   celebrateHallOfFame,
   CURATED_REWARD_TEMPLATES,
@@ -68,7 +69,8 @@ function readRewards(snapshot: any): RewardRow[] {
 export function RewardsPage() {
   const { colors, accentColor } = useTheme();
   const toast = useToast();
-  const { member } = useAuth();
+  const { member, role } = useAuth();
+  const isParent = role === "parent";
   const { snapshot, stale, refreshNow, onPulse } = useSync();
 
   const serverRewards = useMemo(() => readRewards(snapshot), [snapshot]);
@@ -100,6 +102,7 @@ export function RewardsPage() {
   const [prizes, setPrizes] = useState<any[]>([]);
   const [hof, setHof] = useState<any[]>([]);
   const [cachedParents, setCachedParents] = useState<{ name: string; emoji?: string }[]>([]);
+  const [roster, setRoster] = useState<{ name: string; emoji?: string; role?: string }[]>([]);
 
   const [busy, setBusy] = useState(false);
   const [redeemRewardState, setRedeemRewardState] = useState<RewardRow | null>(null);
@@ -163,9 +166,11 @@ export function RewardsPage() {
     let alive = true;
     void readCachedMembers().then((rows) => {
       if (!alive) return;
+      const valid = (rows || []).filter((r: any) => (r?.name || "").trim());
+      setRoster(valid.length > 0 ? valid : FALLBACK_MEMBERS);
       setCachedParents(
-        rows
-          .filter((r: any) => String(r?.role ?? "").toLowerCase() === "parent" && (r.name || "").trim())
+        valid
+          .filter((r: any) => String(r?.role ?? "").toLowerCase() === "parent")
           .map((r: any) => ({ name: r.name, emoji: r.emoji })),
       );
     });
@@ -854,6 +859,24 @@ export function RewardsPage() {
             ))}
           </Material>
         ) : null}
+
+        {/* Family Kudos & Kindness Jar */}
+        <KudosJarCard
+          senderName={member?.name || "Family"}
+          senderEmoji={member?.emoji || "🌟"}
+          roster={roster}
+          isParent={isParent}
+          onKudosSent={(entry) => {
+            if (characterPrefs.enabled) {
+              setCelebrationEvent({
+                kind: "reward",
+                memberName: entry.toName,
+                title: `Kudos: ${entry.message}`,
+                points: 5,
+              });
+            }
+          }}
+        />
 
         {combinedGoals.length > 0 ? (
           <Material tier="thin" style={{ borderRadius: 20, padding: 16, gap: 12 }}>
