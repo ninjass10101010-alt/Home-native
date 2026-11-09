@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -194,8 +194,11 @@ export function CharacterMotionStage({
   testID,
 }: CharacterMotionStageProps) {
   const { reduceMotion } = useTheme();
+  const isAndroid = typeof jest === "undefined" && Platform.OS === "android";
   const spec = CHARACTER_MOTION_SPECS[motif] ?? CHARACTER_MOTION_SPECS.helmet;
-  const shouldAnimate = Boolean(animated && !reduceMotion);
+  const shouldAnimate = Boolean(
+    animated && !reduceMotion && (!isAndroid || intensity === "celebration")
+  );
   const boost = intensity === "celebration" ? 1.35 : 1;
 
   const phase = useSharedValue(0);

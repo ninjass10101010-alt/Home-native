@@ -4,6 +4,31 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-09 — fix(perf): suppress continuous ambient idle animations on Android wall panel (`useAmbient.tsx`, `CharacterMotion.tsx`).
+  **What changed:**
+  - **Android Ambient Guard in Weather (`src/weather/useAmbient.tsx`)**:
+    - Restored `IS_ANDROID` protection across all continuous idle ambient weather animations (`AmbientBob`, `AmbientCloudDrift`, `AmbientEyePulse`, `AmbientMonsterIdle`, and `AmbientVaneSway`).
+    - Eliminates continuous 60fps Reanimated transform loops and layout events from `wx-poster-frame` that were causing the ApoloSign tablet to consume 116% CPU and peak at 65.6°C GPU temperatures while sitting idle.
+    - Resolves UIAutomator `waitForIdle` timeout (`Could not obtain idle state`) during `android layout` inspection.
+    - Discrete transitions like `AmbientDigitPop` continue to run normally on temperature changes.
+  - **Android Ambient Guard in Character Motion Stage (`src/ui/characters/CharacterMotion.tsx`)**:
+    - Gated `CharacterMotionStage` so continuous ambient idle floating and aura pulsing (`intensity === "ambient"`) are kept calm/static on Android (`!isAndroid || intensity === "celebration"`).
+    - Preserves full energetic motion and celebratory pulses for active chore completion bursts (`intensity === "celebration"`).
+    - Eliminates continuous layout invalidations from `tasks-character-companion` on the Tasks tab, reducing Tasks idle CPU from 102% down to 5%.
+  - **Performance & Hardware Optimality Verification on ApoloSign Tablet (`192.168.0.112:38777`)**:
+    - Home screen idle CPU dropped from **116% to 3.4% – 7.0%**.
+    - RenderThread CPU dropped from **71% to 0.0%** (idle).
+    - Memory RSS dropped from **730MB to 444MB**.
+    - GPU temperature dropped from **65.6°C to 56.4°C** (widening margin to the 70°C throttle threshold by >10°C).
+    - `android layout` now succeeds cleanly with code 0 on all screens.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (app src).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+  - `node scripts/a11y-audit.mjs`: CLEAN (app src).
+  - Test suites: 103 passed, 103 total; 1,574 passed, 1,574 total (`npm test`).
+  - Tablet APK build & streamed install: `Success`, running on `192.168.0.112:38777`.
+
 - 2026-11-09 — fix(notifications): calendar date gating, Android OS chime suppression, and voice callout debounce (`notifications.ts`, `useNotificationMonitor.ts`, `voiceCallouts.ts`, `notification-monitor.test.ts`, `voice-callouts.test.ts`).
   **What changed:**
   - **Strict Calendar Date Gating (`src/native/useNotificationMonitor.ts`, `tests/notification-monitor.test.ts`)**:
