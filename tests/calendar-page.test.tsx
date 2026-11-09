@@ -188,7 +188,7 @@ describe("CalendarPage — day list merge", () => {
     expect(selected.getByText("Soccer game")).toBeTruthy();
     expect(selected.getByText("3:00 PM")).toBeTruthy();
     expect(selected.getByText("5:30 PM")).toBeTruthy();
-    expect(rowOrder({ toJSON })).toEqual(["g_g1", "s_s3", "g_g2", "db_e1"]);
+    expect(rowOrder({ toJSON })).toEqual(["g_g1", "g_g2", "db_e1", "s_s3"]);
   });
 
   it("google 502 partial keeps the server's surviving rows and admits the failure pill", async () => {
@@ -512,5 +512,129 @@ describe("CalendarPage — parent event creation", () => {
     expect(getByTestId("event-composer")).toBeTruthy();
     expect(getByLabelText("Event title")).toBeTruthy();
     expect(getByTestId("composer-error")).toBeTruthy();
+  });
+});
+
+describe("CalendarPage — schedule separation & layer controls", () => {
+  it("renders cal-events-section and cal-routines-section separately on days with both", async () => {
+    const schedules = [
+      { id: "s3", title: "Family clean", time: "10:00", days: "all", icon: "🧹", type: "routine", color: "cyan", member: "Aurora" },
+    ];
+    route({
+      "/api/db/events": { items: DB_EVENTS },
+      "/api/google-calendar": GOOGLE_OK(GOOGLE_EVENTS),
+      "/api/db/schedules": { items: schedules },
+    });
+    const { findByText, getByTestId } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
+    await findByText("Piano lesson");
+
+    expect(getByTestId("cal-events-section")).toBeTruthy();
+    expect(getByTestId("cal-routines-section")).toBeTruthy();
+    expect(getByTestId("cal-layer-filter")).toBeTruthy();
+    expect(getByTestId("cal-filter-all")).toBeTruthy();
+    expect(getByTestId("cal-filter-events")).toBeTruthy();
+    expect(getByTestId("cal-filter-routines")).toBeTruthy();
+
+    const eventsSection = within(getByTestId("cal-events-section"));
+    expect(eventsSection.getByText("Beach day")).toBeTruthy();
+    expect(eventsSection.getByText("Soccer game")).toBeTruthy();
+    expect(eventsSection.getByText("Piano lesson")).toBeTruthy();
+    expect(eventsSection.queryByText("Family clean")).toBeNull();
+
+    const routinesSection = within(getByTestId("cal-routines-section"));
+    expect(routinesSection.getByText("Family clean")).toBeTruthy();
+    expect(routinesSection.queryByText("Piano lesson")).toBeNull();
+  });
+
+  it("tapping layer filters toggles visibility of events and routines", async () => {
+    const schedules = [
+      { id: "s3", title: "Family clean", time: "10:00", days: "all", icon: "🧹", type: "routine", color: "cyan", member: "Aurora" },
+    ];
+    route({
+      "/api/db/events": { items: DB_EVENTS },
+      "/api/google-calendar": GOOGLE_OK(GOOGLE_EVENTS),
+      "/api/db/schedules": { items: schedules },
+    });
+    const { findByText, getByTestId, queryByTestId } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
+    await findByText("Piano lesson");
+
+    // Tap Events only
+    await act(async () => {
+      fireEvent.press(getByTestId("cal-filter-events"));
+      await Promise.resolve();
+    });
+    expect(getByTestId("cal-events-section")).toBeTruthy();
+    expect(queryByTestId("cal-routines-section")).toBeNull();
+    expect(getByTestId("cal-filter-events").props.accessibilityState?.selected).toBe(true);
+    expect(getByTestId("cal-filter-all").props.accessibilityState?.selected).toBe(false);
+
+    // Tap Routines only
+    await act(async () => {
+      fireEvent.press(getByTestId("cal-filter-routines"));
+      await Promise.resolve();
+    });
+    expect(queryByTestId("cal-events-section")).toBeNull();
+    expect(getByTestId("cal-routines-section")).toBeTruthy();
+    expect(within(getByTestId("cal-routines-section")).getByText("Family clean")).toBeTruthy();
+    expect(getByTestId("cal-filter-routines").props.accessibilityState?.selected).toBe(true);
+
+    // Tap All to restore
+    await act(async () => {
+      fireEvent.press(getByTestId("cal-filter-all"));
+      await Promise.resolve();
+    });
+    expect(getByTestId("cal-events-section")).toBeTruthy();
+    expect(getByTestId("cal-routines-section")).toBeTruthy();
+    expect(getByTestId("cal-filter-all").props.accessibilityState?.selected).toBe(true);
+  });
+
+  it("tapping cal-routines-toggle collapses and expands routine rows inside cal-routines-section", async () => {
+    const schedules = [
+      { id: "s3", title: "Family clean", time: "10:00", days: "all", icon: "🧹", type: "routine", color: "cyan", member: "Aurora" },
+    ];
+    route({
+      "/api/db/events": { items: DB_EVENTS },
+      "/api/google-calendar": GOOGLE_OK(GOOGLE_EVENTS),
+      "/api/db/schedules": { items: schedules },
+    });
+    const { findByText, getByTestId, queryByTestId, getByText } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
+    await findByText("Piano lesson");
+
+    expect(getByTestId("cal-row-s_s3")).toBeTruthy();
+    expect(getByText("Hide")).toBeTruthy();
+
+    // Tap toggle to collapse
+    await act(async () => {
+      fireEvent.press(getByTestId("cal-routines-toggle"));
+      await Promise.resolve();
+    });
+    expect(queryByTestId("cal-row-s_s3")).toBeNull();
+    expect(getByText("Show")).toBeTruthy();
+
+    // Tap toggle to expand
+    await act(async () => {
+      fireEvent.press(getByTestId("cal-routines-toggle"));
+      await Promise.resolve();
+    });
+    expect(getByTestId("cal-row-s_s3")).toBeTruthy();
+    expect(getByText("Hide")).toBeTruthy();
+  });
+
+  it("renders cal-dots indicator on days with calendar events, omitting routine-only days", async () => {
+    fullRoute();
+    const { findByText, getByTestId, queryByTestId } = render(<CalendarPage now={NOW} />, { wrapper: wrap });
+    await findByText("Piano lesson");
+
+    // 2026-10-10 has DB_EVENTS (Piano lesson) and GOOGLE_EVENTS -> has dots
+    expect(getByTestId("cal-dots-2026-10-10")).toBeTruthy();
+
+    // 2026-10-06 has DB_EVENTS (Dentist) -> has dots
+    expect(getByTestId("cal-dots-2026-10-06")).toBeTruthy();
+
+    // 2026-10-09 (Friday) has only routines (Wake up, Trash day), no calendar events -> no dots
+    expect(queryByTestId("cal-dots-2026-10-09")).toBeNull();
+
+    // 2026-10-08 (Thursday) has only weekday routine (Wake up) -> no dots
+    expect(queryByTestId("cal-dots-2026-10-08")).toBeNull();
   });
 });

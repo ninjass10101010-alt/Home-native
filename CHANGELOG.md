@@ -4,6 +4,20 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-08 — feat(calendar-ui): Calendar vs. Daily Schedule UI Separation & Wall Polish + Wave 5 Deep Critic Re-Verification (`src/calendar/CalendarPage.tsx`, `tests/calendar-page.test.tsx`).
+  **What changed:**
+  - **Clean Separation of Calendar Appointments vs. Daily Schedule & Routines (`src/calendar/CalendarPage.tsx`)**:
+    - Separated `selectedRows` inside `cal-selected-events` into two dedicated visual cards: **📅 Calendar Appointments** (`testID="cal-events-section"`) at the top and **⏰ Daily Schedule & Routines** (`testID="cal-routines-section"`) below, so daily routines never bury real family/Google appointments.
+    - Added a 64dp **Layer Filter Pill Strip** (`testID="cal-layer-filter"`: `cal-filter-all`, `cal-filter-events`, `cal-filter-routines`) and a 64×64dp **`Hide / Show` Routines Toggle** (`testID="cal-routines-toggle"`).
+    - Upgraded event cards (`renderEventCard`) with a 5dp color rail, 42×42dp icon badge, time pill, source tag (`Google Calendar` vs `Family Event`), bold 18sp title, and roster-first `isPhotoUri`-safe `<Image>` avatars; styled daily routines (`renderRoutineRow`) as compact timeline rows.
+    - Added **Month Grid Event Indicator Dots** (`testID="cal-dots-${iso}"`) showing up to 3 color-coded 6×6dp dots on dates with real calendar events (excluding routine-only days so every day in the month grid isn't cluttered).
+    - Grouped each day in the 7-day `Schedule` / `Agenda` tab (`view === "agenda"`) into Calendar Appointments first, followed by a `⏰ Daily Schedule` subsection.
+  **Verification:**
+  - Harsh Critic Loop (`docs/critic-loop.md`): Audited by Wave 5 Deep Re-Verification Critic + Calendar UI Harsh Critic across all 6 rubric axes; both returned **`PASS: zero Critical/High`**.
+  - `npm run tokens:check` & `npm run a11y:audit`: CLEAN.
+  - `npx tsc --noEmit` & `npx expo lint`: CLEAN (0 errors).
+  - Unit tests: **103 test suites passed, 1,553 tests passed** (`tests/calendar-page.test.tsx` + full suite).
+
 - 2026-11-08 — feat(skill-tree,time-capsule,family-memory): Skylight Plus / Hearth Display / Cozi parity Wave 5 — Skill Tree Companion Spotlight & Mastery Certificates, Family Time Capsule Guided Prompts & Keepsake Reactions, Family Memory Babysitter & Emergency Quick-Sheet + Pinned VIP Cards, and Wave 4 Deep Critic Re-Verification (`app/skill-tree.tsx`, `app/time-capsule.tsx`, `app/memory.tsx`).
   **What changed:**
   - **Skill Tree Companion Spotlight, Pep Talks & Branch Mastery (`app/skill-tree.tsx`, `tests/skill-tree-companion.test.tsx`)**:

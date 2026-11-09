@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { api, ApiError } from "../api/client";
 import type { DbListEnvelope, ServerMember } from "../api/types";
 import { useTheme } from "../theme/ThemeProvider";
-import { accentDeepened } from "../theme/mix";
+import { accentDeepened, mix } from "../theme/mix";
 import { Material } from "../theme/Material";
 import { FONTS, MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
 import { useAuth } from "../state/AuthProvider";
@@ -89,8 +89,9 @@ interface CalendarLoad {
 
 export function CalendarPage({ now = new Date() }: { now?: Date }) {
   const { colors, theme, accentColor, setTheme } = useTheme();
-  const { member, role } = useAuth();
+  const { role } = useAuth();
   const isParent = role === "parent";
+  const isSignedIn = role !== null;
   const { stale: syncStale } = useSync();
   const router = useRouter();
 
@@ -100,6 +101,8 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
   const [viewMonth, setViewMonth] = useState(() => isoToDate(localDateISO(now)).getMonth());
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
   const [roster, setRoster] = useState<ServerMember[]>([]);
+  const [dayLayer, setDayLayer] = useState<"all" | "events" | "routines">("all");
+  const [routinesExpanded, setRoutinesExpanded] = useState(true);
 
   const [composerOpen, setComposerOpen] = useState(false);
   const [magicImportOpen, setMagicImportOpen] = useState(false);
@@ -124,7 +127,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
       if (!alive) return;
       const rows = cached.length > 0 ? cached : FALLBACK_MEMBERS;
       setRoster(rows.filter((r) => (r.name || "").trim()));
-    });
+    }).catch(() => {});
     return () => {
       alive = false;
     };
@@ -262,6 +265,8 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
   );
 
   const selectedRows = rowsForDay(selectedISO);
+  const selectedEventRows = useMemo(() => selectedRows.filter((r) => !r.isRoutine), [selectedRows]);
+  const selectedRoutineRows = useMemo(() => selectedRows.filter((r) => r.isRoutine), [selectedRows]);
   const selectedEventCount = calendarEventsForDay(selectedISO).length;
   const agendaHasRows = agendaDays.some((iso) => rowsForDay(iso).length > 0);
 
@@ -403,7 +408,14 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     setViewMonth(target.getMonth());
   }, [selectedISO]);
 
-  const iconTargetStyle = { width: MIN_TARGET_DP, height: MIN_TARGET_DP, alignItems: "center", justifyContent: "center" } as const;
+  const iconTargetStyle = {
+    width: MIN_TARGET_DP,
+    height: MIN_TARGET_DP,
+    minWidth: MIN_TARGET_DP,
+    minHeight: MIN_TARGET_DP,
+    alignItems: "center",
+    justifyContent: "center",
+  } as const;
 
   const readonlyNote = (
     <Text
@@ -419,65 +431,212 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
     </Text>
   );
 
-  const renderRow = (row: WallEvent) => (
-    <View
-      key={row.id}
-      testID={`cal-row-${row.id}`}
-      style={{
-        borderRadius: 18,
-        padding: 14,
-        backgroundColor: colors["color-surface-2"],
-        borderWidth: 1,
-        borderColor: colors["color-border"],
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
-        <View
-          style={{
-            width: 4,
-            height: 36,
-            borderRadius: 2,
-            backgroundColor: row.railToken ? colors[row.railToken] ?? accentColor : accentColor,
-          }}
-        />
-        <View style={{ gap: 2, flex: 1 }}>
-          <Text style={{ color: colors["color-text-secondary"], fontSize: 14, fontWeight: "600" }}>
+  const resolveMemberInfo = (memberName?: string) => {
+    if (!memberName) return { memberObj: undefined, isPhoto: false, glyph: undefined };
+    const memberObj = roster.find(
+      (m) =>
+        m.name.toLowerCase() === memberName.toLowerCase() ||
+        m.name.split(" ")[0].toLowerCase() === memberName.split(" ")[0].toLowerCase()
+    );
+    const glyph = memberObj?.emoji || (memberName === "Google" ? "🌐" : undefined);
+    const isPhoto = glyph ? isPhotoUri(glyph) : false;
+    return { memberObj, isPhoto, glyph };
+  };
+
+  const renderEventCard = (row: WallEvent) => {
+    const railColor = row.railToken ? colors[row.railToken] ?? accentColor : accentColor;
+    const { isPhoto, glyph } = resolveMemberInfo(row.member);
+
+    return (
+      <View
+        key={row.id}
+        testID={`cal-row-${row.id}`}
+        style={{
+          borderRadius: 20,
+          padding: 16,
+          backgroundColor: colors["color-surface-2"],
+          borderWidth: 1,
+          borderColor: mix(railColor, colors["color-border"], 45),
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+          <View
+            style={{
+              width: 5,
+              minHeight: 44,
+              alignSelf: "stretch",
+              borderRadius: 3,
+              backgroundColor: railColor,
+            }}
+          />
+          <View
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 14,
+              backgroundColor: mix(railColor, "transparent", 18),
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ fontSize: 20 }}>{row.icon || "📅"}</Text>
+          </View>
+          <View style={{ gap: 4, flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: 14,
+                  fontWeight: "700",
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                {row.time ?? "Time TBD"}
+              </Text>
+              <Text style={{ color: colors["color-text-muted"], fontSize: 14 }}>•</Text>
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: 14,
+                  fontWeight: "600",
+                }}
+              >
+                {row.source === "google" ? "Google Calendar" : "Family Event"}
+              </Text>
+            </View>
+            <Text
+              numberOfLines={2}
+              style={{
+                color: colors["color-text-primary"],
+                fontSize: 18,
+                fontWeight: "700",
+              }}
+            >
+              {row.title}
+            </Text>
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {row.member ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 14,
+                backgroundColor: colors["color-surface-3"],
+              }}
+            >
+              {isPhoto ? (
+                <Image source={{ uri: glyph }} style={{ width: 22, height: 22, borderRadius: 11 }} />
+              ) : glyph ? (
+                <Text style={{ fontSize: 14 }}>{glyph}</Text>
+              ) : null}
+              <Text
+                style={{
+                  color: row.member === "Google" ? (colors["color-accent-cyan"] ?? accentColor) : colors["color-text-primary"],
+                  fontSize: 14,
+                  fontWeight: "600",
+                }}
+              >
+                {String(row.member).split(" ")[0]}
+              </Text>
+            </View>
+          ) : null}
+          {row.source === "family" && row.sourceId && (
+            row.googleSyncStatus === "pending" || row.googleSyncStatus === "failed"
+          ) ? (
+            <Chip
+              label={row.googleSyncStatus === "failed" ? "Google failed · Retry" : "Google pending · Retry"}
+              tone={row.googleSyncStatus === "failed" ? "danger" : "warning"}
+              onPress={() => void retryGoogle(row.sourceId)}
+              accessibilityLabel={`Retry Google sync for ${row.title}`}
+            />
+          ) : null}
+        </View>
+      </View>
+    );
+  };
+
+  const renderRoutineRow = (row: WallEvent) => {
+    const { isPhoto, glyph } = resolveMemberInfo(row.member);
+
+    return (
+      <View
+        key={row.id}
+        testID={`cal-row-${row.id}`}
+        style={{
+          borderRadius: 14,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          backgroundColor: colors["color-surface-2"],
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+          <Text style={{ fontSize: 18 }}>{row.icon || "⏰"}</Text>
+          <Text
+            style={{
+              color: colors["color-text-secondary"],
+              fontSize: 14,
+              fontWeight: "600",
+              fontVariant: ["tabular-nums"],
+            }}
+          >
             {row.time ?? "Time TBD"}
           </Text>
           <Text
             numberOfLines={1}
-            style={{ color: colors["color-text-primary"], fontSize: 17, fontWeight: "700" }}
+            style={{
+              color: colors["color-text-primary"],
+              fontSize: 16,
+              fontWeight: "600",
+              flex: 1,
+            }}
           >
             {row.title}
           </Text>
         </View>
-      </View>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         {row.member ? (
-          <Chip
-            size="sm"
-            as="span"
-            label={String(row.member).split(" ")[0]}
-            tone={row.member === "Google" ? "cyan" : "accent"}
-          />
-        ) : null}
-        {row.source === "family" && row.sourceId && (
-          row.googleSyncStatus === "pending" || row.googleSyncStatus === "failed"
-        ) ? (
-          <Chip
-            label={row.googleSyncStatus === "failed" ? "Google failed · Retry" : "Google pending · Retry"}
-            tone={row.googleSyncStatus === "failed" ? "danger" : "warning"}
-            onPress={() => void retryGoogle(row.sourceId)}
-            accessibilityLabel={`Retry Google sync for ${row.title}`}
-          />
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 12,
+              backgroundColor: colors["color-surface-3"],
+            }}
+          >
+            {isPhoto ? (
+              <Image source={{ uri: glyph }} style={{ width: 20, height: 20, borderRadius: 10 }} />
+            ) : glyph ? (
+              <Text style={{ fontSize: 14 }}>{glyph}</Text>
+            ) : null}
+            <Text
+              style={{
+                color: colors["color-text-primary"],
+                fontSize: 14,
+                fontWeight: "600",
+              }}
+            >
+              {String(row.member).split(" ")[0]}
+            </Text>
+          </View>
         ) : null}
       </View>
-    </View>
-  );
+    );
+  };
 
   if (pageFailed) {
     return (
@@ -496,30 +655,30 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
 
   return (
     <View testID="calendar-page" style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 180, gap: 16 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Signed-out banner (web SyncStatusBanner parity) */}
-        {!member ? (
-          <SignedOutBanner
-            title={SIGNED_OUT_BANNER}
-            action={
-              <Text
-                style={{
-                  color: colors["color-accent-amber"],
-                  fontSize: TYPOGRAPHY.label.fontSize,
-                  fontWeight: "700",
-                  textDecorationLine: "underline",
-                }}
-              >
-                Sign in with your PIN →
-              </Text>
-            }
-            onPress={() => router.push("/settings")}
-          />
-        ) : null}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 180, gap: 16 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Signed-out banner (web SyncStatusBanner parity) */}
+          {!isSignedIn ? (
+            <SignedOutBanner
+              title={SIGNED_OUT_BANNER}
+              action={
+                <Text
+                  style={{
+                    color: colors["color-accent-amber"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "700",
+                    textDecorationLine: "underline",
+                  }}
+                >
+                  Sign in with your PIN →
+                </Text>
+              }
+              onPress={() => router.push("/settings")}
+            />
+          ) : null}
 
         {/* 1. Top Glass Header Bar */}
         <Material
@@ -549,11 +708,18 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                   accessibilityLabel="Magic Import"
                   variant="secondary"
                   size="sm"
+                  style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
                   onPress={() => setMagicImportOpen(true)}
                 >
                   🪄 Magic Import
                 </SoftButton>
-                <SoftButton testID="add-event" accessibilityLabel="Add event" onPress={() => setComposerOpen(true)} size="sm">
+                <SoftButton
+                  testID="add-event"
+                  accessibilityLabel="Add event"
+                  size="sm"
+                  style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
+                  onPress={() => setComposerOpen(true)}
+                >
                   Add event
                 </SoftButton>
               </>
@@ -673,6 +839,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
               alignItems: "center",
               justifyContent: "center",
               minHeight: MIN_TARGET_DP,
+              minWidth: MIN_TARGET_DP,
               gap: 8,
               paddingHorizontal: 16,
               paddingVertical: 10,
@@ -709,6 +876,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                   alignItems: "center",
                   justifyContent: "center",
                   minHeight: MIN_TARGET_DP,
+                  minWidth: MIN_TARGET_DP,
                   gap: 8,
                   paddingHorizontal: 14,
                   paddingVertical: 8,
@@ -873,6 +1041,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                         const selected = cell.iso === selectedISO;
                         const isToday = cell.iso === todayISO;
                         const inSelectedWeek = cell.iso >= weekStartISO && cell.iso <= addDaysISO(weekStartISO, 6);
+                        const dayCalEvents = calendarEventsForDay(cell.iso);
                         return (
                           <Pressable
                             key={cell.iso}
@@ -910,6 +1079,30 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                               {cell.day}
                             </Text>
                             {isToday ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: accentColor, marginTop: 2 }} /> : null}
+                            {dayCalEvents.length > 0 ? (
+                              <View
+                                testID={`cal-dots-${cell.iso}`}
+                                style={{
+                                  flexDirection: "row",
+                                  gap: 3,
+                                  marginTop: 2,
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                {dayCalEvents.slice(0, 3).map((ev, i) => (
+                                  <View
+                                    key={ev.id || i}
+                                    style={{
+                                      width: 6,
+                                      height: 6,
+                                      borderRadius: 3,
+                                      backgroundColor: ev.railToken ? colors[ev.railToken] ?? accentColor : accentColor,
+                                    }}
+                                  />
+                                ))}
+                              </View>
+                            ) : null}
                           </Pressable>
                         );
                       })}
@@ -956,8 +1149,8 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                         style={{ color: colors["color-text-secondary"], fontSize: 14, marginTop: 2 }}
                       >
                         {(() => {
-                          const events = selectedRows.filter((r) => !r.isRoutine).length;
-                          const routines = selectedRows.length - events;
+                          const events = selectedEventRows.length;
+                          const routines = selectedRoutineRows.length;
                           const eventPart = `${events} ${events === 1 ? "event" : "events"}`;
                           return routines > 0 ? `${eventPart} · ${routines} ${routines === 1 ? "routine" : "routines"}` : eventPart;
                         })()}
@@ -995,12 +1188,113 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                     <Text style={{ color: colors["color-text-secondary"], fontSize: 14, flex: 1 }}>{pendingNotice}</Text>
                     <SoftButton
                       variant="secondary"
+                      size="sm"
+                      style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
                       onPress={() => void retryGoogle(pendingSourceId ?? undefined)}
                     >
                       Retry
                     </SoftButton>
                   </View>
                 ) : null}
+
+                {/* Layer Filter Pill Strip (All / Events / Routines) */}
+                <View
+                  testID="cal-layer-filter"
+                  style={{
+                    flexDirection: "row",
+                    gap: 10,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <Pressable
+                    testID="cal-filter-all"
+                    accessibilityRole="button"
+                    accessibilityLabel="Show all items"
+                    accessibilityState={{ selected: dayLayer === "all" }}
+                    onPress={() => setDayLayer("all")}
+                    style={{
+                      minHeight: MIN_TARGET_DP,
+                      minWidth: MIN_TARGET_DP,
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: 20,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: dayLayer === "all" ? accentDeepened(accentColor, 50) : colors["color-surface-2"],
+                      borderWidth: 1,
+                      borderColor: dayLayer === "all" ? accentColor : colors["color-border"],
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: dayLayer === "all" ? colors["color-primary-foreground"] : colors["color-text-primary"],
+                        fontSize: 14,
+                        fontWeight: "600",
+                      }}
+                    >
+                      All ({selectedRows.length})
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID="cal-filter-events"
+                    accessibilityRole="button"
+                    accessibilityLabel="Show calendar events only"
+                    accessibilityState={{ selected: dayLayer === "events" }}
+                    onPress={() => setDayLayer("events")}
+                    style={{
+                      minHeight: MIN_TARGET_DP,
+                      minWidth: MIN_TARGET_DP,
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: 20,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: dayLayer === "events" ? accentDeepened(accentColor, 50) : colors["color-surface-2"],
+                      borderWidth: 1,
+                      borderColor: dayLayer === "events" ? accentColor : colors["color-border"],
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: dayLayer === "events" ? colors["color-primary-foreground"] : colors["color-text-primary"],
+                        fontSize: 14,
+                        fontWeight: "600",
+                      }}
+                    >
+                      📅 Events ({selectedEventRows.length})
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    testID="cal-filter-routines"
+                    accessibilityRole="button"
+                    accessibilityLabel="Show daily schedule routines only"
+                    accessibilityState={{ selected: dayLayer === "routines" }}
+                    onPress={() => setDayLayer("routines")}
+                    style={{
+                      minHeight: MIN_TARGET_DP,
+                      minWidth: MIN_TARGET_DP,
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderRadius: 20,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: dayLayer === "routines" ? accentDeepened(accentColor, 50) : colors["color-surface-2"],
+                      borderWidth: 1,
+                      borderColor: dayLayer === "routines" ? accentColor : colors["color-border"],
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: dayLayer === "routines" ? colors["color-primary-foreground"] : colors["color-text-primary"],
+                        fontSize: 14,
+                        fontWeight: "600",
+                      }}
+                    >
+                      ⏰ Daily Schedule ({selectedRoutineRows.length})
+                    </Text>
+                  </Pressable>
+                </View>
 
                 {/* Selected Day's Event cards */}
                 {selectedRows.length === 0 ? (
@@ -1022,7 +1316,148 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                     </Text>
                   </View>
                 ) : (
-                  <View testID="cal-selected-events" style={{ gap: 10 }}>{selectedRows.map(renderRow)}</View>
+                  <View testID="cal-selected-events" style={{ gap: 16 }}>
+                    {/* Section 1 — Calendar Events */}
+                    {dayLayer === "all" || dayLayer === "events" ? (
+                      <View testID="cal-events-section" style={{ gap: 12 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Text
+                              style={{
+                                color: colors["color-text-secondary"],
+                                fontSize: 14,
+                                fontWeight: "700",
+                                letterSpacing: 1.2,
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              📅 CALENDAR APPOINTMENTS
+                            </Text>
+                            <View
+                              style={{
+                                paddingHorizontal: 8,
+                                paddingVertical: 2,
+                                borderRadius: 10,
+                                backgroundColor: colors["color-surface-2"],
+                                borderWidth: 1,
+                                borderColor: colors["color-border"],
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: colors["color-text-primary"],
+                                  fontSize: 14,
+                                  fontWeight: "700",
+                                  fontVariant: ["tabular-nums"],
+                                }}
+                              >
+                                {selectedEventRows.length}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        {selectedEventRows.length === 0 ? (
+                          <View
+                            testID="cal-no-appointments-card"
+                            style={{
+                              padding: 16,
+                              borderRadius: 16,
+                              backgroundColor: colors["color-surface-2"],
+                              borderWidth: 1,
+                              borderColor: colors["color-border"],
+                            }}
+                          >
+                            <Text style={{ color: colors["color-text-secondary"], fontSize: 14 }}>
+                              No special appointments on this day — only daily schedule routines below.
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={{ gap: 10 }}>
+                            {selectedEventRows.map(renderEventCard)}
+                          </View>
+                        )}
+                      </View>
+                    ) : null}
+
+                    {/* Section 2 — Daily Schedule & Routines */}
+                    {(dayLayer === "all" || dayLayer === "routines") && selectedRoutineRows.length > 0 ? (
+                      <View
+                        testID="cal-routines-section"
+                        style={{
+                          borderRadius: 20,
+                          padding: 14,
+                          backgroundColor: colors["color-surface-1"],
+                          borderWidth: 1,
+                          borderColor: colors["color-border"],
+                          gap: 12,
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Text
+                              style={{
+                                color: colors["color-text-secondary"],
+                                fontSize: 14,
+                                fontWeight: "700",
+                                letterSpacing: 1.2,
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              ⏰ DAILY SCHEDULE & ROUTINES
+                            </Text>
+                            <View
+                              style={{
+                                paddingHorizontal: 8,
+                                paddingVertical: 2,
+                                borderRadius: 10,
+                                backgroundColor: colors["color-surface-2"],
+                                borderWidth: 1,
+                                borderColor: colors["color-border"],
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: colors["color-text-primary"],
+                                  fontSize: 14,
+                                  fontWeight: "700",
+                                  fontVariant: ["tabular-nums"],
+                                }}
+                              >
+                                {selectedRoutineRows.length}
+                              </Text>
+                            </View>
+                          </View>
+                          <Pressable
+                            testID="cal-routines-toggle"
+                            accessibilityRole="button"
+                            accessibilityLabel={routinesExpanded ? "Hide daily schedule routines" : "Show daily schedule routines"}
+                            onPress={() => setRoutinesExpanded((prev) => !prev)}
+                            style={{
+                              minHeight: MIN_TARGET_DP,
+                              minWidth: MIN_TARGET_DP,
+                              paddingHorizontal: 16,
+                              paddingVertical: 8,
+                              borderRadius: 16,
+                              backgroundColor: colors["color-surface-2"],
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Text style={{ color: colors["color-text-primary"], fontSize: 14, fontWeight: "600" }}>
+                              {routinesExpanded ? "Hide" : "Show"}
+                            </Text>
+                          </Pressable>
+                        </View>
+
+                        {routinesExpanded || dayLayer === "routines" ? (
+                          <View style={{ gap: 8 }}>
+                            {selectedRoutineRows.map(renderRoutineRow)}
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </View>
                 )}
 
                 {/* REST OF THIS WEEK section */}
@@ -1057,6 +1492,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                             flexDirection: "row",
                             alignItems: "center",
                             minHeight: MIN_TARGET_DP,
+                            minWidth: MIN_TARGET_DP,
                             gap: 12,
                             paddingVertical: 6,
                           }}
@@ -1169,6 +1605,7 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                       onPress={() => selectDay(item.iso)}
                       style={{
                         width: 156,
+                        minWidth: MIN_TARGET_DP,
                         minHeight: MIN_TARGET_DP,
                         borderRadius: 20,
                         padding: 14,
@@ -1225,10 +1662,13 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
               <EmptyState flat icon="🌿" title="Quiet week" body={QUIET_WEEK_BODY} />
             ) : (
               agendaDays.map((iso) => {
-                const rows = rowsForDay(iso);
-                if (rows.length === 0) return null;
+                const dayRows = rowsForDay(iso);
+                if (dayRows.length === 0) return null;
                 const d = isoToDate(iso);
                 const heading = iso === todayISO ? `Today · ${longDate(d)}` : longDate(d);
+                const dayEvents = dayRows.filter((r) => !r.isRoutine);
+                const dayRoutines = dayRows.filter((r) => r.isRoutine);
+
                 return (
                   <View key={iso} style={{ gap: 10 }}>
                     <Text
@@ -1241,7 +1681,31 @@ export function CalendarPage({ now = new Date() }: { now?: Date }) {
                     >
                       {heading}
                     </Text>
-                    <View style={{ gap: 8 }}>{rows.map(renderRow)}</View>
+                    <View style={{ gap: 8 }}>
+                      {dayEvents.length > 0 ? (
+                        <View style={{ gap: 8 }}>
+                          {dayEvents.map(renderEventCard)}
+                        </View>
+                      ) : null}
+                      {dayRoutines.length > 0 ? (
+                        <View style={{ gap: 8, marginTop: dayEvents.length > 0 ? 6 : 0 }}>
+                          <Text
+                            style={{
+                              color: colors["color-text-secondary"],
+                              fontSize: 14,
+                              fontWeight: "700",
+                              letterSpacing: 1,
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            ⏰ Daily Schedule ({dayRoutines.length})
+                          </Text>
+                          <View style={{ gap: 6 }}>
+                            {dayRoutines.map(renderRoutineRow)}
+                          </View>
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
                 );
               })
