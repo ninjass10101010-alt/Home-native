@@ -7,8 +7,9 @@ import { GalleryHero } from "./WidgetHero";
 import { WeatherTimeline } from "./WidgetTimeline";
 import { WeatherAirQuality } from "./WidgetAirQuality";
 import { WeatherMoon } from "./WidgetMoon";
+import { DressAdvisorCard } from "./DressAdvisorCard";
 
-export { WeatherTimeline, WeatherAirQuality, WeatherMoon };
+export { WeatherTimeline, WeatherAirQuality, WeatherMoon, DressAdvisorCard };
 
 /**
  * The /weather gallery — ONE fetch for hero + cards (the one-fetch rule).
@@ -26,6 +27,7 @@ export function WeatherGallery() {
       contentContainerStyle={{ padding: 18, gap: 18, paddingBottom: 160 }}
     >
       <GalleryHero status={status} data={data} stale={stale} retry={retry} failure={failure} />
+      {data ? <DressAdvisorCard data={data} /> : null}
       {data ? <WeatherTimeline data={data} /> : null}
       {data ? <WeatherAirQuality data={data} /> : null}
       {data ? <WeatherMoon data={data} /> : null}

@@ -444,26 +444,30 @@ export function RewardsPage() {
             ) : null}
           </View>
 
-          <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
-            <SoftButton
-              variant="secondary"
-              size="sm"
-              testID="rewards-add-goal-button"
-              accessibilityLabel="Add family goal"
-              onPress={() => setGoalModalOpen(true)}
-            >
-              🎯 + Family Goal
-            </SoftButton>
-            <SoftButton
-              variant="primary"
-              size="sm"
-              testID="rewards-add-button"
-              accessibilityLabel="Add reward to shop"
-              onPress={() => setComposerOpen(true)}
-            >
-              + Add Reward
-            </SoftButton>
-          </View>
+          {isParent ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
+              <SoftButton
+                variant="secondary"
+                size="sm"
+                testID="rewards-add-goal-button"
+                accessibilityLabel="Add family goal"
+                style={{ minHeight: MIN_TARGET_DP }}
+                onPress={() => setGoalModalOpen(true)}
+              >
+                🎯 + Family Goal
+              </SoftButton>
+              <SoftButton
+                variant="primary"
+                size="sm"
+                testID="rewards-add-button"
+                accessibilityLabel="Add reward to shop"
+                style={{ minHeight: MIN_TARGET_DP }}
+                onPress={() => setComposerOpen(true)}
+              >
+                + Add Reward
+              </SoftButton>
+            </View>
+          ) : null}
         </View>
 
         {/* Upgraded StatTiles: Material regular tier with tabular-nums */}
@@ -714,7 +718,7 @@ export function RewardsPage() {
                         </Text>
                       ) : null}
                     </View>
-                    {isCustom ? (
+                    {isCustom && isParent ? (
                       <Pressable
                         testID={`reward-delete-${id}`}
                         accessibilityRole="button"
@@ -1193,7 +1197,10 @@ export function RewardsPage() {
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
+                        justifyContent: "center",
                         gap: 6,
+                        minHeight: MIN_TARGET_DP,
+                        minWidth: MIN_TARGET_DP,
                         paddingHorizontal: 14,
                         paddingVertical: 8,
                         borderRadius: 999,
@@ -1230,7 +1237,7 @@ export function RewardsPage() {
             placeholder="Parent name"
             value={parentName}
             onChangeText={setParentName}
-            style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, padding: 12, borderRadius: 12, backgroundColor: colors["color-surface-2"] }}
+            style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, minHeight: MIN_TARGET_DP, padding: 12, borderRadius: 12, backgroundColor: colors["color-surface-2"] }}
           />
           <TextInput
             testID="parent-pin-input"
@@ -1239,7 +1246,7 @@ export function RewardsPage() {
             onChangeText={setParentPin}
             secureTextEntry
             keyboardType="numeric"
-            style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, padding: 12, borderRadius: 12, backgroundColor: colors["color-surface-2"] }}
+            style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, minHeight: MIN_TARGET_DP, padding: 12, borderRadius: 12, backgroundColor: colors["color-surface-2"] }}
           />
           {parentError ? (
             <Text style={{ color: colors["color-accent-rose"], fontSize: TYPOGRAPHY.label.fontSize }} role="alert">

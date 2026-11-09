@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "expo-router";
 import { Screen } from "../src/theme/Screen";
 import { useTheme } from "../src/theme/ThemeProvider";
 import { Material } from "../src/theme/Material";
-import { FONTS, RADII, SPACING, TYPOGRAPHY } from "../src/theme/tokens";
+import { FONTS, MIN_TARGET_DP, RADII, SPACING, TYPOGRAPHY } from "../src/theme/tokens";
 import { mix } from "../src/theme/mix";
 import { CapsuleDock, MoreButton } from "../src/nav/CapsuleDock";
 import { MoreSheet } from "../src/nav/MoreSheet";
@@ -15,6 +15,13 @@ import { Modal } from "../src/ui/Modal";
 import { SoftButton } from "../src/ui/SoftButton";
 import { TextField } from "../src/ui/TextField";
 import { useToast } from "../src/ui/Toast";
+import { CelebrationOverlay, type CelebrationEvent } from "../src/ui/CelebrationOverlay";
+import { useCharacterTheme } from "../src/theme/characterTheme";
+import {
+  ALLOWANCE_JAR_META,
+  useAllowanceJars,
+  type AllowanceJarId,
+} from "../src/rewards/allowance-jars";
 
 const MOUNTAIN_STORAGE_KEY = "@consuela/money_mountain_v1";
 
@@ -50,6 +57,11 @@ export default function MoneyMountainRoute() {
   const { snapshot } = useSync();
   const [moreOpen, setMoreOpen] = useState(false);
 
+  const isSignedIn = capabilityRole !== null;
+  const [characterPrefs] = useCharacterTheme();
+  const [celebrationEvent, setCelebrationEvent] = useState<CelebrationEvent | null>(null);
+  const { jars, adjustJar } = useAllowanceJars();
+
   const [goals, setGoals] = useState<SavingsGoal[]>(DEFAULT_SAVINGS_GOALS);
   const [modalOpen, setModalOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
@@ -60,15 +72,17 @@ export default function MoneyMountainRoute() {
 
   useEffect(() => {
     let alive = true;
-    void AsyncStorage.getItem(MOUNTAIN_STORAGE_KEY).then((raw) => {
-      if (!alive || !raw) return;
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) setGoals(parsed);
-      } catch {
-        // ignore
-      }
-    });
+    void AsyncStorage.getItem(MOUNTAIN_STORAGE_KEY)
+      .then((raw) => {
+        if (!alive || !raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) setGoals(parsed);
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -94,6 +108,33 @@ export default function MoneyMountainRoute() {
     return Object.values(pts).reduce((acc, v) => acc + (Number(v) || 0), 0);
   }, [snapshot, member]);
 
+  const jarToneColor = useCallback(
+    (tone: string) => {
+      switch (tone) {
+        case "cyan":
+          return colors["color-accent-cyan"] ?? accentColor;
+        case "mint":
+          return colors["color-accent-mint"] ?? accentColor;
+        case "coral":
+          return colors["color-accent-coral"] ?? accentColor;
+        default:
+          return accentColor;
+      }
+    },
+    [colors, accentColor],
+  );
+
+  const handleJarAdjust = useCallback(
+    async (jarId: AllowanceJarId, amount: number) => {
+      const nextState = await adjustJar(jarId, amount);
+      const meta = ALLOWANCE_JAR_META.find((m) => m.id === jarId);
+      const sign = amount >= 0 ? `+${amount}` : `${amount}`;
+      toast.show(`${sign} to ${meta?.title ?? jarId}!`, { intent: "success" });
+      return nextState;
+    },
+    [adjustJar, toast],
+  );
+
   const handleDeposit = useCallback(
     async (goalId: string, amount: number) => {
       const next = goals.map((g) =>
@@ -103,11 +144,19 @@ export default function MoneyMountainRoute() {
       const targetGoal = next.find((g) => g.id === goalId);
       if (targetGoal && targetGoal.saved >= targetGoal.target) {
         toast.show(`🏔️ Summit reached for "${targetGoal.title}"!`, { intent: "success" });
+        if (characterPrefs.enabled) {
+          setCelebrationEvent({
+            kind: "reward",
+            memberName: member?.name || "Family",
+            title: `Summit Reached: ${targetGoal.title}!`,
+            points: targetGoal.target,
+          });
+        }
       } else {
         toast.show(`Added +${amount} to "${targetGoal?.title ?? "Goal"}"!`, { intent: "success" });
       }
     },
-    [goals, persistGoals, toast],
+    [goals, persistGoals, toast, characterPrefs.enabled, member],
   );
 
   const handleAddGoal = useCallback(async () => {
@@ -138,8 +187,8 @@ export default function MoneyMountainRoute() {
                   color: colors["color-text-muted"],
                   fontSize: TYPOGRAPHY.label.fontSize,
                   fontWeight: "700",
-                letterSpacing: 2,
-              }}
+                  letterSpacing: 2,
+                }}
               >
                 SAVINGS GOALS & ALLOWANCE
               </Text>
@@ -160,6 +209,7 @@ export default function MoneyMountainRoute() {
               size="sm"
               testID="mountain-add-goal"
               accessibilityLabel="Add new savings goal"
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
               onPress={() => setModalOpen(true)}
             >
               + New Climb Goal
@@ -184,6 +234,116 @@ export default function MoneyMountainRoute() {
             </View>
             <View style={{ height: 10, borderRadius: 5, backgroundColor: colors["color-surface-2"], overflow: "hidden" }}>
               <View style={{ width: `${overallPct}%`, height: 10, backgroundColor: colors["color-accent-mint"] ?? accentColor }} />
+            </View>
+          </Material>
+
+          {/* 3-Jar Family Allowance Split (Spend · Save · Give) */}
+          <Material tier="regular" testID="mountain-jars-card" style={{ borderRadius: RADII.xl, padding: SPACING.md, gap: SPACING.md }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ gap: 4 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "700",
+                    letterSpacing: 1.5,
+                  }}
+                >
+                  3-JAR FAMILY ALLOWANCE SPLIT
+                </Text>
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.cardTitle.fontSize,
+                    fontWeight: "800",
+                  }}
+                >
+                  🏦 Spend · Save · Give Jars
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: SPACING.md }}>
+              {ALLOWANCE_JAR_META.map((meta) => {
+                const toneColor = jarToneColor(meta.tone);
+                const balance = jars[meta.id] ?? 0;
+                return (
+                  <Material
+                    key={meta.id}
+                    tier="thin"
+                    testID={`mountain-jar-${meta.id}`}
+                    style={{
+                      flex: 1,
+                      borderRadius: RADII.lg,
+                      padding: SPACING.md,
+                      gap: SPACING.sm,
+                      borderWidth: 1,
+                      borderColor: colors["color-border-subtle"],
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
+                      <Text style={{ fontSize: 28 }}>{meta.emoji}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={{
+                            color: colors["color-text-primary"],
+                            fontSize: TYPOGRAPHY.body.fontSize,
+                            fontWeight: "700",
+                          }}
+                        >
+                          {meta.title}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors["color-text-muted"],
+                            fontSize: TYPOGRAPHY.label.fontSize,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {meta.subtitle}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text
+                      testID={`mountain-jar-balance-${meta.id}`}
+                      style={{
+                        color: toneColor,
+                        fontSize: 32,
+                        fontWeight: "800",
+                        marginVertical: 4,
+                      }}
+                    >
+                      {`$${balance}`}
+                    </Text>
+
+                    <View style={{ flexDirection: "row", gap: SPACING.xs, flexWrap: "wrap" }}>
+                      <SoftButton
+                        variant="primary"
+                        size="sm"
+                        testID={`mountain-jar-add5-${meta.id}`}
+                        accessibilityLabel={`Add 5 to ${meta.title}`}
+                        style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
+                        onPress={() => void handleJarAdjust(meta.id, 5)}
+                      >
+                        +5
+                      </SoftButton>
+                      {isSignedIn ? (
+                        <SoftButton
+                          variant="secondary"
+                          size="sm"
+                          testID={`mountain-jar-sub5-${meta.id}`}
+                          accessibilityLabel={`Subtract 5 from ${meta.title}`}
+                          style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
+                          onPress={() => void handleJarAdjust(meta.id, -5)}
+                        >
+                          -5
+                        </SoftButton>
+                      ) : null}
+                    </View>
+                  </Material>
+                );
+              })}
             </View>
           </Material>
 
@@ -238,6 +398,7 @@ export default function MoneyMountainRoute() {
                       size="sm"
                       testID={`mountain-deposit-5-${goal.id}`}
                       accessibilityLabel={`Add 5 to ${goal.title}`}
+                      style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
                       onPress={() => void handleDeposit(goal.id, 5)}
                     >
                       + Add 5
@@ -247,6 +408,7 @@ export default function MoneyMountainRoute() {
                       size="sm"
                       testID={`mountain-deposit-10-${goal.id}`}
                       accessibilityLabel={`Add 10 to ${goal.title}`}
+                      style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
                       onPress={() => void handleDeposit(goal.id, 10)}
                     >
                       ⛰️ Climb +10
@@ -296,12 +458,17 @@ export default function MoneyMountainRoute() {
             </View>
           </View>
           <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: SPACING.sm }}>
-            <SoftButton variant="ghost" onPress={() => setModalOpen(false)}>
+            <SoftButton
+              variant="ghost"
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
+              onPress={() => setModalOpen(false)}
+            >
               Cancel
             </SoftButton>
             <SoftButton
               variant="primary"
               testID="mountain-goal-save"
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
               disabled={!draftTitle.trim()}
               onPress={() => void handleAddGoal()}
             >
@@ -310,6 +477,11 @@ export default function MoneyMountainRoute() {
           </View>
         </View>
       </Modal>
+
+      <CelebrationOverlay
+        event={celebrationEvent}
+        onDismiss={() => setCelebrationEvent(null)}
+      />
 
       <View style={{ position: "absolute", left: 0, right: 0, bottom: 116, alignItems: "center" }} pointerEvents="box-none">
         <MoreButton onPress={() => setMoreOpen(true)} />

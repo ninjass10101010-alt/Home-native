@@ -4,6 +4,28 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-08 — feat(weather-advisor,allowance-jars,insights-pulse): Skylight Plus / Hearth Display parity Wave 4 — Morning Weather Dress & Gear Advisor, Money Mountain 3-Jar Family Allowance Split (Spend · Save · Give), Family Insights Pulse & Readiness Digest, and Wave 3 Deep Critic Re-Verification (`dress-advisor.ts`, `DressAdvisorCard.tsx`, `WidgetGallery.tsx`, `allowance-jars.ts`, `app/money-mountain.tsx`, `app/analytics.tsx`, `RewardsPage.tsx`, `RoutinesPanel.tsx`).
+  **What changed:**
+  - **Morning Weather Dress & Gear Advisor ("What to Wear Today") (`src/weather/dress-advisor.ts`, `src/weather/DressAdvisorCard.tsx`, `src/weather/WidgetGallery.tsx`)**:
+    - Built `computeWeatherDressAdvice(data: WeatherSnapshot)` returning a 3-item readiness checklist (`outfit`, `gear`, `play`) and summary headline based on live `feelsLikeF`/`tempF` (freezing ≤38°F heavy coat & gloves, cool 39–58°F hoodie/jacket, mild 59–75°F t-shirt & pants, warm >75°F shorts & breathable tee), precipitation probability/WMO codes (`☔ Raincoat & Boots`), UV index ≥5 (`🕶️ Sunglasses & Sunscreen`), wind (`💨 Windbreaker`), and AQI (`😷 Indoor Play Advisory` vs `🌳 Great for Outdoor Recess`).
+    - Built `<DressAdvisorCard />` (`testID="wx-dress-advisor"`) wired directly below `<GalleryHero />` in `WeatherGallery` (`src/weather/WidgetGallery.tsx`) with 64dp interactive check-off cards (`wx-dress-item-*`) that toggle between `Get ready` and `✓ Ready!` with live progress tracking (`wx-dress-progress`: `X / 3 Ready` → `All Set! 🎉`).
+  - **Money Mountain 3-Jar Family Allowance Split (`Spend · Save · Give`) (`src/rewards/allowance-jars.ts`, `app/money-mountain.tsx`)**:
+    - Built `useAllowanceJars`, `loadAllowanceJars`, and `adjustAllowanceJar` backed by `AsyncStorage` (`consuela-allowance-jars`) tracking 3 virtual family allowance jars (`🛍️ Spend Jar`, `🏔️ Save Jar`, `💝 Give & Share Jar`) and recent jar transactions.
+    - Upgraded `app/money-mountain.tsx` with the **🏦 3-Jar Family Allowance Split (`Spend · Save · Give`)** card (`testID="mountain-jars-card"`) displaying live jar balances (`mountain-jar-balance-*`), 64dp `+5` deposit buttons (`mountain-jar-add5-*`), capability-gated (`role !== null`) 64dp `-5` withdrawal buttons (`mountain-jar-sub5-*`), and `<CelebrationOverlay />` integration when a Climb Goal reaches 100% summit.
+  - **Family Insights Pulse & Readiness Digest (`app/analytics.tsx`)**:
+    - Upgraded `/analytics` (`app/analytics.tsx`) with the **🌟 Family Pulse & Readiness Digest** card (`testID="insights-family-pulse-card"`) aggregating live Kudos Jar stars (`insights-pulse-kudos` + 64dp jump to `/rewards`), the next upcoming Event Countdown (`insights-pulse-countdown` + 64dp jump to `/calendar`), and Reusable Checklist packing readiness (`insights-pulse-checklists` + 64dp jump to `/tasks`).
+    - Enriched `insights-members-card` with roster-first photo-URI-safe avatars (`isPhotoUri` via `<Image testID="insights-member-img-*" />`) and earned habit streak milestone badges (`insights-member-badge-*`, e.g., `🌟 7-Day Flame`, `🔥 3-Day Spark`) resolved via `resolveMemberStreak`.
+  - **Wave 3 Deep Re-Verification Hardening (`src/rewards/RewardsPage.tsx`, `src/tasks/RoutinesPanel.tsx`)**:
+    - Gated `rewards-add-goal-button`, `rewards-add-button`, and `reward-delete-${id}` in `RewardsPage.tsx` and `routines-add-button` in `RoutinesPanel.tsx` behind `isParent` (`role === "parent"`).
+    - Enforced explicit `minHeight: MIN_TARGET_DP` (`64`) and `minWidth: MIN_TARGET_DP` (`64`) on selectable parent chips and text inputs in `highcost-parent-modal` (`RewardsPage.tsx`) and on `routine-edit-${routine.id}` (`RoutinesPanel.tsx`).
+  **Verification:**
+  - Harsh Critic Loop (`docs/critic-loop.md`): Audited by Wave 3 Deep Re-Verification Critic + Wave 4 Harsh Critic across all 6 rubric axes; both returned **`PASS: zero Critical/High`**.
+  - `npm run tokens:check`: CLEAN (app src, 0 token-literal violations).
+  - `npm run a11y:audit`: CLEAN (app src, 14sp floor & 64dp tap targets honored).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors, 0 warnings).
+  - Unit tests: **100 test suites passed, 1,526 tests passed** (`tests/weather-dress-advisor.test.tsx`, `tests/money-mountain-jars.test.tsx`, `tests/analytics-pulse.test.tsx` + full suite).
+
 - 2026-11-08 — feat(focus-timer,kudos-jar,staples-shelf): Skylight Plus / Hearth Display parity Wave 3 — Visual Focus & Routine Sprint Timer, Family Kudos & Kindness Shoutout Jar, 1-Tap Kitchen Staples Quick-Add Shelf, and Wave 2 Deep Critic Re-Verification (`focus-timer.ts`, `FocusTimerModal.tsx`, `RoutinesPanel.tsx`, `kudos-jar.ts`, `KudosJarCard.tsx`, `RewardsPage.tsx`, `staples-shelf.ts`, `ShopStockTabs.tsx`, `CustomListsCard.tsx`, `TasksPage.tsx`).
   **What changed:**
   - **Visual Focus & Routine Sprint Timer (`src/tasks/focus-timer.ts`, `src/tasks/FocusTimerModal.tsx`, `src/tasks/RoutinesPanel.tsx`)**:

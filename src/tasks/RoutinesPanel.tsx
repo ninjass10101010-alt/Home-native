@@ -309,16 +309,18 @@ export function RoutinesPanel({
           >
             ⏱️ Focus Timer
           </SoftButton>
-          <SoftButton
-            variant="primary"
-            size="sm"
-            testID="routines-add-button"
-            accessibilityLabel="Add new family routine"
-            style={{ minHeight: MIN_TARGET_DP }}
-            onPress={openNewComposer}
-          >
-            + Add Routine
-          </SoftButton>
+          {isParent ? (
+            <SoftButton
+              variant="primary"
+              size="sm"
+              testID="routines-add-button"
+              accessibilityLabel="Add new family routine"
+              style={{ minHeight: MIN_TARGET_DP }}
+              onPress={openNewComposer}
+            >
+              + Add Routine
+            </SoftButton>
+          ) : null}
         </View>
       </Material>
 
@@ -504,6 +506,7 @@ export function RoutinesPanel({
                         size="sm"
                         testID={`routine-edit-${routine.id}`}
                         accessibilityLabel={`Edit ${routine.title}`}
+                        style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
                         onPress={() => openEditComposer(routine)}
                       >
                         ✏️
