@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import {
   isWithinQuietHours,
   loadNotificationPreferences,
+  resolveTimingPreference,
   type NotificationCategory,
 } from "./notificationPrefs";
 import { playNotificationAudio } from "./voiceCallouts";
@@ -115,14 +116,15 @@ export async function dispatchNotification({
     }
     isQuiet = category !== "weather" && isWithinQuietHours(new Date(), prefs.quietHours);
     if (!isQuiet) {
+      const timingMode = resolveTimingPreference(config);
       if (timing === "advance") {
-        if (config.advanceEnabled === false) return null;
+        if (config.advanceEnabled === false || timingMode === "start_only") return null;
         const sound = config.advanceSound ?? config.sound;
         const volume = config.advanceVolume ?? config.volume;
         const soundMode = config.advanceSoundMode ?? config.soundMode ?? "tone_and_voice";
         void playNotificationAudio({ sound, volume, soundMode, category, title, body });
       } else if (timing === "start") {
-        if (config.startEnabled === false) return null;
+        if (config.startEnabled === false || timingMode === "advance_only") return null;
         const sound = config.startSound ?? config.sound;
         const volume = config.startVolume ?? config.volume;
         const soundMode = config.startSoundMode ?? config.soundMode ?? "tone_and_voice";

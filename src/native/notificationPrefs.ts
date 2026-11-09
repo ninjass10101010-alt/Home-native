@@ -5,11 +5,15 @@ import type { SoundMode } from "./voiceCallouts";
 
 export type NotificationCategory = "weather" | "calendar" | "routines";
 
+export type TimingPreference = "advance_only" | "start_only" | "both";
+
 export interface CategoryNotificationConfig {
   enabled: boolean;
   sound: NotificationSound;
   volume: number; // 0.0 to 1.0
   soundMode?: SoundMode; // "tone_and_voice" | "voice_only" | "tone_only"
+  // Timing preference: "both" (default), "advance_only" (15 min warning only), or "start_only"
+  timingMode?: TimingPreference;
   // Advance (15-min) notice configuration
   advanceEnabled?: boolean;
   advanceSound?: NotificationSound;
@@ -107,6 +111,20 @@ export function isWithinQuietHours(
   return false;
 }
 
+/**
+ * Resolves the effective timing preference ("advance_only" | "start_only" | "both")
+ * for a category configuration, handling legacy advanceEnabled/startEnabled flags.
+ */
+export function resolveTimingPreference(
+  config?: CategoryNotificationConfig
+): TimingPreference {
+  if (!config) return "both";
+  if (config.timingMode) return config.timingMode;
+  if (config.startEnabled === false && config.advanceEnabled !== false) return "advance_only";
+  if (config.advanceEnabled === false && config.startEnabled !== false) return "start_only";
+  return "both";
+}
+
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
   weather: {
     enabled: true,
@@ -119,6 +137,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
     sound: "chime",
     volume: 0.7,
     soundMode: "tone_and_voice",
+    timingMode: "both",
     advanceEnabled: true,
     advanceSound: "chime",
     advanceVolume: 0.7,
@@ -133,6 +152,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
     sound: "harp",
     volume: 0.7,
     soundMode: "tone_and_voice",
+    timingMode: "both",
     advanceEnabled: true,
     advanceSound: "harp",
     advanceVolume: 0.7,
@@ -188,10 +208,12 @@ export async function loadNotificationPreferences(): Promise<NotificationPrefere
       calendar: {
         ...DEFAULT_NOTIFICATION_PREFS.calendar,
         ...(parsed.calendar ?? {}),
+        timingMode: resolveTimingPreference(parsed.calendar),
       },
       routines: {
         ...DEFAULT_NOTIFICATION_PREFS.routines,
         ...(parsed.routines ?? {}),
+        timingMode: resolveTimingPreference(parsed.routines),
       },
       quietHours: {
         ...DEFAULT_NOTIFICATION_PREFS.quietHours,

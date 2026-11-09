@@ -4,6 +4,26 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-09 — feat(notifications): Timing Stage Mode (15-Min Warning Only, Start Time Only, Both), Persistent Alert Registry, and Multi-Alert Deduplication (`notificationPrefs.ts`, `notifications.ts`, `useNotificationMonitor.ts`, `NotificationsCard.tsx`, `notification-monitor.test.ts`, `notifications-card.test.tsx`).
+  **What changed:**
+  - **15-Min Warning Only / Timing Mode Selection (`src/native/notificationPrefs.ts`, `src/settings/NotificationsCard.tsx`)**:
+    - Added `TimingPreference = "advance_only" | "start_only" | "both"` to `CategoryNotificationConfig` and `resolveTimingPreference()`.
+    - Added dedicated **`WHEN TO ALERT`** segmented control to Routines and Calendar in Settings:
+      - `⏰ 15-Min Only` (`"advance_only"`): Alerts once, 15 minutes before the routine or event so the family has time to get ready. Suppresses the second alert at start time.
+      - `🔔 Start Time Only` (`"start_only"`): Alerts once, right when the routine begins. Suppresses advance reminders.
+      - `✨ Both (15m + Start)` (`"both"`): Alerts twice: 15 minutes before, and again at the scheduled start time, with full independent sound/volume customization for each stage.
+  - **Eliminated Multi-Alert Duplication & Persistent Alert Registry (`src/native/useNotificationMonitor.ts`)**:
+    - Replaced ephemeral, in-memory `useRef` Sets with a persistent AsyncStorage day-cache (`@consuela/alerted_notifications:YYYY-MM-DD`) backed by an in-memory module Set.
+    - Prevents duplicate alerts caused by app restarts, screen wake events, component re-renders, or background-to-foreground transitions. Once an event or routine is alerted for a timing stage, it will never re-alert on that day.
+    - Added semantic key deduplication (`normalizeRoutineSemanticKey`) so overlapping or near-identical schedule items (e.g. school preparation entries within a 15-minute window) do not fire duplicate audio announcements.
+    - Made `defaultNowProvider` reference stable so `useEffect` dependencies do not re-trigger check cycles on every layout re-render.
+    - Fixed calendar check path to query `/api/db/events` rather than the unmapped `/api/calendar/events` route.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN.
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+  - Unit tests: all 43 tests passed across `tests/voice-callouts.test.ts`, `tests/notifications-prefs.test.ts`, `tests/notification-monitor.test.ts`, and `tests/notifications-card.test.tsx`.
+
 - 2026-11-08 — feat(character-portraits,settings-studio): Multi-layered 16-Character Vector Portraits & Always-On Disney Character Studio in Settings (`src/theme/characterTheme.ts`, `src/ui/CelebrationOverlay.tsx`, `src/settings/SettingsPage.tsx`, `tests/character-theme.test.tsx`).
   **What changed:**
   - **Enabled by Default (`src/theme/characterTheme.ts`)**:

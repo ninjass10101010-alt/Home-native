@@ -7,8 +7,15 @@ import {
   isStartingSoon,
   isDueNow,
   evaluateRoutineMealGate,
+  loadAlertedKeys,
+  markKeyAlerted,
+  isKeyAlerted,
+  resetAlertedKeysCache,
 } from "../src/native/useNotificationMonitor";
-import { isWithinQuietHours } from "../src/native/notificationPrefs";
+import {
+  isWithinQuietHours,
+  resolveTimingPreference,
+} from "../src/native/notificationPrefs";
 
 describe("useNotificationMonitor logic", () => {
   describe("isSevereWeather", () => {
@@ -146,5 +153,97 @@ describe("useNotificationMonitor routine integration", () => {
     expect(res.shouldCallOut).toBe(true);
     expect(res.displayTitle).toBe("Dinner: Lasagna");
     expect(res.displayIcon).toBe("🍝");
+  });
+
+  describe("alerted keys registry & deduplication", () => {
+    beforeEach(() => {
+      resetAlertedKeysCache();
+    });
+
+    it("loads and persists alerted keys across check cycles", async () => {
+      const todayISO = "2026-11-09";
+      await loadAlertedKeys(todayISO);
+      expect(isKeyAlerted(`${todayISO}:routines:r1:advance`)).toBe(false);
+
+      await markKeyAlerted(todayISO, `${todayISO}:routines:r1:advance`);
+      expect(isKeyAlerted(`${todayISO}:routines:r1:advance`)).toBe(true);
+
+      // Emulate cache reload from storage
+      resetAlertedKeysCache();
+      await loadAlertedKeys(todayISO);
+      expect(isKeyAlerted(`${todayISO}:routines:r1:advance`)).toBe(true);
+    });
+
+    it("clears cached keys when date rolls over to a new day", async () => {
+      await loadAlertedKeys("2026-11-08");
+      await markKeyAlerted("2026-11-08", "2026-11-08:routines:r1:advance");
+      expect(isKeyAlerted("2026-11-08:routines:r1:advance")).toBe(true);
+
+      // Tomorrow arrives
+      await loadAlertedKeys("2026-11-09");
+      expect(isKeyAlerted("2026-11-08:routines:r1:advance")).toBe(false);
+    });
+  });
+
+  describe("timingMode resolution & filtering", () => {
+    it("respects advance_only mode (15 min warning only)", () => {
+      const config = {
+        enabled: true,
+        sound: "harp" as const,
+        volume: 0.7,
+        timingMode: "advance_only" as const,
+        advanceEnabled: true,
+        startEnabled: false,
+      };
+
+      const mode = resolveTimingPreference(config);
+      expect(mode).toBe("advance_only");
+
+      const advanceAllowed = mode !== "start_only" && config.advanceEnabled !== false;
+      const startAllowed = mode !== "advance_only" && config.startEnabled !== false;
+
+      expect(advanceAllowed).toBe(true);
+      expect(startAllowed).toBe(false); // Start notification suppressed!
+    });
+
+    it("respects start_only mode (at start time only)", () => {
+      const config = {
+        enabled: true,
+        sound: "harp" as const,
+        volume: 0.7,
+        timingMode: "start_only" as const,
+        advanceEnabled: false,
+        startEnabled: true,
+      };
+
+      const mode = resolveTimingPreference(config);
+      expect(mode).toBe("start_only");
+
+      const advanceAllowed = mode !== "start_only" && config.advanceEnabled !== false;
+      const startAllowed = mode !== "advance_only" && config.startEnabled !== false;
+
+      expect(advanceAllowed).toBe(false); // 15-min notification suppressed!
+      expect(startAllowed).toBe(true);
+    });
+
+    it("respects both mode (both 15-min and start)", () => {
+      const config = {
+        enabled: true,
+        sound: "harp" as const,
+        volume: 0.7,
+        timingMode: "both" as const,
+        advanceEnabled: true,
+        startEnabled: true,
+      };
+
+      const mode = resolveTimingPreference(config);
+      expect(mode).toBe("both");
+
+      const advanceAllowed = mode !== "start_only" && config.advanceEnabled !== false;
+      const startAllowed = mode !== "advance_only" && config.startEnabled !== false;
+
+      expect(advanceAllowed).toBe(true);
+      expect(startAllowed).toBe(true);
+    });
   });
 });

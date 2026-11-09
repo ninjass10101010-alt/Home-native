@@ -10,8 +10,10 @@ import { Toggle } from "../ui/Toggle";
 import {
   CATEGORY_META,
   NOTIFICATION_CATEGORIES,
+  resolveTimingPreference,
   useNotificationPreferences,
   type NotificationCategory,
+  type TimingPreference,
 } from "../native/notificationPrefs";
 import {
   NOTIFICATION_SOUNDS,
@@ -263,8 +265,13 @@ export function NotificationsCard() {
           const meta = CATEGORY_META[cat];
           const config = prefs[cat];
           const isTesting = testingCategory === cat;
+          const timingPref = meta.hasTimingStages ? resolveTimingPreference(config) : "both";
           const currentTiming: TimingStage = meta.hasTimingStages
-            ? timingMap[cat] ?? "advance"
+            ? timingPref === "start_only"
+              ? "start"
+              : timingPref === "advance_only"
+                ? "advance"
+                : timingMap[cat] ?? "advance"
             : "advance";
 
           // Resolve sound and volume based on timing stage
@@ -344,7 +351,7 @@ export function NotificationsCard() {
 
               {config.enabled && (
                 <View style={{ gap: 16, marginTop: 4 }}>
-                  {/* Segmented Control for 15-Min Reminder vs Starting Now */}
+                  {/* When to Alert (Timing Mode: 15-Min Only, Start Only, Both) */}
                   {meta.hasTimingStages && (
                     <View style={{ gap: 8 }}>
                       <Text
@@ -355,32 +362,83 @@ export function NotificationsCard() {
                           letterSpacing: 1,
                         }}
                       >
-                        TIMING STAGE
+                        WHEN TO ALERT
                       </Text>
                       <SegmentedControl
-                        testID={`notif-timing-switch-${cat}`}
+                        testID={`notif-timing-mode-${cat}`}
                         options={[
-                          { id: "advance", label: "⏰ 15-Min Reminder" },
-                          { id: "start", label: "🔔 Starting Now" },
+                          { id: "advance_only", label: "⏰ 15-Min Only" },
+                          { id: "start_only", label: "🔔 Start Time Only" },
+                          { id: "both", label: "✨ Both (15m + Start)" },
                         ]}
-                        value={currentTiming}
-                        onChange={(val) =>
-                          setTimingMap((prev) => ({
-                            ...prev,
-                            [cat]: val as TimingStage,
-                          }))
-                        }
+                        value={timingPref}
+                        onChange={(val) => {
+                          const mode = val as TimingPreference;
+                          updateCategory(cat, {
+                            timingMode: mode,
+                            advanceEnabled: mode !== "start_only",
+                            startEnabled: mode !== "advance_only",
+                          });
+                          if (mode === "advance_only") {
+                            setTimingMap((prev) => ({ ...prev, [cat]: "advance" }));
+                          } else if (mode === "start_only") {
+                            setTimingMap((prev) => ({ ...prev, [cat]: "start" }));
+                          }
+                        }}
                       />
-                      {timingSubtitle && (
-                        <Text
-                          style={{
-                            color: colors["color-text-muted"],
-                            fontSize: TYPOGRAPHY.label.fontSize,
-                            marginTop: 2,
-                          }}
-                        >
-                          {timingSubtitle}
-                        </Text>
+                      <Text
+                        style={{
+                          color: colors["color-text-muted"],
+                          fontSize: TYPOGRAPHY.label.fontSize,
+                          lineHeight: 18,
+                        }}
+                      >
+                        {timingPref === "advance_only"
+                          ? "Alerts once, 15 minutes before the scheduled time so the family has time to get ready. Will not alert again when it starts."
+                          : timingPref === "start_only"
+                          ? "Alerts once, right when the routine or event begins. No 15-minute advance reminder."
+                          : "Alerts twice: a 15-minute advance reminder, followed by a start alert when it begins."}
+                      </Text>
+
+                      {/* Sub-selector for Stage tone/volume when "Both" is active */}
+                      {timingPref === "both" && (
+                        <View style={{ gap: 8, marginTop: 4 }}>
+                          <Text
+                            style={{
+                              color: colors["color-text-secondary"],
+                              fontSize: TYPOGRAPHY.label.fontSize,
+                              fontWeight: "600",
+                              letterSpacing: 1,
+                            }}
+                          >
+                            CUSTOMIZE TONE & VOLUME FOR
+                          </Text>
+                          <SegmentedControl
+                            testID={`notif-timing-switch-${cat}`}
+                            options={[
+                              { id: "advance", label: "⏰ 15-Min Reminder" },
+                              { id: "start", label: "🔔 Starting Now" },
+                            ]}
+                            value={currentTiming}
+                            onChange={(val) =>
+                              setTimingMap((prev) => ({
+                                ...prev,
+                                [cat]: val as TimingStage,
+                              }))
+                            }
+                          />
+                          {timingSubtitle && (
+                            <Text
+                              style={{
+                                color: colors["color-text-muted"],
+                                fontSize: TYPOGRAPHY.label.fontSize,
+                                marginTop: 2,
+                              }}
+                            >
+                              {timingSubtitle}
+                            </Text>
+                          )}
+                        </View>
                       )}
                     </View>
                   )}

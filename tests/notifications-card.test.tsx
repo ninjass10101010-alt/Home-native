@@ -148,4 +148,18 @@ describe("NotificationsCard", () => {
       expect(queryByTestId("quiet-hours-end-selector")).toBeNull();
     });
   });
+
+  it("switches routine timingMode to 15-Min Only and updates preference", async () => {
+    const { findAllByText, findByText } = render(<NotificationsCard />, {
+      wrapper: wrap,
+    });
+
+    const advanceOnlyButtons = await findAllByText("⏰ 15-Min Only");
+    // Press routines timing mode (second occurrence)
+    await act(async () => {
+      fireEvent.press(advanceOnlyButtons[1]);
+    });
+
+    expect(await findByText(/Alerts once, 15 minutes before the scheduled time/)).toBeTruthy();
+  });
 });

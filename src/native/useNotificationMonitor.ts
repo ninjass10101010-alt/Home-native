@@ -1,15 +1,19 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "../api/client";
 import { dispatchNotification } from "./notifications";
 import {
   isWithinQuietHours,
   loadNotificationPreferences,
+  resolveTimingPreference,
 } from "./notificationPrefs";
 import {
+  type DbEventRow,
   type MealPlanEntryRow,
   type ScheduleRow,
   findPlannedMealForSlot,
   formatMealRoutineTitle,
+  normalizeRoutineSemanticKey,
   resolveRoutineMealSlot,
   scheduleCoversWeekday,
   scheduleTimeMinutes,
@@ -19,6 +23,58 @@ export interface CalendarEventItem {
   id: string | number;
   title: string;
   start: string; // ISO string or time string
+}
+
+const ALERTED_STORAGE_KEY_PREFIX = "@consuela/alerted_notifications:";
+
+// In-memory module cache for high-speed checks across renders & component lifecycles
+const inMemoryAlertedKeys = new Set<string>();
+let activeAlertDate = "";
+let storageLoaded = false;
+
+export async function loadAlertedKeys(todayISO: string): Promise<Set<string>> {
+  if (activeAlertDate !== todayISO) {
+    inMemoryAlertedKeys.clear();
+    activeAlertDate = todayISO;
+    storageLoaded = false;
+  }
+  if (!storageLoaded) {
+    try {
+      const raw = await AsyncStorage.getItem(`${ALERTED_STORAGE_KEY_PREFIX}${todayISO}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          for (const k of parsed) inMemoryAlertedKeys.add(k);
+        }
+      }
+    } catch {
+      // ignore
+    }
+    storageLoaded = true;
+  }
+  return inMemoryAlertedKeys;
+}
+
+export function isKeyAlerted(key: string): boolean {
+  return inMemoryAlertedKeys.has(key);
+}
+
+export async function markKeyAlerted(todayISO: string, key: string): Promise<void> {
+  inMemoryAlertedKeys.add(key);
+  try {
+    await AsyncStorage.setItem(
+      `${ALERTED_STORAGE_KEY_PREFIX}${todayISO}`,
+      JSON.stringify(Array.from(inMemoryAlertedKeys))
+    );
+  } catch {
+    // ignore
+  }
+}
+
+export function resetAlertedKeysCache(): void {
+  inMemoryAlertedKeys.clear();
+  activeAlertDate = "";
+  storageLoaded = false;
 }
 
 /**
@@ -124,19 +180,15 @@ export function evaluateRoutineMealGate(
   };
 }
 
+const defaultNowProvider = () => new Date();
+
 export function useNotificationMonitor({
   pollIntervalMs = 60_000,
-  nowProvider = () => new Date(),
+  nowProvider = defaultNowProvider,
 }: {
   pollIntervalMs?: number;
   nowProvider?: () => Date;
 } = {}) {
-  const alertedWeatherRef = useRef<string | null>(null);
-  const alertedCalendarAdvanceIds = useRef<Set<string>>(new Set());
-  const alertedCalendarStartIds = useRef<Set<string>>(new Set());
-  const alertedRoutineAdvanceIds = useRef<Set<string>>(new Set());
-  const alertedRoutineStartIds = useRef<Set<string>>(new Set());
-
   useEffect(() => {
     let alive = true;
 
@@ -144,13 +196,14 @@ export function useNotificationMonitor({
       if (!alive) return;
       const now = nowProvider();
       const todayISO = now.toISOString().slice(0, 10);
+      await loadAlertedKeys(todayISO);
 
       let quiet = false;
-      try {
-        const prefs = await loadNotificationPreferences();
-        quiet = isWithinQuietHours(now, prefs.quietHours);
-      } catch {
+      let prefs = await loadNotificationPreferences().catch(() => null);
+      if (!prefs) {
         quiet = isWithinQuietHours(now);
+      } else {
+        quiet = isWithinQuietHours(now, prefs.quietHours);
       }
 
       // 1. Check Weather
@@ -160,9 +213,9 @@ export function useNotificationMonitor({
         const condition = weatherRes?.condition ?? weatherRes?.current?.condition ?? "Severe Conditions";
 
         if (isSevereWeather(code)) {
-          const episodeKey = `${todayISO}-${code}`;
-          if (alertedWeatherRef.current !== episodeKey) {
-            alertedWeatherRef.current = episodeKey;
+          const episodeKey = `${todayISO}:weather:${code}`;
+          if (!isKeyAlerted(episodeKey)) {
+            await markKeyAlerted(todayISO, episodeKey);
             void dispatchNotification({
               category: "weather",
               title: "⛈️ Weather Advisory",
@@ -177,31 +230,52 @@ export function useNotificationMonitor({
 
       // 2. Check Calendar
       try {
-        const calRes = (await api("/api/calendar/events")) as any;
-        const events: CalendarEventItem[] = Array.isArray(calRes?.events)
-          ? calRes.events
-          : Array.isArray(calRes)
-            ? calRes
-            : [];
+        const calRes = (await api("/api/db/events")) as any;
+        const events: DbEventRow[] = Array.isArray(calRes?.items)
+          ? calRes.items
+          : Array.isArray(calRes?.events)
+            ? calRes.events
+            : Array.isArray(calRes)
+              ? calRes
+              : [];
+
+        const calConfig = prefs?.calendar;
+        const calTimingMode = resolveTimingPreference(calConfig);
+        const calAdvanceAllowed =
+          calTimingMode !== "start_only" && calConfig?.advanceEnabled !== false;
+        const calStartAllowed =
+          calTimingMode !== "advance_only" && calConfig?.startEnabled !== false;
+
+        const nowMins = now.getHours() * 60 + now.getMinutes();
 
         for (const ev of events) {
-          const key = String(ev.id);
-          const advanceDue = isStartingSoon(ev.start, now, 15) && !isDueNow(ev.start, now, 2);
-          const startDue = isDueNow(ev.start, now, 2);
+          if (ev.date && ev.date !== todayISO) continue;
+          if (ev.allDay) continue;
+
+          const targetMinutes = scheduleTimeMinutes(ev.time);
+          const advanceDue =
+            targetMinutes !== null
+              ? targetMinutes - nowMins > 2 && targetMinutes - nowMins <= 15
+              : isStartingSoon(ev.time, now, 15) && !isDueNow(ev.time, now, 2);
+          const startDue =
+            targetMinutes !== null
+              ? nowMins - targetMinutes >= -1 && nowMins - targetMinutes <= 2
+              : isDueNow(ev.time, now, 2);
+
+          const eventId = String(ev.id ?? ev.googleEventId ?? ev.title);
+          const advanceKey = `${todayISO}:calendar:${eventId}:advance`;
+          const startKey = `${todayISO}:calendar:${eventId}:start`;
 
           // During quiet hours (11 PM - 5 AM), suppress calendar alerts and mark handled
           if (quiet) {
-            if (advanceDue) alertedCalendarAdvanceIds.current.add(key);
-            if (startDue) alertedCalendarStartIds.current.add(key);
+            if (advanceDue) await markKeyAlerted(todayISO, advanceKey);
+            if (startDue) await markKeyAlerted(todayISO, startKey);
             continue;
           }
 
           // 15-min advance notification
-          if (
-            !alertedCalendarAdvanceIds.current.has(key) &&
-            advanceDue
-          ) {
-            alertedCalendarAdvanceIds.current.add(key);
+          if (calAdvanceAllowed && advanceDue && !isKeyAlerted(advanceKey)) {
+            await markKeyAlerted(todayISO, advanceKey);
             void dispatchNotification({
               category: "calendar",
               title: "📅 Upcoming Event",
@@ -212,11 +286,8 @@ export function useNotificationMonitor({
           }
 
           // Event starting now notification
-          if (
-            !alertedCalendarStartIds.current.has(key) &&
-            startDue
-          ) {
-            alertedCalendarStartIds.current.add(key);
+          if (calStartAllowed && startDue && !isKeyAlerted(startKey)) {
+            await markKeyAlerted(todayISO, startKey);
             void dispatchNotification({
               category: "calendar",
               title: "🔔 Event Starting Now",
@@ -255,6 +326,13 @@ export function useNotificationMonitor({
         const weekdayIndex = now.getDay();
         const nowMins = now.getHours() * 60 + now.getMinutes();
 
+        const routinesConfig = prefs?.routines;
+        const routineTimingMode = resolveTimingPreference(routinesConfig);
+        const advanceAllowed =
+          routineTimingMode !== "start_only" && routinesConfig?.advanceEnabled !== false;
+        const startAllowed =
+          routineTimingMode !== "advance_only" && routinesConfig?.startEnabled !== false;
+
         for (const rt of routines) {
           if (!scheduleCoversWeekday(rt.days, weekdayShort, weekdayIndex)) {
             continue;
@@ -279,19 +357,36 @@ export function useNotificationMonitor({
               ? nowMins - targetMinutes >= -1 && nowMins - targetMinutes <= 2
               : isDueNow(rt.time, now, 2);
 
-          const key = `${todayISO}-${rt.id}`;
           const memberInfo = rt.member ? ` for ${rt.member.split(" ")[0]}` : "";
+          const semantic = normalizeRoutineSemanticKey(rt.title ?? "");
+
+          const advanceKey = `${todayISO}:routines:${rt.id}:advance`;
+          const advanceSemanticKey = `${todayISO}:routines:sem_${semantic}:advance`;
+          const startKey = `${todayISO}:routines:${rt.id}:start`;
+          const startSemanticKey = `${todayISO}:routines:sem_${semantic}:start`;
 
           // During quiet hours (11 PM - 5 AM), suppress routine alarms and mark handled for today
           if (quiet) {
-            if (advanceDue) alertedRoutineAdvanceIds.current.add(key);
-            if (startDue) alertedRoutineStartIds.current.add(key);
+            if (advanceDue) {
+              await markKeyAlerted(todayISO, advanceKey);
+              await markKeyAlerted(todayISO, advanceSemanticKey);
+            }
+            if (startDue) {
+              await markKeyAlerted(todayISO, startKey);
+              await markKeyAlerted(todayISO, startSemanticKey);
+            }
             continue;
           }
 
           // 15-min advance notification
-          if (!alertedRoutineAdvanceIds.current.has(key) && advanceDue) {
-            alertedRoutineAdvanceIds.current.add(key);
+          if (
+            advanceAllowed &&
+            advanceDue &&
+            !isKeyAlerted(advanceKey) &&
+            !isKeyAlerted(advanceSemanticKey)
+          ) {
+            await markKeyAlerted(todayISO, advanceKey);
+            await markKeyAlerted(todayISO, advanceSemanticKey);
             void dispatchNotification({
               category: "routines",
               title: `${displayIcon} Routine Soon`,
@@ -302,8 +397,14 @@ export function useNotificationMonitor({
           }
 
           // Routine starting now notification
-          if (!alertedRoutineStartIds.current.has(key) && startDue) {
-            alertedRoutineStartIds.current.add(key);
+          if (
+            startAllowed &&
+            startDue &&
+            !isKeyAlerted(startKey) &&
+            !isKeyAlerted(startSemanticKey)
+          ) {
+            await markKeyAlerted(todayISO, startKey);
+            await markKeyAlerted(todayISO, startSemanticKey);
             void dispatchNotification({
               category: "routines",
               title: "🔔 Routine Starting",
