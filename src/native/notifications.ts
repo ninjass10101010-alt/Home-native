@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import {
+  getEffectiveNotificationVolume,
   isWithinQuietHours,
   loadNotificationPreferences,
   resolveTimingPreference,
@@ -117,22 +118,34 @@ export async function dispatchNotification({
     isQuiet = category !== "weather" && isWithinQuietHours(new Date(), prefs.quietHours);
     if (!isQuiet) {
       const timingMode = resolveTimingPreference(config);
+      const targetVolume =
+        timing === "advance"
+          ? config.advanceVolume ?? config.volume
+          : timing === "start"
+            ? config.startVolume ?? config.volume
+            : config.volume;
+
+      // Automatically cap notification volume to 40% (or quieter) during gentle morning and evening hours
+      const { volume } = getEffectiveNotificationVolume(
+        targetVolume,
+        new Date(),
+        prefs.gentleHours
+      );
+
       if (timing === "advance") {
         if (config.advanceEnabled === false || timingMode === "start_only") return null;
         const sound = config.advanceSound ?? config.sound;
-        const volume = config.advanceVolume ?? config.volume;
         const soundMode = config.advanceSoundMode ?? config.soundMode ?? "tone_and_voice";
         void playNotificationAudio({ sound, volume, soundMode, category, title, body });
       } else if (timing === "start") {
         if (config.startEnabled === false || timingMode === "advance_only") return null;
         const sound = config.startSound ?? config.sound;
-        const volume = config.startVolume ?? config.volume;
         const soundMode = config.startSoundMode ?? config.soundMode ?? "tone_and_voice";
         void playNotificationAudio({ sound, volume, soundMode, category, title, body });
       } else {
         // Play category audio respecting soundMode (tone + Sarah voice call-out)
         const soundMode = config.soundMode ?? "tone_and_voice";
-        void playNotificationAudio({ sound: config.sound, volume: config.volume, soundMode, category, title, body });
+        void playNotificationAudio({ sound: config.sound, volume, soundMode, category, title, body });
       }
     }
   } else if (category === "emergency") {

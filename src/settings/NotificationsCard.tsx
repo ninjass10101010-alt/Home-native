@@ -78,7 +78,7 @@ const SAMPLE_COPY: Record<
 
 export function NotificationsCard() {
   const { colors, accentColor } = useTheme();
-  const { prefs, updateCategory, updateQuietHours } = useNotificationPreferences();
+  const { prefs, updateCategory, updateQuietHours, updateGentleHours } = useNotificationPreferences();
   const [testingCategory, setTestingCategory] = useState<NotificationCategory | null>(null);
   const [timingMap, setTimingMap] = useState<Record<string, TimingStage>>({
     calendar: "advance",
@@ -257,6 +257,163 @@ export function NotificationsCard() {
               >
                 Morning routines like &quot;PAPA Leaving to work&quot; at 5:40 AM alert right on schedule after 5:00 AM. Severe weather warnings always remain active.
               </Text>
+            </View>
+          )}
+        </Material>
+
+        {/* Layer 2: Gentle Hours (Morning & Evening Soft Volume) */}
+        <Material
+          tier="thin"
+          testID="gentle-hours-card"
+          style={{
+            borderRadius: 20,
+            padding: 18,
+            gap: 16,
+            borderWidth: 1,
+            borderColor: colors["color-border-subtle"],
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+            }}
+          >
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text
+                style={{
+                  color: colors["color-text-primary"],
+                  fontSize: TYPOGRAPHY.title.fontSize,
+                  fontWeight: "600",
+                }}
+              >
+                🌅 Gentle Hours (Morning & Evening Soft Volume)
+              </Text>
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.body.fontSize,
+                }}
+              >
+                {prefs.gentleHours.enabled
+                  ? `Caps chime and voice announcements at ${Math.round(prefs.gentleHours.maxVolume * 100)}% volume during early morning (${formatHour(prefs.gentleHours.morningStartHour)} – ${formatHour(prefs.gentleHours.morningEndHour)}) and late evening (${formatHour(prefs.gentleHours.eveningStartHour)} – ${formatHour(prefs.gentleHours.eveningEndHour)}).`
+                  : "Caps chime and voice announcements at 40% (or quieter) during morning wake-up and evening wind-down."}
+              </Text>
+            </View>
+            <Toggle
+              value={prefs.gentleHours.enabled}
+              onChange={(enabled) => updateGentleHours({ enabled })}
+              testID="gentle-hours-toggle"
+              accessibilityLabel="Enable Gentle Hours Soft Volume"
+            />
+          </View>
+
+          {prefs.gentleHours.enabled && (
+            <View style={{ gap: 14, paddingTop: 4 }}>
+              {/* Max Volume Cap Selection */}
+              <View style={{ gap: 8 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "600",
+                    letterSpacing: 1,
+                  }}
+                >
+                  GENTLE VOLUME CAP
+                </Text>
+                <SegmentedControl
+                  options={[
+                    { id: "0.25", label: "25% (Very Soft)" },
+                    { id: "0.3", label: "30%" },
+                    { id: "0.4", label: "40% (Default)" },
+                    { id: "0.5", label: "50%" },
+                  ]}
+                  value={String(prefs.gentleHours.maxVolume)}
+                  onChange={(val) => updateGentleHours({ maxVolume: Number(val) })}
+                  testID="gentle-hours-volume-selector"
+                />
+              </View>
+
+              {/* Morning Window Selection */}
+              <View style={{ gap: 8 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "600",
+                    letterSpacing: 1,
+                  }}
+                >
+                  MORNING GENTLE WINDOW
+                </Text>
+                <SegmentedControl
+                  options={[
+                    { id: "7", label: "5:00 AM – 7:00 AM" },
+                    { id: "8", label: "5:00 AM – 8:00 AM (Default)" },
+                    { id: "9", label: "5:00 AM – 9:00 AM" },
+                  ]}
+                  value={String(prefs.gentleHours.morningEndHour)}
+                  onChange={(val) => updateGentleHours({ morningEndHour: Number(val) })}
+                  testID="gentle-hours-morning-selector"
+                />
+              </View>
+
+              {/* Evening Window Selection */}
+              <View style={{ gap: 8 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "600",
+                    letterSpacing: 1,
+                  }}
+                >
+                  EVENING GENTLE WINDOW
+                </Text>
+                <SegmentedControl
+                  options={[
+                    { id: "19", label: "7:00 PM – 11:00 PM" },
+                    { id: "20", label: "8:00 PM – 11:00 PM (Default)" },
+                    { id: "21", label: "9:00 PM – 11:00 PM" },
+                  ]}
+                  value={String(prefs.gentleHours.eveningStartHour)}
+                  onChange={(val) => updateGentleHours({ eveningStartHour: Number(val) })}
+                  testID="gentle-hours-evening-selector"
+                />
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  marginTop: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    flex: 1,
+                    color: colors["color-text-muted"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    lineHeight: 18,
+                  }}
+                >
+                  Early morning routines (like 5:40 AM Papá leaving) and evening wind-down routines will play at {Math.round(prefs.gentleHours.maxVolume * 100)}% volume, then normal daytime volume resumes.
+                </Text>
+                <SoftButton
+                  variant="secondary"
+                  size="sm"
+                  testID="gentle-hours-test-btn"
+                  accessibilityLabel="Preview gentle volume"
+                  onPress={() => void playNotificationSound("harp", prefs.gentleHours.maxVolume)}
+                >
+                  🔊 Test Volume ({Math.round(prefs.gentleHours.maxVolume * 100)}%)
+                </SoftButton>
+              </View>
             </View>
           )}
         </Material>

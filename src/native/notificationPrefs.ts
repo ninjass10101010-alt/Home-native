@@ -34,11 +34,21 @@ export interface QuietHoursConfig {
   endMinute: number; // 0-59 (default 0)
 }
 
+export interface GentleHoursConfig {
+  enabled: boolean;
+  maxVolume: number; // 0.1 to 1.0 (default 0.4 = 40% or quieter)
+  morningStartHour: number; // default 5 (5:00 AM, quiet hours end)
+  morningEndHour: number; // default 8 (8:00 AM)
+  eveningStartHour: number; // default 20 (8:00 PM)
+  eveningEndHour: number; // default 23 (11:00 PM, quiet hours start)
+}
+
 export interface NotificationPreferences {
   weather: CategoryNotificationConfig;
   calendar: CategoryNotificationConfig;
   routines: CategoryNotificationConfig;
   quietHours: QuietHoursConfig;
+  gentleHours: GentleHoursConfig;
 }
 
 export const NOTIFICATION_CATEGORIES: readonly NotificationCategory[] = [
@@ -87,6 +97,59 @@ export const DEFAULT_QUIET_HOURS: QuietHoursConfig = {
   endHour: 5, // 5:00 AM
   endMinute: 0,
 };
+
+export const DEFAULT_GENTLE_HOURS: GentleHoursConfig = {
+  enabled: true,
+  maxVolume: 0.4, // 40% volume cap for soft morning & late evening notices
+  morningStartHour: 5, // 5:00 AM (matches quiet hours morning end)
+  morningEndHour: 8, // 8:00 AM (until full house wakes up)
+  eveningStartHour: 20, // 8:00 PM (starts around kid wind-down / reading)
+  eveningEndHour: 23, // 11:00 PM (until nighttime silent quiet hours begin)
+};
+
+/**
+ * Returns true if the given date falls within the configured Gentle Hours window (mornings & evenings).
+ */
+export function isWithinGentleHours(
+  date: Date = new Date(),
+  config: GentleHoursConfig = DEFAULT_GENTLE_HOURS
+): boolean {
+  if (!config.enabled) return false;
+  const currentMinutes = date.getHours() * 60 + date.getMinutes();
+  const mStart = config.morningStartHour * 60;
+  const mEnd = config.morningEndHour * 60;
+  const eStart = config.eveningStartHour * 60;
+  const eEnd = config.eveningEndHour * 60;
+
+  // Morning gentle window (e.g. 5:00 AM to 8:00 AM)
+  if (mStart < mEnd && currentMinutes >= mStart && currentMinutes < mEnd) {
+    return true;
+  }
+
+  // Evening gentle window (e.g. 8:00 PM to 11:00 PM)
+  if (eStart < eEnd) {
+    if (currentMinutes >= eStart && currentMinutes < eEnd) return true;
+  } else if (eStart > eEnd) {
+    if (currentMinutes >= eStart || currentMinutes < eEnd) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Calculates effective notification volume respecting Gentle Hours (caps at 40% or quieter).
+ */
+export function getEffectiveNotificationVolume(
+  targetVolume: number,
+  date: Date = new Date(),
+  config: GentleHoursConfig = DEFAULT_GENTLE_HOURS
+): { volume: number; isGentle: boolean } {
+  if (isWithinGentleHours(date, config)) {
+    const clamped = Math.min(targetVolume, config.maxVolume);
+    return { volume: clamped, isGentle: true };
+  }
+  return { volume: targetVolume, isGentle: false };
+}
 
 /**
  * Returns true if the given date falls within the configured Quiet Hours window.
@@ -163,6 +226,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
     startSoundMode: "tone_and_voice",
   },
   quietHours: { ...DEFAULT_QUIET_HOURS },
+  gentleHours: { ...DEFAULT_GENTLE_HOURS },
 };
 
 export const STORAGE_KEY_NOTIFICATION_PREFS = "@consuela/notification_preferences";
@@ -187,6 +251,7 @@ export function resetNotificationPreferencesCache(): void {
     calendar: { ...DEFAULT_NOTIFICATION_PREFS.calendar },
     routines: { ...DEFAULT_NOTIFICATION_PREFS.routines },
     quietHours: { ...DEFAULT_NOTIFICATION_PREFS.quietHours },
+    gentleHours: { ...DEFAULT_NOTIFICATION_PREFS.gentleHours },
   };
 }
 
@@ -218,6 +283,10 @@ export async function loadNotificationPreferences(): Promise<NotificationPrefere
       quietHours: {
         ...DEFAULT_NOTIFICATION_PREFS.quietHours,
         ...(parsed.quietHours ?? {}),
+      },
+      gentleHours: {
+        ...DEFAULT_NOTIFICATION_PREFS.gentleHours,
+        ...(parsed.gentleHours ?? {}),
       },
     };
     memoryCachedPrefs = merged;
@@ -305,5 +374,21 @@ export function useNotificationPreferences() {
     []
   );
 
-  return { prefs, loading, updateCategory, updateQuietHours };
+  const updateGentleHours = useCallback(
+    (patch: Partial<GentleHoursConfig>) => {
+      const next: NotificationPreferences = {
+        ...memoryCachedPrefs,
+        gentleHours: {
+          ...memoryCachedPrefs.gentleHours,
+          ...patch,
+        },
+      };
+      memoryCachedPrefs = next;
+      setPrefs(next);
+      void saveNotificationPreferences(next);
+    },
+    []
+  );
+
+  return { prefs, loading, updateCategory, updateQuietHours, updateGentleHours };
 }

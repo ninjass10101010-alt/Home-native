@@ -162,4 +162,39 @@ describe("NotificationsCard", () => {
 
     expect(await findByText(/Alerts once, 15 minutes before the scheduled time/)).toBeTruthy();
   });
+
+  it("renders the Gentle Hours card with soft volume controls and test preview", async () => {
+    const { getByTestId, queryByTestId, findByText } = render(<NotificationsCard />, {
+      wrapper: wrap,
+    });
+
+    expect(
+      await findByText("🌅 Gentle Hours (Morning & Evening Soft Volume)")
+    ).toBeTruthy();
+    expect(getByTestId("gentle-hours-card")).toBeTruthy();
+    expect(getByTestId("gentle-hours-toggle")).toBeTruthy();
+    expect(getByTestId("gentle-hours-volume-selector")).toBeTruthy();
+    expect(getByTestId("gentle-hours-morning-selector")).toBeTruthy();
+    expect(getByTestId("gentle-hours-evening-selector")).toBeTruthy();
+    expect(getByTestId("gentle-hours-test-btn")).toBeTruthy();
+
+    // Test volume preview sound
+    const previewBtn = getByTestId("gentle-hours-test-btn");
+    await act(async () => {
+      fireEvent.press(previewBtn);
+    });
+    expect(playSoundSpy).toHaveBeenCalledWith("harp", 0.4);
+
+    // Toggle Gentle Hours off
+    const toggle = getByTestId("gentle-hours-toggle");
+    await act(async () => {
+      fireEvent.press(toggle);
+    });
+
+    await waitFor(() => {
+      expect(queryByTestId("gentle-hours-volume-selector")).toBeNull();
+      expect(queryByTestId("gentle-hours-morning-selector")).toBeNull();
+      expect(queryByTestId("gentle-hours-evening-selector")).toBeNull();
+    });
+  });
 });

@@ -4,6 +4,32 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-09 — feat(notifications): Gentle Hours (Soft Volume Layer for Mornings & Evenings) (`notificationPrefs.ts`, `notifications.ts`, `NotificationsCard.tsx`, `notifications-prefs.test.ts`, `notifications-card.test.tsx`).
+  **What changed:**
+  - **Gentle Hours / Soft Volume Layer (`src/native/notificationPrefs.ts`, `src/native/notifications.ts`)**:
+    - Added `GentleHoursConfig` and `DEFAULT_GENTLE_HOURS` establishing a second quiet-time layer between full daytime volume and total nighttime mute:
+      - Enabled by default with a `0.4` (40% or quieter) volume cap.
+      - Morning gentle window: 5:00 AM – 8:00 AM (covering early wake-up routines like 5:40 AM Papá leaving to work without startling sleeping kids).
+      - Evening gentle window: 8:00 PM – 11:00 PM (covering dinner wind-down and bedtime preparation until 11:00 PM nighttime silent quiet hours begin).
+    - Added `isWithinGentleHours(date, config)` and `getEffectiveNotificationVolume(targetVolume, date, config)`:
+      - Automatically caps chime and ElevenLabs voice announcements to `maxVolume` (default 40%) during morning and evening gentle hours.
+      - Preserves already-quiet alert volumes (e.g. 25% or 30% stay at their quieter level).
+      - Reverts to standard daytime volume (70–80%) during regular daytime (8:00 AM – 8:00 PM).
+      - Silent Night Quiet Hours (11:00 PM – 5:00 AM) take precedence and mute non-emergency notifications entirely.
+  - **Gentle Hours Settings Card (`src/settings/NotificationsCard.tsx`)**:
+    - Added dedicated **`🌅 Gentle Hours (Morning & Evening Soft Volume)`** card (`testID="gentle-hours-card"`):
+      - Master toggle (`testID="gentle-hours-toggle"`).
+      - Gentle Volume Cap selector (`testID="gentle-hours-volume-selector"`: `25% (Very Soft)`, `30%`, `40% (Default)`, `50%`).
+      - Morning Gentle Window selector (`testID="gentle-hours-morning-selector"`: `5:00 AM – 7:00 AM`, `5:00 AM – 8:00 AM (Default)`, `5:00 AM – 9:00 AM`).
+      - Evening Gentle Window selector (`testID="gentle-hours-evening-selector"`: `7:00 PM – 11:00 PM`, `8:00 PM – 11:00 PM (Default)`, `9:00 PM – 11:00 PM`).
+      - Test volume preview button (`testID="gentle-hours-test-btn"`) to sample chime playback at the configured gentle volume cap.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN.
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+  - Unit tests: 40 tests passed across `tests/notifications-prefs.test.ts`, `tests/notification-monitor.test.ts`, and `tests/notifications-card.test.tsx`.
+
+
 - 2026-11-09 — feat(notifications): Timing Stage Mode (15-Min Warning Only, Start Time Only, Both), Persistent Alert Registry, and Multi-Alert Deduplication (`notificationPrefs.ts`, `notifications.ts`, `useNotificationMonitor.ts`, `NotificationsCard.tsx`, `notification-monitor.test.ts`, `notifications-card.test.tsx`).
   **What changed:**
   - **15-Min Warning Only / Timing Mode Selection (`src/native/notificationPrefs.ts`, `src/settings/NotificationsCard.tsx`)**:
