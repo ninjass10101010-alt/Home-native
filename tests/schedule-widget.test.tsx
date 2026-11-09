@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factory */
 import React from "react";
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { ScheduleWidget } from "../src/home/widgets/ScheduleWidget";
 import { clearWidgetMemoryCache } from "../src/home/widgets/data";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
@@ -162,7 +162,9 @@ describe("ScheduleWidget", () => {
         body: "7:00 PM: Take Dogs Out",
       })
     );
-    expect(audioSpy).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(audioSpy).toHaveBeenCalled();
+    });
   });
 
   it("includes Dinner routine with the planned meal name when dinner IS scheduled today", async () => {

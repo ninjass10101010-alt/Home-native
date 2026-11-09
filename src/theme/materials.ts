@@ -197,3 +197,333 @@ export const HOME_WIDGET_ICON_PALETTES: Record<HomeWidgetIconVariant, HomeWidget
 
 export const HOME_WIDGET_ICON_SHINE = "#FFFFFF";
 export const HOME_WIDGET_ICON_SHADOW = "#0B1020";
+
+export type CharacterClayMotif =
+  | "alien"
+  | "snowflake"
+  | "wave"
+  | "ears"
+  | "crown"
+  | "rocket"
+  | "sheriff"
+  | "robot"
+  | "sparkle"
+  | "web"
+  | "arc"
+  | "leaf"
+  | "shield"
+  | "force"
+  | "droid"
+  | "helmet";
+
+export interface CharacterClayPalette {
+  /** Lit top highlight for primary form (hair/helmet/fur). */
+  hi: string;
+  /** Main body clay fill for primary form. */
+  mid: string;
+  /** Shaded base/rim for primary form. */
+  lo: string;
+  /** Secondary costume/accessory highlight. */
+  secHi: string;
+  /** Secondary costume/accessory mid-tone. */
+  secMid: string;
+  /** Secondary costume/accessory shadow. */
+  secLo: string;
+  /** Sculpted face/muzzle top highlight. */
+  skinHi: string;
+  /** Sculpted face/muzzle mid-tone. */
+  skinMid: string;
+  /** Sculpted face/muzzle shadow. */
+  skinLo: string;
+  /** Signature prop/gem/badge accent fill. */
+  detail: string;
+  /** Warm blush or secondary detail accent. */
+  blush: string;
+  /** Iris / optical lens color. */
+  eye: string;
+  /** Deep outline & pupil ink. */
+  ink: string;
+  /** Ambient medallion halo glow. */
+  glow: string;
+}
+
+/**
+ * 3D Claymorphic palettes for the 16 Disney / Pixar / Marvel / Star Wars
+ * companion emblems — matching the volumetric `hi`/`mid`/`lo`/`ink`/`glow`
+ * craft of `HOME_WIDGET_ICON_PALETTES`.
+ */
+export const CHARACTER_CLAY_PALETTES: Record<CharacterClayMotif, CharacterClayPalette> = {
+  // Stitch: Koala-blue clay fur, sky-cyan eye patches, warm berry-pink inner ears, indigo nose
+  alien: {
+    hi: "#93C5FD",
+    mid: "#2563EB",
+    lo: "#1E3A8A",
+    secHi: "#F9A8D4",
+    secMid: "#DB2777",
+    secLo: "#831843",
+    skinHi: "#BAE6FD",
+    skinMid: "#7DD3FC",
+    skinLo: "#0284C7",
+    detail: "#1E1B4B",
+    blush: "#F472B6",
+    eye: "#0F172A",
+    ink: "#090D16",
+    glow: "#38BDF8",
+  },
+  // Queen Elsa: Platinum-ice hair, glacial cyan gown & crystal tiara, warm porcelain skin, rose lips
+  snowflake: {
+    hi: "#FFFFFF",
+    mid: "#E0F2FE",
+    lo: "#93C5FD",
+    secHi: "#A5F3FC",
+    secMid: "#06B6D4",
+    secLo: "#0E7490",
+    skinHi: "#FFF1E6",
+    skinMid: "#FDE2CE",
+    skinLo: "#E6B89C",
+    detail: "#C084FC",
+    blush: "#FB7185",
+    eye: "#0284C7",
+    ink: "#1E1B4B",
+    glow: "#67E8F9",
+  },
+  // Moana: Rich espresso-cocoa wavy curls, warm Polynesian bronze skin, coral hibiscus, turquoise Heart of Te Fiti
+  wave: {
+    hi: "#573B26",
+    mid: "#2A1810",
+    lo: "#140A06",
+    secHi: "#FDA4AF",
+    secMid: "#E11D48",
+    secLo: "#881337",
+    skinHi: "#F3C39B",
+    skinMid: "#D4956A",
+    skinLo: "#9E633C",
+    detail: "#2DD4BF",
+    blush: "#F43F5E",
+    eye: "#451A03",
+    ink: "#140A06",
+    glow: "#FB7185",
+  },
+  // Sorcerer Mickey: Velvet obsidian ears, royal cobalt sorcerer hat with gold moon/stars, warm cream face, crimson robe
+  ears: {
+    hi: "#475569",
+    mid: "#1E293B",
+    lo: "#090D16",
+    secHi: "#60A5FA",
+    secMid: "#1D4ED8",
+    secLo: "#1E3A8A",
+    skinHi: "#FFF3E0",
+    skinMid: "#FFE0B2",
+    skinLo: "#D7A86E",
+    detail: "#FBBF24",
+    blush: "#EF4444",
+    eye: "#090D16",
+    ink: "#090D16",
+    glow: "#3B82F6",
+  },
+  // Simba: Sunlit golden-amber lion cub fur, rich sienna mane tuft & Rafiki mark, cream muzzle, rosy lion nose
+  crown: {
+    hi: "#FDE68A",
+    mid: "#F59E0B",
+    lo: "#B45309",
+    secHi: "#FCA5A5",
+    secMid: "#DC2626",
+    secLo: "#7F1D1D",
+    skinHi: "#FEF3C7",
+    skinMid: "#FDE047",
+    skinLo: "#CA8A04",
+    detail: "#EA580C",
+    blush: "#FB7185",
+    eye: "#78350F",
+    ink: "#271203",
+    glow: "#FBBF24",
+  },
+  // Buzz Lightyear: Star Command lime-green & white space armor, royal purple ranger hood, crystal visor dome
+  rocket: {
+    hi: "#BBF7D0",
+    mid: "#22C55E",
+    lo: "#15803D",
+    secHi: "#C084FC",
+    secMid: "#7E22CE",
+    secLo: "#4C1D95",
+    skinHi: "#FFE4D0",
+    skinMid: "#F5C29F",
+    skinLo: "#C88B65",
+    detail: "#EF4444",
+    blush: "#38BDF8",
+    eye: "#0284C7",
+    ink: "#170F2E",
+    glow: "#4ADE80",
+  },
+  // Sheriff Woody: Saddle-leather brown cowboy hat, golden-yellow plaid collar, crimson bandana, gold sheriff badge
+  sheriff: {
+    hi: "#D97706",
+    mid: "#92400E",
+    lo: "#451A03",
+    secHi: "#FCA5A5",
+    secMid: "#DC2626",
+    secLo: "#7F1D1D",
+    skinHi: "#FFE6D0",
+    skinMid: "#F5C396",
+    skinLo: "#C58958",
+    detail: "#FACC15",
+    blush: "#F87171",
+    eye: "#451A03",
+    ink: "#1C0A00",
+    glow: "#F59E0B",
+  },
+  // WALL-E: Brushed metallic gunmetal binocular eyes, weathered ochre-gold chassis, glowing cyan optical lenses & green sprout
+  robot: {
+    hi: "#FDE047",
+    mid: "#EAB308",
+    lo: "#854D0E",
+    secHi: "#E2E8F0",
+    secMid: "#94A3B8",
+    secLo: "#334155",
+    skinHi: "#F1F5F9",
+    skinMid: "#CBD5E1",
+    skinLo: "#64748B",
+    detail: "#22C55E",
+    blush: "#EF4444",
+    eye: "#38BDF8",
+    ink: "#0F172A",
+    glow: "#38BDF8",
+  },
+  // Joy: Electric cerulean pixie hair, luminous golden-champagne glowing skin, chartreuse star dress, core memory orbs
+  sparkle: {
+    hi: "#67E8F9",
+    mid: "#0284C7",
+    lo: "#1E3A8A",
+    secHi: "#ECFCCB",
+    secMid: "#84CC16",
+    secLo: "#3F6212",
+    skinHi: "#FEF9C3",
+    skinMid: "#FDE047",
+    skinLo: "#EAB308",
+    detail: "#F59E0B",
+    blush: "#F472B6",
+    eye: "#0284C7",
+    ink: "#172554",
+    glow: "#FACC15",
+  },
+  // Spider-Man: Vibrant Marvel crimson mask, deep navy-cobalt suit accents, pearl-white angular lenses with thick ink frames
+  web: {
+    hi: "#FCA5A5",
+    mid: "#EF4444",
+    lo: "#991B1B",
+    secHi: "#60A5FA",
+    secMid: "#1D4ED8",
+    secLo: "#172554",
+    skinHi: "#FFFFFF",
+    skinMid: "#E2E8F0",
+    skinLo: "#94A3B8",
+    detail: "#38BDF8",
+    blush: "#F87171",
+    eye: "#FFFFFF",
+    ink: "#090D16",
+    glow: "#F43F5E",
+  },
+  // Iron Man: Metallic hot-rod crimson armor, brushed gold-titanium faceplate, blinding cyan-white eyes & Arc Reactor
+  arc: {
+    hi: "#FCA5A5",
+    mid: "#DC2626",
+    lo: "#7F1D1D",
+    secHi: "#FEF08A",
+    secMid: "#F59E0B",
+    secLo: "#92400E",
+    skinHi: "#FEF08A",
+    skinMid: "#FBBF24",
+    skinLo: "#B45309",
+    detail: "#22D3EE",
+    blush: "#FFFFFF",
+    eye: "#67E8F9",
+    ink: "#180606",
+    glow: "#22D3EE",
+  },
+  // Baby Groot: Sculpted warm walnut-oak wood bark, vibrant emerald-lime leaf sprouts, glossy dark puppy eyes
+  leaf: {
+    hi: "#D97706",
+    mid: "#92400E",
+    lo: "#451A03",
+    secHi: "#86EFAC",
+    secMid: "#16A34A",
+    secLo: "#14532D",
+    skinHi: "#F59E0B",
+    skinMid: "#B45309",
+    skinLo: "#78350F",
+    detail: "#4ADE80",
+    blush: "#86EFAC",
+    eye: "#090D16",
+    ink: "#1C0A00",
+    glow: "#4ADE80",
+  },
+  // Black Panther: Matte obsidian vibranium cowl, chrome silver tooth necklace, glowing royal violet kinetic energy seams
+  shield: {
+    hi: "#475569",
+    mid: "#1E293B",
+    lo: "#090D16",
+    secHi: "#E9D5FF",
+    secMid: "#9333EA",
+    secLo: "#4C1D95",
+    skinHi: "#F8FAFC",
+    skinMid: "#CBD5E1",
+    skinLo: "#64748B",
+    detail: "#C084FC",
+    blush: "#A855F7",
+    eye: "#FFFFFF",
+    ink: "#030712",
+    glow: "#A855F7",
+  },
+  // Grogu: Soft sage-pistachio green skin, translucent rosy-peach inner ears, cozy fleecy oatmeal-tan Jedi cloak, huge dark eyes
+  force: {
+    hi: "#BBF7D0",
+    mid: "#4ADE80",
+    lo: "#15803D",
+    secHi: "#FDE68A",
+    secMid: "#D97706",
+    secLo: "#78350F",
+    skinHi: "#DCFCE7",
+    skinMid: "#86EFAC",
+    skinLo: "#22C55E",
+    detail: "#E2E8F0",
+    blush: "#FDA4AF",
+    eye: "#090D16",
+    ink: "#052E16",
+    glow: "#34D399",
+  },
+  // R2-D2: Brushed silver-white astromech dome, royal cobalt-blue chassis panels, glossy radar lens & crimson holoprojector
+  droid: {
+    hi: "#FFFFFF",
+    mid: "#E2E8F0",
+    lo: "#64748B",
+    secHi: "#60A5FA",
+    secMid: "#1D4ED8",
+    secLo: "#1E3A8A",
+    skinHi: "#F8FAFC",
+    skinMid: "#CBD5E1",
+    skinLo: "#94A3B8",
+    detail: "#EF4444",
+    blush: "#FBBF24",
+    eye: "#090D16",
+    ink: "#0F172A",
+    glow: "#38BDF8",
+  },
+  // Mandalorian: Polished beskar chrome helmet, slate-steel cheek hollows, pitch-black T-visor with specular rim, copper pauldron hint
+  helmet: {
+    hi: "#F8FAFC",
+    mid: "#94A3B8",
+    lo: "#334155",
+    secHi: "#FDBA74",
+    secMid: "#C2410C",
+    secLo: "#7C2D12",
+    skinHi: "#E2E8F0",
+    skinMid: "#64748B",
+    skinLo: "#1E293B",
+    detail: "#38BDF8",
+    blush: "#F59E0B",
+    eye: "#090D16",
+    ink: "#090D16",
+    glow: "#94A3B8",
+  },
+};
+

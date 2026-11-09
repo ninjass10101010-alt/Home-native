@@ -18,6 +18,10 @@ import {
 } from "../../calendar/events-merge";
 import { postActiveNotification } from "../../native/notificationFeed";
 import { playNotificationAudio } from "../../native/voiceCallouts";
+import {
+  getEffectiveNotificationVolume,
+  loadNotificationPreferences,
+} from "../../native/notificationPrefs";
 import type { WallSpan } from "../widgets";
 
 export interface ScheduleWidgetProps {
@@ -110,14 +114,29 @@ export function ScheduleWidget({ span = 1, now: injectedNow }: ScheduleWidgetPro
       timestamp: Date.now(),
     });
 
-    void playNotificationAudio({
-      sound: "chime",
-      volume: 0.85,
-      soundMode: "tone_and_voice",
-      category: "routines",
-      title: "Daily Schedule",
-      body: "Today's daily schedule summary",
-    });
+    void (async () => {
+      let vol = 0.8;
+      try {
+        const prefs = await loadNotificationPreferences();
+        const eff = getEffectiveNotificationVolume(
+          prefs.routines.volume ?? 0.8,
+          new Date(),
+          prefs.gentleHours
+        );
+        vol = eff.volume;
+      } catch {
+        // fallback
+      }
+
+      void playNotificationAudio({
+        sound: "chime",
+        volume: vol,
+        soundMode: "tone_and_voice",
+        category: "routines",
+        title: "Daily Schedule",
+        body: "Today's daily schedule summary",
+      });
+    })();
   };
 
   return (

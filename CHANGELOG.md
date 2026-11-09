@@ -4,6 +4,38 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-09 — feat(character-graphics,rea-motion): AAA 3D claymorphic character illustrations & 16-signature REA motion engine (`DisneyArt.tsx`, `PixarArt.tsx`, `MarvelArt.tsx`, `StarWarsArt.tsx`, `CharacterMotion.tsx`, `materials.ts`, `CelebrationOverlay.tsx`, `SettingsPage.tsx`, `character-theme.test.tsx`).
+  **What changed:**
+  - **16 AAA 3D Claymorphic Character Illustrations (`src/ui/characters/`)**:
+    - Modeled and implemented 16 volumetric, vinyl/clay-sculpted character medallions (`viewBox="0 0 100 100"`) across four distinct franchises:
+      - **Disney Classics (`DisneyArt.tsx`)**: **Stitch** (`alien`), **Queen Elsa** (`snowflake`), **Moana** (`wave`), **Sorcerer Mickey** (`ears`), and **Simba** (`crown`).
+      - **Pixar Heroes (`PixarArt.tsx`)**: **Buzz Lightyear** (`rocket`), **Sheriff Woody** (`sheriff`), **WALL·E** (`robot`), and **Joy** (`sparkle`).
+      - **Marvel Heroes (`MarvelArt.tsx`)**: **Spider-Man** (`web`), **Iron Man** (`arc`), **Baby Groot** (`leaf`), and **Black Panther** (`shield`).
+      - **Star Wars Legends (`StarWarsArt.tsx`)**: **Grogu** (`force`), **R2-D2** (`droid`), and **The Mandalorian** (`helmet`).
+    - Handcrafted each character using 25–40 layered SVG primitives (`G`, `Path`, `Circle`, `Ellipse`, `Polygon`, `Rect`, `Line`) with anatomically contoured face volumes, secondary highlights, facial expressions, and signature props (e.g. Elsa's ice crystals & braid, Moana's Heart of Te Fiti & plumeria, Mickey's sorcerer hat, Buzz's helmet dome & chest buttons, Woody's stitched hat & gold badge, WALL·E's binocular lenses & boot sprout, Joy's core memories, Spidey's spider-sense & web-lines, Iron Man's glowing Arc Reactor, Groot's carved wood grain & emerald leaves, Black Panther's claw necklace & violet kinetic seams, Grogu's levitating Force sphere, R2-D2's radar eye & holoprojector, and Mando's Beskar chrome specular streak).
+    - Excluded all `<Defs>` and `url(#...)` gradient references, guaranteeing 100% deterministic, drop-free rendering across Android and low-power hardware.
+  - **14-Channel Clay Palettes (`src/theme/materials.ts`)**:
+    - Added `CHARACTER_CLAY_PALETTES` mapping each motif to full 3D clay lighting stops: `hi`, `mid`, `lo`, `secHi`, `secMid`, `secLo`, `skinHi`, `skinMid`, `skinLo`, `detail`, `blush`, `eye`, `ink`, and `glow`.
+  - **16-Signature Reanimated (`REA`) Motion Engine (`src/ui/characters/CharacterMotion.tsx`)**:
+    - Created `CharacterMotionStage` and `CHARACTER_MOTION_SPECS` mapping all 16 characters to bespoke 60fps breathing, float, and personality-tilt transforms:
+      - `mischief-bounce`, `crystal-float`, `ocean-sway`, `magic-conductor`, `royal-pride`, `star-hover`, `cowboy-nod`, `curious-tilt`, `joy-sparkle`, `web-swing`, `repulsor-pulse`, `groot-groove`, `vibranium-stealth`, `force-levitate`, `droid-rock`, and `beskar-stance`.
+    - Added an ambient, pulsing aura halo ring (`testID="character-motion-aura-${motif}"`) positioned behind each medallion.
+    - Added `intensity="celebration"` boosting motion and pulse by `1.35x` during chore completion, routine mastery, and reward unlocks.
+    - Strictly honors `reduceMotion` by canceling animations and resetting transforms to zero.
+  - **Companion Studio Upgrade (`src/settings/SettingsPage.tsx`)**:
+    - Added an elevated **Active Companion Spotlight Banner** (`testID="settings-active-companion-spotlight"`) showcasing the selected member's companion with a 76dp live celebration medallion, motion style chip (`⚡ style`), quote, and `Preview ✨` button.
+    - Interactive 16-character selection grid runs live ambient breathing motion for the currently selected companion.
+  - **Celebration Overlay Refresh (`src/ui/CelebrationOverlay.tsx`)**:
+    - Upgraded `CharacterEmblem` to render 3D clay figures with `intensity="celebration"` and size 136dp on the Reanimated motion stage.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (app src).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+  - `node scripts/a11y-audit.mjs`: CLEAN (app src).
+  - Test suites: 103 passed, 103 total; 1,569 passed, 1,569 total (`npm test`).
+  - Harsh Critic Visual & Motion Audit (`08d1918c-40a7-45ef-89a1-79f21bc87662`): **PASS: zero Critical/High**.
+
+
 - 2026-11-09 — feat(notifications): Gentle Hours (Soft Volume Layer for Mornings & Evenings) (`notificationPrefs.ts`, `notifications.ts`, `NotificationsCard.tsx`, `notifications-prefs.test.ts`, `notifications-card.test.tsx`).
   **What changed:**
   - **Gentle Hours / Soft Volume Layer (`src/native/notificationPrefs.ts`, `src/native/notifications.ts`)**:

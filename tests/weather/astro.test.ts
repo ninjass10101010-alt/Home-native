@@ -21,10 +21,11 @@ describe("moon math (weather-astro.ts:11-44 verbatim port)", () => {
     expect(moonLitPath(0.25, 80)).toMatch(/^M 0 -80 A 80 80 0 0 1 0 80 A /);
   });
   it("nextMoonEvents finds both dates within 30 days", () => {
-    const { nextFullISO, nextNewISO } = nextMoonEvents(Date.now());
+    const fixedNow = Date.UTC(2026, 4, 1, 0, 0);
+    const { nextFullISO, nextNewISO } = nextMoonEvents(fixedNow);
     expect(nextFullISO).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(nextNewISO).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    const days = (iso: string) => (Date.parse(iso + "T12:00:00Z") - Date.now()) / 86400000;
+    const days = (iso: string) => (Date.parse(iso + "T12:00:00Z") - fixedNow) / 86400000;
     expect(days(nextFullISO!)).toBeGreaterThan(0);
     expect(days(nextFullISO!)).toBeLessThanOrEqual(31);
     expect(days(nextNewISO!)).toBeGreaterThan(0);

@@ -15,7 +15,7 @@ import {
   resolveCharacterForMember,
   useCharacterTheme,
 } from "../theme/characterTheme";
-import { CelebrationOverlay, CharacterEmblem, type CelebrationEvent } from "../ui/CelebrationOverlay";
+import { CelebrationOverlay, CharacterEmblem, CHARACTER_MOTION_SPECS, type CelebrationEvent } from "../ui/CelebrationOverlay";
 import { useAuth, type CapabilityRole } from "../state/AuthProvider";
 import { useLocalSearchParams } from "expo-router";
 import { useSync } from "../state/SyncManager";
@@ -1079,42 +1079,107 @@ function AppearanceSection() {
               </View>
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <View style={{ flex: 1 }}>
-                <Text
+            {/* Active Companion Spotlight Banner */}
+            {(() => {
+              const activeAccent = palette[myCharacter.accentKey] ?? colors["color-accent-selected"];
+              const motionSpec = CHARACTER_MOTION_SPECS[myCharacter.motif];
+              return (
+                <View
+                  testID="settings-active-companion-spotlight"
                   style={{
-                    color: colors["color-text-primary"],
-                    fontSize: TYPOGRAPHY.body.fontSize,
-                    fontWeight: "700",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 16,
+                    padding: 18,
+                    borderRadius: RADII.xl,
+                    backgroundColor: mix(activeAccent, colors["color-surface-2"], 18),
+                    borderWidth: 1.5,
+                    borderColor: mix(activeAccent, colors["color-border"], 42),
                   }}
                 >
-                  {`${activePickerName}'s Companion: ${myCharacter.name}`}
-                </Text>
-                <Text
-                  style={{
-                    color: colors["color-text-muted"],
-                    fontSize: TYPOGRAPHY.label.fontSize,
-                  }}
-                >
-                  {`${myCharacter.franchiseLabel} · "${myCharacter.choreCheer}"`}
-                </Text>
-              </View>
-              <SoftButton
-                variant="secondary"
-                size="sm"
-                testID="settings-character-preview"
-                onPress={() =>
-                  setPreviewEvent({
-                    kind: "chore",
-                    memberName: activePickerName,
-                    title: `${myCharacter.name} Team-Up!`,
-                    points: 15,
-                  })
-                }
-              >
-                Preview ✨
-              </SoftButton>
-            </View>
+                  <CharacterEmblem
+                    motif={myCharacter.motif}
+                    accentHex={activeAccent}
+                    inkHex={colors["color-text-primary"]}
+                    size={76}
+                    animated={true}
+                    intensity="celebration"
+                    testID="settings-active-companion-emblem"
+                  />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Text
+                        style={{
+                          color: activeAccent,
+                          fontSize: TYPOGRAPHY.label.fontSize,
+                          fontWeight: "800",
+                          letterSpacing: 1.5,
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {`${myCharacter.franchiseLabel} · COMPANION`}
+                      </Text>
+                      {motionSpec ? (
+                        <View
+                          style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            borderRadius: RADII.pill,
+                            backgroundColor: mix(activeAccent, colors["color-surface-1"], 25),
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: colors["color-text-primary"],
+                              fontSize: TYPOGRAPHY.label.fontSize,
+                              fontWeight: "700",
+                              letterSpacing: 0.8,
+                            }}
+                          >
+                            {`⚡ ${motionSpec.style}`}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text
+                      style={{
+                        color: colors["color-text-primary"],
+                        fontSize: TYPOGRAPHY.title.fontSize,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {`${activePickerName}'s Companion: ${myCharacter.name}`}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors["color-text-secondary"],
+                        fontSize: TYPOGRAPHY.body.fontSize,
+                        fontStyle: "italic",
+                      }}
+                    >
+                      {`${myCharacter.badgeGlyph} "${myCharacter.choreCheer}"`}
+                    </Text>
+                  </View>
+                  <SoftButton
+                    variant="primary"
+                    size="md"
+                    testID="settings-character-preview"
+                    onPress={() =>
+                      setPreviewEvent({
+                        kind: "chore",
+                        memberName: activePickerName,
+                        title: `${myCharacter.name} Team-Up!`,
+                        points: 15,
+                      })
+                    }
+                    style={{ minHeight: MIN_TARGET_DP, minWidth: 110 }}
+                  >
+                    Preview ✨
+                  </SoftButton>
+                </View>
+              );
+            })()}
 
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
               {availableCharacters.map((c) => {
@@ -1149,7 +1214,9 @@ function AppearanceSection() {
                       motif={c.motif}
                       accentHex={cHex}
                       inkHex={colors["color-text-primary"]}
-                      size={60}
+                      size={58}
+                      animated={selected}
+                      intensity="ambient"
                     />
                     <Text
                       numberOfLines={1}

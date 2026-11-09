@@ -16,7 +16,12 @@ import {
   saveCharacterThemePrefs,
 } from "../src/theme/characterTheme";
 import { _resetScreensaverMemoryForTest } from "../src/home/idle";
-import { CelebrationOverlay } from "../src/ui/CelebrationOverlay";
+import {
+  CelebrationOverlay,
+  CharacterEmblem,
+  CHARACTER_MOTION_SPECS,
+} from "../src/ui/CelebrationOverlay";
+import { CHARACTER_CLAY_PALETTES } from "../src/theme/materials";
 import { SettingsPage } from "../src/settings/SettingsPage";
 import { TasksPage } from "../src/tasks/TasksPage";
 import { RewardsPage } from "../src/rewards/RewardsPage";
@@ -324,5 +329,58 @@ describe("TasksPage & RewardsPage & Screensaver — Disney Mode touchpoints", ()
     expect(await findByTestId("ss-character-spotlight-title")).toBeTruthy();
     expect(await findByTestId("ss-character-spotlight-quote")).toBeTruthy();
   });
+
+  it("SettingsPage displays the active companion spotlight banner with REA motion stage", async () => {
+    _resetCharacterThemeMemoryForTest({
+      enabled: true,
+      assignments: { aurora: "stitch" },
+    });
+    api.mockResolvedValue({ ok: true, version: "2.4.0", db: "connected" });
+
+    const { findByTestId, getByTestId, getByText } = render(<SettingsPage />, { wrapper: wrap });
+    await flush();
+
+    fireEvent.press(getByTestId("settings-section-appearance"));
+    expect(await findByTestId("settings-active-companion-spotlight")).toBeTruthy();
+
+    fireEvent.press(getByTestId("settings-character-member-Aurora"));
+    await flush();
+
+    expect(getByTestId("settings-active-companion-emblem")).toBeTruthy();
+    expect(getByText(/Aurora's Companion: Stitch/i)).toBeTruthy();
+  });
+
+  it("CharacterEmblem renders 3D claymorphic artwork and wraps in CharacterMotionStage for all 16 motifs", () => {
+    for (const character of CHARACTER_CATALOG) {
+      const clay = CHARACTER_CLAY_PALETTES[character.motif];
+      expect(clay).toBeDefined();
+      expect(clay.hi).toBeTruthy();
+      expect(clay.mid).toBeTruthy();
+      expect(clay.lo).toBeTruthy();
+      expect(clay.glow).toBeTruthy();
+
+      const motion = CHARACTER_MOTION_SPECS[character.motif];
+      expect(motion).toBeDefined();
+      expect(motion.duration).toBeGreaterThan(1500);
+      expect(motion.verticalAmp).toBeGreaterThan(0);
+      expect(motion.tiltDeg).toBeGreaterThan(0);
+
+      const { getByTestId } = render(
+        <CharacterEmblem
+          motif={character.motif}
+          accentHex="#00E5FF"
+          inkHex="#FFFFFF"
+          size={80}
+          animated={true}
+          testID={`test-emblem-${character.id}`}
+        />,
+        { wrapper: wrap }
+      );
+
+      expect(getByTestId(`test-emblem-${character.id}`)).toBeTruthy();
+      expect(getByTestId(`test-emblem-${character.id}-emblem`)).toBeTruthy();
+    }
+  });
 });
+
 
