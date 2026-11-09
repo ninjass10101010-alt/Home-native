@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "expo-router";
 import { Screen } from "../src/theme/Screen";
 import { useTheme } from "../src/theme/ThemeProvider";
 import { Material } from "../src/theme/Material";
-import { FONTS, MIN_TARGET_DP, RADII, SPACING, TYPOGRAPHY } from "../src/theme/tokens";
+import { ACCENTS, FONTS, MIN_TARGET_DP, RADII, SPACING, TYPOGRAPHY } from "../src/theme/tokens";
 import { mix } from "../src/theme/mix";
 import { CapsuleDock, MoreButton } from "../src/nav/CapsuleDock";
 import { MoreSheet } from "../src/nav/MoreSheet";
@@ -15,6 +15,8 @@ import { SoftButton } from "../src/ui/SoftButton";
 import { isPhotoUri } from "../src/ui/MemberRail";
 import { useToast } from "../src/ui/Toast";
 import { kidLevel, POINTS_PER_LEVEL } from "../src/home/KidHome";
+import { resolveCharacterForMember, useCharacterTheme } from "../src/theme/characterTheme";
+import { CelebrationOverlay, CharacterEmblem, type CelebrationEvent } from "../src/ui/CelebrationOverlay";
 
 const SKILL_STORAGE_KEY = "@consuela/skill_tree_v1";
 
@@ -90,13 +92,15 @@ const BADGES = [
 ];
 
 export default function SkillTreeRoute() {
-  const { colors, accentColor } = useTheme();
+  const { colors, theme, accentColor } = useTheme();
   const toast = useToast();
   const pathname = usePathname();
   const router = useRouter();
   const { member, role: capabilityRole, hydrated } = useAuth();
   const { snapshot } = useSync();
+  const [characterPrefs] = useCharacterTheme();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [celebrationEvent, setCelebrationEvent] = useState<CelebrationEvent | null>(null);
 
   const [unlockedNodes, setUnlockedNodes] = useState<string[]>(["k1", "h1"]);
   const [bonusXp, setBonusXp] = useState<number>(30);
@@ -105,18 +109,28 @@ export default function SkillTreeRoute() {
   const navRole = capabilityRole === "parent" ? "parent" : capabilityRole ? "child" : "guest";
   const memberName = member?.name ?? "Explorer";
 
+  const companion = useMemo(
+    () => resolveCharacterForMember(member?.name, characterPrefs),
+    [member?.name, characterPrefs]
+  );
+  const palette = ACCENTS[theme === "light" ? "light" : "dark"];
+  const companionAccent = palette[companion.accentKey] ?? accentColor;
+  const companionEmoji = (companion as any).emoji ?? companion.badgeGlyph;
+
   useEffect(() => {
     let alive = true;
-    void AsyncStorage.getItem(SKILL_STORAGE_KEY).then((raw) => {
-      if (!alive || !raw) return;
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed?.unlockedNodes)) setUnlockedNodes(parsed.unlockedNodes);
-        if (typeof parsed?.bonusXp === "number") setBonusXp(parsed.bonusXp);
-      } catch {
-        // ignore
-      }
-    });
+    void AsyncStorage.getItem(SKILL_STORAGE_KEY)
+      .then((raw) => {
+        if (!alive || !raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed?.unlockedNodes)) setUnlockedNodes(parsed.unlockedNodes);
+          if (typeof parsed?.bonusXp === "number") setBonusXp(parsed.bonusXp);
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -159,8 +173,16 @@ export default function SkillTreeRoute() {
       setUnlockedNodes(nextUnlocked);
       await persistState(nextUnlocked, bonusXp);
       toast.show(`🎉 Unlocked "${node.title}"!`, { intent: "success" });
+      if (characterPrefs.enabled) {
+        setCelebrationEvent({
+          kind: "reward",
+          memberName,
+          title: `Unlocked ${node.title}!`,
+          points: node.xpCost,
+        });
+      }
     },
-    [unlockedNodes, bonusXp, persistState, toast],
+    [unlockedNodes, bonusXp, persistState, toast, characterPrefs.enabled, memberName],
   );
 
   const visibleBranches = useMemo(
@@ -202,6 +224,7 @@ export default function SkillTreeRoute() {
               size="sm"
               testID="skill-tree-to-tasks"
               accessibilityLabel="Go to Tasks and Routines"
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
               onPress={() => router.replace("/tasks" as never)}
             >
               ✅ Go to Quests & Routines
@@ -257,6 +280,70 @@ export default function SkillTreeRoute() {
             </View>
           </Material>
 
+          {/* ✨ Companion Mastery Spotlight Banner */}
+          <Material
+            tier="thin"
+            testID="skill-companion-banner"
+            style={{
+              borderRadius: RADII.xl,
+              padding: SPACING.md,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: SPACING.sm,
+              borderWidth: 1,
+              borderColor: mix(companionAccent, colors["color-border"] ?? colors["color-text-primary"], 35),
+              backgroundColor: mix(companionAccent, "transparent", 10),
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.sm, flex: 1 }}>
+              <CharacterEmblem
+                motif={companion.motif}
+                accentHex={companionAccent}
+                inkHex={colors["color-text-primary"]}
+                size={52}
+              />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text
+                  testID="skill-companion-title"
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.cardTitle.fontSize,
+                    fontWeight: "700",
+                  }}
+                >
+                  {`${companionEmoji} ${companion.name} · Quest Companion`}
+                </Text>
+                <Text
+                  testID="skill-companion-cheer"
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                  }}
+                >
+                  {companion.choreCheer}
+                </Text>
+              </View>
+            </View>
+            <SoftButton
+              variant="secondary"
+              size="sm"
+              testID="skill-companion-peptalk"
+              accessibilityLabel={`Pep talk from ${companion.name}`}
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
+              onPress={() => {
+                setCelebrationEvent({
+                  kind: "chore",
+                  memberName,
+                  title: `${companion.name} believes in your next skill!`,
+                  points: 10,
+                });
+              }}
+            >
+              ✨ Pep Talk
+            </SoftButton>
+          </Material>
+
           {/* Branch Filter Strip */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: SPACING.xs }}>
             <Pressable
@@ -266,6 +353,7 @@ export default function SkillTreeRoute() {
               onPress={() => setSelectedBranch("all")}
               style={{
                 minHeight: MIN_TARGET_DP,
+                minWidth: MIN_TARGET_DP,
                 paddingHorizontal: SPACING.md,
                 borderRadius: RADII.pill,
                 alignItems: "center",
@@ -290,6 +378,7 @@ export default function SkillTreeRoute() {
                   onPress={() => setSelectedBranch(b.id)}
                   style={{
                     minHeight: MIN_TARGET_DP,
+                    minWidth: MIN_TARGET_DP,
                     paddingHorizontal: SPACING.md,
                     borderRadius: RADII.pill,
                     alignItems: "center",
@@ -310,6 +399,8 @@ export default function SkillTreeRoute() {
           {/* Skill Branches */}
           {visibleBranches.map((branch) => {
             const toneColor = colors[branch.toneKey] ?? accentColor;
+            const branchMastered = branch.nodes.every((n) => unlockedNodes.includes(n.id));
+            const unlockedInBranch = branch.nodes.filter((n) => unlockedNodes.includes(n.id)).length;
             return (
               <Material
                 key={branch.id}
@@ -317,9 +408,34 @@ export default function SkillTreeRoute() {
                 testID={`skill-branch-${branch.id}`}
                 style={{ borderRadius: RADII.xl, padding: SPACING.md, gap: SPACING.sm }}
               >
-                <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.cardTitle.fontSize, fontWeight: "700" }}>
-                  {branch.emoji} {branch.title}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: SPACING.xs }}>
+                  <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.cardTitle.fontSize, fontWeight: "700" }}>
+                    {branch.emoji} {branch.title}
+                  </Text>
+                  <View
+                    testID={`skill-branch-mastery-${branch.id}`}
+                    style={{
+                      paddingHorizontal: SPACING.sm,
+                      paddingVertical: 4,
+                      borderRadius: RADII.pill,
+                      borderWidth: 1,
+                      borderColor: branchMastered ? mix(toneColor, "transparent", 45) : (colors["color-border"] ?? colors["color-text-primary"]),
+                      backgroundColor: branchMastered ? mix(toneColor, "transparent", 18) : colors["color-surface-1"],
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: branchMastered ? colors["color-text-primary"] : colors["color-text-secondary"],
+                        fontSize: TYPOGRAPHY.label.fontSize,
+                        fontWeight: branchMastered ? "700" : "600",
+                      }}
+                    >
+                      {branchMastered ? "🏆 Branch Mastered!" : `${unlockedInBranch}/${branch.nodes.length} Mastered`}
+                    </Text>
+                  </View>
+                </View>
                 <View style={{ gap: SPACING.xs }}>
                   {branch.nodes.map((node) => {
                     const unlocked = unlockedNodes.includes(node.id);
@@ -355,6 +471,7 @@ export default function SkillTreeRoute() {
                           size="sm"
                           testID={`skill-action-${node.id}`}
                           accessibilityLabel={unlocked ? `Practice ${node.title}` : `Unlock ${node.title}`}
+                          style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
                           onPress={() => void toggleNode(node)}
                         >
                           {unlocked ? "⚡ Practice (+10 XP)" : `Unlock (${node.xpCost} XP)`}
@@ -403,6 +520,12 @@ export default function SkillTreeRoute() {
           </Material>
         </ScrollView>
       </View>
+
+      <CelebrationOverlay
+        event={celebrationEvent}
+        onDismiss={() => setCelebrationEvent(null)}
+        characterOverride={companion}
+      />
 
       <View style={{ position: "absolute", left: 0, right: 0, bottom: 116, alignItems: "center" }} pointerEvents="box-none">
         <MoreButton onPress={() => setMoreOpen(true)} />

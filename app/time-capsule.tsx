@@ -14,10 +14,12 @@ import { Modal } from "../src/ui/Modal";
 import { SoftButton } from "../src/ui/SoftButton";
 import { TextField } from "../src/ui/TextField";
 import { useToast } from "../src/ui/Toast";
+import { resolveCharacterForMember, useCharacterTheme } from "../src/theme/characterTheme";
+import { CelebrationOverlay, type CelebrationEvent } from "../src/ui/CelebrationOverlay";
 
 const CAPSULE_STORAGE_KEY = "@consuela/time_capsules_v1";
 
-interface TimeCapsuleEntry {
+export interface TimeCapsuleEntry {
   id: string;
   title: string;
   emoji: string;
@@ -26,7 +28,58 @@ interface TimeCapsuleEntry {
   unlockLabel: string;
   message: string;
   sealed: boolean;
+  reactions?: Record<string, number>;
 }
+
+export interface CapsulePrompt {
+  id: string;
+  emoji: string;
+  label: string;
+  title: string;
+  prompt: string;
+  unlock: string;
+}
+
+export const CAPSULE_PROMPTS: CapsulePrompt[] = [
+  {
+    id: "birthday",
+    emoji: "🎂",
+    label: "Birthday Interview",
+    title: "Birthday Time Capsule",
+    prompt: "My favorite song right now, my best friend, what makes me laugh, and what I want to be when I grow up:",
+    unlock: "In 1 Year",
+  },
+  {
+    id: "school",
+    emoji: "🎒",
+    label: "First Day of School",
+    title: "School Year Snapshot",
+    prompt: "My teacher's name, the subject I'm most excited for, and one big goal for this semester:",
+    unlock: "In 6 Months",
+  },
+  {
+    id: "proud",
+    emoji: "🌟",
+    label: "Proud Family Moment",
+    title: "A Moment to Remember",
+    prompt: "Today our family accomplished something special together and we never want to forget:",
+    unlock: "Ready now",
+  },
+  {
+    id: "holiday",
+    emoji: "🎄",
+    label: "Holiday Wishes",
+    title: "Next Year's Holiday Letter",
+    prompt: "Our favorite family tradition this season and our wishes for next year:",
+    unlock: "In 1 Year",
+  },
+];
+
+export const CAPSULE_REACTIONS: { key: string; emoji: string; label: string }[] = [
+  { key: "love", emoji: "❤️", label: "Love" },
+  { key: "touched", emoji: "🥹", label: "Touched" },
+  { key: "party", emoji: "🎉", label: "Party" },
+];
 
 const DEFAULT_CAPSULES: TimeCapsuleEntry[] = [
   {
@@ -48,6 +101,7 @@ const DEFAULT_CAPSULES: TimeCapsuleEntry[] = [
     unlockLabel: "Ready now",
     message: "So proud of how everyone pitched in on the weekend reset and helped cook Friday tacos together.",
     sealed: false,
+    reactions: { love: 2, touched: 1 },
   },
 ];
 
@@ -59,6 +113,8 @@ export default function TimeCapsuleRoute() {
   const pathname = usePathname();
   const router = useRouter();
   const { member, role: capabilityRole, hydrated } = useAuth();
+  const [characterPrefs] = useCharacterTheme();
+  const [celebrationEvent, setCelebrationEvent] = useState<CelebrationEvent | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
 
   const [capsules, setCapsules] = useState<TimeCapsuleEntry[]>(DEFAULT_CAPSULES);
@@ -68,22 +124,28 @@ export default function TimeCapsuleRoute() {
 
   const [draftTitle, setDraftTitle] = useState("");
   const [draftMessage, setDraftMessage] = useState("");
-  const draftEmoji = "⏳";
+  const [draftEmoji, setDraftEmoji] = useState("⏳");
   const [draftUnlock, setDraftUnlock] = useState("In 6 Months");
 
   const navRole = capabilityRole === "parent" ? "parent" : capabilityRole ? "child" : "guest";
+  const companion = useMemo(
+    () => resolveCharacterForMember(member?.name, characterPrefs),
+    [member?.name, characterPrefs],
+  );
 
   useEffect(() => {
     let alive = true;
-    void AsyncStorage.getItem(CAPSULE_STORAGE_KEY).then((raw) => {
-      if (!alive || !raw) return;
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) setCapsules(parsed);
-      } catch {
-        // ignore
-      }
-    });
+    void AsyncStorage.getItem(CAPSULE_STORAGE_KEY)
+      .then((raw) => {
+        if (!alive || !raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) setCapsules(parsed);
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -117,11 +179,14 @@ export default function TimeCapsuleRoute() {
       unlockLabel: draftUnlock,
       message: draftMessage.trim() || "A special memory saved for the future.",
       sealed: draftUnlock !== "Ready now",
+      reactions: {},
     };
     await persistCapsules([entry, ...capsules]);
     setComposerOpen(false);
     setDraftTitle("");
     setDraftMessage("");
+    setDraftEmoji("⏳");
+    setDraftUnlock("In 6 Months");
     toast.show(`🔒 Sealed "${entry.title}" in the Time Capsule!`, { intent: "success" });
   }, [draftTitle, draftEmoji, member, draftUnlock, draftMessage, capsules, persistCapsules, toast]);
 
@@ -131,13 +196,58 @@ export default function TimeCapsuleRoute() {
         const next = capsules.map((c) => (c.id === entry.id ? { ...c, sealed: false } : c));
         await persistCapsules(next);
         toast.show(`🔓 Unsealed "${entry.title}"!`, { intent: "success" });
+        if (characterPrefs.enabled) {
+          setCelebrationEvent({
+            kind: "reward",
+            memberName: member?.name ?? "Family",
+            title: `Unsealed: ${entry.title}!`,
+          });
+        }
         setReadingCapsule({ ...entry, sealed: false });
       } else {
         setReadingCapsule(entry);
       }
     },
-    [capsules, persistCapsules, toast],
+    [capsules, persistCapsules, toast, characterPrefs.enabled, member],
   );
+
+  const handleReact = useCallback(
+    async (entryId: string, reactionKey: string) => {
+      const next = capsules.map((c) => {
+        if (c.id !== entryId) return c;
+        const currentCount = c.reactions?.[reactionKey] ?? 0;
+        return {
+          ...c,
+          reactions: {
+            ...(c.reactions ?? {}),
+            [reactionKey]: currentCount + 1,
+          },
+        };
+      });
+      await persistCapsules(next);
+      if (readingCapsule && readingCapsule.id === entryId) {
+        const updated = next.find((c) => c.id === entryId);
+        if (updated) setReadingCapsule(updated);
+      }
+    },
+    [capsules, persistCapsules, readingCapsule],
+  );
+
+  const handleOpenComposer = useCallback(() => {
+    setDraftTitle("");
+    setDraftMessage("");
+    setDraftEmoji("⏳");
+    setDraftUnlock("In 6 Months");
+    setComposerOpen(true);
+  }, []);
+
+  const handleSelectPrompt = useCallback((prompt: CapsulePrompt) => {
+    setDraftTitle(prompt.title);
+    setDraftMessage(prompt.prompt);
+    setDraftEmoji(prompt.emoji);
+    setDraftUnlock(prompt.unlock);
+    setComposerOpen(true);
+  }, []);
 
   return (
     <Screen testID="time-capsule-route">
@@ -173,11 +283,86 @@ export default function TimeCapsuleRoute() {
               size="sm"
               testID="capsule-add-button"
               accessibilityLabel="Seal a new time capsule"
-              onPress={() => setComposerOpen(true)}
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
+              onPress={handleOpenComposer}
             >
               + Seal Memory
             </SoftButton>
           </View>
+
+          {/* Guided Story Prompts Shelf */}
+          <Material
+            tier="thin"
+            testID="capsule-prompts-shelf"
+            style={{
+              borderRadius: RADII.xl,
+              padding: SPACING.md,
+              gap: SPACING.sm,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text
+                style={{
+                  color: colors["color-text-muted"],
+                  fontSize: TYPOGRAPHY.fieldLabel.fontSize,
+                  fontWeight: "700",
+                  letterSpacing: 1.2,
+                  textTransform: "uppercase",
+                }}
+              >
+                ✨ Guided Story Prompts
+              </Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: SPACING.sm }}
+            >
+              {CAPSULE_PROMPTS.map((p) => (
+                <Pressable
+                  key={p.id}
+                  testID={`capsule-prompt-${p.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${p.label}: ${p.title}`}
+                  onPress={() => handleSelectPrompt(p)}
+                  style={{
+                    minHeight: MIN_TARGET_DP,
+                    minWidth: MIN_TARGET_DP,
+                    paddingHorizontal: SPACING.md,
+                    paddingVertical: SPACING.sm,
+                    borderRadius: RADII.lg,
+                    borderWidth: 1,
+                    borderColor: colors["color-border-subtle"],
+                    backgroundColor: colors["color-surface-2"],
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: SPACING.sm,
+                  }}
+                >
+                  <Text style={{ fontSize: 26 }}>{p.emoji}</Text>
+                  <View>
+                    <Text
+                      style={{
+                        color: colors["color-text-primary"],
+                        fontSize: TYPOGRAPHY.body.fontSize,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {p.label}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors["color-text-secondary"],
+                        fontSize: TYPOGRAPHY.label.fontSize,
+                      }}
+                    >
+                      {`Opens ${p.unlock}`}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Material>
 
           {/* Filter Pills */}
           <View style={{ flexDirection: "row", gap: SPACING.xs }}>
@@ -198,6 +383,7 @@ export default function TimeCapsuleRoute() {
                   onPress={() => setFilter(tab.id)}
                   style={{
                     minHeight: MIN_TARGET_DP,
+                    minWidth: MIN_TARGET_DP,
                     paddingHorizontal: SPACING.md,
                     borderRadius: RADII.pill,
                     alignItems: "center",
@@ -245,6 +431,7 @@ export default function TimeCapsuleRoute() {
                     size="sm"
                     testID={`capsule-open-${item.id}`}
                     accessibilityLabel={item.sealed ? `Unseal ${item.title}` : `Read ${item.title}`}
+                    style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
                     onPress={() => void handleOpenCapsule(item)}
                   >
                     {item.sealed ? "🔓 Unseal" : "📖 Read"}
@@ -260,6 +447,48 @@ export default function TimeCapsuleRoute() {
                 >
                   {item.sealed ? "🔒 This letter is sealed inside the family vault. Tap Unseal to open it." : item.message}
                 </Text>
+
+                {/* Keepsake Reactions on Unlocked Capsules */}
+                {!item.sealed && (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: SPACING.xs, marginTop: SPACING.xs }}>
+                    {CAPSULE_REACTIONS.map((r) => {
+                      const count = item.reactions?.[r.key] ?? 0;
+                      return (
+                        <Pressable
+                          key={r.key}
+                          testID={`capsule-react-${item.id}-${r.key}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${r.label} reaction: ${count}`}
+                          onPress={() => void handleReact(item.id, r.key)}
+                          style={{
+                            minHeight: MIN_TARGET_DP,
+                            minWidth: MIN_TARGET_DP,
+                            paddingHorizontal: SPACING.md,
+                            borderRadius: RADII.pill,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexDirection: "row",
+                            gap: SPACING.xs,
+                            borderWidth: 1,
+                            borderColor: count > 0 ? accentColor : colors["color-border-subtle"],
+                            backgroundColor: count > 0 ? mix(accentColor, "transparent", 20) : colors["color-surface-2"],
+                          }}
+                        >
+                          <Text style={{ fontSize: 20 }}>{r.emoji}</Text>
+                          <Text
+                            style={{
+                              color: colors["color-text-primary"],
+                              fontSize: TYPOGRAPHY.label.fontSize,
+                              fontWeight: count > 0 ? "700" : "500",
+                            }}
+                          >
+                            {count}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
               </Material>
             ))}
           </View>
@@ -306,6 +535,7 @@ export default function TimeCapsuleRoute() {
                     onPress={() => setDraftUnlock(preset)}
                     style={{
                       minHeight: MIN_TARGET_DP,
+                      minWidth: MIN_TARGET_DP,
                       paddingHorizontal: SPACING.md,
                       borderRadius: RADII.pill,
                       alignItems: "center",
@@ -324,13 +554,18 @@ export default function TimeCapsuleRoute() {
             </View>
           </View>
           <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: SPACING.sm }}>
-            <SoftButton variant="ghost" onPress={() => setComposerOpen(false)}>
+            <SoftButton
+              variant="ghost"
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
+              onPress={() => setComposerOpen(false)}
+            >
               Cancel
             </SoftButton>
             <SoftButton
               variant="primary"
               testID="capsule-composer-save"
               disabled={!draftTitle.trim()}
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
               onPress={() => void handleSealCapsule()}
             >
               🔒 Seal Capsule
@@ -352,12 +587,23 @@ export default function TimeCapsuleRoute() {
             {readingCapsule?.message}
           </Text>
           <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-            <SoftButton variant="primary" onPress={() => setReadingCapsule(null)}>
+            <SoftButton
+              variant="primary"
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
+              onPress={() => setReadingCapsule(null)}
+            >
               Done Reading
             </SoftButton>
           </View>
         </View>
       </Modal>
+
+      <CelebrationOverlay
+        testID="celebration-overlay"
+        event={celebrationEvent}
+        characterOverride={companion}
+        onDismiss={() => setCelebrationEvent(null)}
+      />
 
       <View style={{ position: "absolute", left: 0, right: 0, bottom: 116, alignItems: "center" }} pointerEvents="box-none">
         <MoreButton onPress={() => setMoreOpen(true)} />

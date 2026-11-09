@@ -4,6 +4,25 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-08 — feat(skill-tree,time-capsule,family-memory): Skylight Plus / Hearth Display / Cozi parity Wave 5 — Skill Tree Companion Spotlight & Mastery Certificates, Family Time Capsule Guided Prompts & Keepsake Reactions, Family Memory Babysitter & Emergency Quick-Sheet + Pinned VIP Cards, and Wave 4 Deep Critic Re-Verification (`app/skill-tree.tsx`, `app/time-capsule.tsx`, `app/memory.tsx`).
+  **What changed:**
+  - **Skill Tree Companion Spotlight, Pep Talks & Branch Mastery (`app/skill-tree.tsx`, `tests/skill-tree-companion.test.tsx`)**:
+    - Added the **✨ Companion Mastery Spotlight** banner (`testID="skill-companion-banner"`) resolving the active member's Disney/Pixar/Marvel/Star Wars companion via `resolveCharacterForMember()` with `<CharacterEmblem />`, companion cheer quote (`skill-companion-cheer`), and a 64dp `✨ Pep Talk` button (`skill-companion-peptalk`).
+    - Added **🏆 Branch Mastery** status pills (`testID="skill-branch-mastery-*"` reading `🏆 Branch Mastered!` when all 3 tiers in a branch are unlocked) and wired `<CelebrationOverlay />` when unlocking new skill nodes.
+    - Enforced explicit 64×64dp tap targets (`minHeight: MIN_TARGET_DP`, `minWidth: MIN_TARGET_DP`) across all skill tree buttons and filter pills.
+  - **Family Time Capsule Guided Story Prompts & Keepsake Reactions (`app/time-capsule.tsx`, `tests/time-capsule-prompts.test.tsx`)**:
+    - Added the **✨ Guided Story Prompts Shelf** (`testID="capsule-prompts-shelf"`) with 4 1-tap keepsake templates (`🎂 Birthday Interview`, `🎒 First Day of School`, `🌟 Proud Family Moment`, `🎄 Holiday Wishes` — `testID="capsule-prompt-*"`) that pre-fill the capsule composer modal.
+    - Added **💖 Keepsake Reactions** (`❤️ love`, `🥹 touched`, `🎉 party` — `testID="capsule-react-*"`) on unlocked capsules persisted to `AsyncStorage`, plus `<CelebrationOverlay />` when unsealing a sealed family capsule.
+  - **Family Memory Babysitter & Emergency Quick-Sheet + Pinned VIP Cards (`app/memory.tsx`, `tests/family-memory-pinned.test.tsx`)**:
+    - Added the **🚨 Babysitter & Emergency Quick-Sheet Banner** (`testID="memory-emergency-banner"`) with live pinned count (`memory-pinned-count`) and a 64dp `📌 Filter Pinned VIP` toggle (`memory-pinned-toggle`), plus per-card 64×64dp `📌 Pinned` / `📍 Pin` buttons (`memory-pin-*`) that sort VIP cards to the top.
+    - Added 4 **1-Tap Babysitter & Household Starter Templates** (`🚨 Emergency Contacts & Neighbors`, `🌙 Bedtime & House Rules`, `🐶 Pet Feeding & Walk Guide`, `📶 Guest Wi-Fi & TV Remote` — `testID="memory-tpl-*"`) in the memory composer modal, and capability-gated card deletion (`memory-delete-*`) behind `role === "parent"`.
+  **Verification:**
+  - Harsh Critic Loop (`docs/critic-loop.md`): Audited by Wave 4 Deep Re-Verification Critic + Wave 5 Harsh Critic across all 6 rubric axes; both returned **`PASS: zero Critical/High`**.
+  - `npm run tokens:check`: CLEAN (app src, 0 token-literal violations).
+  - `npm run a11y:audit`: CLEAN (app src, 14sp floor & 64dp tap targets honored).
+  - `npx tsc --noEmit` & `npx expo lint`: CLEAN (0 errors).
+  - Unit tests: **103 test suites passed, 1,549 tests passed** (`tests/skill-tree-companion.test.tsx`, `tests/time-capsule-prompts.test.tsx`, `tests/family-memory-pinned.test.tsx` + full suite).
+
 - 2026-11-08 — feat(weather-advisor,allowance-jars,insights-pulse): Skylight Plus / Hearth Display parity Wave 4 — Morning Weather Dress & Gear Advisor, Money Mountain 3-Jar Family Allowance Split (Spend · Save · Give), Family Insights Pulse & Readiness Digest, and Wave 3 Deep Critic Re-Verification (`dress-advisor.ts`, `DressAdvisorCard.tsx`, `WidgetGallery.tsx`, `allowance-jars.ts`, `app/money-mountain.tsx`, `app/analytics.tsx`, `RewardsPage.tsx`, `RoutinesPanel.tsx`).
   **What changed:**
   - **Morning Weather Dress & Gear Advisor ("What to Wear Today") (`src/weather/dress-advisor.ts`, `src/weather/DressAdvisorCard.tsx`, `src/weather/WidgetGallery.tsx`)**:

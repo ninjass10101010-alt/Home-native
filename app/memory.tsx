@@ -24,6 +24,15 @@ interface MemoryItem {
   category: string;
   emoji: string;
   detail: string;
+  pinned?: boolean;
+}
+
+interface StarterTemplate {
+  id: string;
+  emoji: string;
+  title: string;
+  category: string;
+  detail: string;
 }
 
 const MEMORY_CATEGORIES = [
@@ -34,6 +43,37 @@ const MEMORY_CATEGORIES = [
   "Favorites",
 ] as const;
 
+const STARTER_TEMPLATES: StarterTemplate[] = [
+  {
+    id: "sitters",
+    emoji: "🚨",
+    title: "Emergency Contacts & Neighbors",
+    category: "Medical & Allergies",
+    detail: "Mom & Dad cells · Trusted neighbor next door · Poison Control: 800-222-1222",
+  },
+  {
+    id: "bedtime",
+    emoji: "🌙",
+    title: "Bedtime & House Rules",
+    category: "Home & School",
+    detail: "Pajamas & brush teeth at 7:30 PM · 2 stories · Nightlight on, screens off at 8:00 PM",
+  },
+  {
+    id: "pets",
+    emoji: "🐶",
+    title: "Pet Feeding & Walk Guide",
+    category: "Home & School",
+    detail: "1 scoop kibble at 7 AM & 5 PM · Fresh water bowl in laundry room · Leash on mudroom hook",
+  },
+  {
+    id: "wifi",
+    emoji: "📶",
+    title: "Guest Wi-Fi & TV Remote",
+    category: "Favorites",
+    detail: "Network: FamilyGuest · Apple TV remote in living room tray",
+  },
+];
+
 const DEFAULT_MEMORY_ITEMS: MemoryItem[] = [
   {
     id: "mem-1",
@@ -41,6 +81,7 @@ const DEFAULT_MEMORY_ITEMS: MemoryItem[] = [
     category: "Medical & Allergies",
     emoji: "🩺",
     detail: "No tree nuts in school lunchboxes. Keep children's antihistamine in top hall cabinet.",
+    pinned: true,
   },
   {
     id: "mem-2",
@@ -48,6 +89,7 @@ const DEFAULT_MEMORY_ITEMS: MemoryItem[] = [
     category: "Medical & Allergies",
     emoji: "🏥",
     detail: "Valley Family Pediatrics · Annual checkups in August · Dental cleanings every 6 months.",
+    pinned: true,
   },
   {
     id: "mem-3",
@@ -55,6 +97,7 @@ const DEFAULT_MEMORY_ITEMS: MemoryItem[] = [
     category: "Sizes & Gear",
     emoji: "👟",
     detail: "Kids Youth M / Shoe size 4Y · Winter coat size 10-12.",
+    pinned: false,
   },
   {
     id: "mem-4",
@@ -62,6 +105,7 @@ const DEFAULT_MEMORY_ITEMS: MemoryItem[] = [
     category: "Home & School",
     emoji: "🚌",
     detail: "Morning bus pickup 7:40 AM at corner · Early dismissal Wednesdays at 1:45 PM.",
+    pinned: false,
   },
   {
     id: "mem-5",
@@ -69,6 +113,7 @@ const DEFAULT_MEMORY_ITEMS: MemoryItem[] = [
     category: "Favorites",
     emoji: "🍕",
     detail: "1 Large Half Cheese / Half Pepperoni + 1 Caesar Salad + Garlic Knots.",
+    pinned: false,
   },
 ];
 
@@ -78,11 +123,13 @@ export default function FamilyMemoryRoute() {
   const pathname = usePathname();
   const router = useRouter();
   const { role: capabilityRole, hydrated } = useAuth();
+  const isParent = capabilityRole === "parent";
   const [moreOpen, setMoreOpen] = useState(false);
 
   const [items, setItems] = useState<MemoryItem[]>(DEFAULT_MEMORY_ITEMS);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [pinnedOnly, setPinnedOnly] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
 
   const [draftTitle, setDraftTitle] = useState("");
@@ -93,15 +140,17 @@ export default function FamilyMemoryRoute() {
 
   useEffect(() => {
     let alive = true;
-    void AsyncStorage.getItem(MEMORY_STORAGE_KEY).then((raw) => {
-      if (!alive || !raw) return;
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) setItems(parsed);
-      } catch {
-        // ignore
-      }
-    });
+    void AsyncStorage.getItem(MEMORY_STORAGE_KEY)
+      .then((raw) => {
+        if (!alive || !raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) setItems(parsed);
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -116,14 +165,22 @@ export default function FamilyMemoryRoute() {
     }
   }, []);
 
+  const pinnedCount = useMemo(() => items.filter((m) => Boolean(m.pinned)).length, [items]);
+
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return items.filter((m) => {
+    const result = items.filter((m) => {
+      if (pinnedOnly && !m.pinned) return false;
       if (selectedCategory !== "All" && m.category !== selectedCategory) return false;
       if (q && !m.title.toLowerCase().includes(q) && !m.detail.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [items, selectedCategory, searchQuery]);
+    return [...result].sort((a, b) => {
+      const aPin = a.pinned ? 1 : 0;
+      const bPin = b.pinned ? 1 : 0;
+      return bPin - aPin;
+    });
+  }, [items, pinnedOnly, selectedCategory, searchQuery]);
 
   const handleAddMemory = useCallback(async () => {
     if (!draftTitle.trim()) return;
@@ -133,12 +190,14 @@ export default function FamilyMemoryRoute() {
       "Home & School": "🏠",
       Favorites: "🍕",
     };
+    const matchedTpl = STARTER_TEMPLATES.find((t) => t.title === draftTitle.trim());
     const entry: MemoryItem = {
       id: `mem-${Date.now()}`,
       title: draftTitle.trim(),
       category: draftCategory,
-      emoji: emojiMap[draftCategory] ?? "📌",
+      emoji: matchedTpl?.emoji ?? emojiMap[draftCategory] ?? "📌",
       detail: draftDetail.trim() || "Saved in Family Memory.",
+      pinned: false,
     };
     await persistItems([entry, ...items]);
     setComposerOpen(false);
@@ -152,6 +211,18 @@ export default function FamilyMemoryRoute() {
       const next = items.filter((m) => m.id !== id);
       await persistItems(next);
       toast.show("Removed memory card", { intent: "info" });
+    },
+    [items, persistItems, toast],
+  );
+
+  const handleTogglePin = useCallback(
+    async (id: string) => {
+      const next = items.map((m) => (m.id === id ? { ...m, pinned: !m.pinned } : m));
+      await persistItems(next);
+      const target = next.find((m) => m.id === id);
+      toast.show(target?.pinned ? `Pinned "${target.title}" to VIP list` : `Unpinned "${target?.title ?? "card"}"`, {
+        intent: "info",
+      });
     },
     [items, persistItems, toast],
   );
@@ -190,11 +261,74 @@ export default function FamilyMemoryRoute() {
               size="sm"
               testID="memory-add-button"
               accessibilityLabel="Add new family memory note"
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
               onPress={() => setComposerOpen(true)}
             >
               + Add Memory
             </SoftButton>
           </View>
+
+          {/* 🚨 Babysitter & Emergency Quick-Sheet Banner */}
+          <Material
+            tier="regular"
+            testID="memory-emergency-banner"
+            style={{
+              borderRadius: RADII.xl,
+              padding: SPACING.md,
+              gap: SPACING.sm,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: SPACING.sm }}>
+              <View style={{ flex: 1, minWidth: 200, gap: 4 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.cardTitle.fontSize,
+                    fontWeight: "700",
+                  }}
+                >
+                  🚨 Babysitter & Emergency Quick-Sheet
+                </Text>
+                <Text
+                  testID="memory-pinned-count"
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    lineHeight: TYPOGRAPHY.label.lineHeight,
+                  }}
+                >
+                  {`${pinnedCount} Pinned VIP cards ready for sitters, grandparents & guests`}
+                </Text>
+              </View>
+              <Pressable
+                testID="memory-pinned-toggle"
+                accessibilityRole="button"
+                accessibilityLabel={pinnedOnly ? "Showing Pinned Only" : "Filter Pinned VIP"}
+                onPress={() => setPinnedOnly((prev) => !prev)}
+                style={{
+                  minHeight: MIN_TARGET_DP,
+                  minWidth: MIN_TARGET_DP,
+                  paddingHorizontal: SPACING.md,
+                  borderRadius: RADII.pill,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: pinnedOnly ? accentColor : colors["color-surface-2"],
+                  borderWidth: 1,
+                  borderColor: pinnedOnly ? accentColor : colors["color-border-subtle"],
+                }}
+              >
+                <Text
+                  style={{
+                    color: pinnedOnly ? colors["color-primary-foreground"] : colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "700",
+                  }}
+                >
+                  {pinnedOnly ? "📌 Showing Pinned Only" : "📌 Filter Pinned VIP"}
+                </Text>
+              </Pressable>
+            </View>
+          </Material>
 
           <TextField
             testID="memory-search-input"
@@ -217,6 +351,7 @@ export default function FamilyMemoryRoute() {
                   onPress={() => setSelectedCategory(cat)}
                   style={{
                     minHeight: MIN_TARGET_DP,
+                    minWidth: MIN_TARGET_DP,
                     paddingHorizontal: SPACING.md,
                     borderRadius: RADII.pill,
                     alignItems: "center",
@@ -254,27 +389,64 @@ export default function FamilyMemoryRoute() {
                     gap: SPACING.xs,
                   }}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: SPACING.sm }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.sm, flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: SPACING.sm, flexWrap: "wrap" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.sm, flex: 1, minWidth: 200 }}>
                       <Text style={{ fontSize: 28 }}>{item.emoji}</Text>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.cardTitle.fontSize, fontWeight: "700" }}>
-                          {item.title}
-                        </Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
+                          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.cardTitle.fontSize, fontWeight: "700" }}>
+                            {item.title}
+                          </Text>
+                          {item.pinned ? (
+                            <Text style={{ fontSize: 16 }}>📌</Text>
+                          ) : null}
+                        </View>
                         <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
                           {item.category}
                         </Text>
                       </View>
                     </View>
-                    <SoftButton
-                      variant="ghost"
-                      size="sm"
-                      testID={`memory-delete-${item.id}`}
-                      accessibilityLabel={`Remove ${item.title}`}
-                      onPress={() => void handleDeleteMemory(item.id)}
-                    >
-                      Remove
-                    </SoftButton>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
+                      <Pressable
+                        testID={`memory-pin-${item.id}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={item.pinned ? `Unpin ${item.title}` : `Pin ${item.title}`}
+                        onPress={() => void handleTogglePin(item.id)}
+                        style={{
+                          minHeight: MIN_TARGET_DP,
+                          minWidth: MIN_TARGET_DP,
+                          paddingHorizontal: SPACING.md,
+                          borderRadius: RADII.pill,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: item.pinned ? accentColor : colors["color-border-subtle"],
+                          backgroundColor: item.pinned ? mix(accentColor, "transparent", 20) : colors["color-surface-2"],
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: item.pinned ? colors["color-text-primary"] : colors["color-text-secondary"],
+                            fontSize: TYPOGRAPHY.label.fontSize,
+                            fontWeight: item.pinned ? "700" : "600",
+                          }}
+                        >
+                          {item.pinned ? "📌 Pinned" : "📍 Pin"}
+                        </Text>
+                      </Pressable>
+                      {isParent ? (
+                        <SoftButton
+                          variant="ghost"
+                          size="sm"
+                          testID={`memory-delete-${item.id}`}
+                          accessibilityLabel={`Remove ${item.title}`}
+                          style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
+                          onPress={() => void handleDeleteMemory(item.id)}
+                        >
+                          Remove
+                        </SoftButton>
+                      ) : null}
+                    </View>
                   </View>
                   <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, lineHeight: 22 }}>
                     {item.detail}
@@ -294,6 +466,62 @@ export default function FamilyMemoryRoute() {
         testID="memory-composer-modal"
       >
         <View style={{ gap: SPACING.md }}>
+          {/* Quick Starter Templates */}
+          <View style={{ gap: SPACING.xs }}>
+            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+              Quick Templates
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: SPACING.xs }}>
+              {STARTER_TEMPLATES.map((tpl) => (
+                <Pressable
+                  key={tpl.id}
+                  testID={`memory-tpl-${tpl.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Template: ${tpl.title}`}
+                  onPress={() => {
+                    setDraftTitle(tpl.title);
+                    setDraftCategory(tpl.category);
+                    setDraftDetail(tpl.detail);
+                  }}
+                  style={{
+                    minHeight: MIN_TARGET_DP,
+                    minWidth: MIN_TARGET_DP,
+                    paddingHorizontal: SPACING.md,
+                    paddingVertical: SPACING.xs,
+                    borderRadius: RADII.lg,
+                    borderWidth: 1,
+                    borderColor: colors["color-border-subtle"],
+                    backgroundColor: colors["color-surface-2"],
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: SPACING.xs,
+                  }}
+                >
+                  <Text style={{ fontSize: 22 }}>{tpl.emoji}</Text>
+                  <View style={{ gap: 2 }}>
+                    <Text
+                      style={{
+                        color: colors["color-text-primary"],
+                        fontSize: TYPOGRAPHY.label.fontSize,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {tpl.title}
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors["color-text-muted"],
+                        fontSize: TYPOGRAPHY.label.fontSize,
+                      }}
+                    >
+                      {tpl.category}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+
           <TextField
             testID="memory-composer-title"
             label="Title"
@@ -317,6 +545,7 @@ export default function FamilyMemoryRoute() {
                     onPress={() => setDraftCategory(cat)}
                     style={{
                       minHeight: MIN_TARGET_DP,
+                      minWidth: MIN_TARGET_DP,
                       paddingHorizontal: SPACING.md,
                       borderRadius: RADII.pill,
                       alignItems: "center",
@@ -343,12 +572,17 @@ export default function FamilyMemoryRoute() {
             multiline
           />
           <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: SPACING.sm }}>
-            <SoftButton variant="ghost" onPress={() => setComposerOpen(false)}>
+            <SoftButton
+              variant="ghost"
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
+              onPress={() => setComposerOpen(false)}
+            >
               Cancel
             </SoftButton>
             <SoftButton
               variant="primary"
               testID="memory-composer-save"
+              style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
               disabled={!draftTitle.trim()}
               onPress={() => void handleAddMemory()}
             >
