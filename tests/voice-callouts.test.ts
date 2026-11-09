@@ -136,6 +136,40 @@ describe("voiceCallouts", () => {
       expect(playVoiceSpy).toHaveBeenCalledWith("routine_papa", 0.75);
     });
 
+    it("debounces rapid successive notifications so voice callouts do not speak over each other", async () => {
+      // First notification arrives at t=0
+      await playNotificationAudio({
+        sound: "beacon",
+        volume: 0.75,
+        soundMode: "tone_and_voice",
+        category: "routines",
+        title: "Routine Starting",
+        body: "PAPÁ gets home from work",
+      });
+
+      // 300ms later, a second notification arrives
+      jest.advanceTimersByTime(300);
+      await playNotificationAudio({
+        sound: "beacon",
+        volume: 0.75,
+        soundMode: "tone_and_voice",
+        category: "general",
+        title: "Dinner",
+        body: "Dinner is ready",
+      });
+
+      // Advance by 500ms (total 800ms since first, but only 500ms since second)
+      jest.advanceTimersByTime(500);
+      // First voice callout ("routine_papa") should have been cancelled!
+      expect(playVoiceSpy).not.toHaveBeenCalled();
+
+      // Advance remaining 250ms (total 750ms since second)
+      jest.advanceTimersByTime(250);
+      // Second voice callout ("dinner_ready") fires cleanly
+      expect(playVoiceSpy).toHaveBeenCalledTimes(1);
+      expect(playVoiceSpy).toHaveBeenCalledWith("dinner_ready", 0.75);
+    });
+
     it("plays tone without voice announcement when no specific voice matches", async () => {
       await playNotificationAudio({
         sound: "harp",

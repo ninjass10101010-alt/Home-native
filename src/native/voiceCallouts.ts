@@ -347,6 +347,8 @@ export interface PlayNotificationAudioParams {
   body: string;
 }
 
+let activeVoiceTimeout: ReturnType<typeof setTimeout> | null = null;
+
 export const voiceCalloutPlayer = {
   playVoiceCallout,
 };
@@ -387,7 +389,12 @@ export async function playNotificationAudio({
 
   // 2. Follow up after 750ms with Sarah's warm bilingual spoken announcement if matched
   if (calloutKey) {
-    setTimeout(() => {
+    if (activeVoiceTimeout) {
+      clearTimeout(activeVoiceTimeout);
+      activeVoiceTimeout = null;
+    }
+    activeVoiceTimeout = setTimeout(() => {
+      activeVoiceTimeout = null;
       void voiceCalloutPlayer.playVoiceCallout(calloutKey, volume);
     }, 750);
   }

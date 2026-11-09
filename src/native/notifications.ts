@@ -53,7 +53,7 @@ export function configureNotifications() {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
-        shouldPlaySound: true,
+        shouldPlaySound: false, // In-app playNotificationAudio handles custom tone & volume
         shouldSetBadge: false,
         shouldShowBanner: true,
         shouldShowList: true,
@@ -67,6 +67,7 @@ export function configureNotifications() {
           importance: ch.importance as any,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: TOKENS.dark["color-accent-amber"],
+          sound: null, // silent channel - custom in-app audio engine plays the selected tone & volume
         }).catch(() => {});
       }
     }
@@ -97,6 +98,12 @@ export interface PostNotificationParams {
   timing?: "advance" | "start";
 }
 
+const recentDispatches = new Map<string, number>();
+
+export function resetRecentDispatchesCache(): void {
+  recentDispatches.clear();
+}
+
 /**
  * Dispatches an immediate notification respecting the category's enabled toggle,
  * custom sound, and volume setting.
@@ -108,6 +115,20 @@ export async function dispatchNotification({
   data,
   timing,
 }: PostNotificationParams): Promise<string | null> {
+  // Deduplicate rapid identical dispatches (e.g. within 2000ms)
+  const dedupeKey = `${category}:${title}:${body}:${timing ?? ""}`;
+  const now = Date.now();
+  const lastTime = recentDispatches.get(dedupeKey);
+  if (lastTime && now - lastTime < 2000) {
+    return null;
+  }
+  recentDispatches.set(dedupeKey, now);
+  if (recentDispatches.size > 50) {
+    for (const [k, t] of recentDispatches.entries()) {
+      if (now - t > 10_000) recentDispatches.delete(k);
+    }
+  }
+
   let isQuiet = false;
   if (category !== "emergency" && category !== "general") {
     const prefs = await loadNotificationPreferences();
@@ -184,7 +205,7 @@ export async function dispatchNotification({
         title,
         body,
         data: data ?? {},
-        sound: !isQuiet,
+        sound: false,
         ...(Platform.OS === "android" ? { channelId: channel.id } : {}),
       },
       trigger: null, // immediate

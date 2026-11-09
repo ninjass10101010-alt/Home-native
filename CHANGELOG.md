@@ -4,6 +4,26 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-09 — fix(notifications): calendar date gating, Android OS chime suppression, and voice callout debounce (`notifications.ts`, `useNotificationMonitor.ts`, `voiceCallouts.ts`, `notification-monitor.test.ts`, `voice-callouts.test.ts`).
+  **What changed:**
+  - **Strict Calendar Date Gating (`src/native/useNotificationMonitor.ts`, `tests/notification-monitor.test.ts`)**:
+    - Resolved critical root cause of multiple simultaneous alerts: PocketBase calendar events frequently contain `date: ""` (empty string) with only a `time` field. The previous check `if (ev.date && ev.date !== todayISO) continue;` treated empty strings as falsey, allowing 495 historical events to be evaluated for today and firing 19 duplicate notifications at the exact same minute.
+    - Implemented `isCalendarEventScheduledForToday(ev, todayISO)` strictly requiring non-empty date matching `todayISO` (`ev.date.slice(0, 10) === todayISO`).
+    - Added semantic deduplication and time-slot tracking for calendar events (`advanceSemanticKey`, `startSemanticKey`) matching routine deduplication.
+    - Added time slot to routine semantic keys (`${todayISO}:routines:sem_${semantic}:${timeSlot}`) so distinct morning and evening routines do not collide.
+  - **Android OS Sound Suppression (`src/native/notifications.ts`)**:
+    - Resolved audio double-play: `setNotificationHandler` had `shouldPlaySound: true` and notification channels were created with system chimes enabled, causing Android OS to play its default system alert sound right over the custom synthesized tone and voice callout.
+    - Set `shouldPlaySound: false` in `setNotificationHandler`, `sound: null` on Android notification channels, and `sound: false` in `scheduleNotificationAsync`. Custom tone and volume are now 100% managed by the in-app audio engine.
+    - Added 2,000ms rapid dispatch deduplication in `dispatchNotification` to drop redundant immediate dispatches.
+  - **Voice Callout Debounce (`src/native/voiceCallouts.ts`, `tests/voice-callouts.test.ts`)**:
+    - Tracked `activeVoiceTimeout` in `playNotificationAudio` to cancel pending voice announcements if a newer notification fires, preventing multiple voices from speaking over each other.
+  **Verification:**
+  - `npm run tokens:check`: CLEAN (app src).
+  - `npx tsc --noEmit`: CLEAN (0 errors).
+  - `npx expo lint`: CLEAN (0 errors).
+  - `node scripts/a11y-audit.mjs`: CLEAN (app src).
+  - Test suites: 103 passed, 103 total; 1,574 passed, 1,574 total (`npm test`).
+
 - 2026-11-09 — feat(character-graphics,rea-motion): AAA 3D claymorphic character illustrations & 16-signature REA motion engine (`DisneyArt.tsx`, `PixarArt.tsx`, `MarvelArt.tsx`, `StarWarsArt.tsx`, `CharacterMotion.tsx`, `materials.ts`, `CelebrationOverlay.tsx`, `SettingsPage.tsx`, `character-theme.test.tsx`).
   **What changed:**
   - **16 AAA 3D Claymorphic Character Illustrations (`src/ui/characters/`)**:

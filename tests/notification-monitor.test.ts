@@ -6,6 +6,7 @@ import {
   isSevereWeather,
   isStartingSoon,
   isDueNow,
+  isCalendarEventScheduledForToday,
   evaluateRoutineMealGate,
   loadAlertedKeys,
   markKeyAlerted,
@@ -86,6 +87,31 @@ describe("useNotificationMonitor logic", () => {
       const now = new Date("2026-10-26T14:00:00Z");
       const future10m = new Date("2026-10-26T14:10:00Z").toISOString();
       expect(isDueNow(future10m, now, 2)).toBe(false);
+    });
+  });
+
+  describe("isCalendarEventScheduledForToday", () => {
+    const todayISO = "2026-11-09";
+
+    it("strictly rejects events with empty string date (e.g. PocketBase empty date field)", () => {
+      expect(isCalendarEventScheduledForToday({ date: "" }, todayISO)).toBe(false);
+    });
+
+    it("strictly rejects events with null or undefined date", () => {
+      expect(isCalendarEventScheduledForToday({ date: null }, todayISO)).toBe(false);
+      expect(isCalendarEventScheduledForToday({ date: undefined }, todayISO)).toBe(false);
+      expect(isCalendarEventScheduledForToday({}, todayISO)).toBe(false);
+    });
+
+    it("rejects events with dates in the past or future", () => {
+      expect(isCalendarEventScheduledForToday({ date: "2026-11-08" }, todayISO)).toBe(false);
+      expect(isCalendarEventScheduledForToday({ date: "2026-11-10" }, todayISO)).toBe(false);
+      expect(isCalendarEventScheduledForToday({ date: "2026-10-09" }, todayISO)).toBe(false);
+    });
+
+    it("accepts events explicitly scheduled for today", () => {
+      expect(isCalendarEventScheduledForToday({ date: "2026-11-09" }, todayISO)).toBe(true);
+      expect(isCalendarEventScheduledForToday({ date: "2026-11-09T18:00:00.000Z" }, todayISO)).toBe(true);
     });
   });
 });

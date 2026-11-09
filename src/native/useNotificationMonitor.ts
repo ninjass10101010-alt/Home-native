@@ -182,6 +182,14 @@ export function evaluateRoutineMealGate(
 
 const defaultNowProvider = () => new Date();
 
+export function isCalendarEventScheduledForToday(
+  ev: { date?: string | null },
+  todayISO: string
+): boolean {
+  if (!ev.date) return false;
+  return ev.date.slice(0, 10) === todayISO;
+}
+
 export function useNotificationMonitor({
   pollIntervalMs = 60_000,
   nowProvider = defaultNowProvider,
@@ -249,7 +257,8 @@ export function useNotificationMonitor({
         const nowMins = now.getHours() * 60 + now.getMinutes();
 
         for (const ev of events) {
-          if (ev.date && ev.date !== todayISO) continue;
+          // STRICT MATCH: Only calendar events explicitly scheduled for today
+          if (!isCalendarEventScheduledForToday(ev, todayISO)) continue;
           if (ev.allDay) continue;
 
           const targetMinutes = scheduleTimeMinutes(ev.time);
@@ -263,19 +272,36 @@ export function useNotificationMonitor({
               : isDueNow(ev.time, now, 2);
 
           const eventId = String(ev.id ?? ev.googleEventId ?? ev.title);
+          const semantic = normalizeRoutineSemanticKey(ev.title ?? "");
+          const timeSlot = targetMinutes !== null ? String(targetMinutes) : (ev.time ?? "any");
+
           const advanceKey = `${todayISO}:calendar:${eventId}:advance`;
+          const advanceSemanticKey = `${todayISO}:calendar:sem_${semantic}:${timeSlot}:advance`;
           const startKey = `${todayISO}:calendar:${eventId}:start`;
+          const startSemanticKey = `${todayISO}:calendar:sem_${semantic}:${timeSlot}:start`;
 
           // During quiet hours (11 PM - 5 AM), suppress calendar alerts and mark handled
           if (quiet) {
-            if (advanceDue) await markKeyAlerted(todayISO, advanceKey);
-            if (startDue) await markKeyAlerted(todayISO, startKey);
+            if (advanceDue) {
+              await markKeyAlerted(todayISO, advanceKey);
+              await markKeyAlerted(todayISO, advanceSemanticKey);
+            }
+            if (startDue) {
+              await markKeyAlerted(todayISO, startKey);
+              await markKeyAlerted(todayISO, startSemanticKey);
+            }
             continue;
           }
 
           // 15-min advance notification
-          if (calAdvanceAllowed && advanceDue && !isKeyAlerted(advanceKey)) {
+          if (
+            calAdvanceAllowed &&
+            advanceDue &&
+            !isKeyAlerted(advanceKey) &&
+            !isKeyAlerted(advanceSemanticKey)
+          ) {
             await markKeyAlerted(todayISO, advanceKey);
+            await markKeyAlerted(todayISO, advanceSemanticKey);
             void dispatchNotification({
               category: "calendar",
               title: "📅 Upcoming Event",
@@ -286,8 +312,14 @@ export function useNotificationMonitor({
           }
 
           // Event starting now notification
-          if (calStartAllowed && startDue && !isKeyAlerted(startKey)) {
+          if (
+            calStartAllowed &&
+            startDue &&
+            !isKeyAlerted(startKey) &&
+            !isKeyAlerted(startSemanticKey)
+          ) {
             await markKeyAlerted(todayISO, startKey);
+            await markKeyAlerted(todayISO, startSemanticKey);
             void dispatchNotification({
               category: "calendar",
               title: "🔔 Event Starting Now",
@@ -359,11 +391,12 @@ export function useNotificationMonitor({
 
           const memberInfo = rt.member ? ` for ${rt.member.split(" ")[0]}` : "";
           const semantic = normalizeRoutineSemanticKey(rt.title ?? "");
+          const timeSlot = targetMinutes !== null ? String(targetMinutes) : (rt.time ?? "any");
 
           const advanceKey = `${todayISO}:routines:${rt.id}:advance`;
-          const advanceSemanticKey = `${todayISO}:routines:sem_${semantic}:advance`;
+          const advanceSemanticKey = `${todayISO}:routines:sem_${semantic}:${timeSlot}:advance`;
           const startKey = `${todayISO}:routines:${rt.id}:start`;
-          const startSemanticKey = `${todayISO}:routines:sem_${semantic}:start`;
+          const startSemanticKey = `${todayISO}:routines:sem_${semantic}:${timeSlot}:start`;
 
           // During quiet hours (11 PM - 5 AM), suppress routine alarms and mark handled for today
           if (quiet) {
