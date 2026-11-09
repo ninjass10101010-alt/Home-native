@@ -354,7 +354,7 @@ export const CHARACTER_CATALOG: readonly CharacterProfile[] = [
 ] as const;
 
 export const DEFAULT_CHARACTER_THEME_PREFS: CharacterThemePrefs = {
-  enabled: false,
+  enabled: true,
   franchise: "all",
   screensaverSpotlight: true,
   assignments: {},
@@ -431,7 +431,7 @@ function sanitizePrefs(raw: unknown): CharacterThemePrefs {
     }
   }
   return {
-    enabled: Boolean(obj.enabled),
+    enabled: typeof obj.enabled === "boolean" ? obj.enabled : DEFAULT_CHARACTER_THEME_PREFS.enabled,
     franchise:
       typeof obj.franchise === "string" && VALID_FRANCHISES.has(obj.franchise as CharacterFranchise)
         ? (obj.franchise as CharacterFranchise)

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { api, ApiError } from "../api/client";
 import { getBaseUrl, LAN_BASE_URLS, setBaseUrl } from "../api/config";
+import { readCachedMembers } from "../api/members";
 import type { ServerMember } from "../api/types";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
@@ -824,13 +825,34 @@ function AppearanceSection() {
   const [characterPrefs, setCharacterPrefs] = useCharacterTheme();
   const [previewEvent, setPreviewEvent] = useState<CelebrationEvent | null>(null);
 
+  const [rosterNames, setRosterNames] = useState<string[]>(["Aurora", "Alex", "Rebecca (Mom)"]);
+  const [selectedPickerMember, setSelectedPickerMember] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void readCachedMembers()
+      .then((rows) => {
+        if (!alive || !rows || rows.length === 0) return;
+        const names = rows.map((m) => m.name).filter(Boolean);
+        if (names.length > 0) {
+          setRosterNames((prev) => Array.from(new Set([...prev, ...names])));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   // CAPABILITY gate (AGENTS.md): only a live parent session may toggle the
   // family-wide character mode or franchise pack; cached display profiles do not.
   const isParent = role === "parent";
-  const isSignedIn = role !== null && Boolean(member);
   const availableCharacters = charactersForFranchise(characterPrefs.franchise);
-  const myCharacter = member ? resolveCharacterForMember(member.name, characterPrefs) : null;
+  const activePickerName = selectedPickerMember || member?.name || "Aurora";
+  const myCharacter = resolveCharacterForMember(activePickerName, characterPrefs);
   const palette = ACCENTS[theme === "light" ? "light" : "dark"];
+  const allRosterNames =
+    member?.name && !rosterNames.includes(member.name) ? [member.name, ...rosterNames] : rosterNames;
 
   return (
     <View style={{ gap: 16 }}>
@@ -999,8 +1021,64 @@ function AppearanceSection() {
           </View>
         ) : null}
 
-        {characterPrefs.enabled && isSignedIn && member && myCharacter ? (
-          <View style={{ gap: 12, marginTop: 4 }}>
+        {characterPrefs.enabled && myCharacter ? (
+          <View style={{ gap: 16, marginTop: 4 }}>
+            {/* Family Member Switcher row */}
+            <View style={{ gap: 8 }}>
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  fontWeight: "700",
+                }}
+              >
+                Assign companion for:
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                {allRosterNames.map((name) => {
+                  const isSelected = activePickerName === name;
+                  return (
+                    <Pressable
+                      key={name}
+                      testID={`settings-character-member-${name}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isSelected }}
+                      accessibilityLabel={`Select ${name} to choose character companion`}
+                      onPress={() => setSelectedPickerMember(name)}
+                      style={{
+                        minHeight: MIN_TARGET_DP,
+                        minWidth: MIN_TARGET_DP,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        borderRadius: RADII.pill,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: isSelected
+                          ? mix(colors["color-accent-selected"], colors["color-surface-2"], 30)
+                          : colors["color-surface-1"],
+                        borderWidth: isSelected ? 2 : 1,
+                        borderColor: isSelected
+                          ? colors["color-accent-selected"]
+                          : colors["color-border"],
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: isSelected
+                            ? colors["color-text-primary"]
+                            : colors["color-text-secondary"],
+                          fontSize: TYPOGRAPHY.body.fontSize,
+                          fontWeight: isSelected ? "700" : "500",
+                        }}
+                      >
+                        {name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <Text
@@ -1010,7 +1088,7 @@ function AppearanceSection() {
                     fontWeight: "700",
                   }}
                 >
-                  {`${member.name}'s Companion: ${myCharacter.name}`}
+                  {`${activePickerName}'s Companion: ${myCharacter.name}`}
                 </Text>
                 <Text
                   style={{
@@ -1028,7 +1106,7 @@ function AppearanceSection() {
                 onPress={() =>
                   setPreviewEvent({
                     kind: "chore",
-                    memberName: member.name,
+                    memberName: activePickerName,
                     title: `${myCharacter.name} Team-Up!`,
                     points: 15,
                   })
@@ -1049,12 +1127,13 @@ function AppearanceSection() {
                     accessibilityRole="button"
                     accessibilityState={{ selected }}
                     accessibilityLabel={`Choose ${c.name} (${c.franchiseLabel})`}
-                    onPress={() => void assignCharacterToMember(member.name, c.id)}
+                    onPress={() => void assignCharacterToMember(activePickerName, c.id)}
                     style={{
                       width: "23%",
-                      minHeight: MIN_TARGET_DP,
+                      minHeight: 120,
+                      minWidth: MIN_TARGET_DP,
                       borderRadius: RADII.lg,
-                      paddingVertical: 10,
+                      paddingVertical: 14,
                       paddingHorizontal: 8,
                       alignItems: "center",
                       justifyContent: "center",
@@ -1070,7 +1149,7 @@ function AppearanceSection() {
                       motif={c.motif}
                       accentHex={cHex}
                       inkHex={colors["color-text-primary"]}
-                      size={44}
+                      size={60}
                     />
                     <Text
                       numberOfLines={1}
@@ -1082,6 +1161,16 @@ function AppearanceSection() {
                       }}
                     >
                       {c.name}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        color: colors["color-text-muted"],
+                        fontSize: TYPOGRAPHY.label.fontSize,
+                        textAlign: "center",
+                      }}
+                    >
+                      {`${c.badgeGlyph} ${c.franchiseLabel}`}
                     </Text>
                   </Pressable>
                 );

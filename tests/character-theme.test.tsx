@@ -159,6 +159,7 @@ describe("CelebrationOverlay component", () => {
 
 describe("SettingsPage — Disney & Character Mode capability gating", () => {
   it("parent can toggle Disney & Character Mode on, filter by franchise, and pick a companion", async () => {
+    _resetCharacterThemeMemoryForTest({ enabled: false });
     mockMember = parentMember;
     mockRole = "parent";
     const { getByTestId, findByTestId } = render(<SettingsPage />, { wrapper: wrap });
@@ -200,6 +201,34 @@ describe("SettingsPage — Disney & Character Mode capability gating", () => {
     await waitFor(async () => {
       const loaded = await loadCharacterThemePrefs();
       expect(resolveCharacterForMember("Aurora", loaded).id).toBe("grogu");
+    });
+  });
+
+  it("renders character picker by default when signed out and supports per-member switching", async () => {
+    mockMember = null;
+    mockRole = null;
+    const { getByTestId, findByTestId } = render(<SettingsPage />, { wrapper: wrap });
+    await flush();
+
+    fireEvent.press(getByTestId("settings-section-appearance"));
+    expect(await findByTestId("settings-character-mode-card")).toBeTruthy();
+
+    // 16 character portraits render immediately without signing in
+    expect(getByTestId("settings-character-pick-stitch")).toBeTruthy();
+    expect(getByTestId("settings-character-pick-elsa")).toBeTruthy();
+    expect(getByTestId("settings-character-pick-spiderman")).toBeTruthy();
+
+    // Member switcher pills render
+    expect(getByTestId("settings-character-member-Aurora")).toBeTruthy();
+    expect(getByTestId("settings-character-member-Alex")).toBeTruthy();
+
+    // Switch to Alex and pick WALL-E
+    fireEvent.press(getByTestId("settings-character-member-Alex"));
+    await flush();
+    fireEvent.press(getByTestId("settings-character-pick-walle"));
+    await waitFor(async () => {
+      const loaded = await loadCharacterThemePrefs();
+      expect(resolveCharacterForMember("Alex", loaded).id).toBe("walle");
     });
   });
 });

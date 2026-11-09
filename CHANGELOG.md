@@ -4,6 +4,20 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-08 — feat(character-portraits,settings-studio): Multi-layered 16-Character Vector Portraits & Always-On Disney Character Studio in Settings (`src/theme/characterTheme.ts`, `src/ui/CelebrationOverlay.tsx`, `src/settings/SettingsPage.tsx`, `tests/character-theme.test.tsx`).
+  **What changed:**
+  - **Enabled by Default (`src/theme/characterTheme.ts`)**:
+    - Changed `DEFAULT_CHARACTER_THEME_PREFS.enabled` to `true` so Disney & Character Mode is active out of the box on the wall tablet without requiring initial manual hydration.
+  - **16 Distinct Multi-Layered Illustrated Character Portraits (`src/ui/CelebrationOverlay.tsx`)**:
+    - Replaced the abstract geometric motifs in `CharacterEmblem` (`renderMotifArtwork`) with 16 unique, multi-layered vector character faces/busts using semantic theme tokens (`ACCENTS`, `colors[...]`, `mix()`, `mixAlpha()`): *Stitch* (`alien`), *Queen Elsa* (`snowflake`), *Moana* (`wave`), *Sorcerer Mickey* (`ears`), *Simba* (`crown`), *Buzz Lightyear* (`rocket`), *Sheriff Woody* (`sheriff`), *WALL·E* (`robot`), *Joy* (`sparkle`), *Spider-Man* (`web`), *Iron Man* (`arc`), *Baby Groot* (`leaf`), *Black Panther* (`shield`), *Grogu* (`force`), *R2-D2* (`droid`), and *The Mandalorian* (`helmet`).
+  - **Always-Visible Character Studio & Family Member Switcher (`src/settings/SettingsPage.tsx`)**:
+    - Rendered the **16-Character Portrait Grid** (`settings-character-pick-*`), **Family Member Switcher** (`settings-character-member-*`), and **`Preview ✨`** button (`settings-character-preview`) unconditionally whenever `characterPrefs.enabled` is true (even when `role === null` on the wall), while keeping the family-wide master toggle and franchise pack filters parent-gated (`role === "parent"`).
+  **Verification:**
+  - Harsh Critic Loop (`docs/critic-loop.md`): Audited by Disney Character Portraits Harsh Critic; returned **`PASS: zero Critical/High`**.
+  - `npm run tokens:check` & `npm run a11y:audit`: CLEAN.
+  - `npx tsc --noEmit` & `npx expo lint`: CLEAN (0 errors).
+  - Unit tests: **103 test suites passed, 1,554 tests passed** (`tests/character-theme.test.tsx` + full suite).
+
 - 2026-11-08 — feat(calendar-ui): Calendar vs. Daily Schedule UI Separation & Wall Polish + Wave 5 Deep Critic Re-Verification (`src/calendar/CalendarPage.tsx`, `tests/calendar-page.test.tsx`).
   **What changed:**
   - **Clean Separation of Calendar Appointments vs. Daily Schedule & Routines (`src/calendar/CalendarPage.tsx`)**:
