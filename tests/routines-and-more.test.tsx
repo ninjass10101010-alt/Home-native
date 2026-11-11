@@ -6,6 +6,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { ToastProvider } from "../src/ui/Toast";
 import { RoutinesPanel } from "../src/tasks/RoutinesPanel";
+import { ALL_ROUTINE_DAYS } from "../src/tasks/routines-api";
+import {
+  weekdayCodeForDateISO,
+  type RoutineRosterMember,
+} from "../src/tasks/routine-rules";
 import { RewardsPage } from "../src/rewards/RewardsPage";
 import SkillTreeRoute from "../app/skill-tree";
 import AnalyticsRoute from "../app/analytics";
@@ -210,5 +215,151 @@ describe("More… Secondary Surfaces — Skill Tree, Insights, Money Mountain, T
       fireEvent.press(getByTestId("memory-composer-save"));
     });
     expect(await findByText("Wi-Fi Guest Network")).toBeTruthy();
+  });
+});
+
+describe("RoutinesPanel schedule, settings, and accountability flows", () => {
+  const rosterMembers: RoutineRosterMember[] = [
+    { id: "p1", name: "Rebecca", fullName: "Rebecca (Mom)", role: "parent", emoji: "🐱" },
+    { id: "p2", name: "Dad", fullName: "Dad", role: "parent", emoji: "🧔" },
+    { id: "k1", name: "Aurora", fullName: "Aurora", role: "child", emoji: "🦊" },
+  ];
+
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+  });
+
+  it("filters Scheduled Today vs Full Schedule, creates Sunday individual routine with penalty, updates point rules, and excuses missed entries", async () => {
+    const now = new Date();
+    const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const todayDay = weekdayCodeForDateISO(todayISO);
+    const nonTodayDay =
+      ALL_ROUTINE_DAYS.find((d) => d !== todayDay && d !== "sun") ?? "wed";
+
+    await AsyncStorage.setItem(
+      "@consuela/routines_v1",
+      JSON.stringify([
+        {
+          id: "rt-today",
+          title: "Daily Morning Prep",
+          slot: "morning",
+          emoji: "🌅",
+          color: "color-accent-amber",
+          assignee: "All",
+          daysOfWeek: [...ALL_ROUTINE_DAYS],
+          points: 10,
+          missedPenalty: 5,
+          steps: [{ id: "st-1", title: "Make bed", minutes: 5 }],
+        },
+        {
+          id: "rt-other-day",
+          title: "Water Indoor Plants",
+          slot: "afternoon",
+          emoji: "🪴",
+          color: "color-accent-mint",
+          assignee: "Dad",
+          assigneeMemberIds: ["p2"],
+          daysOfWeek: [nonTodayDay],
+          points: 15,
+          missedPenalty: 8,
+          steps: [{ id: "st-2", title: "Water ferns", minutes: 5 }],
+        },
+      ]),
+    );
+    await AsyncStorage.setItem(
+      "@consuela/routine_accountability_v1",
+      JSON.stringify({
+        lastEvaluatedDate: "2026-11-10",
+        streaks: { dad: { current: 0, longest: 4, lastCompletedDate: "2026-11-08" } },
+        missedEntries: [
+          {
+            id: "miss-1",
+            date: "2026-11-10",
+            routineId: "rt-other-day",
+            routineTitle: "Water Indoor Plants",
+            routineEmoji: "🪴",
+            memberKey: "dad",
+            memberName: "Dad",
+            deductedPoints: 8,
+            excused: false,
+          },
+        ],
+      }),
+    );
+
+    const { findByText, queryByText, getByTestId, findByTestId } = render(
+      <RoutinesPanel rosterMembers={rosterMembers} isParent />,
+      { wrapper: wrap },
+    );
+
+    expect(await findByText("Daily Morning Prep")).toBeTruthy();
+    expect(queryByText("Water Indoor Plants")).toBeNull();
+    expect(await findByTestId("panel-missed-accountability")).toBeTruthy();
+    expect(getByTestId("panel-excuse-miss-1")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(getByTestId("routine-scope-all"));
+    });
+    expect(await findByText("Water Indoor Plants")).toBeTruthy();
+
+    // Create Sunday-only Dad routine with custom integer points and missed penalty
+    await act(async () => {
+      fireEvent.press(getByTestId("routines-add-button"));
+    });
+    await act(async () => {
+      fireEvent.changeText(getByTestId("routine-composer-title"), "Sunday Trash Curb");
+    });
+    // Deselect every non-Sunday day so only "sun" remains scheduled
+    for (const day of ALL_ROUTINE_DAYS) {
+      if (day !== "sun") {
+        await act(async () => {
+          fireEvent.press(getByTestId(`routine-day-${day}`));
+        });
+      }
+    }
+    await act(async () => {
+      fireEvent.press(getByTestId("routine-target-pick-members"));
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId("routine-target-member-dad"));
+    });
+    await act(async () => {
+      fireEvent.changeText(getByTestId("routine-composer-points"), "25");
+      fireEvent.changeText(getByTestId("routine-composer-penalty"), "12");
+      fireEvent.changeText(getByTestId("routine-composer-steps"), "Roll bins to curb");
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId("routine-composer-save"));
+    });
+
+    expect(await findByText("Sunday Trash Curb")).toBeTruthy();
+    const savedRoutinesRaw = await AsyncStorage.getItem("@consuela/routines_v1");
+    const savedRoutines = JSON.parse(savedRoutinesRaw || "[]");
+    const sundayTrash = savedRoutines.find((r: { title: string }) => r.title === "Sunday Trash Curb");
+    expect(sundayTrash).toMatchObject({
+      daysOfWeek: ["sun"],
+      points: 25,
+      missedPenalty: 12,
+      assignee: "Dad",
+      assignees: ["Dad"],
+    });
+
+    // Update global point rules via RoutineSettingsModal
+    await act(async () => {
+      fireEvent.press(getByTestId("routines-settings-button"));
+    });
+    await act(async () => {
+      fireEvent.changeText(getByTestId("routine-settings-default-points"), "18");
+      fireEvent.changeText(getByTestId("routine-settings-default-penalty"), "9");
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId("routine-settings-save"));
+    });
+
+    const savedSettings = JSON.parse(
+      (await AsyncStorage.getItem("@consuela/routine_settings_v1")) || "{}",
+    );
+    expect(savedSettings.defaultPoints).toBe(18);
+    expect(savedSettings.defaultMissedPenalty).toBe(9);
   });
 });

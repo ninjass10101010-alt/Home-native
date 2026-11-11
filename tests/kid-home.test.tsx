@@ -410,8 +410,9 @@ describe("KidHome — quests", () => {
     await findByText("Dishes");
     expect(getAllByText("⏳ Waiting for approval").length).toBeGreaterThan(0);
     expect(getByText("⏳ approval")).toBeTruthy();
+    api.mockClear();
     fireEvent.press(getByTestId("kid-quest-2"));
-    expect(api).not.toHaveBeenCalled();
+    expect(api).not.toHaveBeenCalledWith("/api/tasks/claim", expect.anything());
     expect(queryByTestId("kid-pinpad")).toBeNull();
   });
 
@@ -423,8 +424,9 @@ describe("KidHome — quests", () => {
     await findByText("Garage clean-out");
     expect(getByText("See the Tasks page")).toBeTruthy();
     expect(queryByTestId("kid-quest-5")).toBeNull(); // no ✓ affordance on a crew row
+    api.mockClear();
     fireEvent.press(getByTestId("kid-crew-5"));
-    expect(api).not.toHaveBeenCalled();
+    expect(api).not.toHaveBeenCalledWith("/api/tasks/claim", expect.anything());
   });
 
   it("202 durably queued → honest catching-up toast, never an instant-apply claim", async () => {
@@ -576,12 +578,19 @@ describe("app/index — home mode switch", () => {
     expect(screen.queryByTestId("wall-grid")).toBeNull();
   });
 
-  it("an adult keeps the family bento HomeWall", async () => {
+  it("an adult opens AdultRoutinesHome and can toggle back to the family bento HomeWall", async () => {
     mockMember = adult;
     mockSnapshot = { tasks: [], weekData: WEEK_DATA };
     const screen = render(<HomeRoute />, { wrapper: wrap });
-    expect(await screen.findByTestId("wall-grid")).toBeTruthy();
+    expect(await screen.findByTestId("adult-routines-home")).toBeTruthy();
     expect(screen.queryByTestId("kid-home")).toBeNull();
+    expect(screen.queryByTestId("wall-grid")).toBeNull();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("adult-switch-to-wall"));
+    });
+    expect(await screen.findByTestId("wall-grid")).toBeTruthy();
+    expect(screen.getByTestId("wall-open-adult-routines")).toBeTruthy();
   });
 
   it("guest (signed out) keeps the family bento — kid mode never gates a guest", async () => {

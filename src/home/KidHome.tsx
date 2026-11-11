@@ -1,5 +1,17 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import { getCachedMembersSync, listMembersSmart } from "../api/members";
+import type { ServerMember } from "../api/types";
+import {
+  DEFAULT_ACCOUNTABILITY_STATE,
+  DEFAULT_ROUTINE_SETTINGS,
+  loadRoutinesBundle,
+  type DailyRoutineProgress,
+  type FamilyRoutine,
+  type RoutineAccountabilityState,
+  type RoutineSettings,
+} from "../tasks/routines-api";
+import { RoutineTodaySection } from "../tasks/RoutineTodaySection";
 import { useTheme } from "../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../theme/tokens";
 import { Material } from "../theme/Material";
@@ -100,16 +112,74 @@ function renderTaskAvatar(emoji: string | undefined) {
   return <Text style={{ fontSize: 28 }}>{kidEmoji(emoji)}</Text>;
 }
 
+function kidTodayISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export interface KidHomeProps {
   onOpenMore?: () => void;
 }
 export function KidHome({ onOpenMore }: KidHomeProps = {}) {
   const { colors, accentColor, theme } = useTheme();
   const toast = useToast();
-  const { member, signOut, pinRequiredFor } = useAuth();
-  const { snapshot, stale, lastSyncAt, refreshNow } = useSync();
+  const { member, role, signOut, pinRequiredFor } = useAuth();
+  const { snapshot, stale, lastSyncAt, refreshNow, onPulse } = useSync();
   const [characterPrefs] = useCharacterTheme();
   const [celebrationEvent, setCelebrationEvent] = useState<CelebrationEvent | null>(null);
+
+  const deviceToday = useMemo(() => kidTodayISO(), []);
+  const [routineTodayISO, setRoutineTodayISO] = useState(deviceToday);
+  const [routineRoster, setRoutineRoster] = useState<ServerMember[]>(() =>
+    getCachedMembersSync(),
+  );
+  const [routines, setRoutines] = useState<FamilyRoutine[]>([]);
+  const [routineSettings, setRoutineSettings] = useState<RoutineSettings>(
+    DEFAULT_ROUTINE_SETTINGS,
+  );
+  const [routineAccountability, setRoutineAccountability] =
+    useState<RoutineAccountabilityState>(DEFAULT_ACCOUNTABILITY_STATE);
+  const [routineProgress, setRoutineProgress] = useState<DailyRoutineProgress>({
+    checkedSteps: {},
+    completedRoutines: {},
+    memberCheckedSteps: {},
+    memberCompleted: {},
+  });
+  const [routinesLoading, setRoutinesLoading] = useState(true);
+  const [routinesOffline, setRoutinesOffline] = useState(false);
+
+  const reloadRoutines = useCallback(async () => {
+    try {
+      const bundle = await loadRoutinesBundle(deviceToday);
+      setRoutines(bundle.routines);
+      setRoutineSettings(bundle.settings);
+      setRoutineAccountability(bundle.accountability);
+      setRoutineProgress(bundle.progress);
+      setRoutineTodayISO(bundle.todayISO || deviceToday);
+      setRoutinesOffline(bundle.offline);
+    } finally {
+      setRoutinesLoading(false);
+    }
+  }, [deviceToday]);
+
+  useEffect(() => {
+    void reloadRoutines();
+    void listMembersSmart()
+      .then((res) => {
+        if (res.members.length > 0) setRoutineRoster(res.members);
+      })
+      .catch(() => {});
+  }, [reloadRoutines]);
+
+  useEffect(() => {
+    if (!onPulse) return;
+    return onPulse(() => {
+      void reloadRoutines();
+    });
+  }, [onPulse, reloadRoutines]);
 
   // KidHome is mounted only for a signed-in kid/pet (app/index.tsx) — but the
   // component stays honest even mid-sign-out (member flips null same render).
@@ -773,6 +843,35 @@ export function KidHome({ onOpenMore }: KidHomeProps = {}) {
             })}
           </View>
         </Material>
+
+        {/* Today's Routines — synced check-off, points & streak loop */}
+        {name ? (
+          <RoutineTodaySection
+            title="Today's Routines"
+            memberName={name}
+            memberRole={role === "pet" ? "pet" : "child"}
+            rosterMembers={routineRoster.map((r) => ({
+              id: r.id,
+              name: r.name,
+              fullName: r.name,
+              role: r.role,
+              emoji: r.emoji,
+            }))}
+            routines={routines}
+            settings={routineSettings}
+            accountability={routineAccountability}
+            progress={routineProgress}
+            todayISO={routineTodayISO}
+            loading={routinesLoading}
+            offline={routinesOffline}
+            onDataUpdated={({ progress: nextProg, accountability: nextAcc }) => {
+              setRoutineProgress(nextProg);
+              setRoutineAccountability(nextAcc);
+            }}
+            onPointsChanged={() => void refreshNow()}
+            onCelebrate={setCelebrationEvent}
+          />
+        ) : null}
 
         {/* Quests Widget Card */}
         <Material

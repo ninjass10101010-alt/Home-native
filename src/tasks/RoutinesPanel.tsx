@@ -1,464 +1,955 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { ApiError } from "../api/client";
+import { getCachedMembersSync, listMembersSmart } from "../api/members";
+import type { ServerMember } from "../api/types";
+import { useAuth } from "../state/AuthProvider";
+import { useSync } from "../state/SyncManager";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
-import { MIN_TARGET_DP, RADII, SPACING, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
-import { Modal } from "../ui/Modal";
-import { SoftButton } from "../ui/SoftButton";
-import { TextField } from "../ui/TextField";
-import { EmptyState } from "../ui/EmptyState";
-import { useToast } from "../ui/Toast";
-import { useCharacterTheme } from "../theme/characterTheme";
+import { MIN_TARGET_DP, RADII, TYPOGRAPHY } from "../theme/tokens";
 import { CelebrationOverlay, type CelebrationEvent } from "../ui/CelebrationOverlay";
-import { localTodayISO } from "../home/widgets/data";
+import { Chip } from "../ui/Chip";
+import { EmptyState } from "../ui/EmptyState";
+import { SoftButton } from "../ui/SoftButton";
+import { useToast } from "../ui/Toast";
+import { FocusTimerModal } from "./FocusTimerModal";
 import {
-  DEFAULT_ROUTINES,
-  loadRoutineProgress,
-  loadRoutines,
+  DEFAULT_ACCOUNTABILITY_STATE,
+  DEFAULT_ROUTINE_SETTINGS,
+  loadRoutinesBundle,
+  postRoutineAction,
+  postRoutineProgressAction,
   ROUTINE_SLOT_META,
-  saveRoutineProgress,
-  saveRoutines,
   type DailyRoutineProgress,
   type FamilyRoutine,
+  type RoutineAccountabilityState,
+  type RoutineSettings,
   type RoutineSlot,
 } from "./routines-api";
-import { FocusTimerModal } from "./FocusTimerModal";
+import {
+  findRosterMember,
+  formatRoutineDaysLabel,
+  formatRoutineTargetsLabel,
+  getMemberCheckedSteps,
+  getMemberCompletionMeta,
+  isRoutineScheduledForDate,
+  isSingleMemberRoutine,
+  memberKey,
+  resolveRoutineTargets,
+  routineAppliesToMember,
+  type RoutineRosterMember,
+} from "./routine-rules";
+import {
+  RoutineComposerModal,
+  RoutineParentPinModal,
+  RoutineSettingsModal,
+} from "./RoutineModals";
 
 const SLOTS: RoutineSlot[] = ["morning", "afternoon", "evening", "weekend"];
-const POINT_OPTIONS = [10, 15, 20, 30];
+
+function localTodayISO(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 export interface RoutinesPanelProps {
   activeMemberFilter?: string;
   rosterNames?: string[];
+  rosterMembers?: RoutineRosterMember[];
   isParent?: boolean;
+  onPointsUpdated?: () => void;
+}
+
+type PendingParentAction =
+  | { kind: "upsert_routine"; routine: FamilyRoutine }
+  | { kind: "delete_routine"; routineId: string; title: string }
+  | { kind: "update_settings"; settings: RoutineSettings }
+  | { kind: "approve_routine"; routineId: string; memberName: string }
+  | { kind: "send_back_routine"; routineId: string; memberName: string }
+  | { kind: "excuse_missed"; entryId: string };
+
+function toRoutineRoster(
+  serverMembers: ServerMember[],
+  rosterNames?: string[],
+): RoutineRosterMember[] {
+  if (serverMembers.length > 0) {
+    return serverMembers.map((m) => ({
+      id: m.id,
+      name: m.name,
+      fullName: m.name,
+      role: m.role,
+      emoji: m.emoji,
+    }));
+  }
+  return (rosterNames ?? [])
+    .filter((n) => n && n !== "All")
+    .map((n) => ({ name: n, fullName: n }));
 }
 
 export function RoutinesPanel({
   activeMemberFilter = "All",
-  rosterNames = [],
-  isParent = false,
+  rosterNames,
+  rosterMembers: rosterMembersProp,
+  onPointsUpdated,
 }: RoutinesPanelProps) {
   const { colors, accentColor } = useTheme();
   const toast = useToast();
-  const [characterPrefs] = useCharacterTheme();
-  const [celebrationEvent, setCelebrationEvent] = useState<CelebrationEvent | null>(null);
-  const todayISO = useMemo(() => localTodayISO(), []);
+  const { member: authMember, role } = useAuth();
+  const { refreshNow, onPulse } = useSync();
 
-  const [routines, setRoutines] = useState<FamilyRoutine[]>(DEFAULT_ROUTINES);
+  const isParentSession = role === "parent";
+  const isChildSession = role !== null && role !== "parent";
+
+  const [cachedServerMembers, setCachedServerMembers] = useState<ServerMember[]>(() =>
+    getCachedMembersSync(),
+  );
+  const rosterMembers = useMemo(
+    () =>
+      rosterMembersProp && rosterMembersProp.length > 0
+        ? rosterMembersProp
+        : toRoutineRoster(cachedServerMembers, rosterNames),
+    [rosterMembersProp, cachedServerMembers, rosterNames],
+  );
+
+  const deviceToday = useMemo(() => localTodayISO(), []);
+  const [todayISO, setTodayISO] = useState(deviceToday);
+  const [routines, setRoutines] = useState<FamilyRoutine[]>([]);
+  const [settings, setSettings] = useState<RoutineSettings>(DEFAULT_ROUTINE_SETTINGS);
+  const [accountability, setAccountability] = useState<RoutineAccountabilityState>(
+    DEFAULT_ACCOUNTABILITY_STATE,
+  );
   const [progress, setProgress] = useState<DailyRoutineProgress>({
     checkedSteps: {},
     completedRoutines: {},
+    memberCheckedSteps: {},
+    memberCompleted: {},
   });
-  const [slotFilter, setSlotFilter] = useState<"all" | RoutineSlot>("all");
+  const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
 
-  // Composer modal state
+  const [scheduleScope, setScheduleScope] = useState<"today" | "all">("today");
+  const [slotFilter, setSlotFilter] = useState<RoutineSlot | "all">("all");
+  const [actorByRoutine, setActorByRoutine] = useState<Record<string, string>>({});
+  const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
+
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] = useState<FamilyRoutine | null>(null);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftEmoji, setDraftEmoji] = useState("☀️");
-  const [draftSlot, setDraftSlot] = useState<RoutineSlot>("morning");
-  const [draftTime, setDraftTime] = useState("07:30");
-  const [draftAssignee, setDraftAssignee] = useState("All");
-  const [draftPoints, setDraftPoints] = useState<number>(15);
-  const [draftStepsText, setDraftStepsText] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [modalSaving, setModalSaving] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
-  // Focus timer modal state
-  const [timerOpen, setTimerOpen] = useState(false);
-  const [activeTimerRoutine, setActiveTimerRoutine] = useState<FamilyRoutine | null>(null);
+  const [pendingPinAction, setPendingPinAction] = useState<PendingParentAction | null>(
+    null,
+  );
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinBusy, setPinBusy] = useState(false);
+
+  const [focusModalOpen, setFocusModalOpen] = useState(false);
+  const [focusRoutine, setFocusRoutine] = useState<FamilyRoutine | null>(null);
+  const [celebrationEvent, setCelebrationEvent] = useState<CelebrationEvent | null>(null);
+
+  const reloadBundle = useCallback(async () => {
+    try {
+      const bundle = await loadRoutinesBundle(deviceToday);
+      setRoutines(bundle.routines);
+      setSettings(bundle.settings);
+      setAccountability(bundle.accountability);
+      setProgress(bundle.progress);
+      setTodayISO(bundle.todayISO || deviceToday);
+      setOffline(bundle.offline);
+    } finally {
+      setLoading(false);
+    }
+  }, [deviceToday]);
 
   useEffect(() => {
-    let alive = true;
-    void Promise.all([loadRoutines(), loadRoutineProgress(todayISO)]).then(([loadedRoutines, loadedProg]) => {
-      if (!alive) return;
-      setRoutines(loadedRoutines);
-      setProgress(loadedProg);
+    void reloadBundle();
+    void listMembersSmart()
+      .then((res) => {
+        if (res.members.length > 0) setCachedServerMembers(res.members);
+      })
+      .catch(() => {});
+  }, [reloadBundle]);
+
+  useEffect(() => {
+    return onPulse(() => {
+      void reloadBundle();
     });
-    return () => {
-      alive = false;
-    };
-  }, [todayISO]);
+  }, [onPulse, reloadBundle]);
+
+  const setBusy = (key: string, val: boolean) => {
+    setBusyIds((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const notifyPointsChanged = () => {
+    onPointsUpdated?.();
+    void refreshNow();
+  };
+
+  const executeParentAction = async (
+    action: PendingParentAction,
+    pin?: string,
+  ): Promise<boolean> => {
+    try {
+      if (action.kind === "upsert_routine") {
+        const res = await postRoutineAction({
+          action: "upsert_routine",
+          routine: action.routine,
+          pin,
+        });
+        setRoutines(res.routines);
+        setSettings(res.settings);
+        setAccountability(res.accountability);
+        setComposerOpen(false);
+        setEditingRoutine(null);
+        toast.show(`Saved "${action.routine.title}"`);
+        return true;
+      }
+
+      if (action.kind === "delete_routine") {
+        const res = await postRoutineAction({
+          action: "delete_routine",
+          routineId: action.routineId,
+          pin,
+        });
+        setRoutines(res.routines);
+        setSettings(res.settings);
+        setAccountability(res.accountability);
+        toast.show(`Deleted "${action.title}"`);
+        return true;
+      }
+
+      if (action.kind === "update_settings") {
+        const res = await postRoutineAction({
+          action: "update_settings",
+          settings: action.settings,
+          pin,
+        });
+        setRoutines(res.routines);
+        setSettings(res.settings);
+        setAccountability(res.accountability);
+        setSettingsOpen(false);
+        toast.show("Routine point rules saved!");
+        return true;
+      }
+
+      if (action.kind === "approve_routine") {
+        const res = await postRoutineProgressAction({
+          action: "approve_routine",
+          date: todayISO,
+          routineId: action.routineId,
+          memberName: action.memberName,
+          pin,
+        });
+        setProgress(res.progress);
+        setAccountability(res.accountability);
+        notifyPointsChanged();
+        toast.show(`Approved for ${action.memberName}!`);
+        return true;
+      }
+
+      if (action.kind === "send_back_routine") {
+        const res = await postRoutineProgressAction({
+          action: "send_back_routine",
+          date: todayISO,
+          routineId: action.routineId,
+          memberName: action.memberName,
+          pin,
+        });
+        setProgress(res.progress);
+        setAccountability(res.accountability);
+        toast.show(`Sent back to ${action.memberName}.`);
+        return true;
+      }
+
+      if (action.kind === "excuse_missed") {
+        const res = await postRoutineProgressAction({
+          action: "excuse_missed",
+          entryId: action.entryId,
+          pin,
+        });
+        setProgress(res.progress);
+        setAccountability(res.accountability);
+        notifyPointsChanged();
+        toast.show("Missed routine excused & points refunded!");
+        return true;
+      }
+      return true;
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't complete parent action right now.";
+      if (err instanceof ApiError && err.status === 401 && !pin) {
+        setPinError(null);
+        setPendingPinAction(action);
+        return false;
+      }
+      if (pendingPinAction) {
+        setPinError(msg);
+      } else if (composerOpen || settingsOpen) {
+        setModalError(msg);
+      } else {
+        toast.show(msg, { intent: "error" });
+      }
+      return false;
+    }
+  };
+
+  const dispatchParentAction = async (action: PendingParentAction) => {
+    setModalError(null);
+    if (!isParentSession) {
+      setPinError(null);
+      setPendingPinAction(action);
+      return;
+    }
+    setModalSaving(true);
+    try {
+      await executeParentAction(action);
+    } finally {
+      setModalSaving(false);
+    }
+  };
+
+  const matchedFilterMember = useMemo(() => {
+    if (!activeMemberFilter || activeMemberFilter === "All") return null;
+    return (
+      findRosterMember(activeMemberFilter, rosterMembers) ?? {
+        name: activeMemberFilter,
+        fullName: activeMemberFilter,
+      }
+    );
+  }, [activeMemberFilter, rosterMembers]);
+
+  const resolveActiveActor = useCallback(
+    (routine: FamilyRoutine): string => {
+      if (isChildSession && authMember) return authMember.name;
+      if (matchedFilterMember) {
+        return matchedFilterMember.fullName || matchedFilterMember.name;
+      }
+      const picked = actorByRoutine[routine.id];
+      if (picked) return picked;
+      if (authMember && routineAppliesToMember(routine, authMember, rosterMembers)) {
+        return authMember.name;
+      }
+      const targets = resolveRoutineTargets(routine, rosterMembers);
+      if (targets.length > 0) return targets[0].name;
+      return authMember?.name || "Family";
+    },
+    [isChildSession, authMember, matchedFilterMember, actorByRoutine, rosterMembers],
+  );
 
   const filteredRoutines = useMemo(() => {
-    return routines.filter((r) => {
-      if (slotFilter !== "all" && r.slot !== slotFilter) return false;
-      if (
-        activeMemberFilter &&
-        activeMemberFilter !== "All" &&
-        activeMemberFilter !== "Open" &&
-        activeMemberFilter !== "My Tasks" &&
-        r.assignee !== "All" &&
-        r.assignee.toLowerCase() !== activeMemberFilter.toLowerCase()
-      ) {
+    return routines.filter((rt) => {
+      if (slotFilter !== "all" && rt.slot !== slotFilter) return false;
+      if (scheduleScope === "today" && !isRoutineScheduledForDate(rt, todayISO)) {
         return false;
+      }
+      if (matchedFilterMember) {
+        return routineAppliesToMember(rt, matchedFilterMember, rosterMembers);
       }
       return true;
     });
-  }, [routines, slotFilter, activeMemberFilter]);
+  }, [routines, slotFilter, scheduleScope, todayISO, matchedFilterMember, rosterMembers]);
 
-  const toggleStep = useCallback(
-    async (routine: FamilyRoutine, stepId: string) => {
-      const current = progress.checkedSteps[routine.id] ?? [];
-      const exists = current.includes(stepId);
-      const nextSteps = exists ? current.filter((id) => id !== stepId) : [...current, stepId];
-      const allDone = routine.steps.length > 0 && nextSteps.length >= routine.steps.length;
-      const nextProgress: DailyRoutineProgress = {
-        checkedSteps: {
-          ...progress.checkedSteps,
-          [routine.id]: nextSteps,
-        },
-        completedRoutines: {
-          ...progress.completedRoutines,
-          [routine.id]: allDone,
-        },
-      };
-      setProgress(nextProgress);
-      await saveRoutineProgress(todayISO, nextProgress);
-      if (allDone && !progress.completedRoutines[routine.id]) {
-        toast.show(`🎉 ${routine.title} complete! +${routine.points} routine pts`, { intent: "success" });
-        if (characterPrefs.enabled) {
-          const targetName =
-            routine.assignee && routine.assignee !== "All"
-              ? routine.assignee
-              : activeMemberFilter && activeMemberFilter !== "All" && activeMemberFilter !== "Open" && activeMemberFilter !== "My Tasks"
-              ? activeMemberFilter
-              : "Family";
-          setCelebrationEvent({
-            kind: "routine",
-            memberName: targetName,
-            title: routine.title,
-            points: routine.points,
+  const unexcusedMissed = useMemo(() => {
+    const all = accountability.missedEntries.filter((e) => !e.excused);
+    if (isChildSession && authMember) {
+      const k = memberKey(authMember.name);
+      return all.filter((e) => e.memberKey === k);
+    }
+    if (matchedFilterMember) {
+      const k = memberKey(matchedFilterMember.fullName || matchedFilterMember.name);
+      return all.filter((e) => e.memberKey === k);
+    }
+    return all;
+  }, [accountability.missedEntries, isChildSession, authMember, matchedFilterMember]);
+
+  const pendingApprovals = useMemo(() => {
+    if (isChildSession) return [];
+    const list: { key: string; routine: FamilyRoutine; memberName: string }[] = [];
+    for (const rt of routines) {
+      const targets = resolveRoutineTargets(rt, rosterMembers);
+      for (const t of targets) {
+        const meta = getMemberCompletionMeta(
+          progress,
+          rt.id,
+          t.name,
+          targets.length <= 1,
+        );
+        if (meta?.status === "pending_approval") {
+          list.push({
+            key: `${rt.id}::${t.name}`,
+            routine: rt,
+            memberName: t.name,
           });
         }
       }
-    },
-    [progress, todayISO, toast, characterPrefs.enabled, activeMemberFilter],
-  );
+    }
+    return list;
+  }, [isChildSession, routines, rosterMembers, progress]);
 
-  const checkAllSteps = useCallback(
-    async (routine: FamilyRoutine) => {
-      const allIds = routine.steps.map((s) => s.id);
-      const alreadyDone = !!progress.completedRoutines[routine.id];
-      const nextProgress: DailyRoutineProgress = {
-        checkedSteps: {
-          ...progress.checkedSteps,
-          [routine.id]: alreadyDone ? [] : allIds,
-        },
-        completedRoutines: {
-          ...progress.completedRoutines,
-          [routine.id]: !alreadyDone,
-        },
-      };
-      setProgress(nextProgress);
-      await saveRoutineProgress(todayISO, nextProgress);
-      if (!alreadyDone) {
-        toast.show(`🎉 ${routine.title} complete! +${routine.points} routine pts`, { intent: "success" });
-        if (characterPrefs.enabled) {
-          const targetName =
-            routine.assignee && routine.assignee !== "All"
-              ? routine.assignee
-              : activeMemberFilter && activeMemberFilter !== "All" && activeMemberFilter !== "Open" && activeMemberFilter !== "My Tasks"
-              ? activeMemberFilter
-              : "Family";
+  const handleToggleStep = async (
+    routine: FamilyRoutine,
+    stepId: string,
+    actorName: string,
+  ) => {
+    const bKey = `step:${routine.id}:${stepId}:${actorName}`;
+    if (busyIds[bKey]) return;
+    setBusy(bKey, true);
+    try {
+      const res = await postRoutineProgressAction({
+        action: "toggle_step",
+        date: todayISO,
+        routineId: routine.id,
+        stepId,
+        memberName: actorName,
+      });
+      setProgress(res.progress);
+      setAccountability(res.accountability);
+      if (res.pointsDelta && res.pointsDelta !== 0) {
+        notifyPointsChanged();
+      }
+      if (res.completion?.status === "pending_approval") {
+        toast.show(`${routine.title} sent for parent approval!`);
+      } else if (res.pointsDelta && res.pointsDelta > 0) {
+        setCelebrationEvent({
+          kind: "routine",
+          memberName: actorName,
+          title: routine.title,
+          points: res.pointsDelta,
+        });
+      }
+    } catch (err) {
+      toast.show(
+        err instanceof ApiError
+          ? err.message
+          : "Couldn't save routine check-off right now.",
+        { intent: "error" },
+      );
+    } finally {
+      setBusy(bKey, false);
+    }
+  };
+
+  const handleCompleteOrUndo = async (
+    routine: FamilyRoutine,
+    actorName: string,
+    isCompleteOrPending: boolean,
+  ) => {
+    const bKey = `complete:${routine.id}:${actorName}`;
+    if (busyIds[bKey]) return;
+    setBusy(bKey, true);
+    try {
+      const res = await postRoutineProgressAction({
+        action: isCompleteOrPending ? "uncomplete_routine" : "complete_routine",
+        date: todayISO,
+        routineId: routine.id,
+        memberName: actorName,
+      });
+      setProgress(res.progress);
+      setAccountability(res.accountability);
+      if (res.pointsDelta && res.pointsDelta !== 0) {
+        notifyPointsChanged();
+      }
+      if (!isCompleteOrPending) {
+        if (res.completion?.status === "pending_approval") {
+          toast.show(`${routine.title} sent for parent approval.`);
+        } else if (res.pointsDelta && res.pointsDelta > 0) {
           setCelebrationEvent({
             kind: "routine",
-            memberName: targetName,
+            memberName: actorName,
             title: routine.title,
-            points: routine.points,
+            points: res.pointsDelta,
           });
+        } else {
+          toast.show(`${routine.title} complete!`);
         }
-      } else {
-        toast.show(`Reset ${routine.title} for today`, { intent: "info" });
       }
-    },
-    [progress, todayISO, toast, characterPrefs.enabled, activeMemberFilter],
-  );
+    } catch (err) {
+      toast.show(
+        err instanceof ApiError ? err.message : "Couldn't update routine right now.",
+        { intent: "error" },
+      );
+    } finally {
+      setBusy(bKey, false);
+    }
+  };
 
-  const openNewComposer = useCallback(() => {
-    setEditingRoutine(null);
-    setDraftTitle("");
-    setDraftEmoji("☀️");
-    setDraftSlot("morning");
-    setDraftTime("07:30");
-    setDraftAssignee("All");
-    setDraftPoints(15);
-    setDraftStepsText("Brush teeth, Make bed, Get dressed");
-    setComposerOpen(true);
-  }, []);
-
-  const openEditComposer = useCallback((r: FamilyRoutine) => {
-    setEditingRoutine(r);
-    setDraftTitle(r.title);
-    setDraftEmoji(r.emoji);
-    setDraftSlot(r.slot);
-    setDraftTime(r.time);
-    setDraftAssignee(r.assignee);
-    setDraftPoints(r.points);
-    setDraftStepsText(r.steps.map((s) => s.title).join(", "));
-    setComposerOpen(true);
-  }, []);
-
-  const handleSaveRoutine = useCallback(async () => {
-    if (!draftTitle.trim()) return;
-    const rawSteps = draftStepsText
-      .split(/[,\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const steps =
-      rawSteps.length > 0
-        ? rawSteps.map((title, idx) => ({
-            id: `s-${idx + 1}`,
-            title,
-            emoji: "✨",
-          }))
-        : [{ id: "s-1", title: "Complete routine", emoji: "✨" }];
-
-    const entry: FamilyRoutine = {
-      id: editingRoutine ? editingRoutine.id : `rt-${Date.now()}`,
-      title: draftTitle.trim(),
-      emoji: draftEmoji || ROUTINE_SLOT_META[draftSlot].emoji,
-      slot: draftSlot,
-      time: draftTime.trim() || ROUTINE_SLOT_META[draftSlot].timeDefault,
-      assignee: draftAssignee || "All",
-      points: draftPoints,
-      steps,
-    };
-
-    const next = editingRoutine
-      ? routines.map((item) => (item.id === editingRoutine.id ? entry : item))
-      : [...routines, entry];
-    setRoutines(next);
-    await saveRoutines(next);
-    setComposerOpen(false);
-    toast.show(editingRoutine ? `Updated "${entry.title}"` : `Added "${entry.title}"`, {
-      intent: "success",
-    });
-  }, [
-    draftTitle,
-    draftStepsText,
-    editingRoutine,
-    draftEmoji,
-    draftSlot,
-    draftTime,
-    draftAssignee,
-    draftPoints,
-    routines,
-    toast,
-  ]);
-
-  const handleDeleteRoutine = useCallback(
-    async (id: string) => {
-      const next = routines.filter((r) => r.id !== id);
-      setRoutines(next);
-      await saveRoutines(next);
-      setComposerOpen(false);
-      toast.show("Routine removed", { intent: "info" });
-    },
-    [routines, toast],
-  );
-
-  const completedTodayCount = useMemo(
-    () => routines.filter((r) => progress.completedRoutines[r.id]).length,
-    [routines, progress.completedRoutines],
-  );
+  const roseBg = mix(colors["color-accent-rose"], colors["color-surface-1"], 14);
+  const amberBg = mix(colors["color-accent-amber"], colors["color-surface-1"], 14);
+  const chipSelectedBg = mix(accentColor, colors["color-surface-2"], 22);
 
   return (
-    <View testID="tasks-routines-panel" style={{ gap: SPACING.md }}>
-      {/* Summary & Action Header */}
+    <View testID="routines-panel" style={{ gap: 16 }}>
+      {/* Header Controls */}
       <Material
         tier="regular"
         style={{
-          borderRadius: RADII.xl,
-          padding: SPACING.md,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: SPACING.md,
+          borderRadius: 28,
+          padding: 18,
+          gap: 14,
         }}
       >
-        <View style={{ flex: 1, gap: 4 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <View style={{ flex: 1, minWidth: 220 }}>
+            <Text
+              style={{
+                color: colors["color-text-primary"],
+                fontSize: TYPOGRAPHY.title.fontSize,
+                fontWeight: "700",
+              }}
+            >
+              ⏰ Daily Routines
+            </Text>
+            <Text
+              style={{
+                color: colors["color-text-secondary"],
+                fontSize: TYPOGRAPHY.label.fontSize,
+              }}
+            >
+              Synced schedule · Default +{settings.defaultPoints} pts
+              {settings.accountabilityEnabled
+                ? ` · Miss -${settings.defaultMissedPenalty} pts`
+                : ""}
+              {offline ? " · Offline cache" : ""}
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <SoftButton
+              variant="secondary"
+              size="sm"
+              testID="routine-focus-timer-open"
+              onPress={() => {
+                setFocusRoutine(null);
+                setFocusModalOpen(true);
+              }}
+            >
+              ⏱️ Focus Timer
+            </SoftButton>
+            {!isChildSession ? (
+              <>
+                <SoftButton
+                  variant="secondary"
+                  size="sm"
+                  testID="routines-settings-button"
+                  onPress={() => {
+                    setModalError(null);
+                    setSettingsOpen(true);
+                  }}
+                >
+                  ⚙️ Point Rules
+                </SoftButton>
+                <SoftButton
+                  variant="primary"
+                  size="sm"
+                  testID="routines-add-button"
+                  onPress={() => {
+                    setModalError(null);
+                    setEditingRoutine(null);
+                    setComposerOpen(true);
+                  }}
+                >
+                  + Add Routine
+                </SoftButton>
+              </>
+            ) : null}
+          </View>
+        </View>
+
+        {/* Scope & Slot Filters */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {(["today", "all"] as const).map((scope) => {
+            const active = scheduleScope === scope;
+            return (
+              <Pressable
+                key={scope}
+                testID={`routine-scope-${scope}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                onPress={() => setScheduleScope(scope)}
+                style={{
+                  minHeight: MIN_TARGET_DP,
+                  paddingHorizontal: 16,
+                  borderRadius: RADII.pill,
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: active ? accentColor : colors["color-border-subtle"],
+                  backgroundColor: active ? chipSelectedBg : colors["color-surface-2"],
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: active ? "700" : "600",
+                  }}
+                >
+                  {scope === "today" ? "Scheduled Today" : "Full Schedule"}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <Pressable
+            testID="routine-filter-all"
+            accessibilityRole="button"
+            accessibilityState={{ selected: slotFilter === "all" }}
+            onPress={() => setSlotFilter("all")}
+            style={{
+              minHeight: MIN_TARGET_DP,
+              paddingHorizontal: 16,
+              borderRadius: RADII.pill,
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: slotFilter === "all" ? accentColor : colors["color-border-subtle"],
+              backgroundColor: slotFilter === "all" ? chipSelectedBg : colors["color-surface-2"],
+            }}
+          >
+            <Text
+              style={{
+                color: colors["color-text-primary"],
+                fontSize: TYPOGRAPHY.label.fontSize,
+                fontWeight: slotFilter === "all" ? "700" : "600",
+              }}
+            >
+              All Slots
+            </Text>
+          </Pressable>
+          {SLOTS.map((slot) => {
+            const meta = ROUTINE_SLOT_META[slot];
+            const active = slotFilter === slot;
+            return (
+              <Pressable
+                key={slot}
+                testID={`routine-filter-${slot}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${meta.label} routines`}
+                accessibilityState={{ selected: active }}
+                onPress={() => setSlotFilter(slot)}
+                style={{
+                  minHeight: MIN_TARGET_DP,
+                  paddingHorizontal: 14,
+                  borderRadius: RADII.pill,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  borderWidth: 1,
+                  borderColor: active ? accentColor : colors["color-border-subtle"],
+                  backgroundColor: active ? chipSelectedBg : colors["color-surface-2"],
+                }}
+              >
+                <Text style={{ fontSize: 18 }}>{meta.emoji}</Text>
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: active ? "700" : "600",
+                  }}
+                >
+                  {meta.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Material>
+
+      {/* Missed Yesterday Accountability Banner */}
+      {unexcusedMissed.length > 0 ? (
+        <View
+          testID="panel-missed-accountability"
+          style={{
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: colors["color-accent-rose"],
+            backgroundColor: roseBg,
+            padding: 16,
+            gap: 10,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Text
+              style={{
+                color: colors["color-accent-ink-rose"],
+                fontSize: TYPOGRAPHY.body.fontSize,
+                fontWeight: "700",
+              }}
+            >
+              ⚠️ Missed Yesterday · Daily Accountability
+            </Text>
+            <Text
+              style={{
+                color: colors["color-accent-ink-rose"],
+                fontSize: TYPOGRAPHY.label.fontSize,
+                fontWeight: "600",
+              }}
+            >
+              {unexcusedMissed.length} unexcused
+            </Text>
+          </View>
+          {unexcusedMissed.map((entry) => (
+            <View
+              key={entry.id}
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                borderRadius: RADII.md,
+                backgroundColor: colors["color-surface-1"],
+                borderWidth: 1,
+                borderColor: colors["color-border-subtle"],
+                padding: 12,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 200 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.body.fontSize,
+                    fontWeight: "600",
+                  }}
+                >
+                  {entry.routineEmoji} {entry.routineTitle} · {entry.memberName}
+                </Text>
+                <Text
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                  }}
+                >
+                  {entry.date} · Streak reset
+                  {entry.deductedPoints > 0
+                    ? ` · -${entry.deductedPoints} pts deducted`
+                    : ""}
+                </Text>
+              </View>
+              {!isChildSession ? (
+                <SoftButton
+                  variant="secondary"
+                  size="sm"
+                  testID={`panel-excuse-${entry.id}`}
+                  onPress={() =>
+                    void dispatchParentAction({
+                      kind: "excuse_missed",
+                      entryId: entry.id,
+                    })
+                  }
+                >
+                  {entry.deductedPoints > 0
+                    ? `Excuse +${entry.deductedPoints}`
+                    : "Excuse"}
+                </SoftButton>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Pending Approvals Queue */}
+      {!isChildSession && pendingApprovals.length > 0 ? (
+        <View
+          testID="panel-pending-approvals"
+          style={{
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: colors["color-accent-amber"],
+            backgroundColor: amberBg,
+            padding: 16,
+            gap: 10,
+          }}
+        >
           <Text
             style={{
-              color: colors["color-text-primary"],
-              fontSize: TYPOGRAPHY.cardTitle.fontSize,
+              color: colors["color-accent-ink-amber"],
+              fontSize: TYPOGRAPHY.body.fontSize,
               fontWeight: "700",
             }}
           >
-            ⏰ Daily Family Routines
+            ⏳ Waiting Parent Approval ({pendingApprovals.length})
           </Text>
+          {pendingApprovals.map((item) => (
+            <View
+              key={item.key}
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                borderRadius: RADII.md,
+                backgroundColor: colors["color-surface-1"],
+                borderWidth: 1,
+                borderColor: colors["color-border-subtle"],
+                padding: 12,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 180 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: TYPOGRAPHY.body.fontSize,
+                    fontWeight: "600",
+                  }}
+                >
+                  {item.routine.emoji} {item.routine.title} · {item.memberName}
+                </Text>
+                <Text
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                  }}
+                >
+                  +{item.routine.points} pts upon approval
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <SoftButton
+                  variant="ghost"
+                  size="sm"
+                  onPress={() =>
+                    void dispatchParentAction({
+                      kind: "send_back_routine",
+                      routineId: item.routine.id,
+                      memberName: item.memberName,
+                    })
+                  }
+                >
+                  Send Back
+                </SoftButton>
+                <SoftButton
+                  variant="primary"
+                  size="sm"
+                  onPress={() =>
+                    void dispatchParentAction({
+                      kind: "approve_routine",
+                      routineId: item.routine.id,
+                      memberName: item.memberName,
+                    })
+                  }
+                >
+                  Approve +{item.routine.points}
+                </SoftButton>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Routine Cards List */}
+      {loading && routines.length === 0 ? (
+        <View style={{ paddingVertical: 20 }}>
           <Text
             style={{
               color: colors["color-text-secondary"],
               fontSize: TYPOGRAPHY.body.fontSize,
             }}
           >
-            {`${completedTodayCount} of ${routines.length} routines finished today · tap each step as you go`}
+            Loading routines…
           </Text>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
-          <SoftButton
-            variant="secondary"
-            size="sm"
-            testID="routine-focus-timer-open"
-            accessibilityLabel="Open Focus & Sprint Timer"
-            style={{ minHeight: MIN_TARGET_DP }}
-            onPress={() => {
-              setActiveTimerRoutine(null);
-              setTimerOpen(true);
-            }}
-          >
-            ⏱️ Focus Timer
-          </SoftButton>
-          {isParent ? (
-            <SoftButton
-              variant="primary"
-              size="sm"
-              testID="routines-add-button"
-              accessibilityLabel="Add new family routine"
-              style={{ minHeight: MIN_TARGET_DP }}
-              onPress={openNewComposer}
-            >
-              + Add Routine
-            </SoftButton>
-          ) : null}
-        </View>
-      </Material>
-
-      {/* Time-of-day filter strip */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: SPACING.xs }}
-      >
-        <Pressable
-          testID="routine-filter-all"
-          accessibilityRole="button"
-          accessibilityLabel="Show all routines"
-          accessibilityState={{ selected: slotFilter === "all" }}
-          onPress={() => setSlotFilter("all")}
-          style={{
-            minHeight: MIN_TARGET_DP,
-            paddingHorizontal: SPACING.md,
-            borderRadius: RADII.pill,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: 1,
-            borderColor: slotFilter === "all" ? accentColor : colors["color-border-subtle"],
-            backgroundColor:
-              slotFilter === "all" ? mix(accentColor, "transparent", 20) : colors["color-surface-1"],
-          }}
-        >
-          <Text
-            style={{
-              color: colors["color-text-primary"],
-              fontSize: TYPOGRAPHY.label.fontSize,
-              fontWeight: slotFilter === "all" ? "700" : "600",
-            }}
-          >
-            All Routines ({routines.length})
-          </Text>
-        </Pressable>
-
-        {SLOTS.map((slot) => {
-          const meta = ROUTINE_SLOT_META[slot];
-          const active = slotFilter === slot;
-          return (
-            <Pressable
-              key={slot}
-              testID={`routine-filter-${slot}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Filter by ${meta.label} routines`}
-              accessibilityState={{ selected: active }}
-              onPress={() => setSlotFilter(slot)}
-              style={{
-                minHeight: MIN_TARGET_DP,
-                paddingHorizontal: SPACING.md,
-                borderRadius: RADII.pill,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: active ? accentColor : colors["color-border-subtle"],
-                backgroundColor: active
-                  ? mix(accentColor, "transparent", 20)
-                  : colors["color-surface-1"],
-              }}
-            >
-              <Text
-                style={{
-                  color: colors["color-text-primary"],
-                  fontSize: TYPOGRAPHY.label.fontSize,
-                  fontWeight: active ? "700" : "600",
-                }}
-              >
-                {meta.emoji} {meta.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {/* Routine Cards */}
-      {filteredRoutines.length === 0 ? (
+      ) : filteredRoutines.length === 0 ? (
         <EmptyState
           icon="⏰"
-          title="No routines in this view"
-          body="Switch the time-of-day filter or tap + Add Routine to create one."
+          title="No routines match this filter"
+          body={
+            scheduleScope === "today"
+              ? "Switch to 'Full Schedule' to view routines for other days (e.g., Sunday trash)."
+              : "Tap '+ Add Routine' to create one."
+          }
         />
       ) : (
-        <View style={{ gap: SPACING.md }}>
+        <View style={{ gap: 14 }}>
           {filteredRoutines.map((routine) => {
             const meta = ROUTINE_SLOT_META[routine.slot] ?? ROUTINE_SLOT_META.morning;
             const toneColor = colors[meta.toneKey] ?? accentColor;
-            const checkedIds = progress.checkedSteps[routine.id] ?? [];
+            const targets = resolveRoutineTargets(routine, rosterMembers);
+            const activeActor = resolveActiveActor(routine);
+            const allowLegacy = isSingleMemberRoutine(routine, rosterMembers);
+            const checkedIds = getMemberCheckedSteps(
+              progress,
+              routine.id,
+              activeActor,
+              allowLegacy,
+            );
+            const completionMeta = getMemberCompletionMeta(
+              progress,
+              routine.id,
+              activeActor,
+              allowLegacy,
+            );
+            const isComplete =
+              completionMeta?.status === "completed" ||
+              completionMeta?.status === "approved";
+            const isPending = completionMeta?.status === "pending_approval";
             const doneCount = checkedIds.length;
             const totalCount = routine.steps.length;
-            const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
-            const isComplete = !!progress.completedRoutines[routine.id];
+            const pct = isComplete
+              ? 100
+              : totalCount > 0
+                ? Math.round((doneCount / totalCount) * 100)
+                : 0;
+            const actorStreak =
+              accountability.streaks[memberKey(activeActor)]?.current ?? 0;
+            const effectivePenalty =
+              routine.missedPenalty !== undefined
+                ? routine.missedPenalty
+                : settings.accountabilityEnabled
+                  ? settings.defaultMissedPenalty
+                  : 0;
 
             return (
               <Material
                 key={routine.id}
                 tier="thin"
+                tone={toneColor}
                 testID={`routine-card-${routine.id}`}
                 style={{
-                  borderRadius: RADII.xl,
-                  padding: SPACING.md,
-                  gap: SPACING.sm,
-                  borderWidth: 1,
-                  borderColor: isComplete
-                    ? mix(colors["color-accent-mint"] ?? accentColor, "transparent", 45)
-                    : mix(toneColor, "transparent", 30),
+                  borderRadius: 24,
+                  padding: 18,
+                  gap: 14,
                 }}
               >
-                {/* Card Header */}
                 <View
                   style={{
                     flexDirection: "row",
-                    alignItems: "center",
+                    flexWrap: "wrap",
+                    alignItems: "flex-start",
                     justifyContent: "space-between",
-                    gap: SPACING.sm,
+                    gap: 10,
                   }}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.sm, flex: 1 }}>
-                    <View
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 16,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: mix(toneColor, "transparent", 20),
-                        borderWidth: 1,
-                        borderColor: mix(toneColor, "transparent", 40),
-                      }}
-                    >
-                      <Text style={{ fontSize: 24 }}>{routine.emoji}</Text>
-                    </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+                    <Text style={{ fontSize: 32 }}>{routine.emoji}</Text>
                     <View style={{ flex: 1 }}>
                       <Text
                         style={{
                           color: colors["color-text-primary"],
-                          fontSize: TYPOGRAPHY.cardTitle.fontSize,
+                          fontSize: TYPOGRAPHY.title.fontSize,
                           fontWeight: "700",
                         }}
                       >
@@ -470,54 +961,95 @@ export function RoutinesPanel({
                           fontSize: TYPOGRAPHY.label.fontSize,
                         }}
                       >
-                        {`${meta.label} · ⏰ ${routine.time} · 👤 ${routine.assignee} · +${routine.points} pts`}
+                        {meta.label} · {routine.time} ·{" "}
+                        {formatRoutineTargetsLabel(routine)} ·{" "}
+                        {formatRoutineDaysLabel(routine.daysOfWeek, routine.slot)}
+                        {effectivePenalty > 0 ? ` · Miss -${effectivePenalty}` : ""}
                       </Text>
                     </View>
                   </View>
 
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs }}>
-                    <SoftButton
-                      variant="secondary"
-                      size="sm"
-                      testID={`routine-card-timer-${routine.id}`}
-                      accessibilityLabel={`Start focus timer for ${routine.title}`}
-                      style={{ minHeight: MIN_TARGET_DP }}
-                      onPress={() => {
-                        setActiveTimerRoutine(routine);
-                        setTimerOpen(true);
-                      }}
-                    >
-                      ⏱️ Timer
-                    </SoftButton>
-                    <SoftButton
-                      variant={isComplete ? "success" : "secondary"}
-                      size="sm"
-                      testID={`routine-complete-all-${routine.id}`}
-                      accessibilityLabel={
-                        isComplete ? `Reset ${routine.title}` : `Complete all steps in ${routine.title}`
-                      }
-                      onPress={() => void checkAllSteps(routine)}
-                    >
-                      {isComplete ? "✓ Completed" : `Finish (+${routine.points})`}
-                    </SoftButton>
-                    {isParent ? (
-                      <SoftButton
-                        variant="ghost"
-                        size="sm"
-                        testID={`routine-edit-${routine.id}`}
-                        accessibilityLabel={`Edit ${routine.title}`}
-                        style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
-                        onPress={() => openEditComposer(routine)}
-                      >
-                        ✏️
-                      </SoftButton>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {actorStreak > 0 ? (
+                      <Chip as="span" tone="warning" label={`🔥 ${actorStreak}d`} />
                     ) : null}
+                    <Chip
+                      as="span"
+                      tone={isComplete ? "success" : isPending ? "warning" : "accent"}
+                      label={
+                        isComplete
+                          ? "✓ Completed"
+                          : isPending
+                            ? "⏳ Pending"
+                            : `+${routine.points} pts`
+                      }
+                    />
                   </View>
                 </View>
 
-                {/* Progress Bar */}
-                <View style={{ gap: 4 }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                {/* Member switcher on multi-target cards when unfiltered */}
+                {!isChildSession && !matchedFilterMember && targets.length > 1 ? (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {targets.map((t) => {
+                      const active = memberKey(activeActor) === memberKey(t.name);
+                      const first = t.name.split(/\s+/)[0] || t.name;
+                      return (
+                        <Pressable
+                          key={t.name}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: active }}
+                          onPress={() =>
+                            setActorByRoutine((prev) => ({
+                              ...prev,
+                              [routine.id]: t.name,
+                            }))
+                          }
+                          style={{
+                            minHeight: MIN_TARGET_DP,
+                            paddingHorizontal: 14,
+                            borderRadius: RADII.pill,
+                            justifyContent: "center",
+                            borderWidth: 1,
+                            borderColor: active
+                              ? accentColor
+                              : colors["color-border-subtle"],
+                            backgroundColor: active
+                              ? chipSelectedBg
+                              : colors["color-surface-2"],
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: colors["color-text-primary"],
+                              fontSize: TYPOGRAPHY.label.fontSize,
+                              fontWeight: active ? "700" : "600",
+                            }}
+                          >
+                            {first}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
+                {/* Step Counter + Progress Bar */}
+                <View style={{ gap: 6 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors["color-text-secondary"],
+                        fontSize: TYPOGRAPHY.label.fontSize,
+                      }}
+                    >
+                      {doneCount} of {totalCount} steps done
+                    </Text>
                     <Text
                       style={{
                         color: colors["color-text-secondary"],
@@ -525,22 +1057,13 @@ export function RoutinesPanel({
                         fontWeight: "600",
                       }}
                     >
-                      {`${doneCount} of ${totalCount} steps done`}
-                    </Text>
-                    <Text
-                      style={{
-                        color: colors["color-text-primary"],
-                        fontSize: TYPOGRAPHY.label.fontSize,
-                        fontWeight: "700",
-                      }}
-                    >
-                      {`${pct}%`}
+                      {pct}%
                     </Text>
                   </View>
                   <View
                     style={{
                       height: 8,
-                      borderRadius: 4,
+                      borderRadius: RADII.pill,
                       backgroundColor: colors["color-surface-2"],
                       overflow: "hidden",
                     }}
@@ -548,17 +1071,18 @@ export function RoutinesPanel({
                     <View
                       style={{
                         width: `${pct}%`,
-                        height: 8,
+                        height: "100%",
+                        borderRadius: RADII.pill,
                         backgroundColor: isComplete
-                          ? colors["color-accent-mint"] ?? accentColor
+                          ? colors["color-accent-mint"]
                           : toneColor,
                       }}
                     />
                   </View>
                 </View>
 
-                {/* Step Checklist Rows */}
-                <View style={{ gap: SPACING.xs, marginTop: 4 }}>
+                {/* Checklist Steps */}
+                <View style={{ gap: 8 }}>
                   {routine.steps.map((step) => {
                     const checked = checkedIds.includes(step.id);
                     return (
@@ -566,82 +1090,116 @@ export function RoutinesPanel({
                         key={step.id}
                         testID={`routine-step-${routine.id}-${step.id}`}
                         accessibilityRole="checkbox"
-                        accessibilityLabel={`${step.title} in ${routine.title}`}
+                        accessibilityLabel={`${step.title} (${routine.title})`}
                         accessibilityState={{ checked }}
-                        onPress={() => void toggleStep(routine, step.id)}
+                        onPress={() => void handleToggleStep(routine, step.id, activeActor)}
                         style={{
                           minHeight: MIN_TARGET_DP,
-                          paddingHorizontal: SPACING.md,
-                          paddingVertical: SPACING.xs,
-                          borderRadius: RADII.lg,
                           flexDirection: "row",
                           alignItems: "center",
-                          justifyContent: "space-between",
+                          gap: 12,
+                          paddingHorizontal: 14,
+                          paddingVertical: 10,
+                          borderRadius: RADII.md,
                           borderWidth: 1,
                           borderColor: checked
-                            ? mix(colors["color-accent-mint"] ?? accentColor, "transparent", 40)
+                            ? colors["color-accent-mint"]
                             : colors["color-border-subtle"],
-                          backgroundColor: checked
-                            ? mix(colors["color-accent-mint"] ?? accentColor, "transparent", 12)
-                            : colors["color-surface-1"],
+                          backgroundColor: colors["color-surface-2"],
                         }}
                       >
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.sm, flex: 1 }}>
-                          <View
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: 8,
-                              alignItems: "center",
-                              justifyContent: "center",
-                              borderWidth: 2,
-                              borderColor: checked
-                                ? colors["color-accent-mint"] ?? accentColor
-                                : colors["color-text-muted"],
-                              backgroundColor: checked
-                                ? colors["color-accent-mint"] ?? accentColor
-                                : "transparent",
-                            }}
-                          >
-                            <Text
-                              style={{
-                                color: colors["color-text-primary"],
-                                fontSize: TYPOGRAPHY.label.fontSize,
-                                fontWeight: "700",
-                              }}
-                            >
-                              {checked ? "✓" : ""}
-                            </Text>
-                          </View>
-                          <Text style={{ fontSize: 18 }}>{step.emoji}</Text>
-                          <Text
-                            style={{
-                              color: checked
-                                ? colors["color-text-secondary"]
-                                : colors["color-text-primary"],
-                              fontSize: TYPOGRAPHY.body.fontSize,
-                              fontWeight: checked ? "500" : "600",
-                              textDecorationLine: checked ? "line-through" : "none",
-                              flex: 1,
-                            }}
-                          >
-                            {step.title}
-                          </Text>
-                        </View>
                         <Text
                           style={{
+                            fontSize: 20,
+                            fontWeight: "700",
                             color: checked
-                              ? colors["color-accent-mint"] ?? accentColor
+                              ? colors["color-accent-ink-mint"]
                               : colors["color-text-muted"],
-                            fontSize: TYPOGRAPHY.label.fontSize,
-                            fontWeight: "600",
                           }}
                         >
-                          {checked ? "Done ✓" : "Tap"}
+                          {checked ? "☑" : "☐"}
+                        </Text>
+                        <Text
+                          style={{
+                            flex: 1,
+                            fontSize: TYPOGRAPHY.body.fontSize,
+                            color: checked
+                              ? colors["color-text-secondary"]
+                              : colors["color-text-primary"],
+                            textDecorationLine: checked ? "line-through" : "none",
+                          }}
+                        >
+                          {step.emoji} {step.title}
                         </Text>
                       </Pressable>
                     );
                   })}
+                </View>
+
+                {/* Actions Row */}
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  <SoftButton
+                    variant="secondary"
+                    size="sm"
+                    testID={`routine-card-timer-${routine.id}`}
+                    onPress={() => {
+                      setFocusRoutine(routine);
+                      setFocusModalOpen(true);
+                    }}
+                  >
+                    ⏱️ Focus
+                  </SoftButton>
+
+                  <SoftButton
+                    variant={isComplete || isPending ? "ghost" : "primary"}
+                    size="sm"
+                    testID={`routine-complete-all-${routine.id}`}
+                    onPress={() =>
+                      void handleCompleteOrUndo(
+                        routine,
+                        activeActor,
+                        isComplete || isPending,
+                      )
+                    }
+                    style={{ flex: 1 }}
+                  >
+                    {isComplete
+                      ? "Undo Complete"
+                      : isPending
+                        ? "Undo Submission"
+                        : `Complete (+${routine.points} pts)`}
+                  </SoftButton>
+
+                  {!isChildSession ? (
+                    <>
+                      <SoftButton
+                        variant="secondary"
+                        size="sm"
+                        testID={`routine-edit-${routine.id}`}
+                        onPress={() => {
+                          setModalError(null);
+                          setEditingRoutine(routine);
+                          setComposerOpen(true);
+                        }}
+                      >
+                        Edit
+                      </SoftButton>
+                      <SoftButton
+                        variant="danger"
+                        size="sm"
+                        testID={`routine-delete-${routine.id}`}
+                        onPress={() =>
+                          void dispatchParentAction({
+                            kind: "delete_routine",
+                            routineId: routine.id,
+                            title: routine.title,
+                          })
+                        }
+                      >
+                        Delete
+                      </SoftButton>
+                    </>
+                  ) : null}
                 </View>
               </Material>
             );
@@ -649,251 +1207,76 @@ export function RoutinesPanel({
         </View>
       )}
 
-      {/* Routine Composer Modal */}
-      <Modal
-        visible={composerOpen}
-        onClose={() => setComposerOpen(false)}
-        title={editingRoutine ? `Edit ${editingRoutine.title}` : "New Family Routine"}
-        description="Set a time-of-day checklist for the family wall"
-        testID="routine-composer-modal"
-      >
-        <ScrollView style={{ maxHeight: 580 }} contentContainerStyle={{ gap: SPACING.md }}>
-          <TextField
-            testID="routine-composer-title"
-            label="Routine Name"
-            placeholder="e.g. Morning Launchpad"
-            value={draftTitle}
-            onChangeText={setDraftTitle}
-          />
+      {/* Modals */}
+      <FocusTimerModal
+        visible={focusModalOpen}
+        onClose={() => {
+          setFocusModalOpen(false);
+          setFocusRoutine(null);
+        }}
+        activeRoutine={focusRoutine}
+        onCompleteRoutine={(rt) => {
+          const actor = resolveActiveActor(rt);
+          setFocusModalOpen(false);
+          setFocusRoutine(null);
+          void handleCompleteOrUndo(rt, actor, false);
+        }}
+      />
 
-          {/* Time of day slot selector */}
-          <View style={{ gap: SPACING.xs }}>
-            <Text
-              style={{
-                color: colors["color-text-secondary"],
-                fontSize: TYPOGRAPHY.label.fontSize,
-                fontWeight: "700",
-              }}
-            >
-              Time of Day
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: SPACING.xs }}>
-              {SLOTS.map((slot) => {
-                const meta = ROUTINE_SLOT_META[slot];
-                const active = draftSlot === slot;
-                return (
-                  <Pressable
-                    key={slot}
-                    testID={`routine-composer-slot-${slot}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Select ${meta.label}`}
-                    accessibilityState={{ selected: active }}
-                    onPress={() => {
-                      setDraftSlot(slot);
-                      setDraftEmoji(meta.emoji);
-                      setDraftTime(meta.timeDefault);
-                    }}
-                    style={{
-                      minHeight: MIN_TARGET_DP,
-                      paddingHorizontal: SPACING.md,
-                      borderRadius: RADII.md,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 1,
-                      borderColor: active ? accentColor : colors["color-border-subtle"],
-                      backgroundColor: active
-                        ? mix(accentColor, "transparent", 22)
-                        : colors["color-surface-1"],
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: colors["color-text-primary"],
-                        fontSize: TYPOGRAPHY.label.fontSize,
-                        fontWeight: active ? "700" : "500",
-                      }}
-                    >
-                      {meta.emoji} {meta.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
+      <RoutineComposerModal
+        open={composerOpen}
+        onClose={() => {
+          setComposerOpen(false);
+          setEditingRoutine(null);
+        }}
+        editingRoutine={editingRoutine}
+        rosterMembers={rosterMembers}
+        settings={settings}
+        onSave={(rt) => dispatchParentAction({ kind: "upsert_routine", routine: rt })}
+        saving={modalSaving}
+        error={modalError}
+      />
 
-          <View style={{ flexDirection: "row", gap: SPACING.sm }}>
-            <View style={{ flex: 1 }}>
-              <TextField
-                testID="routine-composer-time"
-                label="Scheduled Time (24h)"
-                placeholder="07:30"
-                value={draftTime}
-                onChangeText={setDraftTime}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <TextField
-                testID="routine-composer-assignee"
-                label="Assigned To"
-                placeholder="All or Member Name"
-                value={draftAssignee}
-                onChangeText={setDraftAssignee}
-              />
-            </View>
-          </View>
+      <RoutineSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onSave={(next) => dispatchParentAction({ kind: "update_settings", settings: next })}
+        saving={modalSaving}
+        error={modalError}
+      />
 
-          {rosterNames.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: SPACING.xs }}>
-              {["All", ...rosterNames].map((name) => {
-                const selected = draftAssignee === name;
-                return (
-                  <Pressable
-                    key={name}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Assign routine to ${name}`}
-                    onPress={() => setDraftAssignee(name)}
-                    style={{
-                      minHeight: MIN_TARGET_DP,
-                      paddingHorizontal: SPACING.md,
-                      borderRadius: RADII.pill,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 1,
-                      borderColor: selected ? accentColor : colors["color-border-subtle"],
-                      backgroundColor: selected
-                        ? mix(accentColor, "transparent", 20)
-                        : colors["color-surface-1"],
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: colors["color-text-primary"],
-                        fontSize: TYPOGRAPHY.label.fontSize,
-                        fontWeight: selected ? "700" : "500",
-                      }}
-                    >
-                      {name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          ) : null}
-
-          {/* Points selector */}
-          <View style={{ gap: SPACING.xs }}>
-            <Text
-              style={{
-                color: colors["color-text-secondary"],
-                fontSize: TYPOGRAPHY.label.fontSize,
-                fontWeight: "700",
-              }}
-            >
-              Completion Bonus Points
-            </Text>
-            <View style={{ flexDirection: "row", gap: SPACING.xs }}>
-              {POINT_OPTIONS.map((pts) => {
-                const active = draftPoints === pts;
-                return (
-                  <Pressable
-                    key={pts}
-                    testID={`routine-composer-pts-${pts}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${pts} points`}
-                    onPress={() => setDraftPoints(pts)}
-                    style={{
-                      minHeight: MIN_TARGET_DP,
-                      minWidth: MIN_TARGET_DP,
-                      paddingHorizontal: SPACING.md,
-                      borderRadius: RADII.pill,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 1,
-                      borderColor: active ? accentColor : colors["color-border-subtle"],
-                      backgroundColor: active
-                        ? mix(accentColor, "transparent", 22)
-                        : colors["color-surface-1"],
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: colors["color-text-primary"],
-                        fontSize: TYPOGRAPHY.label.fontSize,
-                        fontWeight: active ? "700" : "500",
-                      }}
-                    >
-                      +{pts} pts
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <TextField
-            testID="routine-composer-steps"
-            label="Checklist Steps (comma-separated)"
-            placeholder="Brush teeth, Make bed, Pack backpack"
-            value={draftStepsText}
-            onChangeText={setDraftStepsText}
-            multiline
-          />
-
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: SPACING.sm,
-            }}
-          >
-            {editingRoutine ? (
-              <SoftButton
-                variant="danger"
-                testID="routine-composer-delete"
-                accessibilityLabel="Delete routine"
-                onPress={() => void handleDeleteRoutine(editingRoutine.id)}
-              >
-                Delete
-              </SoftButton>
-            ) : (
-              <View />
-            )}
-            <View style={{ flexDirection: "row", gap: SPACING.sm }}>
-              <SoftButton
-                variant="ghost"
-                testID="routine-composer-cancel"
-                accessibilityLabel="Cancel routine edit"
-                onPress={() => setComposerOpen(false)}
-              >
-                Cancel
-              </SoftButton>
-              <SoftButton
-                variant="primary"
-                testID="routine-composer-save"
-                accessibilityLabel="Save routine"
-                disabled={!draftTitle.trim()}
-                onPress={() => void handleSaveRoutine()}
-              >
-                Save Routine
-              </SoftButton>
-            </View>
-          </View>
-        </ScrollView>
-      </Modal>
+      <RoutineParentPinModal
+        open={pendingPinAction !== null}
+        onClose={() => {
+          if (!pinBusy) {
+            setPendingPinAction(null);
+            setPinError(null);
+          }
+        }}
+        busy={pinBusy}
+        error={pinError}
+        onVerified={async (pin) => {
+          if (!pendingPinAction) return;
+          setPinBusy(true);
+          setPinError(null);
+          try {
+            const ok = await executeParentAction(pendingPinAction, pin);
+            if (ok) {
+              setPendingPinAction(null);
+            }
+          } finally {
+            setPinBusy(false);
+          }
+        }}
+      />
 
       <CelebrationOverlay
         event={celebrationEvent}
         onDismiss={() => setCelebrationEvent(null)}
-        testID="routine-celebration-overlay"
-      />
-
-      <FocusTimerModal
-        visible={timerOpen}
-        onClose={() => setTimerOpen(false)}
-        activeRoutine={activeTimerRoutine}
-        onCompleteRoutine={(r) => void checkAllSteps(r)}
       />
     </View>
   );
 }
+
+export default RoutinesPanel;

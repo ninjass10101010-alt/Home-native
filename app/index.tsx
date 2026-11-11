@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "expo-router";
 import { Screen } from "../src/theme/Screen";
 import { HomeWall } from "../src/home/HomeWall";
 import { KidHome } from "../src/home/KidHome";
+import { AdultRoutinesHome } from "../src/home/AdultRoutinesHome";
 import { CapsuleDock } from "../src/nav/CapsuleDock";
 import { resolveRoute } from "../src/nav/nav-items";
 import { MoreSheet } from "../src/nav/MoreSheet";
@@ -270,6 +271,10 @@ export default function HomePlaceholder() {
           ? "offline roster (cached)"
           : "saved roster — not the live one";
 
+  const [familyWallMember, setFamilyWallMember] = React.useState<string | null>(null);
+  const showFamilyWall =
+    role === "parent" && familyWallMember === (member?.name ?? "__parent__");
+
   return (
     <Screen>
       {/* Wall-touch activity resets the screensaver quiet clock. */}
@@ -282,14 +287,19 @@ export default function HomePlaceholder() {
           poke();
         }}
       >
-      {/* Mode switch (WS-4): a signed-in child/pet gets the gamified kid wall
-          INSTEAD of the family bento; family (guest) and adult keep HomeWall.
+      {/* Mode switch: a signed-in child/pet gets KidHome; a signed-in parent
+          gets AdultRoutinesHome (with 1-tap toggle back to HomeWall); guest keeps HomeWall.
 
           The LAYOUT follows the CAPABILITY role, never the cached display
-          profile: a remembered kid (with no live session) must not drop the
-          panel into a kid's personal layout. */}
+          profile: a remembered member (with no live session) must not drop the
+          panel into a personal layout on a cached label. */}
       {role !== null && role !== "parent" ? (
         <KidHome onOpenMore={() => setMoreOpen(true)} />
+      ) : role === "parent" && !showFamilyWall ? (
+        <AdultRoutinesHome
+          onSwitchToWall={() => setFamilyWallMember(member?.name ?? "__parent__")}
+          onOpenMore={() => setMoreOpen(true)}
+        />
       ) : (
         <HomeWall
           members={wallRoster}
@@ -298,6 +308,9 @@ export default function HomePlaceholder() {
           widgets={wallWidgets}
           onSelectDay={(dayId) => router.replace(`/meals?day=${dayId}` as never)}
           onOpenMore={() => setMoreOpen(true)}
+          onOpenAdultRoutines={
+            role === "parent" ? () => setFamilyWallMember(null) : undefined
+          }
           hasSavedRoster={hasSavedRoster}
           rosterUnreachable={roster.reason === "unreachable"}
         />

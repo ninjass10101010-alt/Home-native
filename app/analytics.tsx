@@ -337,7 +337,13 @@ export default function AnalyticsRoute() {
             </View>
             {routines.map((rt) => {
               const meta = ROUTINE_SLOT_META[rt.slot] ?? ROUTINE_SLOT_META.morning;
-              const checked = (routineProg.checkedSteps[rt.id] ?? []).length;
+              const scopedKeys = Object.entries(routineProg.memberCheckedSteps ?? {}).filter(
+                ([k]) => k.startsWith(`${rt.id}::`),
+              );
+              const checked =
+                scopedKeys.length > 0
+                  ? Math.max(...scopedKeys.map(([, list]) => list.length))
+                  : (routineProg.checkedSteps[rt.id] ?? []).length;
               const total = rt.steps.length || 1;
               const pct = Math.min(100, Math.round((checked / total) * 100));
               const toneColor = colors[meta.toneKey] ?? accentColor;

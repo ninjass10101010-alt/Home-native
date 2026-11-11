@@ -1242,6 +1242,7 @@ export function TasksPage() {
           activeMemberFilter={activeFilter}
           rosterNames={cachedRoster.map((r) => r.name)}
           isParent={isParent}
+          onPointsUpdated={() => void refreshNow()}
         />
       );
     }

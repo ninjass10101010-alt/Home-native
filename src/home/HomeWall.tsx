@@ -6,6 +6,7 @@ import { ACCENTS, FONTS, RADII, TYPOGRAPHY } from "../theme/tokens";
 import { Material } from "../theme/Material";
 import { mix } from "../theme/mix";
 import { MemberRail, type RailMember } from "../ui/MemberRail";
+import { SoftButton } from "../ui/SoftButton";
 import { useAuth } from "../state/AuthProvider";
 import { EmergencyShield } from "./EmergencyShield";
 import {
@@ -301,6 +302,8 @@ export interface HomeWallProps {
   onSelectDay?: (dayId: string) => void;
   /** Opens the Home "More…" sheet. */
   onOpenMore?: () => void;
+  /** Signed-in parent toggle back to their Adult Routine Hub. */
+  onOpenAdultRoutines?: () => void;
   /**
    * True when the device holds a saved copy of the family (the roster cache
    * or the live roster). False = the wall has nothing saved, and the
@@ -329,6 +332,7 @@ export function HomeWall({
   greetingNow,
   onSelectDay: _onSelectDay,
   onOpenMore,
+  onOpenAdultRoutines,
   hasSavedRoster = true,
   rosterUnreachable = false,
 }: HomeWallProps) {
@@ -534,9 +538,20 @@ export function HomeWall({
             </View>
           </View>
 
-          {onOpenMore ? (
-            <View style={{ marginBottom: 8 }}>
-              <MoreButton onPress={onOpenMore} />
+          {onOpenMore || onOpenAdultRoutines ? (
+            <View style={{ marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 10 }}>
+              {onOpenAdultRoutines ? (
+                <SoftButton
+                  variant="secondary"
+                  size="sm"
+                  testID="wall-open-adult-routines"
+                  onPress={onOpenAdultRoutines}
+                  accessibilityLabel="Open my routines hub"
+                >
+                  ✓ My Routines
+                </SoftButton>
+              ) : null}
+              {onOpenMore ? <MoreButton onPress={onOpenMore} /> : null}
             </View>
           ) : null}
         </View>
