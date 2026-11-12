@@ -54,13 +54,13 @@ export const KID_INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // child/pet
 export const SESSION_WARN_MS = 30 * 1000; // parents
 export const KID_SESSION_WARN_MS = 5 * 60 * 1000; // kids get a longer runway
 
-/** Under-10s sign in PIN-free (server is authoritative via quick-login;
- *  age missing → PIN required, never assume). */
+/** Everyday sign-in & member flows are PIN-free once a member profile is known
+ *  (server enforces action-level Parent PIN gates on creates/edits/settings). */
 export const PIN_FREE_MAX_AGE = 10;
-export function pinRequiredFor(m: Pick<ServerMember, "role" | "age">): boolean {
-  if (m.role !== "child") return true;
-  if (typeof m.age !== "number") return true;
-  return m.age >= PIN_FREE_MAX_AGE;
+export function pinRequiredFor(
+  m: Pick<ServerMember, "role" | "age"> | null | undefined,
+): boolean {
+  return !m;
 }
 
 const PROFILE_KEY = "consuela-auth-user";

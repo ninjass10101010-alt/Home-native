@@ -1785,8 +1785,8 @@ describe("the floating glass dock", () => {
       <CapsuleDock role="child" hydrated pathname="/" onNavigate={onNavigate} />,
       { wrapper: wrap }
     );
-    fireEvent.press(getByLabelText("Rewards"));
-    expect(onNavigate).toHaveBeenCalledWith("/rewards");
+    fireEvent.press(getByLabelText("House"));
+    expect(onNavigate).toHaveBeenCalledWith("/ha");
     fireEvent.press(getByLabelText("Meals"));
     expect(onNavigate).toHaveBeenCalledWith("/meals");
   });

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { api, ApiError } from "../api/client";
+import { verifyParentPin } from "../api/auth";
 import { getBaseUrl, LAN_BASE_URLS, setBaseUrl } from "../api/config";
 import { readCachedMembers } from "../api/members";
 import type { ServerMember } from "../api/types";
@@ -73,6 +74,8 @@ const SECTIONS: readonly SectionDef[] = [
 
 /** Kid/pet launcher (web SAFE_NON_PARENT_SECTION_IDS). */
 const SIGNED_IN_SECTIONS: readonly SettingsSectionId[] = ["me", "safety", "appearance"];
+/** Parent-only dashboard/system sections require an action-level Parent PIN on each visit. */
+const PARENT_PIN_SECTIONS: readonly SettingsSectionId[] = ["family", "home", "system"];
 /** The signed-out wall holds the device: guests get Me/Safety/Appearance too
  *  (Home-ai contract) — the Me panel shows the sign-in rail pointer. */
 const GUEST_SECTIONS: readonly SettingsSectionId[] = ["me", "safety", "appearance"];
@@ -139,6 +142,31 @@ export function SettingsPage() {
     ? (params.section as SettingsSectionId)
     : null;
   const [openId, setOpenId] = useState<SettingsSectionId | null>(initialSection);
+  const [unlockedScope, setUnlockedScope] = useState<{ viewerKey: string; pin: string } | null>(null);
+  const [pendingSection, setPendingSection] = useState<SettingsSectionId | null>(null);
+  const [parentPinBusy, setParentPinBusy] = useState(false);
+  const [parentPinError, setParentPinError] = useState<string | null>(null);
+  const [parentPinAttempt, setParentPinAttempt] = useState(0);
+
+  const viewerKey = role === "parent" ? `${role}\u0000${member?.name ?? ""}` : "";
+  const parentPin = unlockedScope && viewerKey && unlockedScope.viewerKey === viewerKey ? unlockedScope.pin : null;
+
+  const verifyForSection = async (pin: string, targetSection: SettingsSectionId) => {
+    if (parentPinBusy || !viewerKey) return;
+    setParentPinBusy(true);
+    setParentPinError(null);
+    try {
+      await verifyParentPin(pin);
+      setUnlockedScope({ viewerKey, pin });
+      setPendingSection(null);
+      setOpenId(targetSection);
+    } catch (e: any) {
+      setParentPinError(e?.message || "Parent PIN required.");
+      setParentPinAttempt((n) => n + 1);
+    } finally {
+      setParentPinBusy(false);
+    }
+  };
 
   const sections = sectionsFor(role);
   // If the signed-in member signs out mid-visit, their Me panel is gone — the
@@ -196,7 +224,13 @@ export function SettingsPage() {
           </Text>
         </Material>
       ) : open ? (
-        <SectionFocus def={open} onBack={() => setOpenId(null)}>
+        <SectionFocus
+          def={open}
+          onBack={() => {
+            setOpenId(null);
+            setUnlockedScope(null);
+          }}
+        >
           {open.id === "me" ? (
             member ? (
               <MeSection member={member} />
@@ -214,8 +248,29 @@ export function SettingsPage() {
             <SafetySection member={member} />
           ) : open.id === "appearance" ? (
             <AppearanceSection />
+          ) : PARENT_PIN_SECTIONS.includes(open.id) && !parentPin ? (
+            <Material tier="regular" tone={accentColor} style={{ borderRadius: 24, padding: 24, gap: 16 }}>
+              <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>
+                Parent PIN required
+              </Text>
+              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>
+                Enter a parent PIN to manage {open.title}.
+              </Text>
+              <PinPad
+                key={`settings-inline-pin-${parentPinAttempt}`}
+                testID="settings-inline-parent-pinpad"
+                member={{ name: member?.name ?? "Parent", emoji: member?.emoji ?? "🔒" }}
+                onVerified={(pin) => void verifyForSection(pin, open.id)}
+                onCancel={() => {
+                  setOpenId(null);
+                  setParentPinError(null);
+                }}
+                busy={parentPinBusy}
+                error={parentPinError}
+              />
+            </Material>
           ) : open.id === "family" ? (
-            <FamilySection role={role} />
+            <FamilySection role={role} adminPin={parentPin} />
           ) : open.id === "home" ? (
             <HomeSection />
           ) : open.id === "system" ? (
@@ -235,7 +290,14 @@ export function SettingsPage() {
               testID={`settings-section-${s.id}`}
               accessibilityRole="button"
               accessibilityLabel={`${s.title}: ${s.description}`}
-              onPress={() => setOpenId(s.id)}
+              onPress={() => {
+                if (PARENT_PIN_SECTIONS.includes(s.id) && !parentPin) {
+                  setParentPinError(null);
+                  setPendingSection(s.id);
+                } else {
+                  setOpenId(s.id);
+                }
+              }}
               style={{ width: "48.8%" }}
             >
               <Material tier="regular" tone={accentColor} style={{ borderRadius: 28, padding: 24, minHeight: 188 }}>
@@ -267,6 +329,41 @@ export function SettingsPage() {
           ))}
         </View>
       )}
+
+      <Modal
+        visible={pendingSection !== null}
+        onClose={() => {
+          if (!parentPinBusy) {
+            setPendingSection(null);
+            setParentPinError(null);
+          }
+        }}
+        title="Parent PIN required"
+        description={
+          pendingSection
+            ? `Enter a parent PIN to open ${SECTIONS.find((s) => s.id === pendingSection)?.title ?? "Settings"}`
+            : ""
+        }
+        dismissable={!parentPinBusy}
+        testID="settings-parent-pin-modal"
+      >
+        <PinPad
+          key={`settings-modal-pin-${parentPinAttempt}`}
+          testID="settings-parent-pinpad"
+          member={{ name: member?.name ?? "Parent", emoji: member?.emoji ?? "🔒" }}
+          onVerified={(pin) => {
+            if (pendingSection) void verifyForSection(pin, pendingSection);
+          }}
+          onCancel={() => {
+            if (!parentPinBusy) {
+              setPendingSection(null);
+              setParentPinError(null);
+            }
+          }}
+          busy={parentPinBusy}
+          error={parentPinError}
+        />
+      </Modal>
     </ScrollView>
   );
 }

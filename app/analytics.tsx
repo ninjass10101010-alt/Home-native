@@ -254,7 +254,7 @@ export default function AnalyticsRoute() {
                 variant="ghost"
                 size="sm"
                 style={{ minHeight: MIN_TARGET_DP, minWidth: MIN_TARGET_DP }}
-                onPress={() => router.replace("/rewards" as never)}
+                onPress={() => router.replace("/tasks?tab=leaderboard" as never)}
               >
                 Open Rewards →
               </SoftButton>

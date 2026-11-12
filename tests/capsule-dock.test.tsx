@@ -36,13 +36,13 @@ describe("CapsuleDock", () => {
     expect(getAllByRole("button")).toHaveLength(7);
   });
 
-  it("kid dock swaps House→Rewards", () => {
+  it("kid dock keeps the same 7 primary caps (House stays, no Rewards cap)", () => {
     const { getByLabelText, queryByLabelText, getAllByRole } = render(
       <CapsuleDock role="child" hydrated pathname="/" onNavigate={() => {}} />,
       { wrapper: wrap }
     );
-    expect(getByLabelText("Rewards")).toBeTruthy();
-    expect(queryByLabelText("House")).toBeNull();
+    expect(getByLabelText("House")).toBeTruthy();
+    expect(queryByLabelText("Rewards")).toBeNull();
     expect(getAllByRole("button")).toHaveLength(7);
   });
 

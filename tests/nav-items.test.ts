@@ -20,10 +20,10 @@ describe("nav manifest (port of Home-ai nav-items contracts)", () => {
     }
   });
 
-  it("kid swaps House for Rewards — exactly one of the pair is present", () => {
+  it("all roles share the same 7 primary dock caps (including House, no Rewards dock swap)", () => {
     const kid = navItemsForRole("child").map((i) => i.path);
-    expect(kid).toContain("/rewards");
-    expect(kid).not.toContain("/ha");
+    expect(kid).toContain("/ha");
+    expect(kid).not.toContain("/rewards");
     const parent = navItemsForRole("parent").map((i) => i.path);
     expect(parent).toContain("/ha");
     expect(parent).not.toContain("/rewards");
@@ -32,11 +32,11 @@ describe("nav manifest (port of Home-ai nav-items contracts)", () => {
     expect(guest).not.toContain("/rewards");
   });
 
-  it("More… sheet counts: 8 parent / 7 kid / 4 guest (music IS signed-in only)", () => {
-    expect(moreNavItemsForRole("parent")).toHaveLength(8);
-    expect(moreNavItemsForRole("child")).toHaveLength(7);
-    expect(moreNavItemsForRole("pet")).toHaveLength(7);
-    expect(moreNavItemsForRole("guest")).toHaveLength(4);
+  it("More… sheet counts: 7 parent / 6 kid / 3 guest (music IS signed-in only)", () => {
+    expect(moreNavItemsForRole("parent")).toHaveLength(7);
+    expect(moreNavItemsForRole("child")).toHaveLength(6);
+    expect(moreNavItemsForRole("pet")).toHaveLength(6);
+    expect(moreNavItemsForRole("guest")).toHaveLength(3);
     expect(moreNavItemsForRole("parent").map((i) => i.path)).toContain("/photos");
     expect(moreNavItemsForRole("parent").map((i) => i.path)).toContain("/music");
     expect(moreNavItemsForRole("guest").map((i) => i.path)).not.toContain("/music");
@@ -139,7 +139,6 @@ describe("nav manifest (port of Home-ai nav-items contracts)", () => {
     }
     // Every manifest destination now has a live route file; unknown paths still take the /soon fallback.
     expect(resolveRoute("/grocery", "Grocery")).toBe("/grocery");
-    expect(resolveRoute("/skill-tree", "Skill Tree")).toBe("/skill-tree");
     expect(resolveRoute("/time-capsule", "Time Capsule")).toBe("/time-capsule");
     expect(resolveRoute("/analytics", "Insights")).toBe("/analytics");
     expect(resolveRoute("/money-mountain", "Money Mountain")).toBe("/money-mountain");

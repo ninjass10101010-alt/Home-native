@@ -51,8 +51,8 @@ export async function login(memberName: string, pin: string): Promise<ServerMemb
 }
 
 /**
- * POST /api/auth/quick-login — PIN-free under-10 path (server decides;
- * any 403 → PinRequired, callers fall back to the PIN pad).
+ * POST /api/auth/quick-login — PIN-free profile login for any known role
+ * (server is authoritative; 403 → PinRequired, callers fall back to PIN pad).
  */
 export async function quickLogin(memberName: string): Promise<ServerMember> {
   try {
@@ -109,4 +109,24 @@ export async function verifyPin(memberName: string, pin: string): Promise<boolea
     if (e instanceof ApiError && e.status === 401) return false;
     throw e;
   }
+}
+
+/**
+ * POST /api/members/verify with `{ pin, requireRole: "parent" }` — verifies
+ * that a PIN belongs to ANY parent in PocketBase without affecting the active
+ * session cookie. Throws `ApiError` (`401`/`403`) on wrong or non-parent PIN.
+ */
+export async function verifyParentPin(pin: string): Promise<ServerMember> {
+  const res = await api<{ success: boolean; member: ServerMember }>("/api/members/verify", {
+    method: "POST",
+    body: { pin: pin.trim(), requireRole: "parent" },
+  });
+  if (!res.success || res.member?.role !== "parent") {
+    throw new ApiError({
+      message: "Parent PIN required.",
+      status: 403,
+      code: "parent_pin_required",
+    });
+  }
+  return res.member;
 }

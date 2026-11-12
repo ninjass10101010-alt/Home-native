@@ -2,6 +2,8 @@ import React from "react";
 import { View } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 import { Screen } from "../src/theme/Screen";
+import { AccentScope } from "../src/theme/ThemeProvider";
+import { useKidCharacter } from "../src/theme/kidCharacter";
 import { TasksPage } from "../src/tasks/TasksPage";
 import { CapsuleDock, MoreButton } from "../src/nav/CapsuleDock";
 import { MoreSheet } from "../src/nav/MoreSheet";
@@ -14,6 +16,7 @@ import { useAuth } from "../src/state/AuthProvider";
  */
 export default function TasksRoute() {
   const { role: capabilityRole, hydrated } = useAuth();
+  const kidSkin = useKidCharacter();
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = React.useState(false);
@@ -24,23 +27,25 @@ export default function TasksRoute() {
 
   return (
     <Screen testID="tasks-route">
-      <TasksPage />
-      {/* Above-dock More trigger — the dock is the 7 primary caps only (web parity). */}
-      <View style={{ position: "absolute", left: 0, right: 0, bottom: 116, alignItems: "center" }} pointerEvents="box-none">
-        <MoreButton onPress={() => setMoreOpen(true)} />
-      </View>
-      <CapsuleDock
-        role={role}
-        hydrated={hydrated}
-        pathname={pathname}
-        onNavigate={(p) => { router.replace(p as never); }}
-      />
-      <MoreSheet
-        visible={moreOpen}
-        onClose={() => setMoreOpen(false)}
-        role={role}
-        onNavigate={(p) => { router.replace(p as never); }}
-      />
+      <AccentScope accent={kidSkin?.accentKey}>
+        <TasksPage />
+        {/* Above-dock More trigger — the dock is the 7 primary caps only (web parity). */}
+        <View style={{ position: "absolute", left: 0, right: 0, bottom: 116, alignItems: "center" }} pointerEvents="box-none">
+          <MoreButton onPress={() => setMoreOpen(true)} />
+        </View>
+        <CapsuleDock
+          role={role}
+          hydrated={hydrated}
+          pathname={pathname}
+          onNavigate={(p) => { router.replace(p as never); }}
+        />
+        <MoreSheet
+          visible={moreOpen}
+          onClose={() => setMoreOpen(false)}
+          role={role}
+          onNavigate={(p) => { router.replace(p as never); }}
+        />
+      </AccentScope>
     </Screen>
   );
 }

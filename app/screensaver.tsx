@@ -1,6 +1,7 @@
 import React from "react";
 import { useRouter } from "expo-router";
 import { Screensaver } from "../src/screensaver/Screensaver";
+import { useOptionalLockMusicParent } from "../src/music/playback";
 
 /**
  * /screensaver — the wall's ambient idle board (WS-8). EXEMPT_ROUTE: no dock,
@@ -10,6 +11,10 @@ import { Screensaver } from "../src/screensaver/Screensaver";
  */
 export default function ScreensaverRoute() {
   const router = useRouter();
+  const lockMusicParent = useOptionalLockMusicParent();
+  React.useEffect(() => {
+    lockMusicParent?.();
+  }, [lockMusicParent]);
   const onExit = React.useCallback(() => {
     if (router.canGoBack()) router.back();
     else router.replace("/" as never);

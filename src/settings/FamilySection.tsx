@@ -140,6 +140,7 @@ type RosterState = "loading" | "ready" | "unavailable";
 
 export function FamilySection({
   role,
+  adminPin,
 }: {
   /**
    * The CAPABILITY role — what the viewer may DO. `null` means "no live
@@ -147,6 +148,8 @@ export function FamilySection({
    * profile is a display fallback, not a capability.
    */
   role: CapabilityRole;
+  /** Parent PIN verified for roster mutations in Settings; memory-only. */
+  adminPin?: string | null;
 }) {
   const { colors } = useTheme();
   const [roster, setRoster] = useState<ServerMember[]>([]);
@@ -185,7 +188,10 @@ export function FamilySection({
     setRemoving(true);
     setRemoveError(null);
     try {
-      await removeMember({ id: memberRowId(target), name: target.name });
+      await removeMember(
+        { id: memberRowId(target), name: target.name },
+        { adminPin: adminPin ?? undefined }
+      );
       setRemovePending(null);
       await loadRoster();
       setFeedback(`Removed ${target.name}.`);
@@ -194,7 +200,7 @@ export function FamilySection({
     } finally {
       setRemoving(false);
     }
-  }, [removePending, removing, loadRoster]);
+  }, [removePending, removing, loadRoster, adminPin]);
 
   // Session-gated read: kids/guests never mount this section's fetch.
   useEffect(() => {
@@ -342,6 +348,7 @@ export function FamilySection({
       <MemberEditorDialog
         visible={editorOpen}
         editing={editing}
+        adminPin={adminPin}
         onClose={() => setEditorOpen(false)}
         onSaved={onSaved}
       />
@@ -404,11 +411,13 @@ export default FamilySection;
 function MemberEditorDialog({
   visible,
   editing,
+  adminPin,
   onClose,
   onSaved,
 }: {
   visible: boolean;
   editing: ServerMember | null;
+  adminPin?: string | null;
   onClose: () => void;
   /** Refresh the roster behind the dialog; a message sets the inline feedback line. */
   onSaved: (message: string | null) => void | Promise<void>;
@@ -486,32 +495,38 @@ function MemberEditorDialog({
     const trimmedName = form.name.trim();
     try {
       if (editing) {
-        await updateMember({
-          id: memberRowId(editing),
-          name: editing.name,
-          patch: {
-            name: trimmedName,
-            emoji: keepPhoto() ? editing.emoji : form.emoji,
-            role: form.role,
-            age: form.age === "" ? undefined : Number(form.age),
-            avatarSize: form.avatarSize,
-            glow: form.glow,
-            ...(form.pin ? { pin: form.pin } : {}),
+        await updateMember(
+          {
+            id: memberRowId(editing),
+            name: editing.name,
+            patch: {
+              name: trimmedName,
+              emoji: keepPhoto() ? editing.emoji : form.emoji,
+              role: form.role,
+              age: form.age === "" ? undefined : Number(form.age),
+              avatarSize: form.avatarSize,
+              glow: form.glow,
+              ...(form.pin ? { pin: form.pin } : {}),
+            },
           },
-        });
+          { adminPin: adminPin ?? undefined }
+        );
         if (sessionRef.current !== session) return;
         await onSaved(`Updated ${trimmedName}.`);
         if (sessionRef.current !== session) return;
         hardClose();
       } else {
-        const res = await addMember({
-          name: trimmedName,
-          emoji: form.emoji,
-          role: form.role,
-          age: form.age === "" ? undefined : Number(form.age),
-          avatarSize: form.avatarSize,
-          glow: form.glow,
-        });
+        const res = await addMember(
+          {
+            name: trimmedName,
+            emoji: form.emoji,
+            role: form.role,
+            age: form.age === "" ? undefined : Number(form.age),
+            avatarSize: form.avatarSize,
+            glow: form.glow,
+          },
+          { adminPin: adminPin ?? undefined }
+        );
         if (sessionRef.current !== session) return;
         const returned = typeof res?.starterPin === "string" ? res.starterPin : "";
         if (!/^\d{4}$/.test(returned)) {

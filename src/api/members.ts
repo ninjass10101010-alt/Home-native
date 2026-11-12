@@ -220,28 +220,46 @@ export interface MemberPatchPayload {
   pin?: string;
 }
 
-/** POST /api/members/admin — parent-only (the server re-reads the live
- *  PocketBase identity; the wall renders the verdict). `joined` is the
- *  "Mon YYYY" display string web parity sends on create. */
-export async function addMember(payload: MemberAdminPayload): Promise<{ starterPin?: string }> {
+/** POST /api/members/admin — parent-PIN gated (action-level Parent PIN travels
+ *  in `x-admin-pin`; `joined` is the "Mon YYYY" display string web parity sends). */
+export async function addMember(
+  payload: MemberAdminPayload,
+  options?: { adminPin?: string },
+): Promise<{ starterPin?: string }> {
   const joined = new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" });
   return api<{ starterPin?: string }>("/api/members/admin", {
     method: "POST",
     body: { ...payload, joined },
+    ...(options?.adminPin ? { headers: { "x-admin-pin": options.adminPin } } : {}),
   });
 }
 
-/** PATCH /api/members/admin — { id, name, patch } (web body shape; the
- *  `pin` key only travels when the parent typed one). */
-export async function updateMember(args: {
-  id: string;
-  name: string;
-  patch: MemberPatchPayload;
-}): Promise<void> {
-  await api("/api/members/admin", { method: "PATCH", body: args });
+/** PATCH /api/members/admin — { id, name, patch } (web body shape; `x-admin-pin`
+ *  carries the action-level Parent PIN when verified in Settings). */
+export async function updateMember(
+  args: {
+    id: string;
+    name: string;
+    patch: MemberPatchPayload;
+  },
+  options?: { adminPin?: string },
+): Promise<void> {
+  await api("/api/members/admin", {
+    method: "PATCH",
+    body: args,
+    ...(options?.adminPin ? { headers: { "x-admin-pin": options.adminPin } } : {}),
+  });
 }
 
-/** DELETE /api/members/admin — { id, name } (web body shape). */
-export async function removeMember(args: { id: string; name: string }): Promise<void> {
-  await api("/api/members/admin", { method: "DELETE", body: args });
+/** DELETE /api/members/admin — { id, name } (web body shape; `x-admin-pin`
+ *  carries the action-level Parent PIN when verified in Settings). */
+export async function removeMember(
+  args: { id: string; name: string },
+  options?: { adminPin?: string },
+): Promise<void> {
+  await api("/api/members/admin", {
+    method: "DELETE",
+    body: args,
+    ...(options?.adminPin ? { headers: { "x-admin-pin": options.adminPin } } : {}),
+  });
 }

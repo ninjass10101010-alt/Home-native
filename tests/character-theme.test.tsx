@@ -24,8 +24,10 @@ import {
 import { CHARACTER_CLAY_PALETTES } from "../src/theme/materials";
 import { SettingsPage } from "../src/settings/SettingsPage";
 import { TasksPage } from "../src/tasks/TasksPage";
+import { HomeWall } from "../src/home/HomeWall";
 import { RewardsPage } from "../src/rewards/RewardsPage";
 import { Screensaver } from "../src/screensaver/Screensaver";
+import { ACCENTS } from "../src/theme/tokens";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -256,7 +258,8 @@ describe("TasksPage & RewardsPage & Screensaver — Disney Mode touchpoints", ()
     });
 
     const { findByTestId, getByTestId } = render(<TasksPage />, { wrapper: wrap });
-    expect(await findByTestId("tasks-character-companion")).toBeTruthy();
+    expect(await findByTestId("kid-character-hero")).toBeTruthy();
+    expect(getByTestId("tasks-character-backdrop", { includeHiddenElements: true })).toBeTruthy();
 
     await act(async () => {
       fireEvent.press(getByTestId("pending-row-1"));
@@ -290,18 +293,13 @@ describe("TasksPage & RewardsPage & Screensaver — Disney Mode touchpoints", ()
       return Promise.resolve({ items: [] });
     });
 
-    const { findByTestId, getByTestId, getByLabelText } = render(<RewardsPage />, { wrapper: wrap });
+    const { findByTestId, getByTestId } = render(<RewardsPage />, { wrapper: wrap });
     await findByTestId("reward-redeem-1");
 
     await act(async () => {
       fireEvent.press(getByTestId("reward-redeem-1"));
       await Promise.resolve();
     });
-
-    await findByTestId("redeem-pinpad");
-    for (const digit of ["1", "2", "3", "4"]) {
-      fireEvent.press(getByLabelText(digit));
-    }
 
     expect(await findByTestId("character-celebration-overlay")).toBeTruthy();
     expect(getByTestId("character-emblem-spiderman")).toBeTruthy();
@@ -380,6 +378,77 @@ describe("TasksPage & RewardsPage & Screensaver — Disney Mode touchpoints", ()
       expect(getByTestId(`test-emblem-${character.id}`)).toBeTruthy();
       expect(getByTestId(`test-emblem-${character.id}-emblem`)).toBeTruthy();
     }
+  });
+
+  it("HomeWall applies the kid's character skin + accent and lets kids pick a new character in place", async () => {
+    const elsa = CHARACTER_CATALOG.find((c) => c.id === "elsa")!;
+    const stitch = CHARACTER_CATALOG.find((c) => c.id === "stitch")!;
+    _resetCharacterThemeMemoryForTest({
+      enabled: true,
+      franchise: "all",
+      assignments: { aurora: elsa.id },
+    });
+    mockMember = kidUnder10;
+    mockRole = "child";
+
+    const { findByTestId, getByTestId, findByText, getByText, getAllByText } = render(
+      <HomeWall
+        members={[{ name: "Aurora", emoji: "🌸" }, { name: "Rebecca (Mom)", emoji: "🐱" }]}
+        onSelectMember={jest.fn()}
+        onOpenMore={jest.fn()}
+      />,
+      { wrapper: wrap }
+    );
+
+    const accentHex = (key: string) => ACCENTS.light[key];
+    expect(await findByTestId("home-character-backdrop", { includeHiddenElements: true })).toBeTruthy();
+    expect(getByTestId("kid-character-hero")).toBeTruthy();
+    expect(getByText(/QUEEN ELSA/)).toBeTruthy();
+    expect(getAllByText("Aurora").some((n) => n.props.style?.color === accentHex(elsa.accentKey))).toBe(true);
+
+    await act(async () => {
+      fireEvent.press(getByTestId("kid-character-emblem"));
+    });
+    expect(await findByTestId("kid-character-picker")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(getByTestId(`kid-character-pick-${stitch.id}`));
+    });
+
+    expect(await findByText(/STITCH/)).toBeTruthy();
+    expect(getAllByText("Aurora").some((n) => n.props.style?.color === accentHex(stitch.accentKey))).toBe(true);
+    expect(accentHex(elsa.accentKey)).not.toBe(accentHex(stitch.accentKey));
+  });
+
+  it("TasksPage gives each kid their own character hero while keeping adult views unchanged", async () => {
+    _resetCharacterThemeMemoryForTest({
+      enabled: true,
+      assignments: { aurora: "elsa", caspian: "stitch" },
+    });
+
+    // Parent: adult page stays unchanged (no kid hero or motif backdrop)
+    mockMember = parentMember;
+    mockRole = "parent";
+    const parentRender = render(<TasksPage />, { wrapper: wrap });
+    await flush();
+    expect(parentRender.queryByTestId("kid-character-hero")).toBeNull();
+    expect(parentRender.queryByTestId("tasks-character-backdrop", { includeHiddenElements: true })).toBeNull();
+
+    const parentHome = render(
+      <HomeWall members={[{ name: "Rebecca (Mom)", emoji: "🐱" }]} onSelectMember={jest.fn()} />,
+      { wrapper: wrap }
+    );
+    await flush();
+    expect(parentHome.queryByTestId("kid-character-hero")).toBeNull();
+    expect(parentHome.queryByTestId("home-character-backdrop", { includeHiddenElements: true })).toBeNull();
+
+    // Kid 2 (Caspian): sees Stitch's quest board on the shared Tasks page
+    mockMember = { id: "c2", name: "Caspian", role: "child", age: 6, emoji: "🚀", color: "cyan" };
+    mockRole = "child";
+    const kid2Render = render(<TasksPage />, { wrapper: wrap });
+    expect(await kid2Render.findByTestId("kid-character-hero")).toBeTruthy();
+    expect(kid2Render.getByText(/Caspian's quest board/)).toBeTruthy();
+    expect(kid2Render.getByText(/STITCH/)).toBeTruthy();
   });
 });
 

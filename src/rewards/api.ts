@@ -9,7 +9,7 @@ export interface RedeemRewardInput {
   rewardId: string | number;
   rewardName?: string | null;
   memberName: string;
-  pin: string;
+  pin?: string;
   parentName?: string;
   parentPin?: string;
 }
@@ -64,7 +64,7 @@ export async function redeemReward(input: RedeemRewardInput): Promise<unknown> {
       rewardId: input.rewardId,
       rewardName: input.rewardName ?? null,
       memberName: input.memberName,
-      pin: input.pin,
+      ...(input.pin ? { pin: input.pin } : {}),
       ...(input.parentName ? { parentName: input.parentName } : {}),
       ...(input.parentPin ? { parentPin: input.parentPin } : {}),
     },

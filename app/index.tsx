@@ -3,12 +3,11 @@ import { Text, View } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 import { Screen } from "../src/theme/Screen";
 import { HomeWall } from "../src/home/HomeWall";
-import { KidHome } from "../src/home/KidHome";
-import { AdultRoutinesHome } from "../src/home/AdultRoutinesHome";
 import { CapsuleDock } from "../src/nav/CapsuleDock";
 import { resolveRoute } from "../src/nav/nav-items";
 import { MoreSheet } from "../src/nav/MoreSheet";
-import { useTheme } from "../src/theme/ThemeProvider";
+import { AccentScope, useTheme } from "../src/theme/ThemeProvider";
+import { useKidCharacter } from "../src/theme/kidCharacter";
 import { mix } from "../src/theme/mix";
 import { TYPOGRAPHY } from "../src/theme/tokens";
 import { type RailMember } from "../src/ui/MemberRail";
@@ -68,6 +67,7 @@ const UNREACHABLE_COPY = "Couldn't reach Consuela — check the connection and t
 export default function HomePlaceholder() {
   const { colors } = useTheme();
   const { member, role, hydrated, signIn, signOut, poke } = useAuth();
+  const kidSkin = useKidCharacter();
   /**
    * The navigation role — it follows the CAPABILITY, never the cached
    * profile: the manifest's signed-in-only and parent-only destinations
@@ -271,12 +271,9 @@ export default function HomePlaceholder() {
           ? "offline roster (cached)"
           : "saved roster — not the live one";
 
-  const [familyWallMember, setFamilyWallMember] = React.useState<string | null>(null);
-  const showFamilyWall =
-    role === "parent" && familyWallMember === (member?.name ?? "__parent__");
-
   return (
     <Screen>
+      <AccentScope accent={kidSkin?.accentKey}>
       {/* Wall-touch activity resets the screensaver quiet clock. */}
       {/* Wall-touch activity resets the screensaver quiet clock AND re-arms the
           session idle clock (auth poke — a press is activity on the wall). */}
@@ -287,20 +284,6 @@ export default function HomePlaceholder() {
           poke();
         }}
       >
-      {/* Mode switch: a signed-in child/pet gets KidHome; a signed-in parent
-          gets AdultRoutinesHome (with 1-tap toggle back to HomeWall); guest keeps HomeWall.
-
-          The LAYOUT follows the CAPABILITY role, never the cached display
-          profile: a remembered member (with no live session) must not drop the
-          panel into a personal layout on a cached label. */}
-      {role !== null && role !== "parent" ? (
-        <KidHome onOpenMore={() => setMoreOpen(true)} />
-      ) : role === "parent" && !showFamilyWall ? (
-        <AdultRoutinesHome
-          onSwitchToWall={() => setFamilyWallMember(member?.name ?? "__parent__")}
-          onOpenMore={() => setMoreOpen(true)}
-        />
-      ) : (
         <HomeWall
           members={wallRoster}
           onSelectMember={(m) => void onSelect(m)}
@@ -308,13 +291,9 @@ export default function HomePlaceholder() {
           widgets={wallWidgets}
           onSelectDay={(dayId) => router.replace(`/meals?day=${dayId}` as never)}
           onOpenMore={() => setMoreOpen(true)}
-          onOpenAdultRoutines={
-            role === "parent" ? () => setFamilyWallMember(null) : undefined
-          }
           hasSavedRoster={hasSavedRoster}
           rosterUnreachable={roster.reason === "unreachable"}
         />
-      )}
       {/* The roster badge tells the truth about WHY the rail isn't live, and
           the two causes are not the same failure. A signed-out session reads
           the cache BY DESIGN (the rail is the family wall's sign-in surface) —
@@ -379,6 +358,7 @@ export default function HomePlaceholder() {
         ) : null}
       </Modal>
       </View>
+      </AccentScope>
     </Screen>
   );
 }

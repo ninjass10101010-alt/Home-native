@@ -9,6 +9,7 @@ import {
   type StreamFormat,
 } from "../../modules/youtube-engine";
 import { useAuth } from "../state/AuthProvider";
+import { verifyParentPin } from "../api/auth";
 import {
   appendHistory,
   DOWNLOAD_CAP_BYTES,
@@ -171,6 +172,12 @@ export interface PlaybackValue {
   removeDenied: (term: string) => Promise<void>;
   /** Stops playback (local + cast), clears current + queue, drops lock-screen. */
   stopAndClear: () => void;
+  /** Whether a parent has entered their PIN in Music during the current viewer window. */
+  musicParentUnlocked?: boolean;
+  /** Verifies a parent PIN with the server and unlocks explicit music controls in memory. */
+  unlockMusicParent?: (pin: string) => Promise<void>;
+  /** Immediately re-locks Music back to kid-safe filtered mode. */
+  lockMusicParent?: () => void;
 }
 
 export type PlaybackCoreValue = Omit<PlaybackValue, "position">;
@@ -212,8 +219,34 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
    * no live session confirmed it, and a stale cached parent must not unlock
    * explicit content or the family's blocked artists.
    */
-  const { role } = useAuth();
-  const isParent = role === "parent";
+  /**
+   * MUSIC EXPLICIT POLICY — ACTION-LEVEL PARENT PIN.
+   *
+   * Because profile switching across all members is PIN-free, Music defaults
+   * to kid-safe filtered (`isParent = false`) for EVERY profile — including a
+   * parent session — until a parent verifies their PIN directly inside Music.
+   *
+   * Scoping the in-memory unlock to `${role ?? "guest"}\u0000${member?.name ?? ""}`
+   * means any profile switch, sign-out, or idle warning re-locks Music
+   * immediately without storing any PIN on disk.
+   */
+  const { role, member, sessionWarn } = useAuth();
+  const viewerScope = `${role ?? "guest"}\u0000${member?.name ?? ""}`;
+  const [unlockedScope, setUnlockedScope] = React.useState<string | null>(null);
+  const musicParentUnlocked = unlockedScope === viewerScope && !sessionWarn;
+  const isParent = musicParentUnlocked;
+
+  const unlockMusicParent = React.useCallback(
+    async (pin: string) => {
+      await verifyParentPin(pin);
+      setUnlockedScope(viewerScope);
+    },
+    [viewerScope]
+  );
+
+  const lockMusicParent = React.useCallback(() => {
+    setUnlockedScope(null);
+  }, []);
 
   const [queue, setQueue] = React.useState<QueueState>(() => createQueue([], -1));
   const [error, setError] = React.useState<string | null>(null);
@@ -996,6 +1029,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       addDenied,
       removeDenied,
       stopAndClear,
+      musicParentUnlocked,
+      unlockMusicParent,
+      lockMusicParent,
       player,
     }),
     [
@@ -1007,7 +1043,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,
       recordHistory,
       setCastSink, setExplicitFilter, setRepeat, settings, status?.isBuffering, streamFormat, toggle, toggleShuffleMode,
-      visibleDownloads, visibleHistory, stopAndClear, player,
+      visibleDownloads, visibleHistory, stopAndClear, musicParentUnlocked, unlockMusicParent, lockMusicParent, player,
     ]
   );
 
@@ -1041,6 +1077,13 @@ export function usePlaybackCore(): PlaybackCoreValue {
   if (core) return core;
   if (pb) return pb;
   throw new Error("usePlaybackCore must be used inside PlaybackProvider");
+}
+
+/** Optional lock hook for ambient routes (like /screensaver) that may mount in tests without PlaybackProvider. */
+export function useOptionalLockMusicParent(): (() => void) | undefined {
+  const core = React.useContext(CoreCtx);
+  const pb = React.useContext(Ctx);
+  return core?.lockMusicParent ?? pb?.lockMusicParent;
 }
 
 export function usePlaybackPosition(): number {

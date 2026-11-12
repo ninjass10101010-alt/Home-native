@@ -102,7 +102,6 @@ export function RoutinesPanel({
   const { member: authMember, role } = useAuth();
   const { refreshNow, onPulse } = useSync();
 
-  const isParentSession = role === "parent";
   const isChildSession = role !== null && role !== "parent";
 
   const [cachedServerMembers, setCachedServerMembers] = useState<ServerMember[]>(() =>
@@ -140,7 +139,7 @@ export function RoutinesPanel({
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] = useState<FamilyRoutine | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [modalSaving, setModalSaving] = useState(false);
+  const modalSaving = pinBusy;
   const [modalError, setModalError] = useState<string | null>(null);
 
   const [pendingPinAction, setPendingPinAction] = useState<PendingParentAction | null>(
@@ -303,17 +302,8 @@ export function RoutinesPanel({
 
   const dispatchParentAction = async (action: PendingParentAction) => {
     setModalError(null);
-    if (!isParentSession) {
-      setPinError(null);
-      setPendingPinAction(action);
-      return;
-    }
-    setModalSaving(true);
-    try {
-      await executeParentAction(action);
-    } finally {
-      setModalSaving(false);
-    }
+    setPinError(null);
+    setPendingPinAction(action);
   };
 
   const matchedFilterMember = useMemo(() => {
@@ -1224,7 +1214,7 @@ export function RoutinesPanel({
       />
 
       <RoutineComposerModal
-        open={composerOpen}
+        open={composerOpen && pendingPinAction === null}
         onClose={() => {
           setComposerOpen(false);
           setEditingRoutine(null);
@@ -1238,7 +1228,7 @@ export function RoutinesPanel({
       />
 
       <RoutineSettingsModal
-        open={settingsOpen}
+        open={settingsOpen && pendingPinAction === null}
         onClose={() => setSettingsOpen(false)}
         settings={settings}
         onSave={(next) => dispatchParentAction({ kind: "update_settings", settings: next })}

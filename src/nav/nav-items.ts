@@ -54,20 +54,15 @@ export interface NavItemDefinition {
 const ALL_ROLES: readonly NavRole[] = ["guest", "parent", "child", "pet"];
 const SIGNED_IN_ROLES: readonly NavRole[] = ["parent", "child", "pet"];
 const PARENT_ONLY: readonly NavRole[] = ["parent"];
-/** Kid mode = signed-in non-parent (child or pet), same as the web's resolveMode(). */
-const KID_ROLES: readonly NavRole[] = ["child", "pet"];
-const HOUSE_ROLES: readonly NavRole[] = ["guest", "parent"];
 
-/** The manifest, in display order. Kid dock loses House/gains Rewards purely
- *  through roles + this order — no mode-specific splicing (7 primary always). */
+/** The manifest, in display order. All roles share the same 7 primary dock tabs. */
 export const NAV_ITEMS: readonly NavItemDefinition[] = [
   { path: "/", label: "Home", iconKey: "home", roles: ALL_ROLES, group: "primary", wall: true },
   { path: "/chat", label: "Ask", iconKey: "ask", roles: ALL_ROLES, group: "primary", wall: true },
   { path: "/meals", label: "Meals", iconKey: "meals", roles: ALL_ROLES, group: "primary", wall: true },
   { path: "/tasks", label: "Tasks", iconKey: "tasks", roles: ALL_ROLES, group: "primary", wall: true },
-  { path: "/rewards", label: "Rewards", iconKey: "rewards", roles: KID_ROLES, group: "primary", wall: false },
   { path: "/calendar", label: "Calendar", iconKey: "calendar", roles: ALL_ROLES, group: "primary", wall: true },
-  { path: "/ha", label: "House", iconKey: "house", roles: HOUSE_ROLES, group: "primary", wall: true },
+  { path: "/ha", label: "House", iconKey: "house", roles: ALL_ROLES, group: "primary", wall: true },
   { path: "/settings", label: "Settings", iconKey: "settings", roles: ALL_ROLES, group: "primary", wall: true },
 
   // ── Secondary: the Home More… sheet ──
@@ -76,15 +71,6 @@ export const NAV_ITEMS: readonly NavItemDefinition[] = [
     label: "Grocery",
     iconKey: "grocery",
     description: "Shopping list and sync status",
-    roles: ALL_ROLES,
-    group: "more",
-    wall: true,
-  },
-  {
-    path: "/skill-tree",
-    label: "Skill Tree",
-    iconKey: "skill",
-    description: "Quests, levels and badges",
     roles: ALL_ROLES,
     group: "more",
     wall: true,
@@ -232,9 +218,7 @@ const LIVE_ROUTES: ReadonlySet<string> = new Set([
   "/weather",
   "/ha",
   "/chat",
-  "/rewards",
   "/grocery",
-  "/skill-tree",
   "/time-capsule",
   "/analytics",
   "/money-mountain",

@@ -97,31 +97,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<ThemeValue>(() => {
-    const base = TOKENS[theme];
-    const boostOverrides = boost ? TOKENS.boost[theme] : {};
-    const liveAccent = ACCENTS[theme][accent] ?? ACCENTS[theme].nori;
-    const liveRgb = ACCENTS_RGB[theme][accent] ?? ACCENTS_RGB[theme].nori;
-    const textPrimary = boostOverrides["color-text-primary"] ?? base["color-text-primary"];
-    const colors: Record<string, string> = {
-      ...base,
-      ...boostOverrides,
-      "color-accent-selected": liveAccent,
-      "color-accent-selected-rgb": liveRgb,
-      "color-primary": liveAccent,
-      "color-ring": liveAccent,
-      "color-nav-active": liveAccent,
-      "color-nav-active-border": mix(liveAccent, "transparent", 38),
-      "color-nav-active-sheen": mix(liveAccent, "transparent", 20),
-      "color-nav-active-wash": mix(liveAccent, "transparent", 6),
-      "color-nav-active-glow": mix(liveAccent, "transparent", 35),
-      "color-nav-active-halo": mix(liveAccent, "transparent", 50),
-      "color-nav-active-fill": mix(liveAccent, "black", 72),
-      "color-accent-ink": mix(liveAccent, textPrimary, theme === "light" ? 60 : 55),
-      "color-accent-glow": mix(liveAccent, "transparent", 25),
-      "color-accent-border": mix(liveAccent, "transparent", 35),
-      "color-accent-button": mix(liveAccent, "black", 60),
-    };
-    const accentColor = liveAccent;
+    const { colors, accentColor } = buildThemeColors(theme, boost, accent);
     return {
       theme,
       boost,
@@ -135,6 +111,58 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, [theme, boost, accent, reduceMotion, setTheme, setBoost, setAccent]);
 
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/** The resolved color map for one theme + boost + accent (shared by the root
+ *  provider and AccentScope so a scoped accent repaints exactly like a global one). */
+function buildThemeColors(
+  theme: ThemeName,
+  boost: boolean,
+  accent: AccentName
+): { colors: Record<string, string>; accentColor: string } {
+  const base = TOKENS[theme];
+  const boostOverrides = boost ? TOKENS.boost[theme] : {};
+  const liveAccent = ACCENTS[theme][accent] ?? ACCENTS[theme].nori;
+  const liveRgb = ACCENTS_RGB[theme][accent] ?? ACCENTS_RGB[theme].nori;
+  const textPrimary = boostOverrides["color-text-primary"] ?? base["color-text-primary"];
+  const colors: Record<string, string> = {
+    ...base,
+    ...boostOverrides,
+    "color-accent-selected": liveAccent,
+    "color-accent-selected-rgb": liveRgb,
+    "color-primary": liveAccent,
+    "color-ring": liveAccent,
+    "color-nav-active": liveAccent,
+    "color-nav-active-border": mix(liveAccent, "transparent", 38),
+    "color-nav-active-sheen": mix(liveAccent, "transparent", 20),
+    "color-nav-active-wash": mix(liveAccent, "transparent", 6),
+    "color-nav-active-glow": mix(liveAccent, "transparent", 35),
+    "color-nav-active-halo": mix(liveAccent, "transparent", 50),
+    "color-nav-active-fill": mix(liveAccent, "black", 72),
+    "color-accent-ink": mix(liveAccent, textPrimary, theme === "light" ? 60 : 55),
+    "color-accent-glow": mix(liveAccent, "transparent", 25),
+    "color-accent-border": mix(liveAccent, "transparent", 35),
+    "color-accent-button": mix(liveAccent, "black", 60),
+  };
+  return { colors, accentColor: liveAccent };
+}
+
+/**
+ * Repaints a subtree with a different accent WITHOUT touching the device's
+ * saved accent. Used by kid character theming: the same Home/Tasks page wears
+ * the signed-in kid's character color while adults keep the family accent.
+ * `accent` null/unknown = pass-through (no re-provide).
+ */
+export function AccentScope({ accent, children }: { accent?: AccentName | null; children: React.ReactNode }) {
+  const parent = useContext(Ctx);
+  const value = useMemo<ThemeValue | null>(() => {
+    if (!parent || !accent || !(ACCENTS[parent.theme][accent])) return null;
+    if (accent === parent.accent) return parent;
+    const { colors, accentColor } = buildThemeColors(parent.theme, parent.boost, accent);
+    return { ...parent, accent, colors, accentColor };
+  }, [parent, accent]);
+  if (!value) return <>{children}</>;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

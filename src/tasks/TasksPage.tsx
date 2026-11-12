@@ -1,15 +1,17 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useTheme } from "../theme/ThemeProvider";
+import { AccentScope, useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { ACCENTS, MIN_TARGET_DP, MOTION, RADII, TYPOGRAPHY } from "../theme/tokens";
 import { accentInk, mix } from "../theme/mix";
 import { memberAccentHex } from "../theme/memberColor";
-import { resolveCharacterForMember, useCharacterTheme } from "../theme/characterTheme";
-import { CelebrationOverlay, CharacterEmblem, type CelebrationEvent } from "../ui/CelebrationOverlay";
+import { useCharacterTheme } from "../theme/characterTheme";
+import { useKidCharacter, type KidCharacterSkin } from "../theme/kidCharacter";
+import { CharacterMotifBackdrop, KidCharacterHero } from "../ui/characters/KidCharacterTheme";
+import { CelebrationOverlay, type CelebrationEvent } from "../ui/CelebrationOverlay";
 import { useAuth } from "../state/AuthProvider";
 import { useSync, type WeekData } from "../state/SyncManager";
 import { readCachedMembers } from "../api/members";
@@ -51,6 +53,7 @@ import {
   newOperationId,
 } from "./claim";
 import { RoutinesPanel } from "./RoutinesPanel";
+import { RewardsPage } from "../rewards/RewardsPage";
 import { resolveMemberStreak, loadLocalStreaks, recordLocalStreakCompletion } from "./streaks";
 import { FamilyNotesCard } from "./FamilyNotesCard";
 import { CustomListsCard } from "./CustomListsCard";
@@ -89,7 +92,8 @@ type PinIntent =
   | { kind: "undo"; taskId: number }
   | { kind: "approve"; taskId: number }
   | { kind: "approve-all"; taskIds: number[] }
-  | { kind: "send-back"; taskId: number };
+  | { kind: "send-back"; taskId: number }
+  | { kind: "add-chore"; title: string; points: number; assignee: string };
 
 /**
  * Honest, human copy for the two parent write paths. The server's `error`
@@ -101,8 +105,8 @@ function manageErrorCopy(e: any): string {
   if (e?.status === 0) return "Couldn't reach Consuela — try again.";
   if (e?.code === "unknown_assignee") return "That name isn't a family member.";
   if (e?.code === "pet_assignee") return "Pets can't be assigned chores.";
-  if (e?.status === 401) return "Sign in again to add chores.";
-  if (e?.status === 403) return "Only a parent can add chores.";
+  if (e?.status === 401 || e?.code === "unauthorized") return WRONG_PIN_COPY;
+  if (e?.status === 403 || e?.code === "adult_only") return "Parent PIN required to add chores.";
   if (e?.status === 409) return "A change is already on its way — try again in a moment.";
   return "That didn't go through — try again.";
 }
@@ -584,8 +588,23 @@ function SectionCard({
   );
 }
 
+const useSafeSearchParams: typeof useLocalSearchParams =
+  typeof useLocalSearchParams === "function"
+    ? useLocalSearchParams
+    : () => ({});
+
 export function TasksPage() {
+  const kidSkin = useKidCharacter();
+  return (
+    <AccentScope accent={kidSkin?.accentKey}>
+      <TasksPageInner kidSkin={kidSkin} />
+    </AccentScope>
+  );
+}
+
+function TasksPageInner({ kidSkin }: { kidSkin: KidCharacterSkin | null }) {
   const router = useRouter();
+  const params = useSafeSearchParams<{ tab?: string }>();
   const { colors, accentColor, theme } = useTheme();
   const toast = useToast();
   const { member, role, pinRequiredFor } = useAuth();
@@ -596,7 +615,14 @@ export function TasksPage() {
   const tasks = useMemo(() => normalizeSnapshotTasks(snapshot?.tasks), [snapshot]);
   const weekData = (snapshot?.weekData ?? undefined) as WeekData | undefined;
 
-  const [activeTab, setActiveTab] = useState<"tasks" | "routines" | "leaderboard">("tasks");
+  const paramTab =
+    params?.tab === "leaderboard" || params?.tab === "routines" || params?.tab === "tasks" ? params.tab : null;
+  const [tabState, setTabState] = useState<{ param: string | null; tab: "tasks" | "routines" | "leaderboard" }>({
+    param: paramTab,
+    tab: paramTab ?? "tasks",
+  });
+  const activeTab = tabState.param === paramTab ? tabState.tab : paramTab ?? tabState.tab;
+  const setActiveTab = (tab: "tasks" | "routines" | "leaderboard") => setTabState({ param: paramTab, tab });
   const [showCompleted, setShowCompleted] = useState(false);
   const [pinIntent, setPinIntent] = useState<PinIntent | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
@@ -864,13 +890,15 @@ export function TasksPage() {
     }
   };
 
-  const runClaim = async (taskId: number, pin: string) => {
+  const runClaim = async (taskId: number, pin?: string) => {
     if (!member || busy) return;
     setBusy(true);
     try {
-      // Claim is ALWAYS credentialed (web openPinEntry parity): the member the
-      // row gets assigned to is whoever proved themselves at the pad.
-      const outcome = await submitClaim({ action: "claim", taskId, memberName: member.name, pin });
+      const outcome = await submitClaim({
+        action: "claim",
+        taskId,
+        ...(pin ? { memberName: member.name, pin } : {}),
+      });
       if (finish(outcome, CLAIM_TOAST)) {
         setPinIntent(null);
         setPinError(null);
@@ -884,14 +912,30 @@ export function TasksPage() {
     if (!member || task.pendingApproval || busy) return;
     if (inFlightRef.current.has(task.id)) return;
     if (pinRequiredFor(member)) {
-      // 10+ kids (and pets) verify with their PIN before the command sends.
       setPinIntent({ kind: "kid-complete", taskId: task.id });
       setPinError(null);
       return;
     }
-    // Under-10: the signed-in session rides the claim — no PIN, no pad.
     inFlightRef.current.add(task.id);
     void runComplete(task.id).finally(() => inFlightRef.current.delete(task.id));
+  };
+
+  const claimTask = (task: WallTask) => {
+    if (!member || busy) return;
+    if (pinRequiredFor(member)) {
+      openIntent({ kind: "claim", taskId: task.id });
+      return;
+    }
+    void runClaim(task.id);
+  };
+
+  const undoTask = (task: WallTask) => {
+    if (!member || busy) return;
+    if (pinRequiredFor(member)) {
+      openIntent({ kind: "undo", taskId: task.id });
+      return;
+    }
+    void runUndo(task.id);
   };
 
   const runUndo = async (taskId: number, pin?: string) => {
@@ -949,35 +993,54 @@ export function TasksPage() {
     }
   };
 
-  const submitAddChore = async () => {
+  const requestAddChore = () => {
     if (!member || !isParent || busy) return;
     const title = newChoreTitle.trim();
     const assignee = newChoreAssignee.trim();
     // No fabricated assignee: the server refuses unknown members, and a silent
     // default would put a chore on somebody the parent never chose.
     if (!title || !assignee) return;
+    setAddChoreOpen(false);
+    openIntent({
+      kind: "add-chore",
+      title,
+      points: Number(newChorePoints) || 0,
+      assignee,
+    });
+  };
+
+  const submitAddChore = async (
+    draft: { title: string; points: number; assignee: string },
+    pin: string,
+  ) => {
+    if (!member || !isParent || busy) return;
     setBusy(true);
     try {
       await api("/api/tasks/manage", {
         method: "POST",
+        headers: { "x-admin-pin": pin },
         body: {
           operationId: newOperationId(),
           action: "add",
-          task: {
-            title,
-            points: Number(newChorePoints) || 0,
-            assignee,
-          },
+          task: draft,
         },
       });
-      setAddChoreOpen(false);
+      setPinIntent(null);
+      setPinError(null);
       setNewChoreTitle("");
-      setNewChorePoints("");
+      setNewChorePoints("5");
       setNewChoreAssignee("");
       await refreshNow();
       toast.show("Chore added", { intent: "success" });
     } catch (e: any) {
-      toast.show(manageErrorCopy(e), { intent: "error" });
+      if (e?.status === 401 || e?.status === 403 || e?.code === "unauthorized" || e?.code === "adult_only") {
+        setPinError(manageErrorCopy(e));
+        setPinAttempt((n) => n + 1);
+      } else {
+        setPinIntent(null);
+        setPinError(null);
+        toast.show(manageErrorCopy(e), { intent: "error" });
+      }
     } finally {
       setBusy(false);
     }
@@ -1036,6 +1099,12 @@ export function TasksPage() {
     if (pinIntent.kind === "kid-complete") return void runComplete(pinIntent.taskId, pin);
     if (pinIntent.kind === "claim") return void runClaim(pinIntent.taskId, pin);
     if (pinIntent.kind === "undo") return void runUndo(pinIntent.taskId, pin);
+    if (pinIntent.kind === "add-chore") {
+      return void submitAddChore(
+        { title: pinIntent.title, points: pinIntent.points, assignee: pinIntent.assignee },
+        pin,
+      );
+    }
     if (pinIntent.kind === "approve")
       return void runApproval({ action: "approve", taskId: pinIntent.taskId }, pin, APPROVED_TOAST);
     if (pinIntent.kind === "send-back")
@@ -1056,11 +1125,13 @@ export function TasksPage() {
         ? "Claim this chore"
         : pinIntent?.kind === "undo"
           ? "Take it back"
-        : pinIntent?.kind === "approve"
-          ? "Approve"
-          : pinIntent?.kind === "approve-all"
-            ? "Approve all"
-            : "Send back";
+          : pinIntent?.kind === "add-chore"
+            ? "Parent PIN required"
+            : pinIntent?.kind === "approve"
+              ? "Approve"
+              : pinIntent?.kind === "approve-all"
+                ? "Approve all"
+                : "Send back";
   const modalDescription =
     pinIntent?.kind === "kid-complete"
       ? "Enter your PIN to check it off."
@@ -1068,11 +1139,13 @@ export function TasksPage() {
         ? "Enter your PIN to take this one."
         : pinIntent?.kind === "undo"
           ? "Enter your PIN to take this one back."
-        : pinIntent?.kind === "approve"
-          ? "Enter your PIN to approve this tap."
-          : pinIntent?.kind === "approve-all"
-            ? `Enter your PIN to approve all ${pinIntent.taskIds.length}.`
-            : "Enter your PIN to send this back for a do-over.";
+          : pinIntent?.kind === "add-chore"
+            ? `Enter a parent's 4-digit PIN to add "${pinIntent.title}".`
+            : pinIntent?.kind === "approve"
+              ? "Enter your PIN to approve this tap."
+              : pinIntent?.kind === "approve-all"
+                ? `Enter your PIN to approve all ${pinIntent.taskIds.length}.`
+                : "Enter your PIN to send this back for a do-over.";
 
   const body = () => {
     if (!member) {
@@ -1232,6 +1305,7 @@ export function TasksPage() {
                )}
              </Material>
            </SectionCard>
+           <RewardsPage embedded />
          </View>
        );
      }
@@ -1434,7 +1508,7 @@ export function TasksPage() {
                         testID={`task-claim-${t.id}`}
                         accessibilityLabel={crew ? `Join crew for ${t.title}` : `Claim ${t.title}`}
                         disabled={busy || (crew && full) || !member}
-                        onPress={() => member && openIntent({ kind: "claim", taskId: t.id })}
+                        onPress={() => claimTask(t)}
                       >
                         {crew ? (full ? "Full" : "Join crew") : `🫳 Claim +${claimValue}`}
                       </SoftButton>
@@ -1639,7 +1713,7 @@ export function TasksPage() {
                           size="sm"
                           testID={`task-undo-${t.id}`}
                           disabled={busy}
-                          onPress={() => openIntent({ kind: "undo", taskId: t.id })}
+                          onPress={() => undoTask(t)}
                         >
                           ↩ Take it back
                         </SoftButton>
@@ -1702,7 +1776,7 @@ export function TasksPage() {
                             size="sm"
                             testID={`task-undo-${t.id}`}
                             disabled={busy}
-                            onPress={() => openIntent({ kind: "undo", taskId: t.id })}
+                            onPress={() => undoTask(t)}
                             style={{ minHeight: 36, paddingHorizontal: 10 }}
                           >
                             ↩
@@ -1761,6 +1835,13 @@ export function TasksPage() {
 
   return (
     <View testID="tasks-page" style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
+      {kidSkin ? (
+        <CharacterMotifBackdrop
+          skin={kidSkin}
+          height={240}
+          testID="tasks-character-backdrop"
+        />
+      ) : null}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 180, gap: 20 }} showsVerticalScrollIndicator={false}>
       {/* Signed-out banner (web SyncStatusBanner parity) */}
       {!member ? (
@@ -1854,58 +1935,7 @@ export function TasksPage() {
           <StatTile testID="tasks-stat-earned" icon="🏆" value={stats.earnedThisWeek} label="Earned this week" detail={earnedDetail} tone="accent" />
         </View>
 
-        {characterPrefs.enabled && member ? (() => {
-          const companion = resolveCharacterForMember(member.name, characterPrefs);
-          const companionHex =
-            ACCENTS[theme === "light" ? "light" : "dark"][companion.accentKey] ??
-            colors["color-accent-selected"] ??
-            accentColor;
-          return (
-            <Material
-              tier="thin"
-              tone={companionHex}
-              testID="tasks-character-companion"
-              style={{
-                borderRadius: RADII.lg,
-                paddingHorizontal: 18,
-                paddingVertical: 14,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 14,
-                borderWidth: 1,
-                borderColor: mix(companionHex, colors["color-border"] ?? colors["color-text-primary"], 50),
-              }}
-            >
-              <CharacterEmblem
-                motif={companion.motif}
-                accentHex={companionHex}
-                inkHex={colors["color-text-primary"]}
-                size={44}
-              />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text
-                  style={{
-                    color: colors["color-text-primary"],
-                    fontSize: TYPOGRAPHY.body.fontSize,
-                    fontWeight: "700",
-                  }}
-                >
-                  {`${companion.badgeGlyph} ${companion.name} · ${companion.franchiseLabel}`}
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    color: colors["color-text-secondary"],
-                    fontSize: TYPOGRAPHY.label.fontSize,
-                    marginTop: 2,
-                  }}
-                >
-                  {`"${companion.choreCheer}"`}
-                </Text>
-              </View>
-            </Material>
-          );
-        })() : null}
+        {kidSkin ? <KidCharacterHero skin={kidSkin} /> : null}
 
         {isParent && queueRows.length > 0 ? (
           <Material tier="thin" testID="tasks-queued-commands-banner" style={{ borderRadius: 16, padding: 12, gap: 8, borderWidth: 1, borderColor: mix(colors["color-accent-amber"], "transparent", 40) }}>
@@ -2031,7 +2061,7 @@ export function TasksPage() {
             onChangeText={setNewChoreAssignee}
             style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, padding: 12, borderRadius: 12, backgroundColor: colors["color-surface-2"] }}
           />
-          <SoftButton variant="success" onPress={() => void submitAddChore()} disabled={busy || !newChoreTitle.trim() || !newChoreAssignee.trim()} testID="add-chore-submit" style={{ minHeight: MIN_TARGET_DP }}>
+          <SoftButton variant="success" onPress={requestAddChore} disabled={busy || !newChoreTitle.trim() || !newChoreAssignee.trim()} testID="add-chore-submit" style={{ minHeight: MIN_TARGET_DP }}>
             Save
           </SoftButton>
         </View>

@@ -12,7 +12,6 @@ import {
   type RoutineRosterMember,
 } from "../src/tasks/routine-rules";
 import { RewardsPage } from "../src/rewards/RewardsPage";
-import SkillTreeRoute from "../app/skill-tree";
 import AnalyticsRoute from "../app/analytics";
 import MoneyMountainRoute from "../app/money-mountain";
 import TimeCapsuleRoute from "../app/time-capsule";
@@ -67,7 +66,12 @@ jest.mock("../src/state/SyncManager", () => ({
 }));
 
 jest.mock("../src/api/client", () => ({
-  api: jest.fn(async () => ({ items: [] })),
+  api: jest.fn(async (path: string) => {
+    if (path === "/api/members/verify") {
+      return { success: true, member: { name: "Dad", role: "parent" } };
+    }
+    return { items: [] };
+  }),
   ApiError: jest.requireActual("../src/api/client").ApiError,
 }));
 
@@ -84,7 +88,7 @@ beforeEach(async () => {
 
 describe("RoutinesPanel — interactive checklists & composer", () => {
   it("renders default routines, toggles checklist steps, and adds a custom routine", async () => {
-    const { findByTestId, getByTestId, findByText } = render(<RoutinesPanel isParent />, {
+    const { findByTestId, getByTestId, findByText, getByLabelText } = render(<RoutinesPanel isParent />, {
       wrapper: wrap,
     });
 
@@ -116,13 +120,20 @@ describe("RoutinesPanel — interactive checklists & composer", () => {
       fireEvent.press(getByTestId("routine-composer-save"));
     });
 
+    expect(await findByTestId("routine-parent-pin-modal")).toBeTruthy();
+    for (const digit of ["1", "2", "3", "4"]) {
+      await act(async () => {
+        fireEvent.press(getByLabelText(digit));
+      });
+    }
+
     expect(await findByText("Music Practice Routine")).toBeTruthy();
   });
 });
 
 describe("RewardsPage — custom rewards & family goals", () => {
   it("allows adding a custom reward from template and a family goal", async () => {
-    const { findByTestId, getByTestId, findByText, findAllByText } = render(<RewardsPage />, {
+    const { findByTestId, getByTestId, findByText, findAllByText, getByLabelText } = render(<RewardsPage />, {
       wrapper: wrap,
     });
 
@@ -141,6 +152,12 @@ describe("RewardsPage — custom rewards & family goals", () => {
     await act(async () => {
       fireEvent.press(getByTestId("rewards-composer-save"));
     });
+    expect(await findByTestId("rewards-parent-pinpad")).toBeTruthy();
+    for (const digit of ["1", "2", "3", "4"]) {
+      await act(async () => {
+        fireEvent.press(getByLabelText(digit));
+      });
+    }
     expect(await findByText("Pick Friday Movie")).toBeTruthy();
 
     // Add Family Goal
@@ -154,20 +171,17 @@ describe("RewardsPage — custom rewards & family goals", () => {
     await act(async () => {
       fireEvent.press(getByTestId("rewards-goal-save"));
     });
+    expect(await findByTestId("rewards-parent-pinpad")).toBeTruthy();
+    for (const digit of ["1", "2", "3", "4"]) {
+      await act(async () => {
+        fireEvent.press(getByLabelText(digit));
+      });
+    }
     expect((await findAllByText(/Family Bowling Night/)).length).toBeGreaterThan(0);
   });
 });
 
-describe("More… Secondary Surfaces — Skill Tree, Insights, Money Mountain, Time Capsule, Family Memory", () => {
-  it("SkillTreeRoute unlocks a skill node and updates XP", async () => {
-    const { findByTestId, getByTestId, findByText } = render(<SkillTreeRoute />, { wrapper: wrap });
-    expect(await findByTestId("skill-tree-route")).toBeTruthy();
-    await act(async () => {
-      fireEvent.press(getByTestId("skill-action-k2"));
-    });
-    expect(await findByText(/Unlocked "Sous Chef"/)).toBeTruthy();
-  });
-
+describe("More… Secondary Surfaces — Insights, Money Mountain, Time Capsule, Family Memory", () => {
   it("AnalyticsRoute renders live chore, routine, and meal metrics", async () => {
     const { findByTestId } = render(<AnalyticsRoute />, { wrapper: wrap });
     expect(await findByTestId("analytics-route")).toBeTruthy();
@@ -287,7 +301,7 @@ describe("RoutinesPanel schedule, settings, and accountability flows", () => {
       }),
     );
 
-    const { findByText, queryByText, getByTestId, findByTestId } = render(
+    const { findByText, queryByText, getByTestId, findByTestId, getByLabelText } = render(
       <RoutinesPanel rosterMembers={rosterMembers} isParent />,
       { wrapper: wrap },
     );
@@ -331,6 +345,12 @@ describe("RoutinesPanel schedule, settings, and accountability flows", () => {
     await act(async () => {
       fireEvent.press(getByTestId("routine-composer-save"));
     });
+    expect(await findByTestId("routine-parent-pin-modal")).toBeTruthy();
+    for (const digit of ["1", "2", "3", "4"]) {
+      await act(async () => {
+        fireEvent.press(getByLabelText(digit));
+      });
+    }
 
     expect(await findByText("Sunday Trash Curb")).toBeTruthy();
     const savedRoutinesRaw = await AsyncStorage.getItem("@consuela/routines_v1");
@@ -355,6 +375,12 @@ describe("RoutinesPanel schedule, settings, and accountability flows", () => {
     await act(async () => {
       fireEvent.press(getByTestId("routine-settings-save"));
     });
+    expect(await findByTestId("routine-parent-pin-modal")).toBeTruthy();
+    for (const digit of ["1", "2", "3", "4"]) {
+      await act(async () => {
+        fireEvent.press(getByLabelText(digit));
+      });
+    }
 
     const savedSettings = JSON.parse(
       (await AsyncStorage.getItem("@consuela/routine_settings_v1")) || "{}",

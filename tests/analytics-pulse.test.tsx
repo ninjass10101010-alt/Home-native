@@ -227,7 +227,7 @@ describe("AnalyticsRoute — Family Insights Pulse & Digest", () => {
     await act(async () => {
       fireEvent.press(getByText("Open Rewards →"));
     });
-    expect(mockRouterReplace).toHaveBeenCalledWith("/rewards");
+    expect(mockRouterReplace).toHaveBeenCalledWith("/tasks?tab=leaderboard");
 
     await act(async () => {
       fireEvent.press(getByText("Open Calendar →"));

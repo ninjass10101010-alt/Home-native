@@ -5,6 +5,7 @@ import { Material } from "../theme/Material";
 import { FONTS, MIN_TARGET_DP, RADII, SPACING, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
 import { useAuth } from "../state/AuthProvider";
+import { verifyParentPin } from "../api/auth";
 import { useSync } from "../state/SyncManager";
 import { useToast } from "../ui/Toast";
 import { Modal } from "../ui/Modal";
@@ -48,6 +49,12 @@ interface RewardRow {
 
 const EMOJI_CHOICES = ["🍦", "🎮", "🎬", "🌙", "🍕", "🛡️", "🕹️", "🎟️", "🧸", "🎨"];
 
+type PendingShopParentAction =
+  | { kind: "save-reward" }
+  | { kind: "delete-reward"; id: string | number }
+  | { kind: "starter-pack" }
+  | { kind: "add-goal" };
+
 function rewardTitle(r: RewardRow): string {
   const v = r.name ?? r.title;
   return typeof v === "string" && v.trim() ? v.trim() : "Reward";
@@ -66,7 +73,7 @@ function readRewards(snapshot: any): RewardRow[] {
   return Array.isArray(raw) ? (raw as RewardRow[]) : [];
 }
 
-export function RewardsPage() {
+export function RewardsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { colors, accentColor } = useTheme();
   const toast = useToast();
   const { member, role } = useAuth();
@@ -110,10 +117,14 @@ export function RewardsPage() {
   const [pinAttempt, setPinAttempt] = useState(0);
 
   const [highCostReward, setHighCostReward] = useState<RewardRow | null>(null);
-  const [memberPin, setMemberPin] = useState<string | null>(null);
   const [parentName, setParentName] = useState("");
   const [parentPin, setParentPin] = useState("");
   const [parentError, setParentError] = useState<string | null>(null);
+
+  const [pendingShopAction, setPendingShopAction] = useState<PendingShopParentAction | null>(null);
+  const [shopPinBusy, setShopPinBusy] = useState(false);
+  const [shopPinError, setShopPinError] = useState<string | null>(null);
+  const [shopPinAttempt, setShopPinAttempt] = useState(0);
 
   const [purchasing, setPurchasing] = useState<RewardRow | null>(null);
   const [characterPrefs] = useCharacterTheme();
@@ -238,7 +249,7 @@ export function RewardsPage() {
   );
 
   const runRedeem = useCallback(
-    async (reward: RewardRow, pin: string, parent?: { name: string; pin: string }) => {
+    async (reward: RewardRow, pin?: string, parent?: { name: string; pin: string }) => {
       if (!member || busy) return;
       setBusy(true);
       try {
@@ -246,7 +257,7 @@ export function RewardsPage() {
           rewardId: reward.id,
           rewardName: rewardTitle(reward),
           memberName: member.name,
-          pin,
+          ...(pin ? { pin } : {}),
           ...(parent ? { parentName: parent.name, parentPin: parent.pin } : {}),
         });
         recordRedeemedPass(reward, member.name);
@@ -261,14 +272,15 @@ export function RewardsPage() {
         }
         closeRedeem();
         setHighCostReward(null);
-        setMemberPin(null);
         setParentName("");
         setParentPin("");
         setParentError(null);
         await refreshNow();
         toast.show("Redeemed! Added to your passes 🎟️", { intent: "success" });
       } catch (e: any) {
-        if (e?.status === 401 && e?.code === "unauthorized") {
+        if ((e?.status === 401 || e?.status === 403) && (parent || highCostReward)) {
+          setParentError(e?.message || "Parent approval PIN didn't match — try again.");
+        } else if (e?.status === 401 && e?.code === "unauthorized") {
           setPinError("Wrong PIN — try again.");
           setPinAttempt((n) => n + 1);
         } else if (highCostReward) {
@@ -288,25 +300,19 @@ export function RewardsPage() {
     (reward: RewardRow) => {
       const cost = rewardCost(reward);
       if (cost > 100) {
+        // High-cost rewards require 1-step parent approval PIN directly (no member PIN needed).
         setHighCostReward(reward);
-        setMemberPin(null);
         setParentName(cachedParents[0]?.name ?? (member?.role === "parent" ? member.name : ""));
         setParentPin("");
         setParentError(null);
+      } else if (role !== null) {
+        void runRedeem(reward);
       } else {
         setRedeemRewardState(reward);
         setPinError(null);
       }
     },
-    [cachedParents, member],
-  );
-
-  const onMemberVerified = useCallback(
-    (pin: string) => {
-      if (!highCostReward) return;
-      setMemberPin(pin);
-    },
-    [highCostReward],
+    [cachedParents, member, role, runRedeem],
   );
 
   const uncelebratedHof = useMemo(() => {
@@ -402,6 +408,46 @@ export function RewardsPage() {
     toast.show(`Added family goal "${entry.title}"`, { intent: "success" });
   }, [goalTitle, goalEmoji, goalTarget, localGoals, toast]);
 
+  const requestShopParentAction = useCallback((action: PendingShopParentAction) => {
+    setShopPinError(null);
+    setPendingShopAction(action);
+  }, []);
+
+  const handleConfirmShopParentPin = useCallback(
+    async (pin: string) => {
+      if (!pendingShopAction || shopPinBusy) return;
+      setShopPinBusy(true);
+      setShopPinError(null);
+      try {
+        await verifyParentPin(pin);
+        const action = pendingShopAction;
+        setPendingShopAction(null);
+        if (action.kind === "save-reward") {
+          await handleSaveCustomReward();
+        } else if (action.kind === "delete-reward") {
+          await handleDeleteCustomReward(action.id);
+        } else if (action.kind === "starter-pack") {
+          await handleLoadStarterPack();
+        } else if (action.kind === "add-goal") {
+          await handleAddFamilyGoal();
+        }
+      } catch (e: any) {
+        setShopPinError(e?.message || "Parent PIN required.");
+        setShopPinAttempt((n) => n + 1);
+      } finally {
+        setShopPinBusy(false);
+      }
+    },
+    [
+      pendingShopAction,
+      shopPinBusy,
+      handleSaveCustomReward,
+      handleDeleteCustomReward,
+      handleLoadStarterPack,
+      handleAddFamilyGoal,
+    ],
+  );
+
   const allTimeLabel = !allTimeLoaded
     ? "…"
     : historyComplete && typeof allTimePoints === "number"
@@ -410,9 +456,8 @@ export function RewardsPage() {
 
   const firstParent = cachedParents[0];
 
-  return (
-    <View testID="rewards-page" style={{ flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 180, gap: 20 }} showsVerticalScrollIndicator={false}>
+  const innerContent = (
+    <>
         {/* Header: uppercase REWARD SHOP eyebrow + 44sp editorial serif Rewards title */}
         <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <View>
@@ -654,7 +699,7 @@ export function RewardsPage() {
                 title="No rewards yet"
                 body="Ask a parent to add rewards in Settings."
                 actionLabel="✨ Load Family Starter Pack"
-                onAction={() => void handleLoadStarterPack()}
+                onAction={() => requestShopParentAction({ kind: "starter-pack" })}
               />
             </View>
           ) : filteredRewards.length === 0 ? (
@@ -723,7 +768,7 @@ export function RewardsPage() {
                         testID={`reward-delete-${id}`}
                         accessibilityRole="button"
                         accessibilityLabel={`Delete ${rewardTitle(r)}`}
-                        onPress={() => void handleDeleteCustomReward(id)}
+                        onPress={() => requestShopParentAction({ kind: "delete-reward", id })}
                         style={{
                           minWidth: MIN_TARGET_DP,
                           minHeight: MIN_TARGET_DP,
@@ -910,7 +955,7 @@ export function RewardsPage() {
           </Material>
         ) : null}
 
-        {prizes.length > 0 ? (
+        {!embedded && prizes.length > 0 ? (
           <Material tier="thin" style={{ borderRadius: 20, padding: 16, gap: 12 }}>
             <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
               🏆 Weekly prizes
@@ -933,11 +978,22 @@ export function RewardsPage() {
             </View>
           </Material>
         ) : null}
-      </ScrollView>
+    </>
+  );
+
+  return (
+    <View testID="rewards-page" style={embedded ? { gap: 20 } : { flex: 1, paddingHorizontal: 24, paddingTop: 16 }}>
+      {embedded ? (
+        <View style={{ gap: 20 }}>{innerContent}</View>
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingBottom: 180, gap: 20 }} showsVerticalScrollIndicator={false}>
+          {innerContent}
+        </ScrollView>
+      )}
 
       {/* Add Reward Modal */}
       <Modal
-        visible={composerOpen}
+        visible={composerOpen && pendingShopAction?.kind !== "save-reward"}
         onClose={() => setComposerOpen(false)}
         title="Add Reward to Shop"
         description="Pick a starter template or create a custom family reward"
@@ -1051,7 +1107,7 @@ export function RewardsPage() {
               variant="primary"
               testID="rewards-composer-save"
               disabled={!draftName.trim()}
-              onPress={() => void handleSaveCustomReward()}
+              onPress={() => requestShopParentAction({ kind: "save-reward" })}
             >
               Save Reward
             </SoftButton>
@@ -1061,7 +1117,7 @@ export function RewardsPage() {
 
       {/* Add Family Goal Modal */}
       <Modal
-        visible={goalModalOpen}
+        visible={goalModalOpen && pendingShopAction?.kind !== "add-goal"}
         onClose={() => setGoalModalOpen(false)}
         title="Add Family Goal"
         description="Set a shared milestone for the family to work toward together"
@@ -1104,7 +1160,7 @@ export function RewardsPage() {
               variant="primary"
               testID="rewards-goal-save"
               disabled={!goalTitle.trim()}
-              onPress={() => void handleAddFamilyGoal()}
+              onPress={() => requestShopParentAction({ kind: "add-goal" })}
             >
               Save Goal
             </SoftButton>
@@ -1136,39 +1192,12 @@ export function RewardsPage() {
         ) : null}
       </Modal>
 
-      {/* Two-step for >100: member verify, then parent PIN */}
+      {/* Single-step Parent Approval modal for >100pt rewards */}
       <Modal
-        visible={highCostReward !== null && memberPin === null}
+        visible={highCostReward !== null}
         onClose={() => {
           if (busy) return;
           setHighCostReward(null);
-        }}
-        title="Verify it's you"
-        description={highCostReward ? `Enter your PIN to start redeeming "${rewardTitle(highCostReward)}"` : ""}
-        dismissable={!busy}
-        testID="highcost-member-modal"
-      >
-        {member ? (
-          <PinPad
-            key={`highcost-member-${pinAttempt}`}
-            testID="highcost-member-pinpad"
-            member={{ name: member.name, emoji: member.emoji || "👤" }}
-            onVerified={(pin) => onMemberVerified(pin)}
-            onCancel={() => {
-              if (!busy) setHighCostReward(null);
-            }}
-            busy={busy}
-            error={null}
-          />
-        ) : null}
-      </Modal>
-
-      <Modal
-        visible={highCostReward !== null && memberPin !== null}
-        onClose={() => {
-          if (busy) return;
-          setHighCostReward(null);
-          setMemberPin(null);
           setParentPin("");
           setParentName("");
           setParentError(null);
@@ -1255,10 +1284,10 @@ export function RewardsPage() {
           ) : null}
           <SoftButton
             variant="success"
-            disabled={busy || !memberPin || !parentPin}
+            disabled={busy || !parentPin}
             onPress={() => {
-              if (highCostReward && memberPin) {
-                void runRedeem(highCostReward, memberPin, { name: parentName || firstParent?.name || "", pin: parentPin });
+              if (highCostReward) {
+                void runRedeem(highCostReward, undefined, { name: parentName || firstParent?.name || "", pin: parentPin });
               }
             }}
             testID="highcost-submit"
@@ -1272,6 +1301,46 @@ export function RewardsPage() {
             </Text>
           ) : null}
         </View>
+      </Modal>
+
+      {/* Parent PIN confirmation for editing shop rewards or family goals */}
+      <Modal
+        visible={pendingShopAction !== null}
+        onClose={() => {
+          if (!shopPinBusy) {
+            setPendingShopAction(null);
+            setShopPinError(null);
+          }
+        }}
+        title="Parent PIN required"
+        description={
+          pendingShopAction?.kind === "save-reward"
+            ? `Enter a parent PIN to add "${draftName.trim() || "reward"}" to the shop`
+            : pendingShopAction?.kind === "delete-reward"
+              ? "Enter a parent PIN to remove this custom reward"
+              : pendingShopAction?.kind === "starter-pack"
+                ? "Enter a parent PIN to load the family starter reward pack"
+                : pendingShopAction?.kind === "add-goal"
+                  ? `Enter a parent PIN to add "${goalTitle.trim() || "family goal"}"`
+                  : ""
+        }
+        dismissable={!shopPinBusy}
+        testID="rewards-parent-pin-modal"
+      >
+        <PinPad
+          key={`rewards-shop-pin-${shopPinAttempt}`}
+          testID="rewards-parent-pinpad"
+          member={{ name: firstParent?.name ?? "Parent", emoji: firstParent?.emoji ?? "🔒" }}
+          onVerified={(pin) => void handleConfirmShopParentPin(pin)}
+          onCancel={() => {
+            if (!shopPinBusy) {
+              setPendingShopAction(null);
+              setShopPinError(null);
+            }
+          }}
+          busy={shopPinBusy}
+          error={shopPinError}
+        />
       </Modal>
 
       {purchasing ? (

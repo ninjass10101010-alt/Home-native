@@ -29,6 +29,7 @@ import { FONTS, TYPOGRAPHY } from "../theme/tokens";
 import { mix } from "../theme/mix";
 import { musicTokensFor, type MusicTokens } from "../theme/music-tokens";
 import { Modal } from "../ui/Modal";
+import { PinPad } from "../ui/PinPad";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { usePlayback } from "./playback";
 import { useCast } from "./CastProvider";
@@ -95,8 +96,9 @@ export function MusicPlayer() {
     play, toggle, next, previous, seek, repeat, shuffle,
     cycleRepeatMode, toggleShuffleMode, downloadCurrent, addToQueue,
     removeFromQueue, moveQueueItem,
-    downloads, removeDownload, history, policy,
+    downloads, removeDownload, history, policy, settings, setExplicitFilter,
     denylist, addDenied, removeDenied,
+    unlockMusicParent, lockMusicParent,
   } = usePlayback();
   const cast = useCast();
   const casting = cast.casting;
@@ -119,6 +121,10 @@ export function MusicPlayer() {
    */
   const [denyOpen, setDenyOpen] = React.useState(false);
   const [denyTerm, setDenyTerm] = React.useState("");
+  const [parentPinOpen, setParentPinOpen] = React.useState(false);
+  const [parentPinBusy, setParentPinBusy] = React.useState(false);
+  const [parentPinError, setParentPinError] = React.useState<string | null>(null);
+  const [parentPinAttempt, setParentPinAttempt] = React.useState(0);
 
   const [similarTrackState, setSimilarTrackState] = React.useState<{ id: string; tracks: MediaTrack[] } | null>(null);
   const [activeArtist, setActiveArtist] = React.useState<{ name: string; artworkUrl?: string | null } | null>(null);
@@ -528,19 +534,64 @@ export function MusicPlayer() {
           </View>
           <View style={{ marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 10 }}>
             {/*
-              The deny-list editor is PARENT-ONLY: a kid role (child/pet/guest)
-              must never see the control — nor the family's list behind it.
+              Explicit filter & deny-list editor require an action-level Parent PIN
+              unlock directly inside Music (even when signed in as a parent).
             */}
             {isParent ? (
+              <>
+                {typeof setExplicitFilter === "function" ? (
+                  <Pressable
+                    testID="music-explicit-toggle"
+                    accessibilityRole="button"
+                    accessibilityLabel={settings?.explicitFilter === false ? "Turn kid-safe filter on" : "Allow explicit songs"}
+                    hitSlop={12}
+                    onPress={() => setExplicitFilter(settings?.explicitFilter === false)}
+                    style={{ minHeight: 64, paddingHorizontal: 14, justifyContent: "center", borderRadius: 14, backgroundColor: mix(colors["color-text-primary"], "transparent", 6) }}
+                  >
+                    <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>
+                      {settings?.explicitFilter === false ? "Filter: Off" : "Filter: On"}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  testID="music-deny-open"
+                  accessibilityRole="button"
+                  accessibilityLabel="Blocked artists and songs"
+                  hitSlop={12}
+                  onPress={() => setDenyOpen(true)}
+                  style={{ minHeight: 64, paddingHorizontal: 14, justifyContent: "center", borderRadius: 14, backgroundColor: mix(colors["color-text-primary"], "transparent", 6) }}
+                >
+                  <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>Blocked</Text>
+                </Pressable>
+                {typeof lockMusicParent === "function" ? (
+                  <Pressable
+                    testID="music-parent-lock"
+                    accessibilityRole="button"
+                    accessibilityLabel="Lock parent music mode"
+                    hitSlop={12}
+                    onPress={() => {
+                      setDenyOpen(false);
+                      lockMusicParent();
+                    }}
+                    style={{ minHeight: 64, paddingHorizontal: 14, justifyContent: "center", borderRadius: 14, backgroundColor: mix(accentColor, "transparent", 18) }}
+                  >
+                    <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>🔒 Lock</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            ) : typeof unlockMusicParent === "function" ? (
               <Pressable
-                testID="music-deny-open"
+                testID="music-parent-unlock"
                 accessibilityRole="button"
-                accessibilityLabel="Blocked artists and songs"
+                accessibilityLabel="Unlock parent music controls"
                 hitSlop={12}
-                onPress={() => setDenyOpen(true)}
-                style={{ minHeight: 48, paddingHorizontal: 14, justifyContent: "center", borderRadius: 14, backgroundColor: mix(colors["color-text-primary"], "transparent", 6) }}
+                onPress={() => {
+                  setParentPinError(null);
+                  setParentPinOpen(true);
+                }}
+                style={{ minHeight: 64, paddingHorizontal: 14, justifyContent: "center", borderRadius: 14, backgroundColor: mix(colors["color-text-primary"], "transparent", 6) }}
               >
-                <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>Blocked</Text>
+                <Text style={{ color: colors["color-text-primary"], fontWeight: "700" }}>🔒 Parent</Text>
               </Pressable>
             ) : null}
             <Pressable accessibilityRole="button" accessibilityLabel="Search music" hitSlop={12} onPress={() => setSearchOpen((v) => !v)} style={{ minHeight: 48, paddingHorizontal: 14, justifyContent: "center", borderRadius: 14, backgroundColor: mix(colors["color-text-primary"], "transparent", 6) }}>
@@ -1100,6 +1151,51 @@ export function MusicPlayer() {
           </View>
         </Modal>
       ) : null}
+
+      <Modal
+        visible={parentPinOpen}
+        onClose={() => {
+          if (!parentPinBusy) {
+            setParentPinOpen(false);
+            setParentPinError(null);
+          }
+        }}
+        title="Parent PIN for Music"
+        description="Unlock explicit tracks, the kid-safe filter, and the blocked list for this session"
+        dismissable={!parentPinBusy}
+        testID="music-parent-pin-modal"
+      >
+        <PinPad
+          key={`music-parent-pin-${parentPinAttempt}`}
+          testID="music-parent-pinpad"
+          member={{ name: "Parent", emoji: "🔒" }}
+          onVerified={(pin) => {
+            if (!unlockMusicParent || parentPinBusy) return;
+            setParentPinBusy(true);
+            setParentPinError(null);
+            void unlockMusicParent(pin)
+              .then(() => {
+                setParentPinOpen(false);
+                setParentPinError(null);
+              })
+              .catch((e: any) => {
+                setParentPinError(e?.message || "Parent PIN required.");
+                setParentPinAttempt((n) => n + 1);
+              })
+              .finally(() => {
+                setParentPinBusy(false);
+              });
+          }}
+          onCancel={() => {
+            if (!parentPinBusy) {
+              setParentPinOpen(false);
+              setParentPinError(null);
+            }
+          }}
+          busy={parentPinBusy}
+          error={parentPinError}
+        />
+      </Modal>
     </>
   );
 }

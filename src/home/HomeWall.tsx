@@ -1,12 +1,13 @@
 import React, { useMemo } from "react";
 import { Platform, Pressable, Text, TextStyle, useWindowDimensions, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useTheme } from "../theme/ThemeProvider";
+import { AccentScope, useTheme } from "../theme/ThemeProvider";
 import { ACCENTS, FONTS, RADII, TYPOGRAPHY } from "../theme/tokens";
+import { useKidCharacter, type KidCharacterSkin } from "../theme/kidCharacter";
+import { CharacterMotifBackdrop, KidCharacterHero } from "../ui/characters/KidCharacterTheme";
 import { Material } from "../theme/Material";
 import { mix } from "../theme/mix";
 import { MemberRail, type RailMember } from "../ui/MemberRail";
-import { SoftButton } from "../ui/SoftButton";
 import { useAuth } from "../state/AuthProvider";
 import { EmergencyShield } from "./EmergencyShield";
 import {
@@ -302,8 +303,6 @@ export interface HomeWallProps {
   onSelectDay?: (dayId: string) => void;
   /** Opens the Home "More…" sheet. */
   onOpenMore?: () => void;
-  /** Signed-in parent toggle back to their Adult Routine Hub. */
-  onOpenAdultRoutines?: () => void;
   /**
    * True when the device holds a saved copy of the family (the roster cache
    * or the live roster). False = the wall has nothing saved, and the
@@ -324,7 +323,16 @@ export interface HomeWallProps {
  * The wall: greeting + member rail + the 12-cell widget bento (3 cols, 4
  * rows; photos spans 2 rows). Height is the contract — the wall never scrolls.
  */
-export function HomeWall({
+export function HomeWall(props: HomeWallProps) {
+  const kidSkin = useKidCharacter();
+  return (
+    <AccentScope accent={kidSkin?.accentKey}>
+      <HomeWallInner {...props} kidSkin={kidSkin} />
+    </AccentScope>
+  );
+}
+
+function HomeWallInner({
   members,
   onSelectMember,
   onSignOut,
@@ -332,10 +340,10 @@ export function HomeWall({
   greetingNow,
   onSelectDay: _onSelectDay,
   onOpenMore,
-  onOpenAdultRoutines,
   hasSavedRoster = true,
   rosterUnreachable = false,
-}: HomeWallProps) {
+  kidSkin,
+}: HomeWallProps & { kidSkin: KidCharacterSkin | null }) {
   const { colors, accentColor, theme } = useTheme();
   const { member, hydrated } = useAuth();
   const router = useRouter();
@@ -444,6 +452,13 @@ export function HomeWall({
     // a SIBLING of this frame, so it needs a z-index of its own to stay
     // visible — see the note there.
     <View style={{ flex: 1 }}>
+      {kidSkin ? (
+        <CharacterMotifBackdrop
+          skin={kidSkin}
+          height={signedOut ? 340 : 320}
+          testID="home-character-backdrop"
+        />
+      ) : null}
       {/* Emergency shield: 64dp, top-right of the wall — the web's fixed
           Emergency button, 16px in from the corner. Top band (0..88px) stays
           clear for the full-size MusicIsland centered at top: 8. */}
@@ -538,20 +553,11 @@ export function HomeWall({
             </View>
           </View>
 
-          {onOpenMore || onOpenAdultRoutines ? (
+          {kidSkin ? <KidCharacterHero skin={kidSkin} compact /> : null}
+
+          {onOpenMore ? (
             <View style={{ marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 10 }}>
-              {onOpenAdultRoutines ? (
-                <SoftButton
-                  variant="secondary"
-                  size="sm"
-                  testID="wall-open-adult-routines"
-                  onPress={onOpenAdultRoutines}
-                  accessibilityLabel="Open my routines hub"
-                >
-                  ✓ My Routines
-                </SoftButton>
-              ) : null}
-              {onOpenMore ? <MoreButton onPress={onOpenMore} /> : null}
+              <MoreButton onPress={onOpenMore} />
             </View>
           ) : null}
         </View>
