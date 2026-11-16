@@ -29,6 +29,7 @@ const kidUnder10 = { id: "c1", name: "Aurora", role: "child", age: 8, emoji: "�
 const kidOver10 = { id: "c1", name: "Aurora", role: "child", age: 12, emoji: "🧚", color: "violet" };
 
 let mockMember: any = parent;
+let mockPinRequired: boolean | null = null;
 jest.mock("../src/state/AuthProvider", () => ({
   useAuth: () => ({
     member: mockMember,
@@ -36,7 +37,10 @@ jest.mock("../src/state/AuthProvider", () => ({
     hydrated: true,
     signOut: jest.fn(),
     poke: jest.fn(),
-    pinRequiredFor: jest.requireActual("../src/state/AuthProvider").pinRequiredFor,
+    pinRequiredFor: (m: any) =>
+      mockPinRequired !== null
+        ? mockPinRequired
+        : jest.requireActual("../src/state/AuthProvider").pinRequiredFor(m),
   }),
 }));
 
@@ -176,6 +180,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockPulseListeners.clear();
   mockMember = parent;
+  mockPinRequired = null;
   mockSnapshot = null;
   mockStale = false;
   mockLastSyncAt = null;
@@ -316,6 +321,7 @@ describe("TasksPage — kid view", () => {
 
   it("10+ kid: PIN pad first, then claim body carries memberName + pin", async () => {
     mockMember = kidOver10;
+    mockPinRequired = true;
     kidSnapshot();
     route({ "/api/tasks/claim": CLAIM_OK() });
     const { getByTestId, getByLabelText, findByTestId, findByText, getByText } = render(<TasksPage />, { wrapper: wrap });
@@ -343,6 +349,7 @@ describe("TasksPage — kid view", () => {
 
   it("wrong PIN → pad error, no success state, no refresh; the pad clears for the next try", async () => {
     mockMember = kidOver10;
+    mockPinRequired = true;
     kidSnapshot();
     api.mockImplementation((path: string, init?: any) => {
       if (path !== "/api/tasks/claim") return Promise.reject(new ApiError({ message: "unmapped", status: 404, code: "not_found" }));
@@ -373,6 +380,7 @@ describe("TasksPage — kid view", () => {
 
   it("a SECOND consecutive wrong PIN clears the pad — the family is never stuck re-sending the failed code", async () => {
     mockMember = kidOver10;
+    mockPinRequired = true;
     kidSnapshot();
     api.mockImplementation((path: string, init?: any) => {
       if (path !== "/api/tasks/claim") return Promise.reject(new ApiError({ message: "unmapped", status: 404, code: "not_found" }));
@@ -771,6 +779,7 @@ describe("TasksPage — open board", () => {
 
   it("open rows claim with a PIN: the memberName the row lands on is the PIN's owner", async () => {
     mockMember = kidOver10;
+    mockPinRequired = true;
     mockSnapshot = { tasks: OPEN_TASKS, weekData: WEEK_DATA };
     route({ "/api/tasks/claim": CLAIM_OK() });
     const { findAllByText, findByText, getByText, getByTestId, getByLabelText, findByTestId } = render(<TasksPage />, { wrapper: wrap });
@@ -840,7 +849,7 @@ describe("TasksPage — open board", () => {
       weekData: WEEK_DATA,
     };
     route({ "/api/tasks/claim": CLAIM_OK() });
-    const { findByText, getByTestId, getByLabelText, findByTestId } = render(<TasksPage />, { wrapper: wrap });
+    const { findByText, getByTestId } = render(<TasksPage />, { wrapper: wrap });
 
     await act(async () => {
       fireEvent.press(getByTestId("tasks-completed-toggle"));
@@ -852,16 +861,12 @@ describe("TasksPage — open board", () => {
       fireEvent.press(getByTestId("task-undo-2"));
       await Promise.resolve();
     });
-    expect(await findByTestId("tasks-pinpad")).toBeTruthy();
-    typePin(getByLabelText, "1234");
     const calls = claimCalls();
     expect(calls).toHaveLength(1);
     expect(calls[0][1].body).toEqual({
       operationId: expect.any(String),
       action: "undo",
       taskId: 2,
-      memberName: "Aurora",
-      pin: "1234",
     });
     expect(await findByText("Taken back — it's yours again.")).toBeTruthy();
   });
@@ -991,7 +996,7 @@ describe("TasksPage — parent controls (WS-5)", () => {
       "/api/tasks/manage": { success: true, operationId: "op-m", action: "add", reconciled: true },
       "/api/tasks/queue": { ok: true, rows: [] },
     });
-    const { findByTestId, getByTestId, getByText } = render(<TasksPage />, { wrapper: wrap });
+    const { findByTestId, getByTestId, getByLabelText } = render(<TasksPage />, { wrapper: wrap });
     await findByTestId("tasks-add-chore");
     fireEvent.press(getByTestId("tasks-add-chore"));
     expect(await findByTestId("add-chore-modal")).toBeTruthy();
@@ -1002,8 +1007,14 @@ describe("TasksPage — parent controls (WS-5)", () => {
       fireEvent.press(getByTestId("add-chore-submit"));
       await Promise.resolve();
     });
+    expect(await findByTestId("tasks-pinpad")).toBeTruthy();
+    typePin(getByLabelText, "1234");
+    await act(async () => {
+      await Promise.resolve();
+    });
     const calls = api.mock.calls.filter((c: any[]) => c[0] === "/api/tasks/manage");
     expect(calls).toHaveLength(1);
+    expect(calls[0][1].headers["x-admin-pin"]).toBe("1234");
     expect(calls[0][1].body).toEqual(expect.objectContaining({ action: "add", task: expect.objectContaining({ title: "Water plants", assignee: "Aurora" }) }));
     expect(mockRefreshNow).toHaveBeenCalled();
   });

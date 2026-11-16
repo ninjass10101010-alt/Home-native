@@ -92,12 +92,11 @@ describe("mode derivation + PIN rules (web parity)", () => {
     expect(modeForRole("child")).toBe("kid");
     expect(modeForRole("pet")).toBe("kid");
   });
-  it("pinRequiredFor: under-10 child PIN-free; 10+ and missing age → PIN", () => {
+  it("pinRequiredFor: member selection is PIN-free for known profiles; null/undefined requires auth", () => {
     expect(pinRequiredFor(kid)).toBe(false);
-    expect(pinRequiredFor(parent)).toBe(true);
-    expect(pinRequiredFor({ ...kid, age: 10 })).toBe(true);
-    expect(pinRequiredFor({ ...kid, age: undefined })).toBe(true);
-    expect(pinRequiredFor({ ...kid, role: "pet", age: 3 })).toBe(true);
+    expect(pinRequiredFor(parent)).toBe(false);
+    expect(pinRequiredFor(null)).toBe(true);
+    expect(pinRequiredFor(undefined)).toBe(true);
   });
 });
 

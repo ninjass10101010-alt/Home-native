@@ -84,6 +84,20 @@ const typePin = (getByLabelText: (label: string) => any, pin: string) => {
   for (const k of pin) fireEvent.press(getByLabelText(k));
 };
 
+const openParentSection = async (
+  getByTestId: (id: string) => any,
+  findByTestId: (id: string) => Promise<any>,
+  getByLabelText: (label: string) => any,
+  sectionId: string,
+) => {
+  fireEvent.press(getByTestId(`settings-section-${sectionId}`));
+  await findByTestId("settings-parent-pinpad");
+  typePin(getByLabelText, "1234");
+  await act(async () => {
+    await Promise.resolve();
+  });
+};
+
 /** Flush ThemeProvider's async hydration (AsyncStorage + AccessibilityInfo) inside act(). */
 const flush = () => act(async () => {});
 
@@ -101,6 +115,9 @@ beforeEach(async () => {
   mockHydrated = true;
   mockStale = false;
   api.mockReset();
+  route({
+    "/api/members/verify": { success: true, member: parent },
+  });
 });
 
 describe("SettingsPage — launcher by role", () => {
@@ -372,11 +389,11 @@ describe("SettingsPage — Safety", () => {
 
 describe("SettingsPage — Home uses the balanced v2 layout", () => {
   it("offers configurable home controls and never offers deferred widgets", async () => {
-    const { getByTestId, findByText, queryByText } = render(
+    const { getByTestId, findByText, queryByText, findByTestId, getByLabelText } = render(
       <SettingsPage />,
       { wrapper: wrap },
     );
-    fireEvent.press(getByTestId("settings-section-home"));
+    await openParentSection(getByTestId, findByTestId, getByLabelText, "home");
     expect(await findByText("Home Security")).toBeTruthy();
     expect(getByTestId("wall-layout-row-homeSecurity")).toBeTruthy();
     expect(getByTestId("wall-layout-row-homeClimate")).toBeTruthy();
@@ -388,11 +405,11 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
   });
 
   it("shows the balanced default as twelve of twelve cells", async () => {
-    const { getByTestId, findByText } = render(
+    const { getByTestId, findByText, findByTestId, getByLabelText } = render(
       <SettingsPage />,
       { wrapper: wrap },
     );
-    fireEvent.press(getByTestId("settings-section-home"));
+    await openParentSection(getByTestId, findByTestId, getByLabelText, "home");
     await findByText("Widget layout");
     const children = getByTestId("wall-layout-cells").props.children;
     const copy = Array.isArray(children) ? children.join("") : String(children);
@@ -408,11 +425,11 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
         hidden: ["music", "homeClimate", "homeLights"],
       }),
     );
-    const { getByTestId, findByText } = render(
+    const { getByTestId, findByText, findByTestId, getByLabelText } = render(
       <SettingsPage />,
       { wrapper: wrap },
     );
-    fireEvent.press(getByTestId("settings-section-home"));
+    await openParentSection(getByTestId, findByTestId, getByLabelText, "home");
     await findByText("Widget layout");
     await waitFor(() => {
       expect(
@@ -437,11 +454,11 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
   });
 
   it("refuses a size change that would exceed twelve cells", async () => {
-    const { getByTestId, findByText } = render(
+    const { getByTestId, findByText, findByTestId, getByLabelText } = render(
       <SettingsPage />,
       { wrapper: wrap },
     );
-    fireEvent.press(getByTestId("settings-section-home"));
+    await openParentSection(getByTestId, findByTestId, getByLabelText, "home");
     await findByText("Widget layout");
     expect(
       getByTestId("wall-layout-size-morningBriefing-2").props.accessibilityState
@@ -451,9 +468,9 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
   });
   it("Home section toggles the screensaver setting", async () => {
     mockMember = parent;
-    const { getByTestId, findByText } = render(<SettingsPage />, { wrapper: wrap });
+    const { getByTestId, findByText, findByTestId, getByLabelText } = render(<SettingsPage />, { wrapper: wrap });
     await flush();
-    fireEvent.press(getByTestId("settings-section-home"));
+    await openParentSection(getByTestId, findByTestId, getByLabelText, "home");
     await findByText("Widget layout");
     expect(getByTestId("wall-screensaver-setting")).toBeTruthy();
     fireEvent.press(getByTestId("wall-screensaver-toggle"));
@@ -467,9 +484,9 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
 
   it("Home section allows selecting night schedule and presets", async () => {
     mockMember = parent;
-    const { getByTestId, findByText } = render(<SettingsPage />, { wrapper: wrap });
+    const { getByTestId, findByText, findByTestId, getByLabelText } = render(<SettingsPage />, { wrapper: wrap });
     await flush();
-    fireEvent.press(getByTestId("settings-section-home"));
+    await openParentSection(getByTestId, findByTestId, getByLabelText, "home");
     await findByText("Widget layout");
     fireEvent.press(getByTestId("screensaver-mode-night"));
     expect(getByTestId("screensaver-preset-23-4")).toBeTruthy();
@@ -481,23 +498,26 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
 
 describe("SettingsPage — Family is real; Home and System stay deferred (parent)", () => {
   it("Family renders the roster surface, not the deferral card", async () => {
-    route({ "/api/members/admin": { members: [parent] } });
-    const { getByTestId, findByTestId, queryByText } = render(<SettingsPage />, { wrapper: wrap });
-    fireEvent.press(getByTestId("settings-section-family"));
+    route({
+      "/api/members/verify": { success: true, member: parent },
+      "/api/members/admin": { members: [parent] },
+    });
+    const { getByTestId, findByTestId, queryByText, getByLabelText } = render(<SettingsPage />, { wrapper: wrap });
+    await openParentSection(getByTestId, findByTestId, getByLabelText, "family");
     expect(await findByTestId("family-section")).toBeTruthy();
     expect(queryByText("Settings for the whole family arrive with the full settings wave.")).toBeNull();
   });
 
   it("Home is the wall's own layout editor; Connections & System stay deferred", async () => {
-    const { getByTestId, findByText, queryByText } = render(<SettingsPage />, { wrapper: wrap });
+    const { getByTestId, findByText, queryByText, findByTestId, getByLabelText } = render(<SettingsPage />, { wrapper: wrap });
     // Home is real: the family can size the wall's widgets.
-    fireEvent.press(getByTestId("settings-section-home"));
+    await openParentSection(getByTestId, findByTestId, getByLabelText, "home");
     expect(await findByText("Widget layout")).toBeTruthy();
     expect(getByTestId("wall-layout-cells")).toBeTruthy();
     fireEvent.press(getByTestId("settings-back"));
     expect(queryByText("Widget layout")).toBeNull();
     // System is still honest about what it does not have yet.
-    fireEvent.press(getByTestId("settings-section-system"));
+    await openParentSection(getByTestId, findByTestId, getByLabelText, "system");
     expect(await findByText("Settings for the whole family arrive with the full settings wave.")).toBeTruthy();
     fireEvent.press(getByTestId("settings-back"));
     expect(queryByText("Settings for the whole family arrive with the full settings wave.")).toBeNull();

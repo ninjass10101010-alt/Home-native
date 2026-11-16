@@ -139,7 +139,6 @@ export function RoutinesPanel({
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] = useState<FamilyRoutine | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const modalSaving = pinBusy;
   const [modalError, setModalError] = useState<string | null>(null);
 
   const [pendingPinAction, setPendingPinAction] = useState<PendingParentAction | null>(
@@ -147,6 +146,7 @@ export function RoutinesPanel({
   );
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinBusy, setPinBusy] = useState(false);
+  const modalSaving = pinBusy;
 
   const [focusModalOpen, setFocusModalOpen] = useState(false);
   const [focusRoutine, setFocusRoutine] = useState<FamilyRoutine | null>(null);

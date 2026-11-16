@@ -26,9 +26,11 @@ const parent = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱",
 const kid = { id: "c1", name: "Aurora", role: "child", age: 12, emoji: "🧚", color: "violet" };
 
 let mockMember: any = kid;
+let mockRole: string | null = null;
 jest.mock("../src/state/AuthProvider", () => ({
   useAuth: () => ({
     member: mockMember,
+    role: mockRole,
     hydrated: true,
     signOut: jest.fn(),
     poke: jest.fn(),
@@ -73,6 +75,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockPulseListeners = new Set();
   mockMember = kid;
+  mockRole = null;
   mockStale = false;
   mockSnapshot = { tasks: [], weekData: { weekStart: "2026-10-05", points: { Aurora: 25 }, history: [] }, rewards: REWARDS, penalties: [], family_goals: [], weekly_prizes: [], hall_of_fame: [] };
   api.mockReset();
@@ -130,7 +133,7 @@ describe("RewardsPage — redemption", () => {
     expect(mockRefreshNow).toHaveBeenCalled();
   });
 
-  it("cost>100: two-step then redeem with parent fields", async () => {
+  it("cost>100: single-step parent approval modal then redeem with parent fields", async () => {
     route({
       "/api/tasks/all-time": { historyComplete: false },
       "/api/rewards/redeem": { ok: true, applied: true, reconciled: true },
@@ -142,8 +145,39 @@ describe("RewardsPage — redemption", () => {
       fireEvent.press(getByTestId("reward-redeem-2"));
       await Promise.resolve();
     });
-    // member step
-    expect(await findByTestId("highcost-member-pinpad")).toBeTruthy();
+    expect(await findByTestId("highcost-parent-modal")).toBeTruthy();
+    fireEvent.changeText(getByTestId("parent-name-input"), "Rebecca (Mom)");
+    fireEvent.changeText(getByTestId("parent-pin-input"), "9999");
+    await act(async () => {
+      fireEvent.press(getByTestId("highcost-submit"));
+      await Promise.resolve();
+    });
+    const calls = api.mock.calls.filter((c: any[]) => c[0] === "/api/rewards/redeem");
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    expect(calls[0][1].body).toEqual(expect.objectContaining({
+      rewardId: 2,
+      memberName: "Aurora",
+      parentName: "Rebecca (Mom)",
+      parentPin: "9999",
+    }));
+  });
+
+  it("cost<=100: redeems directly without PIN when member has active role session", async () => {
+    mockRole = "child";
+    route({
+      "/api/tasks/all-time": { historyComplete: true, totals: { Aurora: { points: 100 } } },
+      "/api/rewards/redeem": { ok: true, applied: true, reconciled: true, weekData: mockSnapshot.weekData, reward: { id: 1, name: "Ice cream", cost: 50, emoji: "🍦" } },
+    });
+    const { findByTestId, getByTestId, queryByTestId } = render(<RewardsPage />, { wrapper: wrap });
+    await findByTestId("reward-redeem-1");
+    await act(async () => {
+      fireEvent.press(getByTestId("reward-redeem-1"));
+      await Promise.resolve();
+    });
+    expect(queryByTestId("redeem-pinpad")).toBeNull();
+    const calls = api.mock.calls.filter((c: any[]) => c[0] === "/api/rewards/redeem");
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    expect(calls[0][1].body).toEqual(expect.objectContaining({ rewardId: 1, memberName: "Aurora" }));
   });
 });
 

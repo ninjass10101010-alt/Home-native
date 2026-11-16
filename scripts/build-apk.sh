@@ -41,7 +41,7 @@ cd android
 APK="$(pwd)/app/build/outputs/apk/release/app-release.apk"
 echo "built: $APK"
 
-TARGET_DEVICE="${DEVICE_ID:-192.168.0.112:34229}"
+TARGET_DEVICE="${DEVICE_ID:-192.168.0.112:5555}"
 if adb devices | grep -q "$TARGET_DEVICE"; then
   adb -s "$TARGET_DEVICE" install -r "$APK" && echo "installed OK on $TARGET_DEVICE"
   adb -s "$TARGET_DEVICE" shell am force-stop com.garciafam.consuela

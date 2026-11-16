@@ -26,6 +26,9 @@ jest.mock("expo-audio", () => ({
   useAudioPlayerStatus: () => mockStatus,
   AudioModule: { setAudioModeAsync: jest.fn(async () => {}) },
 }));
+jest.mock("../src/api/auth", () => ({
+  verifyParentPin: jest.fn(async () => ({ role: "parent" })),
+}));
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
@@ -106,11 +109,12 @@ const KID = { id: "c1", name: "Kid", role: "child", emoji: "🐯", color: "green
 const PARENT = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" };
 
 function Probe() {
-  const { current, queue, play, playQueueAt, addToQueue, downloadCurrent, policy, denylist, addDenied, removeDenied, stopAndClear } = usePlayback();
+  const { current, queue, play, playQueueAt, addToQueue, downloadCurrent, policy, denylist, addDenied, removeDenied, stopAndClear, unlockMusicParent } = usePlayback();
   return (
     <>
       <Text testID="title">{current?.title ?? "none"}</Text>
       <Text testID="queue">{queue.map((t) => t.id).join(",") || "empty"}</Text>
+      <Text testID="unlock-parent" onPress={() => void unlockMusicParent?.("1234")}>unlock parent</Text>
       <Text testID="play-pair" onPress={() => void play(clean, [clean, explicit])}>play pair</Text>
       <Text testID="play-triple" onPress={() => void play(clean, [clean, explicit, third])}>play triple</Text>
       <Text testID="play-bad" onPress={() => void play(explicit)}>play bad</Text>
@@ -167,6 +171,7 @@ it("resolves the stream on-device and plays the native URL", async () => {
 it("a parent may queue and play an explicit track", async () => {
   mockMember = PARENT;
   const { getByTestId } = render(tree());
+  await act(async () => { getByTestId("unlock-parent").props.onPress(); });
   await act(async () => { getByTestId("play-pair").props.onPress(); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Clean Song"));
   expect(getByTestId("queue").props.children).toBe("clean11111,exp11111111");
@@ -192,6 +197,7 @@ it("a live parent session keeps the parent policy (the explicit track is visible
   mockMember = PARENT;
   mockRole = "parent";
   const { getByTestId } = render(tree());
+  await act(async () => { getByTestId("unlock-parent").props.onPress(); });
   await act(async () => { getByTestId("play-pair").props.onPress(); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Clean Song"));
   expect(getByTestId("queue").props.children).toBe("clean11111,exp11111111");
@@ -235,6 +241,7 @@ it("a kid cannot jump to an explicit row of the queue", async () => {
 it("a parent may jump to an explicit row of the queue", async () => {
   mockMember = PARENT;
   const { getByTestId } = render(tree());
+  await act(async () => { getByTestId("unlock-parent").props.onPress(); });
   await act(async () => { getByTestId("play-queue-at-bad").props.onPress(); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Bad Song"));
   expect(getByTestId("queue").props.children).toBe("clean11111,exp11111111");
@@ -243,6 +250,7 @@ it("a parent may jump to an explicit row of the queue", async () => {
 it("a parent→kid switch drops the hidden track from the queue", async () => {
   mockMember = PARENT;
   const { getByTestId, rerender } = render(tree());
+  await act(async () => { getByTestId("unlock-parent").props.onPress(); });
   await act(async () => { getByTestId("play-pair").props.onPress(); });
   await waitFor(() => expect(getByTestId("queue").props.children).toBe("clean11111,exp11111111"));
   mockMember = KID;
@@ -253,6 +261,7 @@ it("a parent→kid switch drops the hidden track from the queue", async () => {
 it("a parent→kid switch STOPS the explicit track that was playing", async () => {
   mockMember = PARENT;
   const { getByTestId, rerender } = render(tree());
+  await act(async () => { getByTestId("unlock-parent").props.onPress(); });
   await act(async () => { getByTestId("play-bad").props.onPress(); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Bad Song"));
   mockMember = KID;
@@ -280,6 +289,7 @@ it("auto-advance never rolls into a track the new viewer may not see", async () 
 it("a parent's auto-advance still rolls into an explicit track", async () => {
   mockMember = PARENT;
   const { getByTestId, rerender } = render(tree());
+  await act(async () => { getByTestId("unlock-parent").props.onPress(); });
   await act(async () => { getByTestId("play-pair").props.onPress(); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Clean Song"));
   mockStatus = { ...mockStatus, didJustFinish: true };
@@ -291,6 +301,7 @@ it("a parent's auto-advance still rolls into an explicit track", async () => {
 it("the auto-advance does not roll forward while a start is in flight", async () => {
   mockMember = PARENT;
   const { getByTestId, rerender } = render(tree());
+  await act(async () => { getByTestId("unlock-parent").props.onPress(); });
   await act(async () => { getByTestId("play-triple").props.onPress(); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Clean Song"));
   // The NEXT stream takes a moment: the start is IN FLIGHT while the queue
@@ -313,6 +324,7 @@ it("the auto-advance does not roll forward while a start is in flight", async ()
 it("a download carries the track's rating into the tray", async () => {
   mockMember = PARENT;
   const { getByTestId } = render(tree());
+  await act(async () => { getByTestId("unlock-parent").props.onPress(); });
   await act(async () => { getByTestId("play-bad").props.onPress(); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Bad Song"));
   await act(async () => { getByTestId("download").props.onPress(); });
@@ -359,6 +371,7 @@ it("a parent still plays a denied track", async () => {
   mockMember = PARENT;
   await seedDenylist(["eminem"]);
   const { getByTestId } = render(tree());
+  await act(async () => { getByTestId("unlock-parent").props.onPress(); });
   await waitFor(() => expect(getByTestId("policy-denied").props.children).toBe("eminem"));
   await act(async () => { getByTestId("play-denied").props.onPress(); });
   await waitFor(() => expect(getByTestId("title").props.children).toBe("Till I Collapse"));
@@ -475,6 +488,7 @@ describe("stopAndClear", () => {
     mockMember = PARENT;
     const { getByTestId } = render(tree());
     
+    await act(async () => { getByTestId("unlock-parent").props.onPress(); });
     // Set up a playing track with a queue
     await act(async () => { getByTestId("play-pair").props.onPress(); });
     await waitFor(() => expect(getByTestId("title").props.children).toBe("Clean Song"));
