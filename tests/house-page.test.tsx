@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { render } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { HousePage } from "../src/ha/HousePage";
@@ -95,6 +95,181 @@ describe("HousePage", () => {
     });
     const { findByText } = render(<HousePage />, { wrapper: wrap });
     expect(await findByText("Home Assistant is offline")).toBeTruthy();
+  });
+
+  it("filters out UniFi/system switches while keeping real smart outlets and supports room filtering", async () => {
+    const richStates = [
+      {
+        entity_id: "light.kitchen_main_light",
+        state: "on",
+        attributes: {
+          friendly_name: "Kitchen Main Light",
+          area_id: "Kitchen",
+          supported_color_modes: ["color_temp"],
+          brightness: 204,
+          color_temp_kelvin: 3500,
+        },
+        last_updated: "",
+      },
+      {
+        entity_id: "switch.plant_light_socket",
+        state: "off",
+        attributes: {
+          device_class: "outlet",
+          friendly_name: "Living Room Plant Light",
+          area_id: "Living Room",
+        },
+        last_updated: "",
+      },
+      {
+        entity_id: "switch.unifi_network_plex",
+        state: "on",
+        attributes: { friendly_name: "UniFi Network Plex" },
+        last_updated: "",
+      },
+      {
+        entity_id: "switch.plant_light_child_lock",
+        state: "off",
+        attributes: { friendly_name: "Plant light Child lock" },
+        last_updated: "",
+      },
+      {
+        entity_id: "switch.demo_sim_front_door",
+        state: "off",
+        attributes: { friendly_name: "Demo Sim Front Door" },
+        last_updated: "",
+      },
+    ];
+    api.mockImplementation(async (path: string) => {
+      if (path === "/api/ha/health") return { ok: true, wsConnected: true };
+      if (path === "/api/ha/sync") return { success: true, count: richStates.length, states: richStates };
+      return { success: true };
+    });
+
+    const { findByText, findByTestId, queryByText } = render(<HousePage />, { wrapper: wrap });
+    expect(await findByText(/Kitchen Main Light/)).toBeTruthy();
+    expect(await findByText(/Living Room Plant Light/)).toBeTruthy();
+    expect(queryByText(/UniFi Network Plex/)).toBeNull();
+    expect(queryByText(/Child lock/)).toBeNull();
+    expect(queryByText(/Demo Sim Front Door/)).toBeNull();
+
+    const livingChip = await findByTestId("area-chip-Living Room");
+    fireEvent.press(livingChip);
+    await waitFor(() => {
+      expect(queryByText(/Kitchen Main Light/)).toBeNull();
+      expect(queryByText(/Living Room Plant Light/)).toBeTruthy();
+    });
+  });
+
+  it("sends brightness_pct and color_temp_kelvin service calls for tunable bulbs", async () => {
+    const bulbStates = [
+      {
+        entity_id: "light.kitchen_main_light",
+        state: "on",
+        attributes: {
+          friendly_name: "Kitchen Main Light",
+          area_id: "Kitchen",
+          supported_color_modes: ["color_temp"],
+          brightness: 128,
+          color_temp_kelvin: 3500,
+        },
+        last_updated: "",
+      },
+    ];
+    api.mockImplementation(async (path: string) => {
+      if (path === "/api/ha/health") return { ok: true, wsConnected: true };
+      if (path === "/api/ha/sync") return { success: true, count: bulbStates.length, states: bulbStates };
+      return { success: true };
+    });
+
+    const { findByTestId } = render(<HousePage />, { wrapper: wrap });
+    const bright75 = await findByTestId("brightness-light.kitchen_main_light-75");
+    fireEvent.press(bright75);
+
+    await waitFor(() => {
+      const call = api.mock.calls.find((c: any[]) => c[0] === "/api/ha/call-service");
+      expect(call).toBeTruthy();
+      expect((call![1] as any).body).toMatchObject({
+        domain: "light",
+        service: "turn_on",
+        entity_id: "light.kitchen_main_light",
+        service_data: { brightness_pct: 75 },
+      });
+    });
+
+    const warm2700 = await findByTestId("colortemp-light.kitchen_main_light-2700");
+    fireEvent.press(warm2700);
+
+    await waitFor(() => {
+      const calls = api.mock.calls.filter((c: any[]) => c[0] === "/api/ha/call-service");
+      expect(calls.length).toBeGreaterThanOrEqual(2);
+      expect((calls[calls.length - 1][1] as any).body).toMatchObject({
+        domain: "light",
+        service: "turn_on",
+        entity_id: "light.kitchen_main_light",
+        service_data: { color_temp_kelvin: 2700 },
+      });
+    });
+  });
+
+  it("renders door and motion sensors with simulation toggles calling switch.toggle", async () => {
+    const sensorStates = [
+      {
+        entity_id: "binary_sensor.front_door",
+        state: "off",
+        attributes: {
+          device_class: "door",
+          friendly_name: "Front Door",
+          area_id: "Living Room",
+          demo_sim_entity: "switch.demo_sim_front_door",
+        },
+        last_updated: "",
+      },
+      {
+        entity_id: "binary_sensor.kitchen_motion",
+        state: "off",
+        attributes: {
+          device_class: "motion",
+          friendly_name: "Kitchen Motion",
+          area_id: "Kitchen",
+          demo_sim_entity: "switch.demo_sim_kitchen_motion",
+        },
+        last_updated: "",
+      },
+    ];
+    api.mockImplementation(async (path: string) => {
+      if (path === "/api/ha/health") return { ok: true, wsConnected: true };
+      if (path === "/api/ha/sync") return { success: true, count: sensorStates.length, states: sensorStates };
+      return { success: true };
+    });
+
+    const { findByText, findByTestId } = render(<HousePage />, { wrapper: wrap });
+    expect(await findByText("DOORS & WINDOWS (1)")).toBeTruthy();
+    expect(await findByText("MOTION SENSORS (1)")).toBeTruthy();
+    expect(await findByText(/Front Door/)).toBeTruthy();
+    expect(await findByText(/Kitchen Motion/)).toBeTruthy();
+
+    const simDoor = await findByTestId("sim-sensor-binary_sensor.front_door");
+    fireEvent.press(simDoor);
+    await waitFor(() => {
+      const call = api.mock.calls.find((c: any[]) => c[0] === "/api/ha/call-service");
+      expect((call![1] as any).body).toMatchObject({
+        domain: "switch",
+        service: "toggle",
+        entity_id: "switch.demo_sim_front_door",
+      });
+    });
+
+    const simMotion = await findByTestId("sim-sensor-binary_sensor.kitchen_motion");
+    fireEvent.press(simMotion);
+    await waitFor(() => {
+      const calls = api.mock.calls.filter((c: any[]) => c[0] === "/api/ha/call-service");
+      expect((calls[calls.length - 1][1] as any).body).toMatchObject({
+        domain: "switch",
+        service: "toggle",
+        entity_id: "switch.demo_sim_kitchen_motion",
+      });
+    });
   });
 });
 

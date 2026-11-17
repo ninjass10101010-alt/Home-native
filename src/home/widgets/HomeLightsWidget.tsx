@@ -6,7 +6,7 @@ import { TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
 import { useToast } from "../../ui/Toast";
 import { useAuth } from "../../state/AuthProvider";
-import { useHAState, entitiesByDomain, applyOptimisticHA, refreshHAState } from "./ha-state";
+import { useHAState, controllableLights, applyOptimisticHA, refreshHAState } from "./ha-state";
 import { callHAService, haErrorToastMessage } from "../../ha/actions";
 import { WidgetFrame } from "./WidgetFrame";
 
@@ -42,8 +42,7 @@ export function HomeLightsWidget() {
   // The CAPABILITY role — a cached parent profile grants no control.
   const isParent = role === "parent";
 
-  const lightEntities = entitiesByDomain(states, "light");
-  const lights = lightEntities.length > 0 ? lightEntities : entitiesByDomain(states, "switch");
+  const lights = controllableLights(states);
   const on = lights.filter((l) => l.state === "on");
 
   const toggle = async (entityId: string) => {
