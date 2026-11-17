@@ -10,6 +10,7 @@ import { localTodayISO } from "../home/widgets/data";
 import { pendingSurface } from "../home/widgets/WidgetFrame";
 import { Modal } from "../ui/Modal";
 import { PinPad } from "../ui/PinPad";
+import { useVoiceChat } from "./useVoiceChat";
 
 const GUEST_COPY = "Sign in with your PIN to see the family's chat.";
 const UNREACHABLE_COPY = "Couldn't reach Consuela — check the connection and try again.";
@@ -39,6 +40,17 @@ export function ChatPage({ headerRight }: { headerRight?: React.ReactNode } = {}
   >(null);
   const [pinError, setPinError] = React.useState<string | null>(null);
   const [pinBusy, setPinBusy] = React.useState(false);
+
+  const {
+    recording,
+    transcribing,
+    voiceReplyEnabled,
+    error: voiceError,
+    toggleVoiceReply,
+    startRecording,
+    stopRecording,
+    speak,
+  } = useVoiceChat();
 
   const promptSentRef = React.useRef(false);
   const aliveRef = React.useRef(true);
@@ -104,6 +116,9 @@ export function ChatPage({ headerRight }: { headerRight?: React.ReactNode } = {}
           ...prev,
           { id: `a-${Date.now()}`, role: "assistant", content: String(reply), proposals },
         ]);
+        if (voiceReplyEnabled && reply) {
+          void speak(String(reply));
+        }
         if (proposals.length > 0) {
           setPinTarget({ kind: "proposal", proposal: proposals[0] });
         }
@@ -118,7 +133,7 @@ export function ChatPage({ headerRight }: { headerRight?: React.ReactNode } = {}
         poke();
       }
     },
-    [messages, sending, poke]
+    [messages, sending, poke, voiceReplyEnabled, speak]
   );
 
   // pre-fill/execute ?prompt=
@@ -184,7 +199,26 @@ export function ChatPage({ headerRight }: { headerRight?: React.ReactNode } = {}
           <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors["color-accent-mint"] ?? accentColor }} />
           <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>AI Family Assistant</Text>
         </View>
-        {headerRight ? <View>{headerRight}</View> : null}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Pressable
+            testID="chat-voice-toggle"
+            accessibilityRole="button"
+            accessibilityLabel={voiceReplyEnabled ? "Disable voice replies" : "Enable voice replies"}
+            onPress={toggleVoiceReply}
+            style={{
+              minHeight: 64,
+              minWidth: 64,
+              paddingHorizontal: 12,
+              justifyContent: "center",
+              alignItems: "center",
+              borderRadius: 12,
+              backgroundColor: colors["color-surface-2"],
+            }}
+          >
+            <Text style={{ fontSize: 20 }}>{voiceReplyEnabled ? "🔊" : "🔇"}</Text>
+          </Pressable>
+          {headerRight ? <View>{headerRight}</View> : null}
+        </View>
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: member && status === "ready" ? 24 : 120 }}>
         {/* proactive suggestions strip */}
@@ -276,6 +310,17 @@ export function ChatPage({ headerRight }: { headerRight?: React.ReactNode } = {}
                     <Text style={{ color: m.role === "user" ? colors["color-text-on-accent"] : colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize }}>
                       {m.content}
                     </Text>
+                    {m.role === "assistant" && m.content ? (
+                      <Pressable
+                        testID={`chat-speak-${i}`}
+                        accessibilityRole="button"
+                        accessibilityLabel="Listen to message"
+                        onPress={() => void speak(m.content)}
+                        style={{ alignSelf: "flex-end", marginTop: 4, minHeight: 32, minWidth: 32, justifyContent: "center", alignItems: "center" }}
+                      >
+                        <Text style={{ fontSize: 16 }}>🔊</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 </View>
               ))}
@@ -286,24 +331,71 @@ export function ChatPage({ headerRight }: { headerRight?: React.ReactNode } = {}
       </ScrollView>
 
       {member && status === "ready" ? (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12, paddingBottom: 120 }}>
-          <TextInput
-            testID="chat-input"
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask Consuela…"
-            placeholderTextColor={colors["color-text-secondary"]}
-            style={{ flex: 1, minHeight: 64, borderWidth: 1, borderColor: colors["color-border"], borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize }}
-          />
-          <Pressable
-            testID="chat-send"
-            accessibilityRole="button"
-            disabled={sending}
-            onPress={() => void sendPrompt(input)}
-            style={{ minHeight: 64, minWidth: 64, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", borderRadius: 12, backgroundColor: accentColor }}
-          >
-            <Text style={{ color: colors["color-text-on-accent"], fontWeight: "700" }}>{sending ? "…" : "Send"}</Text>
-          </Pressable>
+        <View style={{ padding: 12, paddingBottom: 120, gap: 8 }}>
+          {recording || transcribing || voiceError ? (
+            <View testID="chat-voice-status" style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8 }}>
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: recording ? (colors["color-accent-rose"] ?? accentColor) : (colors["color-accent-mint"] ?? accentColor),
+                }}
+              />
+              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                {recording ? "Listening… tap mic to finish" : transcribing ? "Transcribing with Whisper…" : voiceError ? voiceError : ""}
+              </Text>
+            </View>
+          ) : null}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <TextInput
+              testID="chat-input"
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask Consuela…"
+              placeholderTextColor={colors["color-text-secondary"]}
+              style={{ flex: 1, minHeight: 64, borderWidth: 1, borderColor: colors["color-border"], borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize }}
+            />
+            <Pressable
+              testID="chat-mic"
+              accessibilityRole="button"
+              accessibilityLabel={recording ? "Stop recording voice" : "Record voice query"}
+              disabled={sending || transcribing}
+              onPress={async () => {
+                if (recording) {
+                  const transcript = await stopRecording();
+                  if (transcript) {
+                    setInput(transcript);
+                    void sendPrompt(transcript);
+                  }
+                } else {
+                  await startRecording();
+                }
+              }}
+              style={{
+                minHeight: 64,
+                minWidth: 64,
+                paddingHorizontal: 12,
+                justifyContent: "center",
+                alignItems: "center",
+                borderRadius: 12,
+                backgroundColor: recording ? (colors["color-accent-rose"] ?? accentColor) : colors["color-surface-2"],
+                borderWidth: 1,
+                borderColor: recording ? (colors["color-accent-rose"] ?? accentColor) : colors["color-border"],
+              }}
+            >
+              <Text style={{ fontSize: 22 }}>{recording ? "⏹️" : transcribing ? "⏳" : "🎙️"}</Text>
+            </Pressable>
+            <Pressable
+              testID="chat-send"
+              accessibilityRole="button"
+              disabled={sending || recording}
+              onPress={() => void sendPrompt(input)}
+              style={{ minHeight: 64, minWidth: 64, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", borderRadius: 12, backgroundColor: accentColor }}
+            >
+              <Text style={{ color: colors["color-text-on-accent"], fontWeight: "700" }}>{sending ? "…" : "Send"}</Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
 

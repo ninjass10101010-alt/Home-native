@@ -219,6 +219,34 @@ describe("ChatPage", () => {
     expect(sends[0][1].body.message).toBe("is the laundry done?");
     expect(sends).toHaveLength(1);
   });
+
+  it("renders voice toggle and mic buttons when ready", async () => {
+    const { findByTestId, getByTestId } = render(<ChatPage />, { wrapper: wrap });
+    await findByTestId("chat-ready");
+    expect(getByTestId("chat-voice-toggle")).toBeTruthy();
+    expect(getByTestId("chat-mic")).toBeTruthy();
+  });
+
+  it("speaks assistant reply via /api/voice/tts when voice reply is enabled", async () => {
+    const { findByTestId, getByTestId, getByPlaceholderText, findByText } = render(<ChatPage />, { wrapper: wrap });
+    await findByTestId("chat-ready");
+    fireEvent.changeText(getByPlaceholderText("Ask Consuela…"), "Are doors locked?");
+    fireEvent.press(getByTestId("chat-send"));
+    await findByText("Tacos tonight.");
+    const ttsCall = api.mock.calls.find((c: any[]) => c[0] === "/api/voice/tts");
+    expect(ttsCall).toBeTruthy();
+    expect(ttsCall![1].body).toEqual({ message: "Tacos tonight." });
+  });
+
+  it("replays assistant speech when speaker icon is tapped", async () => {
+    const { findByTestId, getByTestId } = render(<ChatPage />, { wrapper: wrap });
+    await findByTestId("chat-ready");
+    expect(getByTestId("chat-speak-0")).toBeTruthy();
+    fireEvent.press(getByTestId("chat-speak-0"));
+    const ttsCall = api.mock.calls.find((c: any[]) => c[0] === "/api/voice/tts");
+    expect(ttsCall).toBeTruthy();
+    expect(ttsCall![1].body).toEqual({ message: "Good morning — what's on?" });
+  });
 });
 
 async function waitForSends(min: number): Promise<any[]> {

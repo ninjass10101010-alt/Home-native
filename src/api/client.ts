@@ -65,9 +65,11 @@ export async function api<T = unknown>(path: string, init: ApiInit = {}): Promis
   const headers: Record<string, string> = { ...init.headers };
   const cookie = getSessionCookie();
   if (cookie) headers["Cookie"] = `consuela_session=${cookie}`;
-  if (init.body !== undefined) headers["Content-Type"] = "application/json";
 
-  const serializedBody = init.body !== undefined ? JSON.stringify(init.body) : undefined;
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (init.body !== undefined && !isFormData) headers["Content-Type"] = "application/json";
+
+  const serializedBody = isFormData ? (init.body as unknown as BodyInit) : init.body !== undefined ? JSON.stringify(init.body) : undefined;
   const primaryBase = getBaseUrl();
 
   const ctrl = new AbortController();
