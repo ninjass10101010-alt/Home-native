@@ -4,6 +4,11 @@ Full shipped-change history for Home-native (newest first, long-form entries).
 
 ## Long-form entries
 
+- 2026-11-18 — feat(broadcast,audio): live voice announcement receiver on Android tablet (`useBroadcastReceiver.ts`, `_layout.tsx`, `broadcast-receiver.test.tsx`) — Integrated real-time broadcast receiver on the ApoloSign tablet:
+  - **Broadcast Receiver Hook (`src/native/useBroadcastReceiver.ts`)**: Built `useBroadcastReceiver()` running background long-poll against `/api/broadcast`. Upon receiving a family announcement, plays attention chime (`playNotificationSound("chime")`), shows visual alert banner via `postActiveNotification`, and plays synthesized Piper TTS audio stream via `createAudioPlayer` through the tablet's speakers. Includes deduplication and exponential error backoff.
+  - **Mounted at App Root (`app/_layout.tsx`)**: Mounted `<BroadcastReceiver />` alongside `<NotificationMonitor />`.
+  - **Tests & Verification**: Added `tests/broadcast-receiver.test.tsx` (2/2 passing); `npm run tokens:check` CLEAN, `a11y:audit` CLEAN, and `tsc --noEmit` 0 errors.
+
 - 2026-11-17 — feat(chat,voice): full conversational voice interface with Whisper STT and Piper TTS (`useVoiceChat.ts`, `ChatPage.tsx`, `AndroidManifest.xml`, `app.json`, `client.ts`) — Integrated local voice stack across the ApoloSign tablet and Home Assistant/Home-ai:
   - **Unblocked Audio Recording (`app.json`, `android/app/src/main/AndroidManifest.xml`)**: Removed `android.permission.RECORD_AUDIO` from `blockedPermissions` in `app.json` and restored `<uses-permission android:name="android.permission.RECORD_AUDIO"/>` in `AndroidManifest.xml` so microphone hardware on the ApoloSign tablet can record speech.
   - **Conversational Voice Hook (`src/chat/useVoiceChat.ts`)**: Built `useVoiceChat()` hook managing microphone permissions, `expo-audio` recording, multipart audio upload to `/api/voice/transcribe`, and automatic Piper TTS speech synthesis playback via `/api/voice/tts` and `createAudioPlayer`.

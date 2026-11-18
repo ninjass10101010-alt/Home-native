@@ -17,6 +17,7 @@ import { ToastProvider } from "../src/ui/Toast";
 import { hydrateBaseUrl } from "../src/api/config";
 import { configureNotifications } from "../src/native/notifications";
 import { NotificationMonitor } from "../src/native/useNotificationMonitor";
+import { BroadcastReceiver } from "../src/native/useBroadcastReceiver";
 import { View } from "react-native";
 
 /**
@@ -69,6 +70,7 @@ export default function RootLayout() {
                   <StatusBar hidden />
                   <NavigationBar hidden />
                   <NotificationMonitor />
+                  <BroadcastReceiver />
                   <PokeBoundary>
                     <Stack
                       screenOptions={{
