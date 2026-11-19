@@ -1,12 +1,15 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Material } from "../theme/Material";
 import { useTheme } from "../theme/ThemeProvider";
+import { mix } from "../theme/mix";
 import { TYPOGRAPHY } from "../theme/tokens";
 import { Chip } from "../ui/Chip";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { SoftButton } from "../ui/SoftButton";
 import { Toggle } from "../ui/Toggle";
+import { api } from "../api/client";
+import { useAuth } from "../state/AuthProvider";
 import {
   CATEGORY_META,
   NOTIFICATION_CATEGORIES,
@@ -32,6 +35,427 @@ import { dispatchNotification } from "../native/notifications";
 const VOLUME_STEPS = [0.25, 0.5, 0.75, 1.0];
 
 type TimingStage = "advance" | "start";
+
+interface HASpeakerItem {
+  entityId: string;
+  name: string;
+  state: string;
+  deviceClass: string | null;
+  isGroup: boolean;
+}
+
+interface SpeakerBroadcastConfig {
+  enabled: boolean;
+  entities: string[];
+  announceChat: boolean;
+  announceRoutines: boolean;
+  announceCalendar: boolean;
+  announceWeather: boolean;
+  volume: number | null;
+}
+
+const DEFAULT_SPEAKER_CONFIG: SpeakerBroadcastConfig = {
+  enabled: false,
+  entities: [],
+  announceChat: true,
+  announceRoutines: true,
+  announceCalendar: true,
+  announceWeather: true,
+  volume: null,
+};
+
+const SPEAKER_CATEGORY_OPTIONS: readonly {
+  key: "announceRoutines" | "announceCalendar" | "announceWeather" | "announceChat";
+  label: string;
+  testID: string;
+}[] = [
+  { key: "announceRoutines", label: "Routines", testID: "speaker-cat-routines" },
+  { key: "announceCalendar", label: "Calendar", testID: "speaker-cat-calendar" },
+  { key: "announceWeather", label: "Weather", testID: "speaker-cat-weather" },
+  { key: "announceChat", label: "Chat Broadcasts", testID: "speaker-cat-chat" },
+];
+
+function SpeakerBroadcastSection() {
+  const { colors, accentColor } = useTheme();
+  const { role } = useAuth();
+  const isParent = role === "parent";
+
+  const [speakers, setSpeakers] = useState<HASpeakerItem[]>([]);
+  const [config, setConfig] = useState<SpeakerBroadcastConfig>(DEFAULT_SPEAKER_CONFIG);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [haWarning, setHaWarning] = useState<string | null>(null);
+
+  const loadSpeakers = useCallback(async () => {
+    if (!isParent) return;
+    setLoading(true);
+    try {
+      const res = await api<{
+        ok?: boolean;
+        speakers?: HASpeakerItem[];
+        config?: SpeakerBroadcastConfig;
+        haWarning?: string;
+        error?: string;
+      }>("/api/ha/speakers");
+      if (Array.isArray(res?.speakers)) setSpeakers(res.speakers);
+      if (res?.config) setConfig({ ...DEFAULT_SPEAKER_CONFIG, ...res.config });
+      setHaWarning(res?.haWarning ?? null);
+    } catch (err) {
+      setHaWarning(err instanceof Error ? err.message : "Could not load speakers.");
+    } finally {
+      setLoading(false);
+    }
+  }, [isParent]);
+
+  useEffect(() => {
+    if (!isParent) return;
+    let alive = true;
+    void api<{
+      ok?: boolean;
+      speakers?: HASpeakerItem[];
+      config?: SpeakerBroadcastConfig;
+      haWarning?: string;
+    }>("/api/ha/speakers")
+      .then((res) => {
+        if (!alive) return;
+        if (Array.isArray(res?.speakers)) setSpeakers(res.speakers);
+        if (res?.config) setConfig({ ...DEFAULT_SPEAKER_CONFIG, ...res.config });
+        setHaWarning(res?.haWarning ?? null);
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setHaWarning(err instanceof Error ? err.message : "Could not load speakers.");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isParent]);
+
+  const persistPatch = async (patch: Partial<SpeakerBroadcastConfig>) => {
+    if (!isParent || saving) return;
+    const optimistic: SpeakerBroadcastConfig = { ...config, ...patch };
+    setConfig(optimistic);
+    setSaving(true);
+    setStatusMessage(null);
+    try {
+      const res = await api<{ ok?: boolean; config?: SpeakerBroadcastConfig; error?: string }>(
+        "/api/ha/speakers",
+        { method: "POST", body: optimistic }
+      );
+      if (res?.config) setConfig({ ...DEFAULT_SPEAKER_CONFIG, ...res.config });
+    } catch (err) {
+      setConfig(config);
+      setStatusMessage(err instanceof Error ? err.message : "Could not save speaker settings.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleEntity = (entityId: string) => {
+    const exists = config.entities.includes(entityId);
+    const next = exists
+      ? config.entities.filter((id) => id !== entityId)
+      : [...config.entities, entityId];
+    void persistPatch({ entities: next });
+  };
+
+  const runTest = async () => {
+    if (!isParent || testing || config.entities.length === 0) return;
+    setTesting(true);
+    setStatusMessage(null);
+    try {
+      const res = await api<{ ok?: boolean; delivered?: number; attempted?: number; errors?: string[] }>(
+        "/api/ha/speakers/test",
+        { method: "POST", body: { entities: config.entities } }
+      );
+      if (res?.ok) {
+        setStatusMessage(
+          `Sent test announcement to ${res.delivered ?? config.entities.length} speaker${(res.delivered ?? 1) === 1 ? "" : "s"}.`
+        );
+      } else {
+        setStatusMessage(res?.errors?.[0] || "Could not reach selected speakers.");
+      }
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : "Test announcement failed.");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <Material
+      tier="thin"
+      testID="speaker-broadcast-card"
+      style={{
+        borderRadius: 20,
+        padding: 18,
+        gap: 16,
+        borderWidth: 1,
+        borderColor: colors["color-border-subtle"],
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 16,
+        }}
+      >
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text
+            style={{
+              color: colors["color-text-primary"],
+              fontSize: TYPOGRAPHY.title.fontSize,
+              fontWeight: "600",
+            }}
+          >
+            🔊 Google Speaker Broadcast
+          </Text>
+          <Text
+            style={{
+              color: colors["color-text-secondary"],
+              fontSize: TYPOGRAPHY.body.fontSize,
+            }}
+          >
+            Announce routine wake-up calls, alerts, and chat broadcasts on Google Home speakers or speaker groups.
+          </Text>
+        </View>
+        {isParent ? (
+          <Toggle
+            value={config.enabled}
+            onChange={(enabled) => void persistPatch({ enabled })}
+            testID="speaker-broadcast-toggle"
+            accessibilityLabel="Broadcast alerts to Google speakers"
+          />
+        ) : null}
+      </View>
+
+      {!isParent ? (
+        <Text
+          testID="speaker-broadcast-guest-copy"
+          style={{
+            color: colors["color-text-muted"],
+            fontSize: TYPOGRAPHY.body.fontSize,
+          }}
+        >
+          Sign in as a parent to choose Google speakers for house announcements.
+        </Text>
+      ) : (
+        <View style={{ gap: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <Text
+              style={{
+                color: colors["color-text-secondary"],
+                fontSize: TYPOGRAPHY.label.fontSize,
+                fontWeight: "600",
+                letterSpacing: 1,
+              }}
+            >
+              {config.enabled ? "SPEAKERS & GROUPS" : "ENABLE ABOVE TO PICK SPEAKERS"}
+            </Text>
+            <SoftButton
+              variant="secondary"
+              size="sm"
+              loading={loading}
+              testID="speaker-broadcast-refresh"
+              accessibilityLabel="Refresh Home Assistant speakers"
+              onPress={() => void loadSpeakers()}
+            >
+              Refresh
+            </SoftButton>
+          </View>
+
+          {haWarning ? (
+            <Text
+              style={{
+                color: colors["color-accent-amber"],
+                fontSize: TYPOGRAPHY.label.fontSize,
+              }}
+            >
+              {haWarning}
+            </Text>
+          ) : null}
+
+          {config.enabled ? (
+            <View style={{ gap: 12 }}>
+              {speakers.length === 0 ? (
+                <Text
+                  testID="speaker-broadcast-empty"
+                  style={{
+                    color: colors["color-text-muted"],
+                    fontSize: TYPOGRAPHY.body.fontSize,
+                  }}
+                >
+                  No Google speakers found in Home Assistant yet.
+                </Text>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {speakers.map((sp) => {
+                    const selected = config.entities.includes(sp.entityId);
+                    return (
+                      <Pressable
+                        key={sp.entityId}
+                        testID={`speaker-target-${sp.entityId}`}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: selected }}
+                        accessibilityLabel={`Select ${sp.name}`}
+                        onPress={() => toggleEntity(sp.entityId)}
+                        style={{
+                          minHeight: 64,
+                          paddingHorizontal: 16,
+                          paddingVertical: 12,
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: selected ? accentColor : colors["color-border-subtle"],
+                          backgroundColor: selected
+                            ? mix(accentColor, colors["color-surface-2"], 16)
+                            : colors["color-surface-2"],
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 12,
+                        }}
+                      >
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Text
+                              style={{
+                                color: colors["color-text-primary"],
+                                fontSize: TYPOGRAPHY.body.fontSize,
+                                fontWeight: "600",
+                              }}
+                            >
+                              {sp.name}
+                            </Text>
+                            {sp.isGroup ? (
+                              <View
+                                style={{
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 2,
+                                  borderRadius: 8,
+                                  backgroundColor: mix(accentColor, colors["color-surface-1"], 24),
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    color: colors["color-text-primary"],
+                                    fontSize: TYPOGRAPHY.label.fontSize,
+                                    fontWeight: "600",
+                                  }}
+                                >
+                                  Group
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          <Text
+                            style={{
+                              color: colors["color-text-secondary"],
+                              fontSize: TYPOGRAPHY.label.fontSize,
+                            }}
+                          >
+                            {sp.state === "off" || sp.state === "idle" || sp.state === "playing"
+                              ? `Ready (${sp.state})`
+                              : sp.state}
+                          </Text>
+                        </View>
+                        <Text
+                          style={{
+                            color: selected ? accentColor : colors["color-text-muted"],
+                            fontSize: TYPOGRAPHY.title.fontSize,
+                            fontWeight: "700",
+                          }}
+                        >
+                          {selected ? "✓" : "○"}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+
+              <View style={{ gap: 8, paddingTop: 4 }}>
+                <Text
+                  style={{
+                    color: colors["color-text-secondary"],
+                    fontSize: TYPOGRAPHY.label.fontSize,
+                    fontWeight: "600",
+                    letterSpacing: 1,
+                  }}
+                >
+                  ANNOUNCE ON SPEAKERS
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {SPEAKER_CATEGORY_OPTIONS.map((opt) => {
+                    const active = config[opt.key];
+                    return (
+                      <Pressable
+                        key={opt.key}
+                        testID={opt.testID}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        onPress={() => void persistPatch({ [opt.key]: !active })}
+                        style={{
+                          minHeight: 64,
+                          paddingHorizontal: 16,
+                          borderRadius: 16,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: active ? accentColor : colors["color-border-subtle"],
+                          backgroundColor: active ? accentColor : colors["color-surface-2"],
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: active
+                              ? colors["color-primary-foreground"]
+                              : colors["color-text-secondary"],
+                            fontSize: TYPOGRAPHY.body.fontSize,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <SoftButton
+                variant="secondary"
+                size="sm"
+                loading={testing}
+                disabled={config.entities.length === 0}
+                testID="speaker-broadcast-test"
+                accessibilityLabel="Send test announcement to selected Google speakers"
+                onPress={() => void runTest()}
+              >
+                Test Speakers 🔊
+              </SoftButton>
+            </View>
+          ) : null}
+
+          {statusMessage ? (
+            <Text
+              testID="speaker-broadcast-status"
+              style={{
+                color: colors["color-text-secondary"],
+                fontSize: TYPOGRAPHY.label.fontSize,
+              }}
+            >
+              {statusMessage}
+            </Text>
+          ) : null}
+        </View>
+      )}
+    </Material>
+  );
+}
 
 function formatHour(h: number): string {
   if (h === 0) return "12:00 AM";
@@ -149,6 +573,9 @@ export function NotificationsCard() {
       </View>
 
       <View style={{ gap: 20 }}>
+        {/* Google Speaker Broadcasts */}
+        <SpeakerBroadcastSection />
+
         {/* Quiet Hours / Do Not Disturb Section */}
         <Material
           tier="thin"

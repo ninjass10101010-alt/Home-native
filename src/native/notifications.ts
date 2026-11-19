@@ -1,4 +1,5 @@
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
+import { api } from "../api/client";
 import {
   getEffectiveNotificationVolume,
   isWithinQuietHours,
@@ -6,7 +7,7 @@ import {
   resolveTimingPreference,
   type NotificationCategory,
 } from "./notificationPrefs";
-import { playNotificationAudio } from "./voiceCallouts";
+import { playNotificationAudio, resolveVoiceCallout } from "./voiceCallouts";
 import { postActiveNotification } from "./notificationFeed";
 import { TOKENS } from "../theme/tokens";
 
@@ -44,6 +45,10 @@ const CHANNELS: Record<
   general: { id: "consuela-general", name: "General Reminders", importance: 3 }, // DEFAULT
 };
 
+export function resetNotificationsConfiguredForTests(): void {
+  configured = false;
+}
+
 export function configureNotifications() {
   if (configured) return;
   configured = true;
@@ -52,11 +57,10 @@ export function configureNotifications() {
   try {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: false, // In-app playNotificationAudio handles custom tone & volume
+        shouldPlaySound: false,
         shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
+        shouldShowBanner: false,
+        shouldShowList: false,
       }),
     });
 
@@ -77,7 +81,6 @@ export function configureNotifications() {
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {
-  if (typeof jest !== "undefined") return false;
   const Notifications = notifications();
   if (!Notifications) return false;
   try {
@@ -105,8 +108,36 @@ export function resetRecentDispatchesCache(): void {
 }
 
 /**
+ * Forwards an alert to Home-ai so configured Google speakers announce it too.
+ * Never throws or blocks local tablet delivery.
+ */
+export async function forwardNotificationToSpeakers(params: {
+  category: PostNotificationParams["category"];
+  title: string;
+  body: string;
+  volume?: number;
+}): Promise<void> {
+  try {
+    await api("/api/broadcast", {
+      method: "POST",
+      body: {
+        message: params.body || params.title,
+        title: params.title,
+        category: params.category,
+        voiceKey: resolveVoiceCallout(params.category, params.title, params.body),
+        volume: params.volume,
+        skipTablet: true,
+      },
+    });
+  } catch {
+    // Speaker broadcast is best-effort; never fail local tablet delivery
+  }
+}
+
+/**
  * Dispatches an immediate notification respecting the category's enabled toggle,
- * custom sound, and volume setting.
+ * custom sound, and volume setting. Suppresses OS shade delivery while Consuela
+ * is in the foreground so alerts only appear in the in-app dashboard banner.
  */
 export async function dispatchNotification({
   category,
@@ -130,6 +161,7 @@ export async function dispatchNotification({
   }
 
   let isQuiet = false;
+  let effectiveVolume: number | undefined;
   if (category !== "emergency" && category !== "general") {
     const prefs = await loadNotificationPreferences();
     const config = prefs[category];
@@ -152,6 +184,7 @@ export async function dispatchNotification({
         new Date(),
         prefs.gentleHours
       );
+      effectiveVolume = volume;
 
       if (timing === "advance") {
         if (config.advanceEnabled === false || timingMode === "start_only") return null;
@@ -170,6 +203,7 @@ export async function dispatchNotification({
       }
     }
   } else if (category === "emergency") {
+    effectiveVolume = 1.0;
     void playNotificationAudio({
       sound: "radar",
       volume: 1.0,
@@ -191,7 +225,19 @@ export async function dispatchNotification({
     timestamp: Date.now(),
   });
 
-  if (typeof jest !== "undefined") return "mock-id";
+  if (!isQuiet && data?.skipSpeakers !== true && typeof jest === "undefined") {
+    void forwardNotificationToSpeakers({
+      category,
+      title,
+      body,
+      volume: effectiveVolume,
+    });
+  }
+
+  if (AppState.currentState === "active") {
+    return notifId;
+  }
+
   const Notifications = notifications();
   if (!Notifications) return null;
 
@@ -206,9 +252,8 @@ export async function dispatchNotification({
         body,
         data: data ?? {},
         sound: false,
-        ...(Platform.OS === "android" ? { channelId: channel.id } : {}),
       },
-      trigger: null, // immediate
+      trigger: Platform.OS === "android" ? { channelId: channel.id } : null,
     });
   } catch {
     return null;
@@ -230,7 +275,6 @@ export async function scheduleCategoryReminder(
     if (!prefs[category].enabled) return null;
   }
 
-  if (typeof jest !== "undefined") return "mock-id";
   const Notifications = notifications();
   if (!Notifications) return null;
 
@@ -245,9 +289,13 @@ export async function scheduleCategoryReminder(
         body,
         data: data ?? {},
         sound: true,
-        ...(Platform.OS === "android" ? { channelId: channel.id } : {}),
       },
-      trigger: { seconds, repeats: false } as any,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes?.TIME_INTERVAL ?? "timeInterval",
+        seconds,
+        repeats: false,
+        ...(Platform.OS === "android" ? { channelId: channel.id } : {}),
+      } as any,
     });
   } catch {
     return null;
@@ -265,7 +313,6 @@ export async function scheduleLocalReminder(
 }
 
 export async function cancelAllNotifications() {
-  if (typeof jest !== "undefined") return;
   const Notifications = notifications();
   if (!Notifications) return;
   try {
