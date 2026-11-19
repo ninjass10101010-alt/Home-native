@@ -339,7 +339,7 @@ export function Material({ tier, children, style, background, tone, blur, testID
 
   return (
     <View testID={testID} style={[outerLayoutStyle, shadow, radius]}>
-      <View style={[innerBaseStyle, innerContentStyle, { flex: 1 }]}>{layers}</View>
+      <View style={[{ flexGrow: 1, flexShrink: 1 }, innerBaseStyle, innerContentStyle]}>{layers}</View>
     </View>
   );
 }

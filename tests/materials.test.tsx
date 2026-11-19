@@ -276,10 +276,31 @@ describe("<Material>", () => {
     const outerStyle = StyleSheet.flatten(outer.props.style) ?? {};
     expect(outerStyle.flex).toBe(1);
     expect(outerStyle.width).toBe(200);
-    // the inner view still fills the outer shell so the material layers cover it
+    // the inner view fills the outer shell without setting flexBasis: 0
     const inner: any = outer.children[0];
     const innerStyle = StyleSheet.flatten(inner.props.style) ?? {};
-    expect(innerStyle.flex).toBe(1);
+    expect(innerStyle.flexGrow).toBe(1);
+    expect(innerStyle.flexShrink).toBe(1);
+    expect(innerStyle.flex).toBeUndefined();
+  });
+
+  it("auto-height shadowed Material (e.g. Modal) avoids flexBasis: 0 collapse on the inner wrapper", () => {
+    const { getByTestId } = render(
+      <Material tier="thick" testID="modal-shell" style={{ maxHeight: "90%", width: "94%", padding: 28 }}>
+        <Text>x</Text>
+      </Material>,
+      { wrapper: wrapTheme("light") }
+    );
+    const outer: any = getByTestId("modal-shell");
+    const outerStyle = StyleSheet.flatten(outer.props.style) ?? {};
+    expect(outerStyle.maxHeight).toBe("90%");
+    expect(outerStyle.width).toBe("94%");
+    const inner: any = outer.children[0];
+    const innerStyle = StyleSheet.flatten(inner.props.style) ?? {};
+    expect(innerStyle.flex).toBeUndefined();
+    expect(innerStyle.flexGrow).toBe(1);
+    expect(innerStyle.flexShrink).toBe(1);
+    expect(innerStyle.padding).toBe(28);
   });
 
   it("the shadow shell strips overflow from the OUTER box (a clipping shadow box loses the iOS shadow)", () => {
