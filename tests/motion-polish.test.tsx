@@ -191,4 +191,21 @@ describe("interactive WallStatStrip KPI shortcuts", () => {
     fireEvent.press(getByTestId("wall-stat-week"));
     expect(mockReplace).toHaveBeenCalledWith("/meals");
   });
+
+  it("reserves explicit KPI tile height on row, wrapper, and Pressable so Android Yoga does not collapse", () => {
+    publishWallStats({ eventsToday: 2, openTasks: 5, plannedDays: 4 });
+    const { getByTestId, getByLabelText } = render(<WallStatStrip />, { wrapper: wrap });
+
+    const rowStyle = StyleSheet.flatten(getByTestId("wall-stat-row").props.style);
+    expect(rowStyle.height).toBe(75);
+
+    const tileStyle = StyleSheet.flatten(getByTestId("wall-stat-events").props.style);
+    expect(tileStyle.height).toBe(75);
+    expect(tileStyle.flex).toBeUndefined();
+
+    const pressable = getByLabelText("Events — Today: 2");
+    const pressableStyle = StyleSheet.flatten(pressable.props.style);
+    expect(pressableStyle.height).toBe(75);
+    expect(pressableStyle.flex).toBeUndefined();
+  });
 });

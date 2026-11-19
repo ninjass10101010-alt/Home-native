@@ -182,7 +182,6 @@ function StatTile({ label, detail, value, pending, stale, icon, widgetId, tone, 
   }, [pending, value, reduceMotion, numeralScale]);
 
   const pressAnimStyle = useAnimatedStyle(() => ({
-    flex: 1,
     transform: [{ scale: pressScale.value }],
   }));
 
@@ -191,7 +190,7 @@ function StatTile({ label, detail, value, pending, stale, icon, widgetId, tone, 
   }));
 
   return (
-    <Animated.View style={pressAnimStyle}>
+    <Animated.View style={[{ flex: 1, height: KPI_TILE_H }, pressAnimStyle]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${label} — ${detail}${pending ? "" : `: ${value}`}`}
@@ -213,13 +212,13 @@ function StatTile({ label, detail, value, pending, stale, icon, widgetId, tone, 
           // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
           pressScale.value = reduceMotion ? 1 : withSpring(1, SPRING.press);
         }}
-        style={{ flex: 1 }}
+        style={{ width: "100%", height: KPI_TILE_H }}
       >
         <Material
           tier="regular"
           tone={toneColor}
           style={{
-            flex: 1,
+            width: "100%",
             height: KPI_TILE_H,
             borderRadius: 24,
             paddingHorizontal: KPI_PAD,
@@ -366,7 +365,7 @@ export function WallStatStrip() {
   // own state — live, stale or unknown — is carried by the numeral itself
   // and by the stale marker.
   return (
-    <View style={{ flexDirection: "row", gap: KPI_BAND_GAP, marginTop: 12 }} testID="wall-stat-row">
+    <View style={{ flexDirection: "row", gap: KPI_BAND_GAP, marginTop: 12, height: KPI_TILE_H }} testID="wall-stat-row">
       <StatTile
         testID="wall-stat-events"
         icon="📅"
