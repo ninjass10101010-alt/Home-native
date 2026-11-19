@@ -7,6 +7,66 @@ import { Atmosphere } from "./Atmosphere";
 const DESIGN_WIDTH = 1080;
 const DESIGN_HEIGHT = 1920;
 
+export const WallStageContext = React.createContext<boolean>(false);
+
+export function useIsInsideWallStage(): boolean {
+  return React.useContext(WallStageContext);
+}
+
+/**
+ * Root 1080×1920 wall stage scaler. Mounted once at the app root so Stack screens
+ * and persistent floating chrome (CapsuleDock, MusicIsland, Toast) share the exact
+ * same scaled coordinate space on Android hardware.
+ */
+export function RootWallStage({ children }: { children: React.ReactNode }) {
+  const { colors } = useTheme();
+  const { width, height } = useWindowDimensions();
+  const shouldScale =
+    typeof jest === "undefined" &&
+    Platform.OS === "android" &&
+    width > 0 &&
+    height > 0 &&
+    (width < 960 || height < 1600);
+
+  if (!shouldScale) {
+    return (
+      <WallStageContext.Provider value={true}>
+        <View style={{ flex: 1, backgroundColor: colors["color-canvas"] }}>
+          {children}
+        </View>
+      </WallStageContext.Provider>
+    );
+  }
+
+  const scale = Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT);
+  const stageWidth = Math.round(width / scale);
+  const stageHeight = Math.round(height / scale);
+
+  return (
+    <WallStageContext.Provider value={true}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors["color-canvas"],
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+        }}
+      >
+        <View
+          style={{
+            width: stageWidth,
+            height: stageHeight,
+            transform: [{ scale }],
+          }}
+        >
+          {children}
+        </View>
+      </View>
+    </WallStageContext.Provider>
+  );
+}
+
 export interface ScreenProps {
   children: React.ReactNode;
   style?: ViewStyle;
@@ -33,19 +93,24 @@ export interface ScreenProps {
  */
 export function Screen({ children, style, testID, atmosphere = true }: ScreenProps) {
   const { colors } = useTheme();
+  const insideRootStage = useIsInsideWallStage();
   const { width, height } = useWindowDimensions();
-  const shouldScale =
+  const needsHardwareScale =
     typeof jest === "undefined" &&
     Platform.OS === "android" &&
     width > 0 &&
     height > 0 &&
     (width < 960 || height < 1600);
+  const shouldScale = !insideRootStage && needsHardwareScale;
 
   if (!shouldScale) {
     return (
       <View testID={testID} style={[{ flex: 1, backgroundColor: colors["color-canvas"] }, style]}>
         {atmosphere ? <Atmosphere /> : null}
-        <SafeAreaView style={{ flex: 1 }} edges={["top", "left", "right"]}>
+        <SafeAreaView
+          style={{ flex: 1 }}
+          edges={insideRootStage && needsHardwareScale ? ["left", "right"] : ["top", "left", "right"]}
+        >
           {children}
         </SafeAreaView>
       </View>

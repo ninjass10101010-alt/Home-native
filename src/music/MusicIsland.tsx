@@ -11,19 +11,31 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Animated,
   GestureResponderEvent,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { usePathname, useRouter } from "expo-router";
 import { usePlayback } from "./playback";
 import { isContentHidden } from "./explicit";
 import { useCast } from "./CastProvider";
 import { useTheme } from "../theme/ThemeProvider";
+import { MOTION, SPRING } from "../theme/tokens";
+import { hapticTap } from "../theme/haptics";
 import { musicTokensFor } from "../theme/music-tokens";
 import { useOutputVolume } from "./output-volume";
 import { DOCK_TOP_OFFSET } from "../nav/CapsuleDock";
@@ -64,6 +76,86 @@ function categoryMeta(category: string, timing?: string) {
   }
 }
 
+const IS_ANDROID_RUNTIME = typeof jest === "undefined" && Platform.OS === "android";
+const BAR_REST_SCALE = 0.12;
+const BAR_KEYFRAMES: readonly (readonly [number, number][])[] = [
+  [
+    [0.9, 320],
+    [0.25, 280],
+    [0.7, 300],
+    [0.2, 240],
+  ],
+  [
+    [0.3, 240],
+    [1.0, 340],
+    [0.45, 270],
+    [0.85, 310],
+  ],
+  [
+    [0.8, 290],
+    [0.2, 300],
+    [0.6, 260],
+    [0.35, 250],
+  ],
+  [
+    [0.4, 250],
+    [0.95, 330],
+    [0.25, 270],
+    [0.75, 290],
+  ],
+];
+
+function WaveformBar({
+  playing,
+  reduceMotion,
+  color,
+  keyframes,
+}: {
+  playing: boolean;
+  reduceMotion: boolean;
+  color: string;
+  keyframes: readonly [number, number][];
+}) {
+  const scaleY = useSharedValue(playing ? keyframes[0][0] : BAR_REST_SCALE);
+
+  useEffect(() => {
+    if (reduceMotion || process.env.NODE_ENV === "test") {
+      cancelAnimation(scaleY);
+      scaleY.value = playing ? keyframes[0][0] : BAR_REST_SCALE;
+      return;
+    }
+    if (!playing) {
+      cancelAnimation(scaleY);
+      scaleY.value = withTiming(BAR_REST_SCALE, { duration: 180 });
+      return;
+    }
+    scaleY.value = withRepeat(
+      withSequence(
+        ...keyframes.map(([to, dur]) =>
+          withTiming(to, { duration: dur, easing: Easing.inOut(Easing.sin) })
+        )
+      ),
+      -1,
+      false
+    );
+    return () => cancelAnimation(scaleY);
+  }, [playing, reduceMotion, scaleY, keyframes]);
+
+  const barStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleY: scaleY.value }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        styles.eqBar,
+        { height: 20, backgroundColor: color, opacity: playing ? 1 : 0.35 },
+        barStyle,
+      ]}
+    />
+  );
+}
+
 export function WaveformBars({
   playing,
   color,
@@ -74,84 +166,17 @@ export function WaveformBars({
   testID?: string;
 }) {
   const { reduceMotion } = useTheme();
-  const [bar1] = useState(() => new Animated.Value(playing ? 14 : 2));
-  const [bar2] = useState(() => new Animated.Value(playing ? 18 : 2));
-  const [bar3] = useState(() => new Animated.Value(playing ? 11 : 2));
-  const [bar4] = useState(() => new Animated.Value(playing ? 16 : 2));
-
-  useEffect(() => {
-    if (reduceMotion || process.env.NODE_ENV === "test") {
-      bar1.setValue(playing ? 14 : 2);
-      bar2.setValue(playing ? 18 : 2);
-      bar3.setValue(playing ? 11 : 2);
-      bar4.setValue(playing ? 16 : 2);
-      return;
-    }
-
-    if (!playing) {
-      // Off state: smoothly drop to flat minimal baseline
-      Animated.parallel([
-        Animated.timing(bar1, { toValue: 2, duration: 180, useNativeDriver: false }),
-        Animated.timing(bar2, { toValue: 2, duration: 180, useNativeDriver: false }),
-        Animated.timing(bar3, { toValue: 2, duration: 180, useNativeDriver: false }),
-        Animated.timing(bar4, { toValue: 2, duration: 180, useNativeDriver: false }),
-      ]).start();
-      return;
-    }
-
-    // Active state: lively, rhythmic jumping equalizer bars
-    const anim1 = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bar1, { toValue: 18, duration: 320, useNativeDriver: false }),
-        Animated.timing(bar1, { toValue: 5, duration: 280, useNativeDriver: false }),
-        Animated.timing(bar1, { toValue: 14, duration: 300, useNativeDriver: false }),
-        Animated.timing(bar1, { toValue: 4, duration: 240, useNativeDriver: false }),
-      ])
-    );
-    const anim2 = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bar2, { toValue: 6, duration: 240, useNativeDriver: false }),
-        Animated.timing(bar2, { toValue: 20, duration: 340, useNativeDriver: false }),
-        Animated.timing(bar2, { toValue: 9, duration: 270, useNativeDriver: false }),
-        Animated.timing(bar2, { toValue: 17, duration: 310, useNativeDriver: false }),
-      ])
-    );
-    const anim3 = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bar3, { toValue: 16, duration: 290, useNativeDriver: false }),
-        Animated.timing(bar3, { toValue: 4, duration: 300, useNativeDriver: false }),
-        Animated.timing(bar3, { toValue: 12, duration: 260, useNativeDriver: false }),
-        Animated.timing(bar3, { toValue: 7, duration: 250, useNativeDriver: false }),
-      ])
-    );
-    const anim4 = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bar4, { toValue: 8, duration: 250, useNativeDriver: false }),
-        Animated.timing(bar4, { toValue: 19, duration: 330, useNativeDriver: false }),
-        Animated.timing(bar4, { toValue: 5, duration: 270, useNativeDriver: false }),
-        Animated.timing(bar4, { toValue: 15, duration: 290, useNativeDriver: false }),
-      ])
-    );
-
-    anim1.start();
-    anim2.start();
-    anim3.start();
-    anim4.start();
-
-    return () => {
-      anim1.stop();
-      anim2.stop();
-      anim3.stop();
-      anim4.stop();
-    };
-  }, [playing, reduceMotion, bar1, bar2, bar3, bar4]);
-
   return (
     <View style={styles.equalizer} testID={testID}>
-      <Animated.View style={[styles.eqBar, { height: bar1, backgroundColor: color, opacity: playing ? 1 : 0.35 }]} />
-      <Animated.View style={[styles.eqBar, { height: bar2, backgroundColor: color, opacity: playing ? 1 : 0.35 }]} />
-      <Animated.View style={[styles.eqBar, { height: bar3, backgroundColor: color, opacity: playing ? 1 : 0.35 }]} />
-      <Animated.View style={[styles.eqBar, { height: bar4, backgroundColor: color, opacity: playing ? 1 : 0.35 }]} />
+      {BAR_KEYFRAMES.map((kf, idx) => (
+        <WaveformBar
+          key={idx}
+          playing={playing}
+          reduceMotion={reduceMotion}
+          color={color}
+          keyframes={kf}
+        />
+      ))}
     </View>
   );
 }
@@ -172,14 +197,14 @@ export function MusicIsland() {
   const stopArmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Notification alert lifecycle:
-  // "large" (5s pop-up) -> "minimized" (into Island with glow for 60s) -> "idle" (dismissed)
+  // "large" (16s pop-up) -> "minimized" (into Island for 60s) -> "idle" (dismissed)
   const [alertStage, setAlertStage] = useState<"idle" | "large" | "minimized">("idle");
   const [activeAlert, setActiveAlert] = useState<ActiveNotification | null>(null);
   const largeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const minTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [glowAnim] = useState(() => new Animated.Value(0.35));
 
   const handleDismissAlert = useCallback(() => {
+    hapticTap();
     if (largeTimerRef.current) clearTimeout(largeTimerRef.current);
     if (minTimerRef.current) clearTimeout(minTimerRef.current);
     setAlertStage("idle");
@@ -188,11 +213,13 @@ export function MusicIsland() {
   }, []);
 
   const handleMinimizeAlert = useCallback(() => {
+    hapticTap();
     if (largeTimerRef.current) clearTimeout(largeTimerRef.current);
     setAlertStage("minimized");
   }, []);
 
   const handleExpandAlert = useCallback(() => {
+    hapticTap();
     if (minTimerRef.current) clearTimeout(minTimerRef.current);
     setAlertStage("large");
     largeTimerRef.current = setTimeout(() => {
@@ -222,29 +249,9 @@ export function MusicIsland() {
     });
   }, []);
 
-  // Glow animation & 60-second timer when minimized in the island
+  // 60-second auto-dismiss timer when minimized in the island
   useEffect(() => {
     if (alertStage === "minimized") {
-      const loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, {
-            toValue: 1,
-            duration: 850,
-            useNativeDriver: false,
-          }),
-          Animated.timing(glowAnim, {
-            toValue: 0.35,
-            duration: 850,
-            useNativeDriver: false,
-          }),
-        ])
-      );
-      if (!reduceMotion) {
-        loop.start();
-      } else {
-        glowAnim.setValue(0.75);
-      }
-
       minTimerRef.current = setTimeout(() => {
         setAlertStage("idle");
         setActiveAlert(null);
@@ -252,11 +259,10 @@ export function MusicIsland() {
       }, 60000);
 
       return () => {
-        loop.stop();
         if (minTimerRef.current) clearTimeout(minTimerRef.current);
       };
     }
-  }, [alertStage, reduceMotion, glowAnim]);
+  }, [alertStage]);
 
   const touchStartY = useRef<number | null>(null);
 
@@ -277,6 +283,19 @@ export function MusicIsland() {
       }
     }
   };
+
+  const bumpAutoCollapseTimer = useCallback(() => {
+    if (autoCollapseTimer.current) {
+      clearTimeout(autoCollapseTimer.current);
+      autoCollapseTimer.current = null;
+    }
+    if (expanded && !stopArmed) {
+      autoCollapseTimer.current = setTimeout(() => {
+        setExpanded(false);
+        setStopArmed(false);
+      }, 5000);
+    }
+  }, [expanded, stopArmed]);
 
   // Auto-collapse music after 5s
   useEffect(() => {
@@ -314,8 +333,9 @@ export function MusicIsland() {
       const newVol = calculateVolumeFromX(e.nativeEvent.locationX);
       setDragVolume(newVol);
       volume.setValue(newVol);
+      bumpAutoCollapseTimer();
     },
-    [calculateVolumeFromX, volume],
+    [calculateVolumeFromX, volume, bumpAutoCollapseTimer],
   );
 
   const handleResponderMove = useCallback(
@@ -333,8 +353,9 @@ export function MusicIsland() {
       volume.setValue(finalVol);
       setIsDraggingVolume(false);
       setDragVolume(null);
+      bumpAutoCollapseTimer();
     },
-    [calculateVolumeFromX, volume],
+    [calculateVolumeFromX, volume, bumpAutoCollapseTimer],
   );
 
   const handleResponderTerminate = useCallback(() => {
@@ -342,12 +363,55 @@ export function MusicIsland() {
     setDragVolume(null);
   }, []);
 
-  // Island appears if music is playing OR if a notification alert is active!
-  if (!current && (!activeAlert || alertStage === "idle")) return null;
-  if (pathname === "/music" || pathname === "/screensaver") return null;
+  const isAlertMinimized = alertStage === "minimized" && Boolean(activeAlert);
+  const isRouteHidden = pathname === "/music" || pathname === "/screensaver";
+  const isVisible = (Boolean(current) || (Boolean(activeAlert) && alertStage !== "idle")) && !isRouteHidden;
+  const stageKey = !isVisible
+    ? "hidden"
+    : alertStage === "large"
+      ? "alert"
+      : expanded
+        ? "expanded"
+        : isAlertMinimized
+          ? "minimized"
+          : "collapsed";
 
-  const handleExpand = () => setExpanded(true);
+  const prevStageRef = useRef<string>("hidden");
+  const stageScale = useSharedValue(1);
+  const stageY = useSharedValue(0);
+  const stageOpacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (prevStageRef.current === stageKey) return;
+    prevStageRef.current = stageKey;
+    if (stageKey === "hidden" || reduceMotion) {
+      stageScale.value = 1;
+      stageY.value = 0;
+      stageOpacity.value = 1;
+      return;
+    }
+    stageScale.value = 0.92;
+    stageY.value = -8;
+    stageOpacity.value = 0.7;
+    stageScale.value = withSpring(1, SPRING.settle);
+    stageY.value = withSpring(0, SPRING.settle);
+    stageOpacity.value = withTiming(1, { duration: MOTION.fast });
+  }, [stageKey, reduceMotion, stageScale, stageY, stageOpacity]);
+
+  const stageAnimStyle = useAnimatedStyle(() => ({
+    opacity: stageOpacity.value,
+    transform: [{ translateY: stageY.value }, { scale: stageScale.value }],
+  }));
+
+  // Island appears if music is playing OR if a notification alert is active!
+  if (!isVisible) return null;
+
+  const handleExpand = () => {
+    hapticTap();
+    setExpanded(true);
+  };
   const handleCollapse = () => {
+    hapticTap();
     setExpanded(false);
     setStopArmed(false);
     if (stopArmTimer.current) {
@@ -361,6 +425,7 @@ export function MusicIsland() {
   };
 
   const handleStopPress = () => {
+    hapticTap();
     if (!stopArmed) {
       setStopArmed(true);
       if (autoCollapseTimer.current) {
@@ -393,7 +458,6 @@ export function MusicIsland() {
 
   const catMeta = activeAlert ? categoryMeta(activeAlert.category, activeAlert.timing) : null;
   const alertColor = catMeta ? (colors?.[catMeta.colorKey] ?? tokens.accent) : tokens.accent;
-  const isAlertMinimized = alertStage === "minimized" && Boolean(activeAlert);
 
   return (
     <>
@@ -408,8 +472,9 @@ export function MusicIsland() {
         />
       )}
       <View testID="music-island" style={styles.container} pointerEvents="box-none">
+        <Animated.View style={[styles.stageWrapper, stageAnimStyle]} pointerEvents="box-none">
         {alertStage === "large" && activeAlert ? (
-          <Animated.View
+          <View
             testID="notification-alert-large"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
@@ -418,7 +483,18 @@ export function MusicIsland() {
               {
                 backgroundColor: tokens.glassStrong,
                 borderColor: alertColor,
-                shadowColor: alertColor,
+                ...(IS_ANDROID_RUNTIME
+                  ? ({
+                      boxShadow: [
+                        {
+                          offsetX: 0,
+                          offsetY: 12,
+                          blurRadius: 28,
+                          color: mix(alertColor, "transparent", 45),
+                        },
+                      ],
+                    } as Record<string, unknown>)
+                  : { shadowColor: alertColor }),
               },
             ]}
           >
@@ -466,17 +542,29 @@ export function MusicIsland() {
                 </Text>
               </View>
             </Pressable>
-          </Animated.View>
+          </View>
         ) : !expanded ? (
           !current && isAlertMinimized ? (
             /* Minimized Notification Pill (when no music is playing) */
-            <Animated.View
+            <View
               style={{
                 borderRadius: 23,
-                shadowColor: alertColor,
-                shadowOpacity: 0.75,
-                shadowRadius: 16,
-                elevation: 10,
+                ...(IS_ANDROID_RUNTIME
+                  ? ({
+                      boxShadow: [
+                        {
+                          offsetX: 0,
+                          offsetY: 6,
+                          blurRadius: 16,
+                          color: mix(alertColor, "transparent", 48),
+                        },
+                      ],
+                    } as Record<string, unknown>)
+                  : {
+                      shadowColor: alertColor,
+                      shadowOpacity: 0.75,
+                      shadowRadius: 16,
+                    }),
               }}
             >
               <Pressable
@@ -513,22 +601,34 @@ export function MusicIsland() {
                   testID="notification-alert-dismiss"
                   onPress={handleDismissAlert}
                   accessibilityLabel="Dismiss notification"
-                  hitSlop={8}
+                  hitSlop={14}
                   style={styles.pillDismissBtn}
                 >
                   <Text style={[styles.pillDismissIcon, { color: tokens.label2 }]}>✕</Text>
                 </Pressable>
               </Pressable>
-            </Animated.View>
+            </View>
           ) : current && isAlertMinimized ? (
             /* Merged Music + Notification Minimized Pill */
-            <Animated.View
+            <View
               style={{
                 borderRadius: 23,
-                shadowColor: alertColor,
-                shadowOpacity: 0.75,
-                shadowRadius: 16,
-                elevation: 10,
+                ...(IS_ANDROID_RUNTIME
+                  ? ({
+                      boxShadow: [
+                        {
+                          offsetX: 0,
+                          offsetY: 6,
+                          blurRadius: 16,
+                          color: mix(alertColor, "transparent", 48),
+                        },
+                      ],
+                    } as Record<string, unknown>)
+                  : {
+                      shadowColor: alertColor,
+                      shadowOpacity: 0.75,
+                      shadowRadius: 16,
+                    }),
               }}
             >
               <Pressable
@@ -573,7 +673,7 @@ export function MusicIsland() {
                   </Text>
                 </Pressable>
               </Pressable>
-            </Animated.View>
+            </View>
           ) : current ? (
             /* Standard Collapsed Music Island */
             <Pressable
@@ -584,9 +684,22 @@ export function MusicIsland() {
                 {
                   backgroundColor: tokens.glassStrong,
                   borderColor: playing ? mix(tokens.accent, tokens.glassRim, 40) : tokens.glassRim,
-                  shadowColor: playing ? tokens.accent : tokens.shadow,
-                  shadowOpacity: playing ? 0.5 : 0.25,
-                  shadowRadius: playing ? 14 : 8,
+                  ...(IS_ANDROID_RUNTIME
+                    ? ({
+                        boxShadow: [
+                          {
+                            offsetX: 0,
+                            offsetY: 4,
+                            blurRadius: 12,
+                            color: playing ? mix(tokens.accent, "transparent", 45) : tokens.shadow,
+                          },
+                        ],
+                      } as Record<string, unknown>)
+                    : {
+                        shadowColor: playing ? tokens.accent : tokens.shadow,
+                        shadowOpacity: playing ? 0.5 : 0.25,
+                        shadowRadius: playing ? 14 : 8,
+                      }),
                 },
               ]}
             >
@@ -650,7 +763,18 @@ export function MusicIsland() {
               {
                 borderColor: tokens.glassRim,
                 backgroundColor: tokens.glassStrong,
-                shadowColor: tokens.shadow,
+                ...(IS_ANDROID_RUNTIME
+                  ? ({
+                      boxShadow: [
+                        {
+                          offsetX: 0,
+                          offsetY: 12,
+                          blurRadius: 28,
+                          color: tokens.shadow,
+                        },
+                      ],
+                    } as Record<string, unknown>)
+                  : { shadowColor: tokens.shadow }),
               },
             ]}
           >
@@ -697,12 +821,17 @@ export function MusicIsland() {
             <View style={styles.controls}>
               <Pressable
                 testID="music-island-prev"
-                hitSlop={10}
-                onPress={() => (cast.casting ? cast.previous() : previous())}
+                hitSlop={8}
+                onPress={() => {
+                  hapticTap();
+                  bumpAutoCollapseTimer();
+                  if (cast.casting) cast.previous();
+                  else previous();
+                }}
                 style={({ pressed }) => [
                   styles.controlButton,
                   { backgroundColor: tokens.panel },
-                  pressed && { opacity: 0.6 },
+                  pressed && !reduceMotion && { transform: [{ scale: 0.94 }], opacity: 0.75 },
                 ]}
                 accessibilityLabel="Previous track"
               >
@@ -712,16 +841,38 @@ export function MusicIsland() {
               <Pressable
                 testID="music-island-play"
                 hitSlop={8}
-                onPress={() => (cast.casting ? (cast.playing ? cast.pause() : cast.play()) : toggle())}
+                onPress={() => {
+                  hapticTap();
+                  bumpAutoCollapseTimer();
+                  if (cast.casting) {
+                    if (cast.playing) cast.pause();
+                    else cast.play();
+                  } else {
+                    toggle();
+                  }
+                }}
                 style={({ pressed }) => [
                   styles.playButton,
                   {
                     backgroundColor: tokens.accent,
-                    shadowColor: playing ? tokens.accent : tokens.shadow,
-                    shadowOpacity: playing ? 0.6 : 0.3,
-                    shadowRadius: playing ? 10 : 6,
+                    ...(IS_ANDROID_RUNTIME
+                      ? ({
+                          boxShadow: [
+                            {
+                              offsetX: 0,
+                              offsetY: 4,
+                              blurRadius: playing ? 12 : 8,
+                              color: playing ? mix(tokens.accent, "transparent", 55) : tokens.shadow,
+                            },
+                          ],
+                        } as Record<string, unknown>)
+                      : {
+                          shadowColor: playing ? tokens.accent : tokens.shadow,
+                          shadowOpacity: playing ? 0.6 : 0.3,
+                          shadowRadius: playing ? 10 : 6,
+                        }),
                   },
-                  pressed && { opacity: 0.8 },
+                  pressed && !reduceMotion && { transform: [{ scale: 0.94 }], opacity: 0.85 },
                 ]}
                 accessibilityLabel={playing ? "Pause" : "Play"}
               >
@@ -730,12 +881,17 @@ export function MusicIsland() {
 
               <Pressable
                 testID="music-island-next"
-                hitSlop={10}
-                onPress={() => (cast.casting ? cast.advance(false) : next())}
+                hitSlop={8}
+                onPress={() => {
+                  hapticTap();
+                  bumpAutoCollapseTimer();
+                  if (cast.casting) cast.advance(false);
+                  else next();
+                }}
                 style={({ pressed }) => [
                   styles.controlButton,
                   { backgroundColor: tokens.panel },
-                  pressed && { opacity: 0.6 },
+                  pressed && !reduceMotion && { transform: [{ scale: 0.94 }], opacity: 0.75 },
                 ]}
                 accessibilityLabel="Next track"
               >
@@ -775,8 +931,12 @@ export function MusicIsland() {
 
                 <Pressable
                   testID="music-island-mute"
-                  hitSlop={14}
-                  onPress={() => volume?.toggleMute()}
+                  hitSlop={10}
+                  onPress={() => {
+                    hapticTap();
+                    bumpAutoCollapseTimer();
+                    volume?.toggleMute();
+                  }}
                   style={[styles.muteButton, { backgroundColor: tokens.panel }]}
                   accessibilityLabel={volume?.muted ? "Unmute" : "Mute"}
                 >
@@ -804,6 +964,7 @@ export function MusicIsland() {
             </Pressable>
           </View>
         ) : null}
+        </Animated.View>
       </View>
     </>
   );
@@ -818,6 +979,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 9999,
   },
+  stageWrapper: {
+    width: "100%",
+    alignItems: "center",
+  },
   // Collapsed Dynamic Island Pill
   collapsed: {
     flexDirection: "row",
@@ -829,7 +994,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 10,
-    elevation: 8,
     maxWidth: 390,
     overflow: "hidden",
   },
@@ -907,7 +1071,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.65,
     shadowRadius: 24,
-    elevation: 20,
   },
   // Large Alert Window (Room-Scale: Viewable across 15.6" display)
   alertLarge: {
@@ -919,7 +1082,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.75,
     shadowRadius: 24,
-    elevation: 20,
   },
   alertHeaderRow: {
     flexDirection: "row",
@@ -944,9 +1106,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   alertDismissBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -990,9 +1152,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   pillDismissBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 6,
@@ -1080,25 +1242,24 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   controlButton: {
-    width: 48,
-    height: 48,
+    width: 56,
+    height: 56,
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 24,
+    borderRadius: 28,
   },
   controlGlyph: {
     fontSize: 20,
   },
   playButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: "center",
     alignItems: "center",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
-    elevation: 6,
   },
   playGlyph: {
     fontSize: 24,
@@ -1131,9 +1292,9 @@ const styles = StyleSheet.create({
     borderRadius: 11,
   },
   muteButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 4,

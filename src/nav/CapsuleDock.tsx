@@ -1,11 +1,12 @@
 import React from "react";
-import { Pressable, Text, View, ViewStyle } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { LayoutChangeEvent, Pressable, Text, View, ViewStyle } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
 import { SPECULAR_AT } from "../theme/materials";
 import { accentDeepened, mix } from "../theme/mix";
-import { MOTION, TYPOGRAPHY } from "../theme/tokens";
+import { MOTION, PRESS_IN_MS, SPRING, TYPOGRAPHY } from "../theme/tokens";
+import { hapticSelect } from "../theme/haptics";
 import { NavIcon } from "../ui/NavIcon";
 import { SoftButton } from "../ui/SoftButton";
 import {
@@ -37,6 +38,12 @@ export const NAV_ICONS: Record<NavIconKey | "more", string> = {
   more: "☰",
 };
 
+export const RootDockContext = React.createContext<boolean>(false);
+
+export function useRootDockMounted(): boolean {
+  return React.useContext(RootDockContext);
+}
+
 export interface CapsuleDockProps {
   role: NavRole;
   /** Auth hydration gate: render NOTHING until true (no parent-cap flash). */
@@ -44,6 +51,8 @@ export interface CapsuleDockProps {
   /** Current path (the root layout supplies it from expo-router). */
   pathname: string;
   onNavigate: (path: string) => void;
+  /** True only for the persistent root-mounted dock in app/_layout.tsx. */
+  isRoot?: boolean;
   style?: ViewStyle;
   testID?: string;
 }
@@ -108,11 +117,78 @@ const CAP_LABEL = 17;
 const CAP_LABEL_PAD_LEFT = 10; // the label's px-2.5 — the gap after the disc
 const CAP_LABEL_PAD_RIGHT = 6; // …and before the next cap (the reference's 16 total)
 
-export const CapsuleDock = React.memo(function CapsuleDock({ role, hydrated, pathname, onNavigate, style, testID }: CapsuleDockProps) {
-  const { colors, accentColor, reduceMotion } = useTheme();
+export const CapsuleDock = React.memo(function CapsuleDock({
+  role,
+  hydrated,
+  pathname,
+  onNavigate,
+  isRoot = false,
+  style,
+  testID,
+}: CapsuleDockProps) {
+  const rootDockMounted = useRootDockMounted();
   if (!hydrated) return null;
+  if (!isRoot && rootDockMounted) return null;
 
+  return (
+    <CapsuleDockInner
+      role={role}
+      pathname={pathname}
+      onNavigate={onNavigate}
+      style={style}
+      testID={testID}
+    />
+  );
+});
+
+const CapsuleDockInner = React.memo(function CapsuleDockInner({
+  role,
+  pathname,
+  onNavigate,
+  style,
+  testID,
+}: Omit<CapsuleDockProps, "hydrated" | "isRoot">) {
+  const { colors, accentColor, reduceMotion } = useTheme();
   const caps = navItemsForRole(role);
+  const activeIndex = caps.findIndex((item) => isNavItemActive(pathname, item));
+
+  const [boxes, setBoxes] = React.useState<{ x: number; w: number }[]>([]);
+  const hasMeasuredRef = React.useRef(false);
+  const pillX = useSharedValue(0);
+  const pillW = useSharedValue(0);
+  const pillOpacity = useSharedValue(0);
+
+  const activeBox = activeIndex >= 0 ? boxes[activeIndex] : undefined;
+  const hasPillLayout = Boolean(activeBox && activeBox.w > 0);
+
+  React.useEffect(() => {
+    if (activeIndex < 0) {
+      if (hasMeasuredRef.current) {
+        pillOpacity.value = reduceMotion ? 0 : withTiming(0, { duration: MOTION.fast });
+      }
+      return;
+    }
+    const b = boxes[activeIndex];
+    if (!b || b.w <= 0) return;
+
+    if (!hasMeasuredRef.current || reduceMotion) {
+      hasMeasuredRef.current = true;
+      pillX.value = b.x;
+      pillW.value = b.w;
+      pillOpacity.value = 1;
+      return;
+    }
+
+    pillX.value = withSpring(b.x, SPRING.settle);
+    pillW.value = withSpring(b.w, SPRING.settle);
+    pillOpacity.value = withTiming(1, { duration: MOTION.fast });
+  }, [activeIndex, boxes, reduceMotion, pillX, pillW, pillOpacity]);
+
+  const pillStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pillX.value }],
+    width: pillW.value,
+    opacity: pillOpacity.value,
+  }));
 
   const activeBg = mix(accentColor, "transparent", 20);
   const activeBorder = mix(accentColor, "transparent", 38);
@@ -143,7 +219,6 @@ export const CapsuleDock = React.memo(function CapsuleDock({ role, hydrated, pat
           bottom: CAP_EDGE,
           alignItems: "stretch",
           zIndex: 50,
-          elevation: 10,
         },
         style,
       ]}
@@ -151,48 +226,83 @@ export const CapsuleDock = React.memo(function CapsuleDock({ role, hydrated, pat
       <Material
         tier="thick"
         style={{
-          flexDirection: "row",
-          alignItems: "center",
           borderRadius: 9999,
           paddingHorizontal: CAP_PAD,
           paddingVertical: CAP_PAD,
-          gap: CAP_GAP,
-          // The reference's caps FILL the capsule (its content is exactly the
-          // capsule's inner width), so the row spreads its caps edge to edge
-          // and the leftover space becomes the inter-cap gap — never a lump of
-          // empty glass at one end.
-          justifyContent: "space-between",
           backgroundColor: mix(colors["color-surface-0"], "transparent", 82),
           borderColor: mix(colors["color-text-primary"], "transparent", 14),
         }}
       >
-        {caps.map((item) => {
-          const active = isNavItemActive(pathname, item);
-          return (
-            <DockCap
-              key={item.path}
-              iconKey={item.iconKey as NavIconKey}
-              label={item.label}
-              active={active}
-              activeBg={activeBg}
-              activeBorder={activeBorder}
-              activeDiscBg={activeDiscBg}
-              activeDiscBorder={activeDiscBorder}
-              idleDiscBg={idleDiscBg}
-              idleDiscBorder={idleDiscBorder}
-              activeGlyphColor={colors["color-primary-foreground"]}
-              idleGlyphColor={colors["color-text-secondary"]}
-              activeLabelInk={colors["color-text-primary"]}
-              inactiveInk={colors["color-text-secondary"]}
-              onPress={() => {
-                if (active) return;
-                onNavigate(resolveRoute(item.path, item.label));
-              }}
-              reduceMotion={reduceMotion}
-              testID={`dock-${item.label.toLowerCase()}`}
-            />
-          );
-        })}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: CAP_GAP,
+            // The reference's caps FILL the capsule (its content is exactly the
+            // capsule's inner width), so the row spreads its caps edge to edge
+            // and the leftover space becomes the inter-cap gap — never a lump of
+            // empty glass at one end.
+            justifyContent: "space-between",
+            width: "100%",
+          }}
+        >
+          <Animated.View
+            pointerEvents="none"
+            testID="dock-active-pill"
+            style={[
+              {
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: 0,
+                borderRadius: 9999,
+                borderWidth: 1,
+                borderColor: activeBorder,
+                backgroundColor: activeBg,
+              },
+              pillStyle,
+            ]}
+          />
+          {caps.map((item, index) => {
+            const active = index === activeIndex;
+            return (
+              <DockCap
+                key={item.path}
+                iconKey={item.iconKey as NavIconKey}
+                label={item.label}
+                active={active}
+                showFallbackActiveChrome={active && !hasPillLayout}
+                activeBg={activeBg}
+                activeBorder={activeBorder}
+                activeDiscBg={activeDiscBg}
+                activeDiscBorder={activeDiscBorder}
+                idleDiscBg={idleDiscBg}
+                idleDiscBorder={idleDiscBorder}
+                activeGlyphColor={colors["color-primary-foreground"]}
+                idleGlyphColor={colors["color-text-secondary"]}
+                activeLabelInk={colors["color-text-primary"]}
+                inactiveInk={colors["color-text-secondary"]}
+                onLayout={(e) => {
+                  const { x, width } = e.nativeEvent.layout;
+                  setBoxes((prev) => {
+                    const cur = prev[index];
+                    if (cur && Math.abs(cur.x - x) < 0.5 && Math.abs(cur.w - width) < 0.5) return prev;
+                    const next = [...prev];
+                    next[index] = { x, w: width };
+                    return next;
+                  });
+                }}
+                onPress={() => {
+                  if (active) return;
+                  hapticSelect();
+                  onNavigate(resolveRoute(item.path, item.label));
+                }}
+                reduceMotion={reduceMotion}
+                testID={`dock-${item.label.toLowerCase()}`}
+              />
+            );
+          })}
+        </View>
       </Material>
     </View>
   );
@@ -202,6 +312,7 @@ interface DockCapProps {
   iconKey: NavIconKey;
   label: string;
   active: boolean;
+  showFallbackActiveChrome: boolean;
   activeBg: string;
   activeBorder: string;
   activeDiscBg: string;
@@ -212,6 +323,7 @@ interface DockCapProps {
   idleGlyphColor: string;
   activeLabelInk: string;
   inactiveInk: string;
+  onLayout: (e: LayoutChangeEvent) => void;
   onPress: () => void;
   reduceMotion: boolean;
   testID?: string;
@@ -221,6 +333,7 @@ const DockCap = React.memo(function DockCap({
   iconKey,
   label,
   active,
+  showFallbackActiveChrome,
   activeBg,
   activeBorder,
   activeDiscBg,
@@ -231,6 +344,7 @@ const DockCap = React.memo(function DockCap({
   idleGlyphColor,
   activeLabelInk,
   inactiveInk,
+  onLayout,
   onPress,
   reduceMotion,
   testID,
@@ -239,13 +353,14 @@ const DockCap = React.memo(function DockCap({
   const aStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
     <Animated.View
+      onLayout={onLayout}
       style={[
         aStyle,
         {
           borderRadius: 9999,
           borderWidth: 1,
-          borderColor: active ? activeBorder : "transparent",
-          backgroundColor: active ? activeBg : "transparent",
+          borderColor: showFallbackActiveChrome ? activeBorder : "transparent",
+          backgroundColor: showFallbackActiveChrome ? activeBg : "transparent",
         },
       ]}
     >
@@ -257,11 +372,13 @@ const DockCap = React.memo(function DockCap({
         onPress={onPress}
         onPressIn={() => {
           if (!reduceMotion) {
-            scale.value = withTiming(0.96, { duration: MOTION.fast });
+            // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+            scale.value = withTiming(0.95, { duration: PRESS_IN_MS });
           }
         }}
         onPressOut={() => {
-          scale.value = withTiming(1, { duration: MOTION.fast });
+          // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+          scale.value = reduceMotion ? 1 : withSpring(1, SPRING.press);
         }}
         style={{
           // The web's wall cap cell is 72px tall (h-[72px]) — above the 64dp

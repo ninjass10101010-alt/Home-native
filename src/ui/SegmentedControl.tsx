@@ -1,10 +1,11 @@
 import React from "react";
 import { Pressable, Text, View, ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { mixAlpha } from "./SoftButton";
 import { useTheme } from "../theme/ThemeProvider";
-import { MOTION, TYPOGRAPHY } from "../theme/tokens";
+import { SPRING, TYPOGRAPHY } from "../theme/tokens";
+import { hapticSelect } from "../theme/haptics";
 import { accentDeepened } from "../theme/mix";
 
 export interface SegmentedOption {
@@ -47,6 +48,7 @@ export function SegmentedControl({
   const activeIndex = Math.max(options.findIndex((o) => o.id === value), 0);
 
   const [boxes, setBoxes] = React.useState<{ x: number; w: number }[]>([]);
+  const hasMeasuredRef = React.useRef(false);
   // pill origin sits at the container's 6dp padding until measurement lands
   const pillX = useSharedValue(6);
   const pillW = useSharedValue(0);
@@ -54,9 +56,14 @@ export function SegmentedControl({
   React.useEffect(() => {
     const b = boxes[activeIndex];
     if (!b) return;
-    const dur = reduceMotion ? 0 : MOTION.base;
-    pillX.value = withTiming(b.x, { duration: dur });
-    pillW.value = withTiming(b.w, { duration: dur });
+    if (!hasMeasuredRef.current || reduceMotion) {
+      hasMeasuredRef.current = true;
+      pillX.value = b.x;
+      pillW.value = b.w;
+      return;
+    }
+    pillX.value = withSpring(b.x, SPRING.settle);
+    pillW.value = withSpring(b.w, SPRING.settle);
   }, [activeIndex, boxes, reduceMotion, pillX, pillW]);
 
   const pillStyle = useAnimatedStyle(() => ({
@@ -164,7 +171,10 @@ export function SegmentedControl({
             key={option.id}
             accessibilityRole="radio"
             accessibilityState={{ selected: active }}
-            onPress={() => onChange(option.id)}
+            onPress={() => {
+              if (option.id !== value) hapticSelect();
+              onChange(option.id);
+            }}
             onLayout={(e) => {
               const { x, width } = e.nativeEvent.layout;
               setBoxes((prev) => {

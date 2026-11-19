@@ -1,7 +1,9 @@
 import React from "react";
 import { Pressable, Text, View, ViewStyle } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
-import { TYPOGRAPHY, MIN_TARGET_DP } from "../theme/tokens";
+import { MIN_TARGET_DP, MOTION, PRESS_IN_MS, SPRING, TYPOGRAPHY } from "../theme/tokens";
+import { hapticTap } from "../theme/haptics";
 import { mixAlpha } from "./SoftButton";
 
 export interface ListRowProps {
@@ -39,7 +41,15 @@ export function ListRow({
   testID,
   accessibilityLabel,
 }: ListRowProps) {
-  const { colors, accentColor } = useTheme();
+  const { colors, accentColor, reduceMotion } = useTheme();
+  const scale = useSharedValue(1);
+  const highlight = useSharedValue(0);
+  const rowAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  const highlightStyle = useAnimatedStyle(() => ({
+    opacity: highlight.value,
+  }));
 
   const inner = (
     <>
@@ -140,15 +150,47 @@ export function ListRow({
     );
   }
   return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      onPress={onPress}
-      style={({ pressed }) => [base, { opacity: pressed ? 0.85 : 1 }, style]}
-    >
-      {inner}
-    </Pressable>
+    <Animated.View style={rowAnimStyle}>
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        onPress={() => {
+          hapticTap();
+          onPress();
+        }}
+        onPressIn={() => {
+          if (reduceMotion) return;
+          // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+          scale.value = withTiming(0.985, { duration: PRESS_IN_MS });
+          // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+          highlight.value = withTiming(1, { duration: PRESS_IN_MS });
+        }}
+        onPressOut={() => {
+          // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+          scale.value = reduceMotion ? 1 : withSpring(1, SPRING.press);
+          // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+          highlight.value = reduceMotion ? 0 : withTiming(0, { duration: MOTION.fast });
+        }}
+        style={[base, style]}
+      >
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: mixAlpha(leftRailColor ?? accentColor, 0.08),
+            },
+            highlightStyle,
+          ]}
+        />
+        {inner}
+      </Pressable>
+    </Animated.View>
   );
 }
 

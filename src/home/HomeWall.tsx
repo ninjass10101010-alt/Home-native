@@ -245,19 +245,30 @@ function WallSignedOutBanner({ copy, onSignIn }: { copy: string; onSignIn: () =>
       >
         {copy}
       </Text>
-      <Pressable onPress={onSignIn} accessibilityRole="link" accessibilityLabel="Sign in with your PIN">
+      <Pressable
+        onPress={onSignIn}
+        accessibilityRole="link"
+        accessibilityLabel="Sign in with your PIN"
+        hitSlop={10}
+        style={({ pressed }) => ({
+          minHeight: 44,
+          paddingHorizontal: 14,
+          paddingVertical: 8,
+          borderRadius: RADII.full,
+          borderWidth: 1,
+          borderColor: rim,
+          backgroundColor: mix(amber, "transparent", pressed ? 30 : 22),
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        })}
+      >
         <Text
           style={{
             color: ink,
             fontSize: TYPOGRAPHY.label.fontSize,
             lineHeight: TYPOGRAPHY.label.lineHeight,
             fontWeight: "600",
-            textDecorationLine: "underline",
-            textDecorationStyle: "dotted",
-            // The web's link rides the strip's UPPER line: its baseline sits
-            // 12px above the copy's. A transform lifts it without moving the
-            // copy (which the strip centres).
-            transform: [{ translateY: -12 }],
           }}
         >
           Sign in with your PIN →

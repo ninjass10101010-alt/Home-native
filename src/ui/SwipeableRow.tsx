@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Text, View, ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
-import { MOTION, MIN_TARGET_DP } from "../theme/tokens";
+import { MIN_TARGET_DP, SPRING } from "../theme/tokens";
+import { hapticSelect, hapticTap } from "../theme/haptics";
 import { mix } from "../theme/mix";
 import { mixAlpha } from "./SoftButton";
 
@@ -35,21 +36,32 @@ export function SwipeableRow({ children, actions = [], style, testID }: Swipeabl
   const { colors, accentColor, reduceMotion } = useTheme();
   const [open, setOpen] = useState(false);
   const offset = useSharedValue(0);
+  const openSV = useSharedValue(0);
   const maxOffset = actions.length * ACTION_WIDTH;
+
+  const syncOpenState = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen);
+    hapticSelect();
+  }, []);
 
   const pan = Gesture.Pan()
     .activeOffsetX([-10, 10])
-    // React state (setOpen) is JS-thread only — run the callbacks there.
-    .runOnJS(true)
     .onUpdate((e) => {
-      offset.value = Math.max(-maxOffset, Math.min(0, e.translationX + (open ? -maxOffset : 0)));
+      "worklet";
+      offset.value = Math.max(-maxOffset, Math.min(0, e.translationX + (openSV.value ? -maxOffset : 0)));
     })
-    .onEnd(() => {
-      const dur = reduceMotion ? 0 : MOTION.fast;
-      const shouldOpen = offset.value < -THRESHOLD;
-      offset.value = withTiming(shouldOpen ? -maxOffset : 0, { duration: dur });
-      // Shared value → React state (JS thread) for a11y + press behavior
-      if (shouldOpen !== open) setOpen(shouldOpen);
+    .onEnd((e) => {
+      "worklet";
+      const shouldOpen = offset.value < -THRESHOLD || e.velocityX < -500;
+      const target = shouldOpen ? -maxOffset : 0;
+      offset.value = reduceMotion
+        ? target
+        : withSpring(target, { ...SPRING.settle, velocity: e.velocityX });
+      const wasOpen = openSV.value === 1;
+      openSV.value = shouldOpen ? 1 : 0;
+      if (shouldOpen !== wasOpen) {
+        runOnJS(syncOpenState)(shouldOpen);
+      }
     });
 
   const rowStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }));
@@ -80,8 +92,10 @@ export function SwipeableRow({ children, actions = [], style, testID }: Swipeabl
               accessibilityRole="button"
               accessibilityLabel={a.label}
               onPress={() => {
+                hapticTap();
                 a.onAction();
-                offset.value = withTiming(0, { duration: reduceMotion ? 0 : MOTION.fast });
+                offset.value = reduceMotion ? 0 : withSpring(0, SPRING.settle);
+                openSV.value = 0;
                 setOpen(false);
               }}
               style={{
@@ -106,7 +120,11 @@ export function SwipeableRow({ children, actions = [], style, testID }: Swipeabl
   );
 
   return (
-    <View testID={testID} style={[{ overflow: "hidden", borderRadius: 20 }, style]}>
+    <View
+      testID={testID}
+      accessibilityState={actions.length > 0 ? { expanded: open } : undefined}
+      style={[{ overflow: "hidden", borderRadius: 20 }, style]}
+    >
       {actions.length > 0 ? rail : null}
       <GestureDetector gesture={pan}>
         <Animated.View style={rowStyle}>{children}</Animated.View>

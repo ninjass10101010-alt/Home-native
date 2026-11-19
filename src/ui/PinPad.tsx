@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { Image, Pressable, Text, View, ViewStyle } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
-import { MOTION, MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
+import { MIN_TARGET_DP, MOTION, PRESS_IN_MS, SPRING, TYPOGRAPHY } from "../theme/tokens";
+import { hapticError, hapticTap } from "../theme/haptics";
 import { Material } from "../theme/Material";
 import { SoftButton } from "./SoftButton";
 import { isPhotoUri } from "./MemberRail";
@@ -22,6 +23,54 @@ export interface PinPadProps {
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "Clear", "0", "⌫"] as const;
 
+function PinDot({
+  filled,
+  borderColor,
+  fillColor,
+  reduceMotion,
+}: {
+  filled: boolean;
+  borderColor: string;
+  fillColor: string;
+  reduceMotion: boolean;
+}) {
+  const scale = useSharedValue(1);
+  React.useEffect(() => {
+    if (reduceMotion) {
+      scale.value = 1;
+      return;
+    }
+    if (filled) {
+      scale.value = withSequence(
+        withTiming(1.22, { duration: PRESS_IN_MS }),
+        withSpring(1, SPRING.bouncy)
+      );
+    } else {
+      scale.value = withTiming(1, { duration: MOTION.fast });
+    }
+  }, [filled, reduceMotion, scale]);
+
+  const aStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          borderWidth: 2,
+          borderColor: filled ? fillColor : borderColor,
+          backgroundColor: filled ? fillColor : "transparent",
+        },
+        aStyle,
+      ]}
+    />
+  );
+}
+
 /**
  * Presentational wall PIN pad (port of components/wall/WallPinPad.tsx at wall
  * scale: 96dp keys — above the 64dp floor, sized for 3-10ft reach).
@@ -35,15 +84,16 @@ export function PinPad({ member, onVerified, onCancel, busy = false, error = nul
 
   React.useEffect(() => {
     if (!error) return;
+    hapticError();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- clear-on-error is the honest-failure contract
     setPin("");
     if (reduceMotion) return;
     shake.value = withSequence(
-      withTiming(-10, { duration: 50 }),
-      withTiming(10, { duration: 50 }),
-      withTiming(-8, { duration: 50 }),
-      withTiming(8, { duration: 50 }),
-      withTiming(0, { duration: MOTION.fast })
+      withTiming(-12, { duration: 45 }),
+      withTiming(12, { duration: 45 }),
+      withTiming(-8, { duration: 45 }),
+      withTiming(6, { duration: 45 }),
+      withSpring(0, SPRING.press)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- shake is a stable Reanimated shared value (a ref-like mutable, correctly omitted; listing it made the clear re-fire on every render under the jest mock where useSharedValue is per-render)
   }, [error, reduceMotion]);
@@ -52,6 +102,7 @@ export function PinPad({ member, onVerified, onCancel, busy = false, error = nul
 
   const press = (k: string) => {
     if (busy) return;
+    hapticTap();
     if (k === "Clear") return setPin("");
     if (k === "⌫") return setPin((p) => p.slice(0, -1));
     const next = (pin + k).slice(0, 4);
@@ -60,6 +111,7 @@ export function PinPad({ member, onVerified, onCancel, busy = false, error = nul
   };
 
   const firstName = member.name.split(" ")[0];
+  const dotFill = colors["color-accent-selected"] ?? colors["color-text-primary"];
 
   return (
     <View testID={testID} style={style}>
@@ -90,16 +142,12 @@ export function PinPad({ member, onVerified, onCancel, busy = false, error = nul
 
       <Animated.View style={[shakeStyle, { flexDirection: "row", justifyContent: "center", gap: 18, marginBottom: 20 }]}>
         {[0, 1, 2, 3].map((i) => (
-          <View
+          <PinDot
             key={i}
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 11,
-              borderWidth: 2,
-              borderColor: colors["color-text-secondary"],
-              backgroundColor: i < pin.length ? colors["color-text-primary"] : "transparent",
-            }}
+            filled={i < pin.length}
+            borderColor={colors["color-text-secondary"]}
+            fillColor={dotFill}
+            reduceMotion={reduceMotion}
           />
         ))}
       </Animated.View>

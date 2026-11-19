@@ -1,8 +1,11 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
-import { FONTS, TYPOGRAPHY } from "../theme/tokens";
+import { FONTS, PRESS_IN_MS, SPRING, TYPOGRAPHY } from "../theme/tokens";
+import { hapticTap } from "../theme/haptics";
 import { accentDeepened, mix } from "../theme/mix";
 import { SPECULAR_AT } from "../theme/materials";
 import { Material } from "../theme/Material";
@@ -141,148 +144,215 @@ interface TileProps {
   widgetId: string;
   tone: ToneKey;
   testID: string;
+  onPress?: () => void;
 }
 
 /** The tile's stale marker — the band-level twin of the card's stale badge. */
 const STALE_MARK = "stale";
 
-function StatTile({ label, detail, value, pending, stale, icon, widgetId, tone, testID }: TileProps) {
-  const { colors, accentColor } = useTheme();
+function StatTile({ label, detail, value, pending, stale, icon, widgetId, tone, testID, onPress }: TileProps) {
+  const { colors, accentColor, reduceMotion } = useTheme();
   const toneColor = colors[toneToken(tone)] ?? accentColor;
   const ink = colors[toneInkToken(tone)] ?? mix(toneColor, colors["color-text-primary"], 45);
   // The app's stale ink (the same one the widget cards' stale badge wears).
   const staleInk = colors["color-accent-ink-amber"] ?? colors["color-text-secondary"];
   const variant = widgetIconVariantFor(widgetId);
 
+  const pressScale = useSharedValue(1);
+  const numeralScale = useSharedValue(1);
+  const didMountRef = React.useRef(false);
+  const prevValueRef = React.useRef<string | null>(pending ? null : value);
+
+  React.useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      prevValueRef.current = pending ? null : value;
+      return;
+    }
+    if (pending) {
+      prevValueRef.current = null;
+      return;
+    }
+    const prev = prevValueRef.current;
+    prevValueRef.current = value;
+    if (prev !== null && prev !== value && !reduceMotion) {
+      numeralScale.value = 1.1;
+      numeralScale.value = withSpring(1, SPRING.bouncy);
+    }
+  }, [pending, value, reduceMotion, numeralScale]);
+
+  const pressAnimStyle = useAnimatedStyle(() => ({
+    flex: 1,
+    transform: [{ scale: pressScale.value }],
+  }));
+
+  const numeralAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: numeralScale.value }],
+  }));
+
   return (
-    <Material
-      tier="regular"
-      tone={toneColor}
-      style={{
-        flex: 1,
-        height: KPI_TILE_H,
-        borderRadius: 24,
-        paddingHorizontal: KPI_PAD,
-        paddingVertical: KPI_PAD,
-        justifyContent: "flex-start",
-      }}
-      testID={testID}
-    >
-      {/* The web's 2-row grid: the chip in row 1, the value spanning both
-          rows, the label/detail pair in column 3. `alignItems: flex-start`
-          reproduces the web's `alignContent: start` (the rows start at the
-          content's top edge). */}
-      <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-        {/* The icon is the web's clay HomeWidgetIcon at `size="sm"` — the
-            same artwork, and the same round glow halo behind it. The web
-            seats it in a `rounded-xl bg-white/7%` chip; on the wall that
-            chip is invisible, so the native paints the artwork on the
-            card instead of tinting a square behind it (which read as a
-            flat sticker, not a disc). The chip BOX is the web's 28px
-            `h-7 w-7` — the 32px artwork overflows it by 2px a side,
-            exactly as it does on the web. */}
-        <View
+    <Animated.View style={pressAnimStyle}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${label} — ${detail}${pending ? "" : `: ${value}`}`}
+        onPress={
+          onPress
+            ? () => {
+                hapticTap();
+                onPress();
+              }
+            : undefined
+        }
+        onPressIn={() => {
+          if (!reduceMotion && onPress) {
+            // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+            pressScale.value = withTiming(0.97, { duration: PRESS_IN_MS });
+          }
+        }}
+        onPressOut={() => {
+          // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+          pressScale.value = reduceMotion ? 1 : withSpring(1, SPRING.press);
+        }}
+        style={{ flex: 1 }}
+      >
+        <Material
+          tier="regular"
+          tone={toneColor}
           style={{
-            width: KPI_ICON_PX,
-            height: KPI_ICON_PX,
-            borderRadius: 10,
-            backgroundColor: mix(toneColor, "transparent", 12),
-            borderWidth: 1,
-            borderColor: mix(toneColor, "transparent", 24),
-            alignItems: "center",
-            justifyContent: "center",
+            flex: 1,
+            height: KPI_TILE_H,
+            borderRadius: 24,
+            paddingHorizontal: KPI_PAD,
+            paddingVertical: KPI_PAD,
+            justifyContent: "flex-start",
           }}
+          testID={testID}
         >
-          {variant ? (
-            <HomeWidgetIcon variant={variant} size="sm" />
-          ) : (
-            <AnimatedEmoji emoji={icon} size={22} />
-          )}
-        </View>
-        {/* The value column: the numeral spans rows 1-2, so it is centred on
-            the tile's CONTENT height (the web's `row-span-2`), which is what
-            puts the icon 9px above it. */}
-        <View style={{ marginLeft: KPI_ICON_GAP, height: KPI_CONTENT_H, justifyContent: "center", flexShrink: 0 }}>
-          {pending ? (
-            /* The numeral slot while its read is unanswered: the WEB's own
-               unknown-value glyph — the em dash the reference shows on a tile
-               whose source has not answered. It wears the same primary ink as
-               a real numeral (the reference's dash is white, not dimmed) but
-               is unmistakably a GLYPH, not a slab, so the tile never reads as
-               a hole. Static, too: a pulsing dash would flicker the floor it
-               is supposed to sit under. */
-            <Text
-              testID={`${testID}-pending`}
-              accessibilityLabel="Not known yet"
+          {/* The web's 2-row grid: the chip in row 1, the value spanning both
+              rows, the label/detail pair in column 3. `alignItems: flex-start`
+              reproduces the web's `alignContent: start` (the rows start at the
+              content's top edge). */}
+          <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+            {/* The icon is the web's clay HomeWidgetIcon at `size="sm"` — the
+                same artwork, and the same round glow halo behind it. The web
+                seats it in a `rounded-xl bg-white/7%` chip; on the wall that
+                chip is invisible, so the native paints the artwork on the
+                card instead of tinting a square behind it (which read as a
+                flat sticker, not a disc). The chip BOX is the web's 28px
+                `h-7 w-7` — the 32px artwork overflows it by 2px a side,
+                exactly as it does on the web. */}
+            <View
               style={{
-                color: colors["color-text-primary"],
-                fontFamily: FONTS.rounded,
-                fontSize: KPI_NUMERAL_SIZE,
-                lineHeight: KPI_NUMERAL_SIZE,
-                fontWeight: "700",
-                transform: [{ scaleX: KPI_DASH_SCALE }],
-                transformOrigin: "left center",
+                width: KPI_ICON_PX,
+                height: KPI_ICON_PX,
+                borderRadius: 10,
+                backgroundColor: mix(toneColor, "transparent", 12),
+                borderWidth: 1,
+                borderColor: mix(toneColor, "transparent", 24),
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              {"—"}
-            </Text>
-          ) : (
-            <Text
-              style={{
-                color: colors["color-text-primary"],
-                fontFamily: FONTS.rounded,
-                fontSize: KPI_NUMERAL_SIZE,
-                lineHeight: KPI_NUMERAL_SIZE,
-                fontWeight: "700",
-                letterSpacing: KPI_NUMERAL_TRACKING,
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {value}
-            </Text>
-          )}
-        </View>
-        {/* The label block hugs the tile's right edge (the web's
-            `md:col-start-3 md:justify-self-end md:text-right`), label over
-            detail, both in the tone ink. The label sits in grid row 1 — as
-            tall as the icon chip — and the detail in row 2, which is what
-            gives the pair the reference's 25-26px pitch. */}
-        <View style={{ flex: 1, alignItems: "flex-end" }}>
-          <View style={{ height: KPI_LABEL_ROW1, justifyContent: "center" }}>
-            <Text
-              style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
-          </View>
-          <View style={{ height: KPI_LABEL_ROW2, justifyContent: "center", marginTop: KPI_ROW_GAP }}>
-            <Text
-              style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight }}
-              numberOfLines={1}
-            >
-              {detail}
-              {/* The tile carries the staleness of its OWN number: the count
-                  above is the last-good copy the card below is also showing
-                  (badged there), and the band can never publish it as a live
-                  figure. The marker rides the detail line so the numeral
-                  stays the loudest thing on the tile. */}
-              {stale ? (
-                <Text testID={`${testID}-stale`} style={{ color: staleInk, fontWeight: "600" }}>
-                  {` · ${STALE_MARK}`}
+              {variant ? (
+                <HomeWidgetIcon variant={variant} size="sm" />
+              ) : (
+                <AnimatedEmoji emoji={icon} size={22} />
+              )}
+            </View>
+            {/* The value column: the numeral spans rows 1-2, so it is centred on
+                the tile's CONTENT height (the web's `row-span-2`), which is what
+                puts the icon 9px above it. */}
+            <View style={{ marginLeft: KPI_ICON_GAP, height: KPI_CONTENT_H, justifyContent: "center", flexShrink: 0 }}>
+              {pending ? (
+                /* The numeral slot while its read is unanswered: the WEB's own
+                   unknown-value glyph — the em dash the reference shows on a tile
+                   whose source has not answered. It wears the same primary ink as
+                   a real numeral (the reference's dash is white, not dimmed) but
+                   is unmistakably a GLYPH, not a slab, so the tile never reads as
+                   a hole. Static, too: a pulsing dash would flicker the floor it
+                   is supposed to sit under. */
+                <Text
+                  testID={`${testID}-pending`}
+                  accessibilityLabel="Not known yet"
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontFamily: FONTS.rounded,
+                    fontSize: KPI_NUMERAL_SIZE,
+                    lineHeight: KPI_NUMERAL_SIZE,
+                    fontWeight: "700",
+                    transform: [{ scaleX: KPI_DASH_SCALE }],
+                    transformOrigin: "left center",
+                  }}
+                >
+                  {"—"}
                 </Text>
-              ) : null}
-            </Text>
+              ) : (
+                <Animated.View style={numeralAnimStyle}>
+                  <Text
+                    style={{
+                      color: colors["color-text-primary"],
+                      fontFamily: FONTS.rounded,
+                      fontSize: KPI_NUMERAL_SIZE,
+                      lineHeight: KPI_NUMERAL_SIZE,
+                      fontWeight: "700",
+                      letterSpacing: KPI_NUMERAL_TRACKING,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {value}
+                  </Text>
+                </Animated.View>
+              )}
+            </View>
+            {/* The label block hugs the tile's right edge (the web's
+                `md:col-start-3 md:justify-self-end md:text-right`), label over
+                detail, both in the tone ink. The label sits in grid row 1 — as
+                tall as the icon chip — and the detail in row 2, which is what
+                gives the pair the reference's 25-26px pitch. */}
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
+              <View style={{ height: KPI_LABEL_ROW1, justifyContent: "center" }}>
+                <Text
+                  style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}
+                  numberOfLines={1}
+                >
+                  {label}
+                </Text>
+              </View>
+              <View style={{ height: KPI_LABEL_ROW2, justifyContent: "center", marginTop: KPI_ROW_GAP }}>
+                <Text
+                  style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight }}
+                  numberOfLines={1}
+                >
+                  {detail}
+                  {/* The tile carries the staleness of its OWN number: the count
+                      above is the last-good copy the card below is also showing
+                      (badged there), and the band can never publish it as a live
+                      figure. The marker rides the detail line so the numeral
+                      stays the loudest thing on the tile. */}
+                  {stale ? (
+                    <Text testID={`${testID}-stale`} style={{ color: staleInk, fontWeight: "600" }}>
+                      {` · ${STALE_MARK}`}
+                    </Text>
+                  ) : null}
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
-      </View>
-    </Material>
+        </Material>
+      </Pressable>
+    </Animated.View>
   );
 }
 
 
 export function WallStatStrip() {
   const { eventsToday, openTasks, openTasksStale, plannedDays } = useWallStats();
+  const router = useRouter();
+  const go = (route: string) => {
+    const r = router as unknown as { replace?: (p: never) => void; push?: (p: never) => void };
+    if (typeof r.replace === "function") r.replace(route as never);
+    else r.push?.(route as never);
+  };
 
   // Tone parity (critic round 4, HIGH 4): the strip's three tiles must read
   // as three TONES, the way the reference does in every capture — amber
@@ -306,6 +376,7 @@ export function WallStatStrip() {
         value={eventsToday === null ? "" : String(eventsToday)}
         pending={eventsToday === null}
         tone={eventsToday !== null && eventsToday > 0 ? "warning" : "accent"}
+        onPress={() => go("/calendar")}
       />
       <StatTile
         testID="wall-stat-tasks"
@@ -317,6 +388,7 @@ export function WallStatStrip() {
         pending={openTasks === null}
         stale={openTasks !== null && openTasksStale}
         tone="success"
+        onPress={() => go("/tasks")}
       />
       <StatTile
         testID="wall-stat-week"
@@ -327,6 +399,7 @@ export function WallStatStrip() {
         value={plannedDays === null ? "" : String(plannedDays)}
         pending={plannedDays === null}
         tone="accent"
+        onPress={() => go("/meals")}
       />
     </View>
   );

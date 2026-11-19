@@ -1,8 +1,9 @@
 import React from "react";
 import { Image, Pressable, Text, View, ViewStyle } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
-import { MIN_TARGET_DP, MOTION, RADII, TYPOGRAPHY } from "../theme/tokens";
+import { MIN_TARGET_DP, PRESS_IN_MS, RADII, SPRING, TYPOGRAPHY } from "../theme/tokens";
+import { hapticTap } from "../theme/haptics";
 import { accentDeepened, mix } from "../theme/mix";
 import { AnimatedEmoji } from "./AnimatedEmoji";
 import {
@@ -134,14 +135,17 @@ function RailTap({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        onPress={onPress}
+        onPress={() => {
+          hapticTap();
+          onPress();
+        }}
         onPressIn={() => {
           // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write is the idiom
-          if (!reduceMotion) scale.value = withTiming(0.97, { duration: MOTION.fast });
+          if (!reduceMotion) scale.value = withTiming(0.96, { duration: PRESS_IN_MS });
         }}
         onPressOut={() => {
           // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write is the idiom
-          scale.value = withTiming(1, { duration: MOTION.fast });
+          scale.value = reduceMotion ? 1 : withSpring(1, SPRING.press);
         }}
         style={style}
       >

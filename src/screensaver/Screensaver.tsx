@@ -1,12 +1,15 @@
 import React from "react";
 import { AppState, Platform, Pressable, Text, useWindowDimensions, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { api } from "../api/client";
+import { useTheme } from "../theme/ThemeProvider";
 import { ACCENTS, TOKENS } from "../theme/tokens";
 import { mixAlpha } from "../ui/SoftButton";
 import { ConditionIcon, MonsterDigit } from "../weather/art";
 import { conditionCode } from "../weather/conditions";
 import { isBlackoutActiveNow, isScreensaverDueNow, useScreensaverPrefs } from "../home/idle";
 import { charactersForFranchise, useCharacterTheme } from "../theme/characterTheme";
+import { useIsInsideWallStage } from "../theme/Screen";
 import { CharacterEmblem } from "../ui/CelebrationOverlay";
 
 /**
@@ -87,6 +90,7 @@ function dateLine(now: Date): string {
 }
 
 export function Screensaver({ onExit }: ScreensaverProps) {
+  const { reduceMotion } = useTheme();
   const [data, setData] = React.useState<ScreensaverPayload | null>(null);
   const [lastOk, setLastOk] = React.useState(0);
   const [now, setNow] = React.useState(() => new Date());
@@ -148,8 +152,10 @@ export function Screensaver({ onExit }: ScreensaverProps) {
     setNow(new Date());
   };
 
+  const insideRootStage = useIsInsideWallStage();
   const { width, height } = useWindowDimensions();
   const shouldScale =
+    !insideRootStage &&
     typeof jest === "undefined" &&
     Platform.OS === "android" &&
     width > 0 &&
@@ -161,6 +167,16 @@ export function Screensaver({ onExit }: ScreensaverProps) {
 
   const stale = lastOk > 0 && now.getTime() - lastOk > STALE_MS;
   const dimmed = now.getTime() - lastTouch >= DIM_AFTER_MS;
+  const targetDimOpacity = dimmed ? DIM_OPACITY : 1;
+  const dimOpacity = useSharedValue(targetDimOpacity);
+  React.useEffect(() => {
+    dimOpacity.value = reduceMotion
+      ? targetDimOpacity
+      : withTiming(targetDimOpacity, { duration: 1200 });
+  }, [targetDimOpacity, reduceMotion, dimOpacity]);
+  const dimAnimStyle = useAnimatedStyle(() => ({
+    opacity: dimOpacity.value,
+  }));
 
   const progressPct =
     data && data.tasks.total > 0 ? Math.round((data.tasks.done / data.tasks.total) * 100) : 0;
@@ -228,7 +244,7 @@ export function Screensaver({ onExit }: ScreensaverProps) {
             </View>
           </View>
         ) : (
-          <View testID="ss-content" collapsable={false} style={{ flex: 1, opacity: dimmed ? DIM_OPACITY : 1 }}>
+          <Animated.View testID="ss-content" collapsable={false} style={[{ flex: 1 }, dimAnimStyle]}>
           {/* header: clock + date (left), weather (right), stale dot (corner) */}
           <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
             <View>
@@ -451,7 +467,7 @@ export function Screensaver({ onExit }: ScreensaverProps) {
               </View>
             );
           })() : null}
-        </View>
+        </Animated.View>
         )}
       </Pressable>
     </View>

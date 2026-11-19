@@ -245,6 +245,42 @@ export function WidgetFrame({
   const { member, hydrated } = useAuth();
   const signedOut = hydrated && !member;
 
+  // One-shot content reveal when transitioning from skeleton loading → ready
+  const wasLoadingRef = React.useRef(status === "loading");
+  const readyOpacity = useSharedValue(1);
+  const readyY = useSharedValue(0);
+
+  React.useEffect(() => {
+    if (status === "loading") {
+      wasLoadingRef.current = true;
+      return;
+    }
+    const isErrorState = !hasData && (failure !== null || status === "error");
+    if (isErrorState) {
+      wasLoadingRef.current = false;
+      readyOpacity.value = 1;
+      readyY.value = 0;
+      return;
+    }
+    if (wasLoadingRef.current) {
+      wasLoadingRef.current = false;
+      if (reduceMotion) {
+        readyOpacity.value = 1;
+        readyY.value = 0;
+      } else {
+        readyOpacity.value = 0;
+        readyY.value = 6;
+        readyOpacity.value = withTiming(1, { duration: 220 });
+        readyY.value = withTiming(0, { duration: 220 });
+      }
+    }
+  }, [status, hasData, failure, reduceMotion, readyOpacity, readyY]);
+
+  const readyAnimStyle = useAnimatedStyle(() => ({
+    opacity: readyOpacity.value,
+    transform: [{ translateY: readyY.value }],
+  }));
+
   const tone = ACCENTS[theme]?.[WIDGET_TONES[id as keyof typeof WIDGET_TONES] ?? "nori"] ?? accentColor;
   const amber = colors["color-accent-amber"] ?? accentColor;
   const inkAmber = colors["color-accent-ink-amber"] ?? amber;
@@ -520,7 +556,9 @@ export function WidgetFrame({
           {READ_COPY_STALE}
         </Text>
       ) : null}
-      <View style={{ flex: 1, minHeight: 0, marginTop: 10 }}>{children}</View>
+      <Animated.View style={[{ flex: 1, minHeight: 0, marginTop: 10 }, readyAnimStyle]}>
+        {children}
+      </Animated.View>
     </View>
   );
 }

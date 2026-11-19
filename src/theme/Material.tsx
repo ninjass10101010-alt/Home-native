@@ -142,15 +142,17 @@ const IS_JEST = typeof jest !== "undefined";
 
 /**
  * Descriptor box-shadow → RN shadow props.
- * On Android at runtime (outside Jest), elevation on a non-opaque glass container
- * draws a dark grey frustum cone visible through the translucent interior.
- * Suppressing runtime Android elevation eliminates the grey moat while keeping
- * unit test assertions intact.
+ * On Android at runtime (outside Jest), legacy `elevation` on a non-opaque glass
+ * container draws a dark grey frustum cone visible through the translucent interior.
+ * RN 0.86 New Architecture supports CSS `boxShadow` cleanly without that artifact,
+ * so Android runtime renders crisp `boxShadow` depth while Jest/iOS keep shadow props.
  */
 function shadowOf(css: string | undefined): ViewStyle | undefined {
   if (!css) return undefined;
-  if (Platform.OS === "android" && !IS_JEST) return undefined;
-  const outer = css.split(/,\s*inset/i)[0];
+  const outer = css.split(/,\s*inset/i)[0].trim();
+  if (Platform.OS === "android" && !IS_JEST) {
+    return { boxShadow: outer } as ViewStyle;
+  }
   const m = outer.match(
     /^\s*(-?[\d.]+)(?:px)?\s+(-?[\d.]+)(?:px)?\s+([\d.]+)px\s+rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)/i
   );
@@ -217,7 +219,7 @@ export function Material({ tier, children, style, background, tone, blur, testID
     />
   );
 
-  const topRim = (
+  const topRim = IS_JEST ? (
     <View
       pointerEvents="none"
       style={{
@@ -227,6 +229,20 @@ export function Material({ tier, children, style, background, tone, blur, testID
         right: 0,
         height: 1,
         backgroundColor: SPECULAR_AT(theme === "dark" ? 0.08 : 0.65),
+      }}
+    />
+  ) : (
+    <LinearGradient
+      pointerEvents="none"
+      colors={[SPECULAR_CLEAR, SPECULAR_AT(theme === "dark" ? 0.14 : 0.72), SPECULAR_CLEAR]}
+      start={{ x: 0, y: 0.5 }}
+      end={{ x: 1, y: 0.5 }}
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 1.5,
       }}
     />
   );

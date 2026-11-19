@@ -6,13 +6,16 @@ import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
-import { ACCENTS, FONTS, MIN_TARGET_DP, RADII, TYPOGRAPHY } from "../theme/tokens";
+import { ACCENTS, FONTS, MIN_TARGET_DP, RADII, SPRING, TYPOGRAPHY } from "../theme/tokens";
+import { hapticSuccess } from "../theme/haptics";
 import { mix } from "../theme/mix";
 import { mixAlpha, SoftButton } from "./SoftButton";
 import {
@@ -156,6 +159,64 @@ const SPARKLE_POSITIONS = [
   { bottom: 22, right: 26, glyph: "✨" },
 ] as const;
 
+function SparkleGlyph({
+  pos,
+  idx,
+  doAnim,
+}: {
+  pos: (typeof SPARKLE_POSITIONS)[number];
+  idx: number;
+  doAnim: boolean;
+}) {
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    if (!doAnim) {
+      cancelAnimation(pulse);
+      pulse.value = 0;
+      return;
+    }
+    pulse.value = withDelay(
+      idx * 220,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 750, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0, { duration: 750, easing: Easing.inOut(Easing.sin) })
+        ),
+        -1,
+        false
+      )
+    );
+    return () => cancelAnimation(pulse);
+  }, [doAnim, idx, pulse]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: doAnim ? 0.72 + 0.28 * pulse.value : 1,
+    transform: [
+      { translateY: -5 * pulse.value },
+      { scale: 0.92 + 0.16 * pulse.value },
+      { rotate: `${(idx % 2 === 0 ? 1 : -1) * 8 * pulse.value}deg` },
+    ],
+  }));
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          top: "top" in pos ? pos.top : undefined,
+          bottom: "bottom" in pos ? pos.bottom : undefined,
+          left: "left" in pos ? pos.left : undefined,
+          right: "right" in pos ? pos.right : undefined,
+        },
+        doAnim ? animStyle : null,
+      ]}
+    >
+      <Text style={{ fontSize: 28 }}>{pos.glyph}</Text>
+    </Animated.View>
+  );
+}
+
 export function CelebrationOverlay({
   event,
   onDismiss,
@@ -167,33 +228,34 @@ export function CelebrationOverlay({
   const [prefs] = useCharacterTheme();
   const doAnim = !reduceMotion;
 
+  const scrimOpacity = useSharedValue(0);
   const pop = useSharedValue(1);
-  const pulse = useSharedValue(0);
+  const cardY = useSharedValue(0);
 
   useEffect(() => {
     if (!event) return;
+    hapticSuccess();
     if (!doAnim) {
+      cancelAnimation(scrimOpacity);
       cancelAnimation(pop);
-      cancelAnimation(pulse);
+      cancelAnimation(cardY);
+      scrimOpacity.value = 1;
       pop.value = 1;
-      pulse.value = 0;
+      cardY.value = 0;
     } else {
-      pop.value = 0.86;
-      pop.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) });
-      pulse.value = withRepeat(
-        withSequence(
-          withTiming(1, { duration: 750, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0, { duration: 750, easing: Easing.inOut(Easing.ease) })
-        ),
-        -1,
-        false
-      );
+      scrimOpacity.value = 0;
+      scrimOpacity.value = withTiming(1, { duration: 180 });
+      pop.value = 0.84;
+      pop.value = withSpring(1, SPRING.bouncy);
+      cardY.value = 18;
+      cardY.value = withSpring(0, SPRING.settle);
     }
     return () => {
+      cancelAnimation(scrimOpacity);
       cancelAnimation(pop);
-      cancelAnimation(pulse);
+      cancelAnimation(cardY);
     };
-  }, [event, doAnim, pop, pulse]);
+  }, [event, doAnim, scrimOpacity, pop, cardY]);
 
   useEffect(() => {
     if (!event || autoDismissMs <= 0) return;
@@ -203,12 +265,12 @@ export function CelebrationOverlay({
     return () => clearTimeout(timer);
   }, [event, autoDismissMs, onDismiss]);
 
-  const cardAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pop.value }],
+  const scrimAnimStyle = useAnimatedStyle(() => ({
+    opacity: scrimOpacity.value,
   }));
 
-  const sparkleAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: -4 * pulse.value }, { scale: 0.94 + 0.12 * pulse.value }],
+  const cardAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: cardY.value }, { scale: pop.value }],
   }));
 
   if (!event) return null;
@@ -239,22 +301,25 @@ export function CelebrationOverlay({
       : `⭐ Way to go, ${event.memberName}!`;
 
   return (
-    <View
+    <Animated.View
       testID={testID}
       accessibilityRole="alert"
       accessibilityLabel={`${character.name} celebration for ${event.memberName}: ${cheerCopy}`}
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 90,
-        backgroundColor: backdropColor,
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 32,
-      }}
+      style={[
+        {
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 90,
+          backgroundColor: backdropColor,
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 32,
+        },
+        doAnim ? scrimAnimStyle : null,
+      ]}
     >
       <Pressable
         accessibilityRole="button"
@@ -285,22 +350,7 @@ export function CelebrationOverlay({
         >
           {/* Floating celebration sparkles */}
           {SPARKLE_POSITIONS.map((pos, idx) => (
-            <Animated.View
-              key={idx}
-              pointerEvents="none"
-              style={[
-                {
-                  position: "absolute",
-                  top: "top" in pos ? pos.top : undefined,
-                  bottom: "bottom" in pos ? pos.bottom : undefined,
-                  left: "left" in pos ? pos.left : undefined,
-                  right: "right" in pos ? pos.right : undefined,
-                },
-                doAnim ? sparkleAnimStyle : null,
-              ]}
-            >
-              <Text style={{ fontSize: 28 }}>{pos.glyph}</Text>
-            </Animated.View>
+            <SparkleGlyph key={idx} pos={pos} idx={idx} doAnim={doAnim} />
           ))}
 
           {/* Franchise + Character Pill */}
@@ -417,7 +467,7 @@ export function CelebrationOverlay({
           </SoftButton>
         </Material>
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 }
 

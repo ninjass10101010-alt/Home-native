@@ -7,10 +7,10 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Text, View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { Platform, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
-import { MOTION, TYPOGRAPHY } from "../theme/tokens";
+import { MOTION, SPRING, TYPOGRAPHY } from "../theme/tokens";
 import { accentInk, mix } from "../theme/mix";
 
 export type ToastIntent = "info" | "success" | "error";
@@ -76,25 +76,37 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(() => ({ show }), [show]);
 
-  const ty = useSharedValue(-80);
+  const ty = useSharedValue(-36);
   const opacity = useSharedValue(0);
+  const scale = useSharedValue(0.94);
   React.useEffect(() => {
     if (!toast) return;
-    const dur = reduceMotion ? 0 : MOTION.base;
-     
-    ty.value = withTiming(0, { duration: dur });
-     
-    opacity.value = withTiming(1, { duration: dur });
-  }, [toast, reduceMotion, ty, opacity]);
+    if (reduceMotion) {
+      ty.value = 0;
+      opacity.value = 1;
+      scale.value = 1;
+      return;
+    }
+    ty.value = -36;
+    opacity.value = 0;
+    scale.value = 0.94;
+    ty.value = withSpring(0, SPRING.settle);
+    scale.value = withSpring(1, SPRING.settle);
+    opacity.value = withTiming(1, { duration: MOTION.fast });
+  }, [toast, reduceMotion, ty, opacity, scale]);
   React.useEffect(() => {
     if (!leaving) return;
     const dur = reduceMotion ? 0 : EXIT_MS;
     // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
-    ty.value = withTiming(-80, { duration: dur });
-  }, [leaving, reduceMotion, ty]);
+    ty.value = withTiming(-28, { duration: dur });
+    // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+    scale.value = withTiming(0.96, { duration: dur });
+    // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+    opacity.value = withTiming(0, { duration: dur });
+  }, [leaving, reduceMotion, ty, scale, opacity]);
 
   const aStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: ty.value }],
+    transform: [{ translateY: ty.value }, { scale: scale.value }],
     opacity: opacity.value,
   }));
 
@@ -131,11 +143,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           style={[
             {
               position: "absolute",
-              top: 24,
+              top: 72,
               left: 0,
               right: 0,
               alignItems: "center",
-              zIndex: 90,
+              zIndex: 9998,
             },
             aStyle,
           ]}
@@ -151,6 +163,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               backgroundColor: bg,
               paddingHorizontal: 20,
               paddingVertical: 14,
+              ...(typeof jest === "undefined" && Platform.OS === "android"
+                ? ({
+                    boxShadow: [
+                      {
+                        offsetX: 0,
+                        offsetY: 8,
+                        blurRadius: 24,
+                        color: mix(colors["color-monster-ink-blue"], "transparent", 28),
+                      },
+                    ],
+                  } as Record<string, unknown>)
+                : {}),
             }}
           >
             <Text style={{ color: fg, fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>

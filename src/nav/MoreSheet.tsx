@@ -25,6 +25,7 @@ export const MoreSheet = React.memo(function MoreSheet({ visible, onClose, role,
     <Modal
       visible={visible}
       onClose={onClose}
+      variant="sheet"
       title="More…"
       description="Everything else around the house"
       testID={testID}

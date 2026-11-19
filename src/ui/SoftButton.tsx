@@ -1,8 +1,9 @@
 import React from "react";
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, ViewStyle } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
-import { MOTION, MIN_TARGET_DP } from "../theme/tokens";
+import { MIN_TARGET_DP, PRESS_IN_MS, SPRING } from "../theme/tokens";
+import { hapticTap } from "../theme/haptics";
 import { accentDeepened, accentInk, mix } from "../theme/mix";
 
 export type SoftButtonVariant = "primary" | "secondary" | "ghost" | "destructive" | "danger" | "success";
@@ -90,11 +91,20 @@ export function SoftButton({
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ disabled: isDisabled, busy: loading }}
         disabled={isDisabled}
-        onPress={onPress}
+        onPress={
+          onPress
+            ? () => {
+                hapticTap();
+                onPress();
+              }
+            : undefined
+        }
         onPressIn={() => { // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write is the idiom
-        if (!reduceMotion) scale.value = withTiming(0.96, { duration: MOTION.fast }); }}
+          if (!reduceMotion) scale.value = withTiming(0.96, { duration: PRESS_IN_MS });
+        }}
         onPressOut={() => { // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write is the idiom
-        scale.value = withTiming(1, { duration: MOTION.fast }); }}
+          scale.value = reduceMotion ? 1 : withSpring(1, SPRING.press);
+        }}
         style={[
           styles.base,
           {

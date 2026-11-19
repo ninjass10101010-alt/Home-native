@@ -45,6 +45,12 @@ export const ACCENTS_RGB = GENERATED.accentsRgb as {
 
 export const RADII = { sm: 10, md: 16, lg: 20, xl: 28, xxl: 36, full: 9999, pill: 9999 } as const;
 export const MOTION = { fast: 150, base: 240, slow: 400, glide: 600 } as const;
+export const PRESS_IN_MS = 70;
+export const SPRING = {
+  press: { damping: 20, stiffness: 420, mass: 0.7 },
+  settle: { damping: 24, stiffness: 280, mass: 0.85 },
+  bouncy: { damping: 14, stiffness: 260, mass: 0.8 },
+} as const;
 export const SPACING = { xs: 8, sm: 12, md: 16, lg: 20, xl: 24, xxl: 32 } as const;
 
 /**
@@ -110,5 +116,6 @@ export const MIN_TARGET_DP = 64;
 export const Typography = TYPOGRAPHY;
 export const Radii = RADII;
 export const Motion = MOTION;
+export const Spring = SPRING;
 export const Accents = ACCENTS;
 export const Spacing = SPACING;
