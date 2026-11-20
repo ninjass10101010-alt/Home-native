@@ -81,3 +81,14 @@ export interface RecommendedArtist {
   reason: string;
   artworkUrl?: string | null;
 }
+
+export interface FamilyPlaylist {
+  id: string;
+  name: string;
+  emoji: string;
+  tracks: MediaTrack[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type SleepTimerMinutes = 15 | 30 | 45 | 60;

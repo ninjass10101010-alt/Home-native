@@ -4,25 +4,36 @@ jest.mock("@react-native-async-storage/async-storage", () =>
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  addTrackToPlaylist,
   appendHistory,
+  createCustomPlaylist,
+  deleteCustomPlaylist,
   getRecommendedArtists,
   HISTORY_SCHEMA_VERSION,
   isFavoriteArtist,
+  isTrackLiked,
+  loadCustomPlaylists,
   loadDenylist,
   loadDownloads,
   loadFavoriteArtists,
   loadHistory,
+  loadLikedTracks,
   loadMusicSettings,
   mergeHistory,
   mergeMusicSettings,
   removeDownloadEntry,
+  removeTrackFromPlaylist,
+  saveCustomPlaylists,
   saveDenylist,
   saveDownloads,
   saveFavoriteArtists,
+  saveLikedTracks,
   toggleFavoriteArtist,
+  toggleLikedTrack,
   totalDownloadBytes,
   upsertDownload,
 } from "../src/music/library";
+import { visibleTracks, type ContentPolicy } from "../src/music/explicit";
 import type { DownloadEntry, MediaTrack } from "../src/music/types";
 
 const track = (id: string): MediaTrack => ({
@@ -233,6 +244,58 @@ describe("music library", () => {
       expect(recs.some((r) => r.name === "02:59")).toBe(false);
       expect(recs.some((r) => r.name === "Unknown")).toBe(false);
       expect(recs[0].name).toBe("Adele");
+    });
+  });
+
+  describe("liked tracks and custom household playlists", () => {
+    it("toggles, persists, and normalizes missing explicit ratings on liked songs", async () => {
+      const clean = track("clean");
+      const explicitTrack = { ...track("exp"), explicit: true as const };
+
+      let liked = toggleLikedTrack([], clean);
+      liked = toggleLikedTrack(liked, explicitTrack);
+      expect(isTrackLiked(liked, "clean")).toBe(true);
+      expect(isTrackLiked(liked, "exp")).toBe(true);
+
+      await saveLikedTracks(liked);
+      const reloaded = await loadLikedTracks();
+      expect(reloaded).toHaveLength(2);
+
+      // Legacy entry without explicit field must normalize to null (unknown => hidden for kids)
+      const legacyNoExplicit: Record<string, unknown> = { ...clean, id: "legacy1" };
+      delete legacyNoExplicit.explicit;
+      await AsyncStorage.setItem("music.liked.tracks", JSON.stringify([legacyNoExplicit, clean, explicitTrack]));
+      const normalized = await loadLikedTracks();
+      expect(normalized.find((t) => t.id === "legacy1")?.explicit).toBeNull();
+
+      const kidPolicy: ContentPolicy = { isParent: false, filterOn: true, denied: [] };
+      expect(visibleTracks(normalized, kidPolicy).map((t) => t.id)).toEqual(["clean"]);
+    });
+
+    it("creates, edits, deletes, and policy-filters custom household playlists", async () => {
+      const clean = track("clean");
+      const bad = { ...track("bad"), artist: "Eminem", explicit: true as const };
+      const unrated = { ...track("unrated"), explicit: null };
+
+      let pls = createCustomPlaylist([], "Sunday Cleaning", "🎉", [clean, bad, unrated]);
+      expect(pls).toHaveLength(1);
+      const id = pls[0].id;
+
+      // Adding duplicate id is ignored
+      pls = addTrackToPlaylist(pls, id, clean);
+      expect(pls[0].tracks).toHaveLength(3);
+
+      pls = removeTrackFromPlaylist(pls, id, "unrated");
+      expect(pls[0].tracks.map((t) => t.id)).toEqual(["clean", "bad"]);
+
+      await saveCustomPlaylists(pls);
+      const loaded = await loadCustomPlaylists();
+      expect(loaded).toHaveLength(1);
+
+      const kidPolicy: ContentPolicy = { isParent: false, filterOn: true, denied: ["eminem"] };
+      expect(visibleTracks(loaded[0].tracks, kidPolicy).map((t) => t.id)).toEqual(["clean"]);
+
+      expect(deleteCustomPlaylist(loaded, id)).toEqual([]);
     });
   });
 });

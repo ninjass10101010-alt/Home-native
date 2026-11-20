@@ -164,6 +164,7 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
   const pauseLocal = playback.pauseLocal;
   const parkLocal = playback.parkLocal;
   const setCastSink = playback.setCastSink;
+  const setCastPause = playback.setCastPause;
   const recordHistory = playback.recordHistory;
 
   const [target, setTarget] = React.useState<CastTarget | null>(null);
@@ -525,6 +526,11 @@ export function CastProvider({ children }: { children: React.ReactNode }) {
     () => guarded(async () => { await clientRef.current?.pause(); }),
     [guarded]
   );
+
+  React.useEffect(() => {
+    setCastPause?.(target ? pause : null);
+    return () => setCastPause?.(null);
+  }, [target, pause, setCastPause]);
 
   const seek = React.useCallback(
     (seconds: number) => guarded(async () => { await clientRef.current?.seek({ position: seconds }); }),

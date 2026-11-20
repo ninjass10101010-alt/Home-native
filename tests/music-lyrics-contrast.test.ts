@@ -140,18 +140,18 @@ describe("the measured pixels over the sheet", () => {
   it("the dark sheet's words hold the ratios the pane claims", () => {
     const t = musicTokensFor("dark", false);
     const on = (c: string) => contrast(composite(c, t.glassStrong), t.glassStrong);
-    expect(on(t.label)).toBeCloseTo(17.0, 0);
-    expect(on(t.label2)).toBeCloseTo(9.25, 1);
-    expect(on(t.label3)).toBeCloseTo(5.97, 1);
-    expect(on(t.accent)).toBeCloseTo(4.83, 1);
+    expect(on(t.label)).toBeCloseTo(15.51, 1);
+    expect(on(t.label2)).toBeCloseTo(9.37, 1);
+    expect(on(t.label3)).toBeCloseTo(6.36, 1);
+    expect(on(t.accent)).toBeCloseTo(4.81, 1);
   });
 
   it("the light sheet's words hold the ratios the pane claims", () => {
     const t = musicTokensFor("light", false);
     const on = (c: string) => contrast(composite(c, t.glassStrong), t.glassStrong);
-    expect(on(t.label)).toBeCloseTo(19.63, 1);
-    expect(on(t.label2)).toBeCloseTo(8.95, 1);
-    expect(on(t.label3)).toBeCloseTo(4.69, 1);
-    expect(on(t.accent)).toBeCloseTo(3.41, 1);
+    expect(on(t.label)).toBeCloseTo(16.57, 1);
+    expect(on(t.label2)).toBeCloseTo(7.52, 1);
+    expect(on(t.label3)).toBeCloseTo(4.98, 1);
+    expect(on(t.accent)).toBeCloseTo(5.01, 1);
   });
 });

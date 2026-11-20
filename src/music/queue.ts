@@ -81,3 +81,36 @@ export function moveInQueue(state: QueueState, from: number, to: number): QueueS
   const index = currentId ? tracks.findIndex((track) => track.id === currentId) : 0;
   return { ...state, tracks, index: index >= 0 ? index : 0 };
 }
+
+/** Inserts `track` immediately after the currently playing item (or starts the queue if empty). */
+export function insertNext(state: QueueState, track: MediaTrack): QueueState {
+  if (state.tracks.length === 0 || state.index < 0) {
+    return createQueue([track], 0, state.repeat);
+  }
+  const insertAt = Math.min(state.index + 1, state.tracks.length);
+  const tracks = [...state.tracks];
+  tracks.splice(insertAt, 0, track);
+  const currentId = state.tracks[state.index]?.id;
+  const baseIndex = currentId ? state.baseTracks.findIndex((t) => t.id === currentId) : -1;
+  const baseTracks = [...state.baseTracks];
+  if (baseIndex >= 0) {
+    baseTracks.splice(baseIndex + 1, 0, track);
+  } else {
+    baseTracks.push(track);
+  }
+  return { ...state, tracks, baseTracks };
+}
+
+/** Keeps only the currently playing track in the queue (preserving shuffle/repeat settings). */
+export function clearUpcoming(state: QueueState): QueueState {
+  if (state.tracks.length === 0 || state.index < 0) {
+    return { ...state, tracks: [], baseTracks: [], index: -1 };
+  }
+  const current = state.tracks[state.index];
+  return {
+    ...state,
+    tracks: [current],
+    baseTracks: [current],
+    index: 0,
+  };
+}

@@ -124,10 +124,10 @@ const LIGHT = musicTokensFor("light", false);
 /** The stage's text in the dark theme with boost — the tiers lift. */
 const DARK_BOOST = musicTokensFor("dark", true);
 
-/** The white page ink of the dark stage (the full label token). */
-const WHITE_TEXT = "#FFFFFF";
-/** The black page ink of the light stage (the full label token). */
-const BLACK_TEXT = "#000000";
+/** The page ink of the dark stage (the full label token). */
+const WHITE_TEXT = DARK.label;
+/** The page ink of the light stage (the full label token). */
+const BLACK_TEXT = LIGHT.label;
 
 /**
  * The ground under one word on the stage: the cover, veiled by the backdrop

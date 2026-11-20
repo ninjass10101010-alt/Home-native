@@ -351,11 +351,11 @@ it("an unknown cast duration shows an honest total, never a fake 0:00", async ()
   expect(queryByText("0:00")).toBeNull();
 });
 
-it("does not render the cast control when there is no current track", async () => {
+it("renders the cast control when idle so a speaker can be selected before playing", async () => {
   mockCurrent = null;
-  const { getByTestId, queryByTestId } = render(<MusicPlayer />, { wrapper: wrap });
+  const { getByTestId } = render(<MusicPlayer />, { wrapper: wrap });
   await waitFor(() => expect(getByTestId("music-search-input")).toBeTruthy());
-  expect(queryByTestId("cast-open")).toBeNull();
+  expect(getByTestId("cast-open")).toBeTruthy();
 });
 
 it("a hidden current track keeps a visible cast banner with Stop and the page-level error", async () => {

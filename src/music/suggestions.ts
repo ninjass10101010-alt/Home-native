@@ -35,12 +35,18 @@ export async function saveRecentSearch(
   current?: string[]
 ): Promise<string[]> {
   const cleaned = term.trim();
-  if (!cleaned) return current ?? [];
+  if (cleaned.length < 2) return current ?? [];
   const base = current ?? (await loadRecentSearches());
   const lower = cleaned.toLowerCase();
   const next = [
     cleaned,
-    ...base.filter((item) => item.trim().toLowerCase() !== lower),
+    ...base.filter((item) => {
+      const existing = item.trim().toLowerCase();
+      if (!existing || existing === lower) return false;
+      // Drop partial typing artifacts like "Alejandr" when saving "Alejandro Fernández"
+      if (lower.startsWith(existing)) return false;
+      return true;
+    }),
   ].slice(0, RECENT_SEARCHES_CAP);
   try {
     await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));

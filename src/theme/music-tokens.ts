@@ -1,27 +1,20 @@
 /**
- * The music surface's palette — Shiny's LIQUID palette, as a token module.
+ * The music surface's palette — Warm Glass v2 tokens for /music.
  *
- * SP2 (2026-10-21, human decision): the /music surface adopts Shiny's Liquid
- * palette — artwork-led, neutral grounds, recessive chrome — instead of the
- * app's Warm-Glass tokens. This module is the colour SOURCE for that surface:
- * it is ALLOW-listed in scripts/check-token-literals.mjs exactly like
- * materials.ts, so the literal ban applies DOWNSTREAM of it (every music
- * screen reads these tokens; no colour literals in components).
+ * Evolved from the original Liquid token contract so /music matches Consuela's
+ * warm parchment-cream (light) and deep indigo-slate (dark) atmosphere + cyan-nori
+ * accent palette while keeping every WCAG AA composited-pixel guarantee and the
+ * living blurred-artwork backdrop when playing.
  *
- * WHY THE TIERS ARE LIFTED (honesty note): Shiny's own label tiers (white at
- * 60% / 30% alpha) FAIL strict AA on Shiny's grounds. This app's contract
- * wins — the tiers below are lifted until they clear 4.5:1, and hierarchy is
- * carried by WEIGHT and SIZE, never by sub-AA colour. Shiny's LOOK survives
- * (a lifted tier is still a translucent tier); the accessibility maths does
- * not get a waiver.
+ * This module stays allow-listed in scripts/check-token-literals.mjs so the
+ * literal ban continues to apply downstream across all src/music/ components.
  *
- * MEASURED RATIOS (composited pixels — the rgba() token resolved over its
- * ground before the ratio is taken; see tests/music-tokens.test.ts):
+ * MEASURED RATIOS (composited pixels — resolved over ground before ratio):
  *
- *   variant       label   label2  label3  label/panel  accent  onAccent/accent
- *   light         21.00    9.29    4.74         21.00    3.65            3.65
- *   dark          21.00   10.59    6.25         18.58    5.96            3.52
- *   dark + boost  21.00   14.88   10.02         17.40    5.96            3.52
+ *   variant       label   label2  label3  accent/bg  onAccent/accent
+ *   light         16.57    7.52    4.98       5.01             5.36
+ *   dark          17.15   10.13    6.63       5.31             3.55
+ *   dark + boost  18.87   14.58   10.50       5.31             3.55
  *
  * The LIGHT accent (3.65:1 on the white ground) is deliberately LARGE-ONLY:
  * it may carry the big Now Playing title and accent FILLS, never body copy
@@ -150,25 +143,25 @@ export interface MusicTokens {
 }
 
 const DARK: MusicTokens = {
-  bg: "#000000",
-  grouped: "#131315",
+  bg: "#0F1117",
+  grouped: "#181C24",
   panel: "rgba(255,255,255,0.075)",
-  panelRim: "rgba(255,255,255,0.13)",
-  separator: "rgba(140,140,150,0.55)",
-  panelSeparator: "rgba(255,255,255,0.09)",
-  sheet: "#131315",
-  scrim: "rgba(0,0,0,0.28)",
-  label: "#FFFFFF",
-  label2: "rgba(255,255,255,0.72)",
-  label3: "rgba(255,255,255,0.55)",
-  accent: "#FF375F",
+  panelRim: "rgba(240,244,255,0.13)",
+  separator: "rgba(148,163,184,0.45)",
+  panelSeparator: "rgba(240,244,255,0.09)",
+  sheet: "#1E2330",
+  scrim: "rgba(0,0,0,0.30)",
+  label: "#F0F4FF",
+  label2: "rgba(240,244,255,0.76)",
+  label3: "rgba(240,244,255,0.60)",
+  accent: "#0E94B4",
   onAccent: "#FFFFFF",
-  green: "#30D158",
-  glassFill: "rgba(14,14,16,0.58)",
-  glassRim: "#3C3C40",
-  glassStrong: "#1C1C1F",
-  scrimTop: "rgba(0,0,0,0.60)",
-  scrimBottom: "rgba(0,0,0,0.68)",
+  green: "#4ADE80",
+  glassFill: "rgba(12,14,20,0.62)",
+  glassRim: "#3E4656",
+  glassStrong: "#181C24",
+  scrimTop: "rgba(12,14,20,0.66)",
+  scrimBottom: "rgba(12,14,20,0.72)",
   grain: "rgba(255,255,255,0.04)",
   shadow: "rgba(0,0,0,0.45)",
   pageMargin: 20,
@@ -178,27 +171,27 @@ const DARK: MusicTokens = {
 };
 
 const LIGHT: MusicTokens = {
-  bg: "#FFFFFF",
-  grouped: "#F2F2F7",
-  panel: "#FFFFFF",
-  panelRim: "rgba(0,0,0,0.08)",
-  separator: "rgba(60,60,67,0.29)",
-  panelSeparator: "rgba(60,60,67,0.12)",
-  sheet: "#F2F2F7",
+  bg: "#FAF7F2",
+  grouped: "#F2ECE3",
+  panel: "rgba(255,253,249,0.92)",
+  panelRim: "rgba(28,25,23,0.10)",
+  separator: "rgba(68,60,52,0.28)",
+  panelSeparator: "rgba(68,60,52,0.12)",
+  sheet: "#F6F2EC",
   scrim: "rgba(0,0,0,0.28)",
-  label: "#000000",
-  label2: "rgba(0,0,0,0.72)",
-  label3: "rgba(0,0,0,0.55)",
-  accent: "#FF2D55",
+  label: "#1A1816",
+  label2: "rgba(26,24,22,0.75)",
+  label3: "rgba(26,24,22,0.63)",
+  accent: "#0E7490",
   onAccent: "#FFFFFF",
-  green: "#34C759",
-  glassFill: "rgba(255,255,255,0.62)",
-  glassRim: "#D9D9DE",
-  glassStrong: "#F7F7F9",
-  scrimTop: "rgba(255,255,255,0.86)",
-  scrimBottom: "rgba(255,255,255,0.76)",
-  grain: "rgba(0,0,0,0.04)",
-  shadow: "rgba(0,0,0,0.26)",
+  green: "#059669",
+  glassFill: "rgba(255,255,255,0.68)",
+  glassRim: "#C8C0B4",
+  glassStrong: "#FAF7F2",
+  scrimTop: "rgba(250,247,242,0.88)",
+  scrimBottom: "rgba(250,247,242,0.78)",
+  grain: "rgba(0,0,0,0.035)",
+  shadow: "rgba(0,0,0,0.18)",
   pageMargin: 20,
   shelfGap: 12,
   artworkRadius: 14,
@@ -208,17 +201,18 @@ const LIGHT: MusicTokens = {
 /** Boost lifts the sub-primary tiers and the panel fill (high-contrast dark). */
 const DARK_BOOST: MusicTokens = {
   ...DARK,
-  label2: "rgba(255,255,255,0.85)",
-  label3: "rgba(255,255,255,0.70)",
-  panel: "rgba(255,255,255,0.10)",
-  panelRim: "rgba(255,255,255,0.16)",
+  label: "#FFFFFF",
+  label2: "rgba(255,255,255,0.88)",
+  label3: "rgba(255,255,255,0.74)",
+  panel: "rgba(255,255,255,0.11)",
+  panelRim: "rgba(255,255,255,0.18)",
   // The glass family lifts with it: a denser fill, a brighter rim and a
   // deeper scrim — the same reason the tiers are lifted.
-  glassFill: "rgba(10,10,12,0.68)",
-  glassRim: "#4A4A4F",
-  glassStrong: "#151517",
-  scrimTop: "rgba(0,0,0,0.68)",
-  scrimBottom: "rgba(0,0,0,0.74)",
+  glassFill: "rgba(10,12,18,0.72)",
+  glassRim: "#525C70",
+  glassStrong: "#141820",
+  scrimTop: "rgba(10,12,18,0.72)",
+  scrimBottom: "rgba(10,12,18,0.78)",
   grain: "rgba(255,255,255,0.05)",
   shadow: "rgba(0,0,0,0.55)",
 };

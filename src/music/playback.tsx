@@ -11,23 +11,35 @@ import {
 import { useAuth } from "../state/AuthProvider";
 import { verifyParentPin } from "../api/auth";
 import {
+  addTrackToPlaylist as addTrackToPlaylistEntry,
   appendHistory,
+  createCustomPlaylist as createCustomPlaylistEntry,
+  deleteCustomPlaylist as deleteCustomPlaylistEntry,
   DOWNLOAD_CAP_BYTES,
+  isTrackLiked,
+  loadCustomPlaylists,
   loadDenylist,
   loadDownloads,
   loadHistory,
+  loadLikedTracks,
   loadMusicSettings,
   removeDownloadEntry,
+  removeTrackFromPlaylist as removeTrackFromPlaylistEntry,
+  saveCustomPlaylists,
   saveDenylist,
   saveDownloads,
+  saveLikedTracks,
   saveMusicSettings,
+  toggleLikedTrack,
   totalDownloadBytes,
   upsertDownload,
   type MusicSettings,
 } from "./library";
 import {
+  clearUpcoming,
   createQueue,
   cycleRepeat,
+  insertNext,
   moveInQueue,
   nextIndex,
   previousIndex,
@@ -41,7 +53,7 @@ import {
   visibleTracks,
   type ContentPolicy,
 } from "./explicit";
-import type { DenyEntry, DownloadEntry, MediaTrack, QueueState, RepeatMode } from "./types";
+import type { DenyEntry, DownloadEntry, FamilyPlaylist, MediaTrack, QueueState, RepeatMode } from "./types";
 
 /**
  * The downloads directory — resolved LAZILY, not at module load.
@@ -178,6 +190,32 @@ export interface PlaybackValue {
   unlockMusicParent?: (pin: string) => Promise<void>;
   /** Immediately re-locks Music back to kid-safe filtered mode. */
   lockMusicParent?: () => void;
+  /** Liked tracks visible under the current viewer policy. */
+  likedTracks?: MediaTrack[];
+  /** Custom household playlists (with tracks filtered under the viewer policy). */
+  playlists?: FamilyPlaylist[];
+  /** Epoch ms when the active sleep timer pauses playback (null = off). */
+  sleepTimerEndsAt?: number | null;
+  /** Inserts a track immediately after the currently playing item. */
+  playNext?: (track: MediaTrack) => void;
+  /** Clears upcoming tracks while keeping the currently playing track. */
+  clearQueue?: () => void;
+  /** Sets/clears the sleep timer (in minutes; null turns off). */
+  setSleepTimer?: (minutes: number | null) => void;
+  /** Checks whether `trackId` is currently liked (and visible). */
+  isLiked?: (trackId: string) => boolean;
+  /** Toggles like status for a track (fail-closed if hidden when adding). */
+  toggleLike?: (track: MediaTrack) => void;
+  /** Creates a custom household playlist (optionally seeded with visible tracks). */
+  createPlaylist?: (name: string, emoji?: string, initialTracks?: MediaTrack[]) => void;
+  /** Deletes a custom household playlist by id. */
+  deletePlaylist?: (playlistId: string) => void;
+  /** Appends a visible track to a custom playlist. */
+  addTrackToPlaylist?: (playlistId: string, track: MediaTrack) => void;
+  /** Removes a track from a custom playlist. */
+  removeTrackFromPlaylist?: (playlistId: string, trackId: string) => void;
+  /** Installs/clears Cast pause callback so sleep timer can pause active casts. */
+  setCastPause?: (fn: (() => Promise<void>) | null) => void;
 }
 
 export type PlaybackCoreValue = Omit<PlaybackValue, "position">;
@@ -253,6 +291,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [downloads, setDownloads] = React.useState<DownloadEntry[]>([]);
   const [history, setHistory] = React.useState<MediaTrack[]>([]);
   const [denylist, setDenylist] = React.useState<DenyEntry[]>([]);
+  const [rawLikedTracks, setRawLikedTracks] = React.useState<MediaTrack[]>([]);
+  const [likedLoaded, setLikedLoaded] = React.useState(false);
+  const [rawPlaylists, setRawPlaylists] = React.useState<FamilyPlaylist[]>([]);
+  const [playlistsLoaded, setPlaylistsLoaded] = React.useState(false);
+  const [sleepTimerEndsAt, setSleepTimerEndsAt] = React.useState<number | null>(null);
+  const sleepTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const castPauseRef = React.useRef<(() => Promise<void>) | null>(null);
   /**
    * The stream the engine resolved last.
    *
@@ -408,10 +453,26 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       });
       setDenylistLoaded(true);
     });
-    void Promise.all([loadDownloads(), loadMusicSettings(), loadHistory()]).then(([list, saved, recent]) => {
+    void Promise.all([
+      loadDownloads(),
+      loadMusicSettings(),
+      loadHistory(),
+      loadLikedTracks(),
+      loadCustomPlaylists(),
+    ]).then(([list, saved, recent, liked, savedPlaylists]) => {
       setDownloads(list);
       setSettings(saved);
       setHistory(recent);
+      setRawLikedTracks((prev) => {
+        const seen = new Set(prev.map((t) => t.id));
+        return [...prev, ...liked.filter((t) => !seen.has(t.id))];
+      });
+      setLikedLoaded(true);
+      setRawPlaylists((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        return [...prev, ...savedPlaylists.filter((p) => !seen.has(p.id))];
+      });
+      setPlaylistsLoaded(true);
       setQueue((q) => ({ ...q, repeat: saved.repeat, shuffle: saved.shuffle }));
     });
   }, []);
@@ -428,6 +489,25 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     if (!denylistLoaded) return;
     void saveDenylist(denylist);
   }, [denylist, denylistLoaded]);
+
+  React.useEffect(() => {
+    if (!likedLoaded) return;
+    void saveLikedTracks(rawLikedTracks);
+  }, [rawLikedTracks, likedLoaded]);
+
+  React.useEffect(() => {
+    if (!playlistsLoaded) return;
+    void saveCustomPlaylists(rawPlaylists);
+  }, [rawPlaylists, playlistsLoaded]);
+
+  React.useEffect(() => {
+    return () => {
+      if (sleepTimerRef.current) {
+        clearTimeout(sleepTimerRef.current);
+        sleepTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const persistSettings = React.useCallback((next: MusicSettings) => {
     setSettings(next);
@@ -498,6 +578,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     },
     []
   );
+
+  const setCastPause = React.useCallback((fn: (() => Promise<void>) | null) => {
+    castPauseRef.current = fn;
+  }, []);
 
   const pauseLocal = React.useCallback(() => {
     playerRef.current.pause();
@@ -853,6 +937,45 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setQueue((q) => moveInQueue(q, from, to));
   }, []);
 
+  const playNext = React.useCallback(
+    (track: MediaTrack) => {
+      // Fail closed: a track the viewer may not see never enters Play Next.
+      if (isContentHidden(track, policy)) return;
+      setQueue((q) => insertNext(q, track));
+    },
+    [policy]
+  );
+
+  const clearQueue = React.useCallback(() => {
+    setQueue((q) => clearUpcoming(q));
+  }, []);
+
+  const setSleepTimer = React.useCallback((minutes: number | null) => {
+    if (sleepTimerRef.current) {
+      clearTimeout(sleepTimerRef.current);
+      sleepTimerRef.current = null;
+    }
+    if (minutes === null || !Number.isFinite(minutes) || minutes <= 0) {
+      setSleepTimerEndsAt(null);
+      return;
+    }
+    const ms = Math.round(minutes * 60 * 1000);
+    setSleepTimerEndsAt(Date.now() + ms);
+    sleepTimerRef.current = setTimeout(() => {
+      sleepTimerRef.current = null;
+      setSleepTimerEndsAt(null);
+      try {
+        playerRef.current.pause();
+      } catch {
+        // ignore native pause error
+      }
+      const castPause = castPauseRef.current;
+      if (castPause) {
+        void castPause().catch(() => {});
+      }
+    }, ms);
+  }, []);
+
   const downloadCurrent = React.useCallback(async () => {
     if (!current) return;
     const dest = localFileFor(current.id);
@@ -985,6 +1108,59 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     () => visibleTracks(history, policy),
     [history, policy]
   );
+  const visibleLikedTracks = React.useMemo(
+    () => visibleTracks(rawLikedTracks, policy),
+    [rawLikedTracks, policy]
+  );
+  const visiblePlaylists = React.useMemo(
+    () =>
+      rawPlaylists.map((pl) => ({
+        ...pl,
+        tracks: visibleTracks(pl.tracks, policy),
+      })),
+    [rawPlaylists, policy]
+  );
+
+  const isLiked = React.useCallback(
+    (trackId: string) => isTrackLiked(visibleLikedTracks, trackId),
+    [visibleLikedTracks]
+  );
+
+  const toggleLike = React.useCallback(
+    (track: MediaTrack) => {
+      const alreadyLiked = isTrackLiked(rawLikedTracks, track.id);
+      if (!alreadyLiked && isContentHidden(track, policy)) return;
+      setRawLikedTracks((prev) => toggleLikedTrack(prev, track));
+    },
+    [policy, rawLikedTracks]
+  );
+
+  const createPlaylist = React.useCallback(
+    (name: string, emoji = "🎵", initialTracks: MediaTrack[] = []) => {
+      const safeTracks = visibleTracks(initialTracks, policy);
+      setRawPlaylists((prev) => createCustomPlaylistEntry(prev, name, emoji, safeTracks));
+    },
+    [policy]
+  );
+
+  const deletePlaylist = React.useCallback((playlistId: string) => {
+    setRawPlaylists((prev) => deleteCustomPlaylistEntry(prev, playlistId));
+  }, []);
+
+  const addTrackToPlaylist = React.useCallback(
+    (playlistId: string, track: MediaTrack) => {
+      if (isContentHidden(track, policy)) return;
+      setRawPlaylists((prev) => addTrackToPlaylistEntry(prev, playlistId, track));
+    },
+    [policy]
+  );
+
+  const removeTrackFromPlaylist = React.useCallback(
+    (playlistId: string, trackId: string) => {
+      setRawPlaylists((prev) => removeTrackFromPlaylistEntry(prev, playlistId, trackId));
+    },
+    []
+  );
 
   /* eslint-disable react-hooks/refs -- the transport callbacks read the player/cast refs only when a user action invokes them, never during render */
   const coreValue = React.useMemo<PlaybackCoreValue>(
@@ -1001,6 +1177,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       downloads: visibleDownloads,
       downloadBytes: totalDownloadBytes(visibleDownloads),
       history: visibleHistory,
+      likedTracks: visibleLikedTracks,
+      playlists: visiblePlaylists,
+      sleepTimerEndsAt,
       settings,
       denylist,
       policy,
@@ -1012,6 +1191,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       advanceForCast,
       previousForCast,
       setCastSink,
+      setCastPause,
       pauseLocal,
       recordHistory,
       parkLocal,
@@ -1021,6 +1201,15 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       cycleRepeatMode,
       toggleShuffleMode,
       addToQueue,
+      playNext,
+      clearQueue,
+      setSleepTimer,
+      isLiked,
+      toggleLike,
+      createPlaylist,
+      deletePlaylist,
+      addTrackToPlaylist,
+      removeTrackFromPlaylist,
       removeFromQueue,
       moveQueueItem,
       downloadCurrent,
@@ -1035,15 +1224,15 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       player,
     }),
     [
-      addDenied, addToQueue, advanceForCast, current, cycleRepeatMode, downloadCurrent, duration,
-      error, denylist, moveQueueItem, next, parkLocal, pauseLocal, play, playQueueAt, playing, policy,
-      previous,
-      previousForCast,
-      queue.index,
-      queue.repeat, queue.shuffle, queue.tracks, removeDenied, removeDownload, removeFromQueue, seek,
-      recordHistory,
-      setCastSink, setExplicitFilter, setRepeat, settings, status?.isBuffering, streamFormat, toggle, toggleShuffleMode,
-      visibleDownloads, visibleHistory, stopAndClear, musicParentUnlocked, unlockMusicParent, lockMusicParent, player,
+      addDenied, addToQueue, addTrackToPlaylist, advanceForCast, clearQueue, createPlaylist,
+      current, cycleRepeatMode, deletePlaylist, downloadCurrent, duration, error, denylist,
+      isLiked, moveQueueItem, next, parkLocal, pauseLocal, play, playNext, playQueueAt,
+      playing, policy, previous, previousForCast, queue.index, queue.repeat, queue.shuffle,
+      queue.tracks, removeDenied, removeDownload, removeFromQueue, removeTrackFromPlaylist,
+      seek, recordHistory, setCastPause, setCastSink, setExplicitFilter, setRepeat,
+      setSleepTimer, settings, sleepTimerEndsAt, status?.isBuffering, streamFormat, toggle,
+      toggleLike, toggleShuffleMode, visibleDownloads, visibleHistory, visibleLikedTracks,
+      visiblePlaylists, stopAndClear, musicParentUnlocked, unlockMusicParent, lockMusicParent, player,
     ]
   );
 

@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { DenyEntry, DownloadEntry, FavoriteArtist, MediaTrack, RecommendedArtist, RepeatMode } from "./types";
+import type { DenyEntry, DownloadEntry, FamilyPlaylist, FavoriteArtist, MediaTrack, RecommendedArtist, RepeatMode } from "./types";
 
 const DOWNLOADS_KEY = "music.downloads";
 const HISTORY_KEY = "music.history";
@@ -7,8 +7,11 @@ const HISTORY_VERSION_KEY = "music.history.version";
 const SETTINGS_KEY = "music.settings";
 const DENYLIST_KEY = "music.denylist";
 const FAVORITE_ARTISTS_KEY = "music.favorites.artists";
+const LIKED_TRACKS_KEY = "music.liked.tracks";
+const CUSTOM_PLAYLISTS_KEY = "music.playlists.custom";
 
 export const HISTORY_LIMIT = 500;
+export const LIKED_LIMIT = 500;
 export const DOWNLOAD_CAP_BYTES = 2 * 1024 * 1024 * 1024;
 
 /**
@@ -297,7 +300,7 @@ export function getRecommendedArtists(
     recommendations.push({
       name,
       genre: "Recently Played",
-      reason: "Based on your recent listening",
+      reason: "From recent listening",
       artworkUrl,
     });
     if (recommendations.length >= 4) break;
@@ -324,4 +327,117 @@ export function getRecommendedArtists(
   }
 
   return recommendations;
+}
+
+/** Ensures every persisted track keeps a valid tri-state explicit rating (missing => null). */
+export function normalizeTrackExplicit(track: MediaTrack): MediaTrack {
+  return {
+    ...track,
+    explicit: typeof track.explicit === "boolean" ? track.explicit : null,
+  };
+}
+
+export async function loadLikedTracks(): Promise<MediaTrack[]> {
+  const list = await readJson<MediaTrack[]>(LIKED_TRACKS_KEY, []);
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((t) => typeof t?.id === "string" && typeof t?.title === "string")
+    .map(normalizeTrackExplicit);
+}
+
+export function saveLikedTracks(list: MediaTrack[]): Promise<void> {
+  return writeJson(LIKED_TRACKS_KEY, list.slice(0, LIKED_LIMIT));
+}
+
+export function isTrackLiked(list: readonly MediaTrack[], trackId: string): boolean {
+  return list.some((t) => t.id === trackId);
+}
+
+export function toggleLikedTrack(list: MediaTrack[], track: MediaTrack): MediaTrack[] {
+  const normalized = normalizeTrackExplicit(track);
+  if (list.some((t) => t.id === normalized.id)) {
+    return list.filter((t) => t.id !== normalized.id);
+  }
+  return [normalized, ...list].slice(0, LIKED_LIMIT);
+}
+
+export async function loadCustomPlaylists(): Promise<FamilyPlaylist[]> {
+  const list = await readJson<FamilyPlaylist[]>(CUSTOM_PLAYLISTS_KEY, []);
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((p) => typeof p?.id === "string" && typeof p?.name === "string" && p.name.trim().length > 0)
+    .map((p) => ({
+      ...p,
+      emoji: typeof p.emoji === "string" && p.emoji.trim() ? p.emoji : "🎵",
+      tracks: Array.isArray(p.tracks)
+        ? p.tracks
+            .filter((t) => typeof t?.id === "string" && typeof t?.title === "string")
+            .map(normalizeTrackExplicit)
+        : [],
+    }));
+}
+
+export function saveCustomPlaylists(list: FamilyPlaylist[]): Promise<void> {
+  return writeJson(CUSTOM_PLAYLISTS_KEY, list);
+}
+
+export function createCustomPlaylist(
+  list: FamilyPlaylist[],
+  name: string,
+  emoji = "🎵",
+  initialTracks: MediaTrack[] = []
+): FamilyPlaylist[] {
+  const trimmed = name.trim();
+  if (!trimmed) return list;
+  const now = Date.now();
+  const seen = new Set<string>();
+  const deduped: MediaTrack[] = [];
+  for (const t of initialTracks) {
+    if (!t?.id || seen.has(t.id)) continue;
+    seen.add(t.id);
+    deduped.push(normalizeTrackExplicit(t));
+  }
+  const entry: FamilyPlaylist = {
+    id: `pl-${now}-${Math.random().toString(36).slice(2, 7)}`,
+    name: trimmed,
+    emoji: emoji.trim() || "🎵",
+    tracks: deduped,
+    createdAt: now,
+    updatedAt: now,
+  };
+  return [entry, ...list];
+}
+
+export function deleteCustomPlaylist(list: FamilyPlaylist[], playlistId: string): FamilyPlaylist[] {
+  return list.filter((p) => p.id !== playlistId);
+}
+
+export function addTrackToPlaylist(
+  list: FamilyPlaylist[],
+  playlistId: string,
+  track: MediaTrack
+): FamilyPlaylist[] {
+  const normalized = normalizeTrackExplicit(track);
+  return list.map((p) => {
+    if (p.id !== playlistId) return p;
+    if (p.tracks.some((t) => t.id === normalized.id)) return p;
+    return {
+      ...p,
+      tracks: [...p.tracks, normalized],
+      updatedAt: Date.now(),
+    };
+  });
+}
+
+export function removeTrackFromPlaylist(
+  list: FamilyPlaylist[],
+  playlistId: string,
+  trackId: string
+): FamilyPlaylist[] {
+  return list.map((p) => {
+    if (p.id !== playlistId) return p;
+    const next = p.tracks.filter((t) => t.id !== trackId);
+    if (next.length === p.tracks.length) return p;
+    return { ...p, tracks: next, updatedAt: Date.now() };
+  });
 }

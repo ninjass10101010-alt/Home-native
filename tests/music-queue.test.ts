@@ -1,6 +1,8 @@
 import {
+  clearUpcoming,
   createQueue,
   cycleRepeat,
+  insertNext,
   moveInQueue,
   nextIndex,
   previousIndex,
@@ -74,5 +76,29 @@ describe("music queue", () => {
     const moved = moveInQueue(createQueue(tracks, 0), 0, 2);
     expect(moved.tracks.map((t) => t.id)).toEqual(["b", "c", "a", "d"]);
     expect(moved.index).toBe(2);
+  });
+
+  it("insertNext starts a queue when empty and inserts right after current when playing", () => {
+    const empty = createQueue([], -1, "all");
+    const started = insertNext(empty, track("x"));
+    expect(started.index).toBe(0);
+    expect(started.tracks.map((t) => t.id)).toEqual(["x"]);
+    expect(started.repeat).toBe("all");
+
+    const q = createQueue(tracks, 1);
+    const nextUp = insertNext(q, track("x"));
+    expect(nextUp.index).toBe(1);
+    expect(nextUp.tracks.map((t) => t.id)).toEqual(["a", "b", "x", "c", "d"]);
+    expect(nextUp.baseTracks.map((t) => t.id)).toEqual(["a", "b", "x", "c", "d"]);
+  });
+
+  it("clearUpcoming keeps only the current track and preserves repeat/shuffle", () => {
+    const q = { ...createQueue(tracks, 2, "all"), shuffle: true };
+    const cleared = clearUpcoming(q);
+    expect(cleared.tracks.map((t) => t.id)).toEqual(["c"]);
+    expect(cleared.baseTracks.map((t) => t.id)).toEqual(["c"]);
+    expect(cleared.index).toBe(0);
+    expect(cleared.repeat).toBe("all");
+    expect(cleared.shuffle).toBe(true);
   });
 });

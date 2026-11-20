@@ -1,10 +1,12 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
+import { hapticTap } from "../theme/haptics";
 import { musicTokensFor } from "../theme/music-tokens";
 import { Modal } from "../ui/Modal";
 import { CastVolume } from "./CastVolume";
 import { useCast } from "./CastProvider";
+import { MusicIcon } from "./MusicIcons";
 import type { MediaTrack } from "./types";
 
 export interface CastControlProps {
@@ -57,6 +59,8 @@ export function CastControl({ track }: CastControlProps) {
     }
   };
 
+  const activeCast = cast.casting;
+
   return (
     <>
       <Pressable
@@ -69,7 +73,10 @@ export function CastControl({ track }: CastControlProps) {
               ? `Connected to ${cast.target.name}. Change cast device`
               : "Cast to a device"
         }
-        onPress={() => setOpen(true)}
+        onPress={() => {
+          hapticTap();
+          setOpen(true);
+        }}
         style={{
           minHeight: 64,
           minWidth: 64,
@@ -80,16 +87,21 @@ export function CastControl({ track }: CastControlProps) {
           justifyContent: "center",
           gap: 8,
           borderRadius: 999,
-          backgroundColor: tokens.scrim,
+          backgroundColor: activeCast ? tokens.accent : tokens.scrim,
           borderWidth: 1,
-          borderColor: tokens.panelRim,
+          borderColor: activeCast ? tokens.accent : tokens.panelRim,
         }}
       >
-        <Text style={{ fontSize: 18 }}>{cast.casting ? "🔊" : "📺"}</Text>
+        <MusicIcon
+          name={activeCast ? "speaker" : "cast"}
+          size={20}
+          color={activeCast ? tokens.onAccent : tokens.label}
+          filled={activeCast}
+        />
         <Text
           numberOfLines={1}
           style={{
-            color: tokens.label,
+            color: activeCast ? tokens.onAccent : tokens.label,
             fontSize: 16,
             fontWeight: "700",
           }}
@@ -171,7 +183,10 @@ export function CastControl({ track }: CastControlProps) {
                   accessibilityLabel={`Cast to ${device.name}`}
                   accessibilityState={{ disabled: busy, selected: connected }}
                   disabled={busy}
-                  onPress={() => void pick(device.id)}
+                  onPress={() => {
+                    hapticTap();
+                    void pick(device.id);
+                  }}
                   style={{
                     minHeight: 76,
                     paddingHorizontal: 22,
@@ -180,11 +195,16 @@ export function CastControl({ track }: CastControlProps) {
                     gap: 16,
                     borderRadius: 18,
                     borderWidth: 1,
-                    borderColor: tokens.panelRim,
+                    borderColor: connected ? tokens.accent : tokens.panelRim,
                     backgroundColor: tokens.sheet,
                   }}
                 >
-                  <Text style={{ fontSize: 22 }}>{connected ? "🔊" : "📺"}</Text>
+                  <MusicIcon
+                    name={connected ? "speaker" : "cast"}
+                    size={22}
+                    color={connected ? tokens.accent : tokens.label}
+                    filled={connected}
+                  />
                   <Text
                     numberOfLines={1}
                     style={{ flex: 1, color: tokens.label, fontSize: 20, fontWeight: "600" }}
@@ -194,15 +214,13 @@ export function CastControl({ track }: CastControlProps) {
                   {connected ? (
                     <View
                       style={{
-                        paddingHorizontal: 12,
+                        paddingHorizontal: 14,
                         paddingVertical: 6,
                         borderRadius: 999,
-                        backgroundColor: tokens.scrim,
-                        borderWidth: 1,
-                        borderColor: tokens.panelRim,
+                        backgroundColor: tokens.accent,
                       }}
                     >
-                      <Text style={{ color: tokens.label, fontSize: 16, fontWeight: "600" }}>
+                      <Text style={{ color: tokens.onAccent, fontSize: 16, fontWeight: "700" }}>
                         Connected
                       </Text>
                     </View>
@@ -221,7 +239,10 @@ export function CastControl({ track }: CastControlProps) {
               accessibilityLabel="Stop casting"
               accessibilityState={{ disabled: busy }}
               disabled={busy}
-              onPress={() => void stop()}
+              onPress={() => {
+                hapticTap();
+                void stop();
+              }}
               style={{
                 minHeight: 76,
                 paddingHorizontal: 24,
