@@ -14,11 +14,63 @@ export interface MediaTrack {
    *   `MUSIC_EXPLICIT_BADGE` on this row. The badge MARKS the explicit tracks;
    *   it does not certify the rest, so `false` is "not marked explicit", never
    *   "rated clean".
-   * - `null` — UNKNOWN/unrated (the NewPipe fallback search, or a
-   *   `related()` row). Kid roles fail closed on an unknown rating.
+   * - `null` — UNKNOWN/unrated (the NewPipe fallback path, a `related()` row,
+   *   or an unbadged OMV playlist item). Kid roles fail closed on an unknown
+   *   rating.
    */
   explicit: boolean | null;
   source: MediaSource;
+}
+
+export interface MusicArtistSummary {
+  browseId: string;
+  name: string;
+  subtitle: string;
+  artworkUrl: string | null;
+}
+
+export interface MusicAlbumSummary {
+  browseId: string;
+  title: string;
+  artist: string;
+  year: string;
+  albumType: string;
+  subtitle: string;
+  artworkUrl: string | null;
+  explicit: boolean | null;
+}
+
+export interface MusicPlaylistSummary {
+  browseId: string;
+  title: string;
+  author: string;
+  subtitle: string;
+  artworkUrl: string | null;
+}
+
+export interface ArtistProfile {
+  browseId: string;
+  name: string;
+  subtitle: string;
+  description: string;
+  artworkUrl: string | null;
+  topSongs: MediaTrack[];
+  albums: MusicAlbumSummary[];
+  singles: MusicAlbumSummary[];
+  playlists: MusicPlaylistSummary[];
+  relatedArtists: MusicArtistSummary[];
+  explicitKnown: boolean;
+}
+
+export interface MusicCollectionDetail {
+  browseId: string;
+  kind: "album" | "playlist";
+  title: string;
+  subtitle: string;
+  artist: string;
+  artworkUrl: string | null;
+  tracks: MediaTrack[];
+  explicitKnown: boolean;
 }
 
 export interface ResolvedAudio {

@@ -179,8 +179,14 @@ object Engine {
   /**
    * The whole fallback answer: the tracks plus the "ratings unknown" flag.
    */
-  fun fallbackResult(items: List<StreamInfoItem>): Map<String, Any?> =
-    mapOf("tracks" to mapFallbackTracks(items), "explicitKnown" to false)
+  fun fallbackResult(items: List<StreamInfoItem>): Map<String, Any?> = mapOf(
+    "tracks" to mapFallbackTracks(items),
+    "explicitKnown" to false,
+    "topArtist" to null,
+    "artists" to emptyList<Any>(),
+    "albums" to emptyList<Any>(),
+    "playlists" to emptyList<Any>()
+  )
 
   private fun StreamInfoItem.toFallbackTrack(): Map<String, Any?> = mapOf(
     "id" to youtubeId(),
@@ -248,6 +254,19 @@ object Engine {
     onEngineThread(promise) { related(id) }
 
   /**
+   * Fetches a YouTube Music artist profile (top songs, albums, singles, playlists,
+   * related artists) off Expo's shared async queue.
+   */
+  fun browseArtistAsync(browseId: String, promise: Promise) =
+    onEngineThread(promise) { browseArtist(browseId) }
+
+  /**
+   * Fetches a YouTube Music album or playlist tracklist off Expo's shared async queue.
+   */
+  fun browseCollectionAsync(browseId: String, promise: Promise) =
+    onEngineThread(promise) { browseCollection(browseId) }
+
+  /**
    * Reads the artwork's own colours, off Expo's shared async queue and off
    * the playback/search engine threads so thumbnail fetches never compete
    * with stream resolution.
@@ -313,8 +332,8 @@ object Engine {
    */
   fun search(query: String, limit: Int): Map<String, Any?> {
     ensureInit()
-    val badgeTracks = try {
-      MusicSearch.search(query, limit, badgeClient)
+    val rich = try {
+      MusicSearch.searchRich(query, limit, badgeClient)
     } catch (cancellation: CancellationException) {
       // A cancellation is not a search failure — it must not be swallowed.
       throw cancellation
@@ -323,8 +342,21 @@ object Engine {
       Log.w(TAG, "innertube search failed: ${MusicSearch.reasonFor(error)}")
       null
     }
-    if (!badgeTracks.isNullOrEmpty()) {
-      return mapOf("tracks" to badgeTracks, "explicitKnown" to true)
+    val richTracks = rich?.get("tracks") as? List<*>
+    val richArtists = rich?.get("artists") as? List<*>
+    val richAlbums = rich?.get("albums") as? List<*>
+    val richPlaylists = rich?.get("playlists") as? List<*>
+    if (
+      rich != null &&
+      (
+        !richTracks.isNullOrEmpty() ||
+          rich["topArtist"] != null ||
+          !richArtists.isNullOrEmpty() ||
+          !richAlbums.isNullOrEmpty() ||
+          !richPlaylists.isNullOrEmpty()
+      )
+    ) {
+      return rich
     }
     val fallback = try {
       searchViaNewPipe(query, limit)
@@ -335,6 +367,16 @@ object Engine {
       emptyList()
     }
     return fallbackResult(fallback)
+  }
+
+  fun browseArtist(browseId: String): Map<String, Any?> {
+    ensureInit()
+    return MusicBrowse.browseArtist(browseId, badgeClient)
+  }
+
+  fun browseCollection(browseId: String): Map<String, Any?> {
+    ensureInit()
+    return MusicBrowse.browseCollection(browseId, badgeClient)
   }
 
   /**

@@ -34,6 +34,10 @@ export type MusicIconName =
   | "moon"
   | "playlist"
   | "clock"
+  | "disc"
+  | "user"
+  | "chevronRight"
+  | "link"
   | "music";
 
 export interface MusicIconProps {
@@ -314,6 +318,29 @@ export function MusicIcon({
           <>
             <Circle cx="12" cy="12" r="8.5" fill={color} fillOpacity={fillTint} />
             <Path d="M12 7.5V12l3 2" />
+          </>
+        );
+      case "disc":
+        return (
+          <>
+            <Circle cx="12" cy="12" r="9" fill={color} fillOpacity={fillTint} />
+            <Circle cx="12" cy="12" r="2.6" />
+          </>
+        );
+      case "user":
+        return (
+          <>
+            <Circle cx="12" cy="8.5" r="3.5" fill={color} fillOpacity={fillTint} />
+            <Path d="M5 19.5c1.3-3.2 4-4.5 7-4.5s5.7 1.3 7 4.5" />
+          </>
+        );
+      case "chevronRight":
+        return <Path d="m9 6 6 6-6 6" />;
+      case "link":
+        return (
+          <>
+            <Path d="M10 13a5 5 0 0 0 7.54.54l2.92-2.92a5 5 0 0 0-7.07-7.07L11.7 5.2" />
+            <Path d="M14 11a5 5 0 0 0-7.54-.54l-2.92 2.92a5 5 0 0 0 7.07 7.07l1.71-1.7" />
           </>
         );
       case "music":

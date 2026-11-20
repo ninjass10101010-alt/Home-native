@@ -154,7 +154,16 @@ jest.mock("expo-notifications", () => ({
 // expo-youtube-engine: native module is unavailable in jsdom. Individual tests
 // override these with jest.mock when they assert behaviour.
 jest.mock("./modules/youtube-engine", () => ({
-  search: jest.fn(async () => ({ tracks: [], explicitKnown: true })),
+  search: jest.fn(async () => ({
+    tracks: [],
+    explicitKnown: true,
+    topArtist: null,
+    artists: [],
+    albums: [],
+    playlists: [],
+  })),
+  browseArtist: jest.fn(async () => null),
+  browseCollection: jest.fn(async () => null),
   related: jest.fn(async () => []),
   resolveAudio: jest.fn(async () => ({
     url: "https://example.invalid/audio.m4a",

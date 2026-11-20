@@ -23,7 +23,7 @@ object MusicSearch {
   private const val ENDPOINT = "https://www.youtube.com/youtubei/v1/search?prettyPrint=false"
 
   /** YouTube Music's web client — the one that answers with music results. */
-  private const val CLIENT_NAME = "WEB_REMIX"
+  internal const val CLIENT_NAME = "WEB_REMIX"
 
   /**
    * The innertube client version this module speaks.
@@ -35,9 +35,9 @@ object MusicSearch {
    * so the family-safe filter hides the tracks instead of showing them
    * unrated. Re-probe and bump this constant when the search starts failing.
    */
-  private const val CLIENT_VERSION = "1.20241010.01.00"
-  private const val CLIENT_ID = "67"
-  private const val USER_AGENT =
+  internal const val CLIENT_VERSION = "1.20241010.01.00"
+  internal const val CLIENT_ID = "67"
+  internal const val USER_AGENT =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
       "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
 
@@ -48,14 +48,19 @@ object MusicSearch {
   private const val EXPLICIT_ICON_TYPE = "MUSIC_EXPLICIT_BADGE"
   private const val EXPLICIT_LABEL = "Explicit"
 
+  private const val PAGE_TYPE_ARTIST = "MUSIC_PAGE_TYPE_ARTIST"
+  private const val PAGE_TYPE_ALBUM = "MUSIC_PAGE_TYPE_ALBUM"
+  private const val PAGE_TYPE_PLAYLIST = "MUSIC_PAGE_TYPE_PLAYLIST"
+
   /** Every failure of this module carries this prefix — and only this prefix. */
   const val REASON_PREFIX = "innertube_search_"
 
-  private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+  internal val JSON_MEDIA_TYPE = "application/json".toMediaType()
+  private val YEAR_RE = Regex("^\\d{4}$")
 
   /** The item kinds YouTube prints in the second column ("Song • Eminem"). */
   private val ITEM_KINDS = setOf(
-    "song", "video", "album", "single", "episode", "playlist", "artist",
+    "song", "video", "album", "single", "ep", "episode", "playlist", "artist",
     "profile", "podcast", "audiobook", "station", "movie", "clip", "show"
   )
 
@@ -79,8 +84,10 @@ object MusicSearch {
    * "Not explicit".
    */
   fun hasExplicitBadge(item: JsonObject): Boolean {
-    val badges = item["badges"] ?: return false
-    return hasExplicitMarker(badges)
+    val badges = item["badges"]
+    if (badges != null && hasExplicitMarker(badges)) return true
+    val subtitleBadges = item["subtitleBadges"] ?: return false
+    return hasExplicitMarker(subtitleBadges)
   }
 
   /** Every music song item in the response, found by shape, not by path. */
@@ -118,19 +125,35 @@ object MusicSearch {
    * and rows whose kind cannot be read are dropped: none of them carry a
    * rating, and a row without a rating must never be reported as "clean".
    */
-  fun trackFrom(item: JsonObject): Map<String, Any?>? {
-    val kind = kindOf(item)
-    if (kind == null || kind !in TRACK_KINDS) return null
+  fun trackFrom(item: JsonObject): Map<String, Any?>? =
+    extractTrack(item, requireTrackKind = true)
+
+  internal fun extractTrack(
+    item: JsonObject,
+    fallbackArtist: String = "",
+    fallbackAlbum: String = "",
+    fallbackArtworkUrl: String? = null,
+    requireTrackKind: Boolean = true,
+    useExplicitOverride: Boolean = false,
+    explicitOverride: Boolean? = null,
+  ): Map<String, Any?>? {
+    if (requireTrackKind) {
+      val kind = kindOf(item)
+      if (kind == null || kind !in TRACK_KINDS) return null
+    }
     val id = videoId(item) ?: return null
     val title = columnText(item, 0) ?: return null
+    val resolvedArtist = artistOf(item).ifEmpty { fallbackArtist }
+    val explicitValue: Boolean? =
+      if (useExplicitOverride) explicitOverride else hasExplicitBadge(item)
     return mapOf(
       "id" to id,
       "title" to title,
-      "artist" to artistOf(item),
-      "album" to "",
+      "artist" to resolvedArtist,
+      "album" to fallbackAlbum,
       "durationSeconds" to durationSeconds(item),
-      "artworkUrl" to thumbnailUrl(item),
-      "explicit" to hasExplicitBadge(item),
+      "artworkUrl" to (thumbnailUrl(item) ?: fallbackArtworkUrl),
+      "explicit" to explicitValue,
       "source" to "youtube_music"
     )
   }
@@ -144,14 +167,204 @@ object MusicSearch {
   fun parseTracks(json: JsonObject): List<Map<String, Any?>> =
     collectMusicItems(json).mapNotNull { trackFrom(it) }
 
-  /** Searches YouTube Music and returns the tracks it found. */
+  /**
+   * Rich YouTube Music search returning playable tracks plus structured artist,
+   * album,single/EP, and playlist summaries extracted from the same innertube
+   * search payload. Keeps the fail-closed guarantee for tracks (`video` rows
+   * are never promoted into `tracks`).
+   */
+  fun parseRichSearch(json: JsonObject, limit: Int): Map<String, Any?> {
+    val maxTracks = limit.coerceIn(1, 50)
+    var topArtist: Map<String, Any?>? = null
+    val artists = mutableListOf<Map<String, Any?>>()
+    val albums = mutableListOf<Map<String, Any?>>()
+    val playlists = mutableListOf<Map<String, Any?>>()
+    val tracks = mutableListOf<Map<String, Any?>>()
+
+    val seenArtistIds = HashSet<String>()
+    val seenAlbumIds = HashSet<String>()
+    val seenPlaylistIds = HashSet<String>()
+    val seenTrackIds = HashSet<String>()
+
+    fun addArtist(summary: Map<String, Any?>, asTop: Boolean = false) {
+      val browseId = summary["browseId"] as? String ?: return
+      if (asTop && topArtist == null) {
+        topArtist = summary
+      }
+      if (seenArtistIds.add(browseId)) {
+        artists += summary
+      }
+    }
+
+    fun addAlbum(summary: Map<String, Any?>) {
+      val browseId = summary["browseId"] as? String ?: return
+      if (seenAlbumIds.add(browseId)) {
+        albums += summary
+      }
+    }
+
+    fun addPlaylist(summary: Map<String, Any?>) {
+      val browseId = summary["browseId"] as? String ?: return
+      if (seenPlaylistIds.add(browseId)) {
+        playlists += summary
+      }
+    }
+
+    fun addTrack(track: Map<String, Any?>?) {
+      if (track == null || tracks.size >= maxTracks) return
+      val id = track["id"] as? String ?: return
+      if (seenTrackIds.add(id)) {
+        tracks += track
+      }
+    }
+
+    fun inspectResponsiveItem(item: JsonObject, fallbackArtist: String) {
+      val browse = browseTargetOf(item)
+      val kind = kindOf(item)
+      when {
+        browse?.second == PAGE_TYPE_ARTIST || (kind == "artist" && browse != null) -> {
+          val name = columnText(item, 0) ?: return
+          addArtist(
+            mapOf(
+              "browseId" to browse!!.first,
+              "name" to name,
+              "subtitle" to (columnText(item, 1) ?: "Artist"),
+              "artworkUrl" to thumbnailUrl(item),
+            )
+          )
+        }
+        browse?.second == PAGE_TYPE_ALBUM || (kind in setOf("album", "single", "ep") && browse != null) -> {
+          val albumSummary = parseAlbumListItem(item, browse!!.first, kind) ?: return
+          addAlbum(albumSummary)
+        }
+        browse?.second == PAGE_TYPE_PLAYLIST || (kind == "playlist" && browse != null) -> {
+          val playlistSummary = parsePlaylistListItem(item, browse!!.first) ?: return
+          addPlaylist(playlistSummary)
+        }
+        else -> {
+          addTrack(extractTrack(item, fallbackArtist = fallbackArtist, requireTrackKind = true))
+        }
+      }
+    }
+
+    val sectionContents = extractSectionContents(json)
+    if (sectionContents.isEmpty()) {
+      // Fallback shape for trimmed JSON objects / flat fixtures.
+      parseTracks(json).take(maxTracks).forEach { addTrack(it) }
+    } else {
+      for (sec in sectionContents) {
+        val card = sec["musicCardShelfRenderer"] as? JsonObject
+        if (card != null) {
+          val titleRuns = runsList(card["title"])
+          val cardBrowse = runsBrowseTarget(titleRuns)
+            ?: browseTargetOfEndpoint(card["navigationEndpoint"] as? JsonObject)
+            ?: browseTargetOfEndpoint(card["onTap"] as? JsonObject)
+          val cardTitle = runsText(card["title"])
+          val cardSubtitle = runsText(card["subtitle"]) ?: ""
+          val cardThumb = thumbnailUrl(card)
+          var cardArtistFallback = ""
+
+          if (cardBrowse != null && cardTitle != null) {
+            when (cardBrowse.second) {
+              PAGE_TYPE_ARTIST -> {
+                cardArtistFallback = cardTitle
+                addArtist(
+                  mapOf(
+                    "browseId" to cardBrowse.first,
+                    "name" to cardTitle,
+                    "subtitle" to cardSubtitle.ifEmpty { "Artist" },
+                    "artworkUrl" to cardThumb,
+                  ),
+                  asTop = true,
+                )
+              }
+              PAGE_TYPE_ALBUM -> {
+                addAlbum(
+                  albumMap(
+                    browseId = cardBrowse.first,
+                    title = cardTitle,
+                    subtitle = cardSubtitle,
+                    artworkUrl = cardThumb,
+                    explicit = hasExplicitBadge(card),
+                    fallbackArtist = "",
+                  )
+                )
+              }
+              PAGE_TYPE_PLAYLIST -> {
+                addPlaylist(
+                  playlistMap(
+                    browseId = cardBrowse.first,
+                    title = cardTitle,
+                    subtitle = cardSubtitle,
+                    artworkUrl = cardThumb,
+                  )
+                )
+              }
+            }
+          }
+
+          val cardSubItems = (card["contents"] as? JsonArray)?.filterIsInstance<JsonObject>() ?: emptyList()
+          for (sub in cardSubItems) {
+            val item = sub["musicResponsiveListItemRenderer"] as? JsonObject ?: continue
+            inspectResponsiveItem(item, cardArtistFallback)
+          }
+          continue
+        }
+
+        val listItems = collectMusicItems(sec)
+        for (item in listItems) {
+          inspectResponsiveItem(item, topArtist?.get("name") as? String ?: "")
+        }
+      }
+    }
+
+    return mapOf(
+      "tracks" to tracks,
+      "explicitKnown" to true,
+      "topArtist" to topArtist,
+      "artists" to artists.take(8),
+      "albums" to albums.take(12),
+      "playlists" to playlists.take(12),
+    )
+  }
+
+  /** Searches YouTube Music and returns only tracks (legacy wrapper). */
   fun search(query: String, limit: Int, client: OkHttpClient): List<Map<String, Any?>> {
     val trimmed = query.trim()
     if (trimmed.isEmpty()) return emptyList()
+    val json = executeSearchRequest(trimmed, client)
+    return parseTracks(json).take(limit.coerceIn(1, 50))
+  }
 
+  /** Rich YouTube Music search returning tracks + artist/album/playlist sections. */
+  fun searchRich(query: String, limit: Int, client: OkHttpClient): Map<String, Any?> {
+    val trimmed = query.trim()
+    if (trimmed.isEmpty()) {
+      return mapOf(
+        "tracks" to emptyList<Map<String, Any?>>(),
+        "explicitKnown" to true,
+        "topArtist" to null,
+        "artists" to emptyList<Map<String, Any?>>(),
+        "albums" to emptyList<Map<String, Any?>>(),
+        "playlists" to emptyList<Map<String, Any?>>(),
+      )
+    }
+    val json = executeSearchRequest(trimmed, client)
+    return parseRichSearch(json, limit)
+  }
+
+  private fun executeSearchRequest(trimmed: String, client: OkHttpClient): JsonObject =
+    postInnertube(ENDPOINT, requestBody(trimmed), client, REASON_PREFIX)
+
+  internal fun postInnertube(
+    url: String,
+    body: String,
+    client: OkHttpClient,
+    reasonPrefix: String,
+  ): JsonObject {
     val request = Request.Builder()
-      .url(ENDPOINT)
-      .post(requestBody(trimmed).toRequestBody(JSON_MEDIA_TYPE))
+      .url(url)
+      .post(body.toRequestBody(JSON_MEDIA_TYPE))
       .header("Content-Type", "application/json")
       .header("User-Agent", USER_AGENT)
       .header("X-Youtube-Client-Name", CLIENT_ID)
@@ -161,14 +374,13 @@ object MusicSearch {
       .build()
 
     client.newCall(request).execute().use { response ->
-      if (!response.isSuccessful) throw IOException("${REASON_PREFIX}http_${response.code}")
-      val payload = response.body?.string() ?: throw IOException("${REASON_PREFIX}empty_body")
-      val json = try {
+      if (!response.isSuccessful) throw IOException("${reasonPrefix}http_${response.code}")
+      val payload = response.body?.string() ?: throw IOException("${reasonPrefix}empty_body")
+      return try {
         JsonParser.`object`().from(payload)
       } catch (error: Exception) {
-        throw IOException("${REASON_PREFIX}unreadable_body")
+        throw IOException("${reasonPrefix}unreadable_body")
       }
-      return parseTracks(json).take(limit.coerceIn(1, 50))
     }
   }
 
@@ -190,7 +402,7 @@ object MusicSearch {
       "\"clientVersion\":\"$CLIENT_VERSION\",\"hl\":\"en\",\"gl\":\"US\"}}," +
       "\"query\":\"${escape(query)}\",\"params\":\"$SEARCH_PARAMS\"}"
 
-  private fun escape(value: String): String {
+  internal fun escape(value: String): String {
     val out = StringBuilder(value.length + 8)
     for (char in value) {
       when {
@@ -229,10 +441,146 @@ object MusicSearch {
       else -> false
     }
 
-  private fun flexColumns(item: JsonObject): List<JsonObject> =
+  internal fun musicVideoTypeOf(node: Any?): String? {
+    when (node) {
+      is JsonObject -> {
+        val direct = node.getString("musicVideoType")
+        if (!direct.isNullOrBlank()) return direct
+        for (value in node.values) {
+          val nested = musicVideoTypeOf(value)
+          if (nested != null) return nested
+        }
+      }
+      is JsonArray -> {
+        for (item in node) {
+          val nested = musicVideoTypeOf(item)
+          if (nested != null) return nested
+        }
+      }
+    }
+    return null
+  }
+
+  internal fun albumMap(
+    browseId: String,
+    title: String,
+    subtitle: String,
+    artworkUrl: String?,
+    explicit: Boolean?,
+    fallbackArtist: String,
+  ): Map<String, Any?> {
+    val parts = subtitle.split("•").map { it.trim() }.filter { it.isNotEmpty() }
+    val kindCandidate = parts.firstOrNull()?.lowercase()
+    val albumType = when (kindCandidate) {
+      "single" -> "Single"
+      "ep" -> "EP"
+      "album" -> "Album"
+      else -> "Album"
+    }
+    val year = parts.firstOrNull { YEAR_RE.matches(it) } ?: ""
+    val artist = parts
+      .filterNot { it.lowercase() in setOf("album", "single", "ep") || YEAR_RE.matches(it) }
+      .firstOrNull()
+      ?: fallbackArtist
+    return mapOf(
+      "browseId" to browseId,
+      "title" to title,
+      "artist" to artist,
+      "year" to year,
+      "albumType" to albumType,
+      "subtitle" to subtitle,
+      "artworkUrl" to artworkUrl,
+      "explicit" to explicit,
+    )
+  }
+
+  internal fun playlistMap(
+    browseId: String,
+    title: String,
+    subtitle: String,
+    artworkUrl: String?,
+  ): Map<String, Any?> {
+    val parts = subtitle.split("•").map { it.trim() }.filter { it.isNotEmpty() }
+    val author = parts.dropWhile { it.equals("playlist", ignoreCase = true) }.firstOrNull() ?: ""
+    return mapOf(
+      "browseId" to browseId,
+      "title" to title,
+      "author" to author,
+      "subtitle" to subtitle,
+      "artworkUrl" to artworkUrl,
+    )
+  }
+
+  private fun parseAlbumListItem(item: JsonObject, browseId: String, kind: String?): Map<String, Any?>? {
+    val title = columnText(item, 0) ?: return null
+    val subtitle = columnText(item, 1) ?: (kind?.replaceFirstChar { it.uppercase() } ?: "Album")
+    return albumMap(
+      browseId = browseId,
+      title = title,
+      subtitle = subtitle,
+      artworkUrl = thumbnailUrl(item),
+      explicit = hasExplicitBadge(item),
+      fallbackArtist = artistOf(item),
+    )
+  }
+
+  private fun parsePlaylistListItem(item: JsonObject, browseId: String): Map<String, Any?>? {
+    val title = columnText(item, 0) ?: return null
+    val subtitle = columnText(item, 1) ?: "Playlist"
+    return playlistMap(
+      browseId = browseId,
+      title = title,
+      subtitle = subtitle,
+      artworkUrl = thumbnailUrl(item),
+    )
+  }
+
+  private fun extractSectionContents(json: JsonObject): List<JsonObject> {
+    val contents = json["contents"] as? JsonObject ?: return emptyList()
+    val tabbed = contents["tabbedSearchResultsRenderer"] as? JsonObject ?: return emptyList()
+    val tabs = (tabbed["tabs"] as? JsonArray)?.filterIsInstance<JsonObject>() ?: return emptyList()
+    val tabRenderer = tabs.firstOrNull()?.get("tabRenderer") as? JsonObject ?: return emptyList()
+    val content = tabRenderer["content"] as? JsonObject ?: return emptyList()
+    val sectionList = content["sectionListRenderer"] as? JsonObject ?: return emptyList()
+    return (sectionList["contents"] as? JsonArray)?.filterIsInstance<JsonObject>() ?: emptyList()
+  }
+
+  private fun browseTargetOf(item: JsonObject): Pair<String, String?>? =
+    browseTargetOfEndpoint(item["navigationEndpoint"] as? JsonObject)
+      ?: runsBrowseTarget(columnRuns(item, 0))
+
+  internal fun runsBrowseTarget(runs: List<JsonObject>): Pair<String, String?>? {
+    for (run in runs) {
+      val hit = browseTargetOfEndpoint(run["navigationEndpoint"] as? JsonObject)
+      if (hit != null) return hit
+    }
+    return null
+  }
+
+  internal fun browseTargetOfEndpoint(endpoint: JsonObject?): Pair<String, String?>? {
+    val browse = endpoint?.get("browseEndpoint") as? JsonObject ?: return null
+    val id = browse.getString("browseId")?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val configs = browse["browseEndpointContextSupportedConfigs"] as? JsonObject
+    val music = configs?.get("browseEndpointContextMusicConfig") as? JsonObject
+    val pageType = music?.getString("pageType")?.trim()?.takeIf { it.isNotEmpty() }
+    return id to pageType
+  }
+
+  internal fun runsList(obj: Any?): List<JsonObject> {
+    val jsonObj = obj as? JsonObject ?: return emptyList()
+    return (jsonObj["runs"] as? JsonArray)?.filterIsInstance<JsonObject>() ?: emptyList()
+  }
+
+  internal fun runsText(obj: Any?): String? {
+    val runs = runsList(obj)
+    if (runs.isEmpty()) return null
+    return runs.joinToString("") { it.getString("text") ?: "" }.trim().ifEmpty { null }
+  }
+
+  internal fun flexColumns(item: JsonObject): List<JsonObject> =
     (item["flexColumns"] as? JsonArray)?.filterIsInstance<JsonObject>() ?: emptyList()
 
-  private fun columnRuns(item: JsonObject, index: Int): List<JsonObject> {
+  internal fun columnRuns(item: JsonObject, index: Int): List<JsonObject> {
     val column = flexColumns(item).getOrNull(index) ?: return emptyList()
     val renderer = column["musicResponsiveListItemFlexColumnRenderer"] as? JsonObject
       ?: return emptyList()
@@ -241,7 +589,7 @@ object MusicSearch {
     return runs.filterIsInstance<JsonObject>()
   }
 
-  private fun columnText(item: JsonObject, index: Int): String? {
+  internal fun columnText(item: JsonObject, index: Int): String? {
     val runs = columnRuns(item, index)
     if (runs.isEmpty()) return null
     val text = runs.joinToString("") { run -> run.getString("text") ?: "" }.trim()
@@ -304,8 +652,10 @@ object MusicSearch {
     return watch.getString("videoId")?.takeIf { it.length == 11 }
   }
 
-  private fun thumbnailUrl(item: JsonObject): String? {
-    val thumbnail = item["thumbnail"] as? JsonObject ?: return null
+  internal fun thumbnailUrl(item: JsonObject): String? {
+    val thumbnail = (item["thumbnail"] as? JsonObject)
+      ?: (item["thumbnailRenderer"] as? JsonObject)
+      ?: return null
     val renderer = thumbnail["musicThumbnailRenderer"] as? JsonObject
     val inner = renderer?.get("thumbnail") as? JsonObject ?: thumbnail
     val thumbs = (inner["thumbnails"] as? JsonArray)?.filterIsInstance<JsonObject>() ?: return null

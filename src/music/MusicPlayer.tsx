@@ -1,6 +1,7 @@
 import React from "react";
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   ScrollView,
   Text,
@@ -10,6 +11,8 @@ import {
 import {
   artworkBlurred,
   artworkColors,
+  browseArtist,
+  browseCollection,
   prefetchAudio,
   search as engineSearch,
 } from "../../modules/youtube-engine";
@@ -30,20 +33,32 @@ import {
   SearchSuggestionsStrip,
   SimilarTracksShelf,
   StationsShelf,
+  type SearchCategoryFilter,
 } from "./MusicBrowse";
 import { MusicIcon } from "./MusicIcons";
 import {
   AddToPlaylistModal,
   ArtistModal,
+  CollectionDetailModal,
   CreatePlaylistModal,
   DenyListModal,
   MusicParentPinModal,
   PlaylistDetailModal,
   SleepTimerModal,
+  YouTubeAccountModal,
+  type CollectionTrackItem,
 } from "./MusicLibraryModals";
 import { DownloadsTray, HistoryShelf, LyricsPane, QueuePane } from "./MusicQueueLyrics";
 import { NowPlayingStage, StageMiniBar } from "./MusicStage";
-import { countUnrated, isContentHidden, searchNote, visibleTracks } from "./explicit";
+import {
+  countUnrated,
+  isAlbumHidden,
+  isArtistHidden,
+  isContentHidden,
+  isPlaylistHidden,
+  searchNote,
+  visibleTracks,
+} from "./explicit";
 import {
   getRecommendedArtists,
   isFavoriteArtist,
@@ -67,7 +82,28 @@ import {
   saveRecentSearch,
   type SearchSuggestion,
 } from "./suggestions";
-import type { FavoriteArtist, MediaTrack } from "./types";
+import type {
+  ArtistProfile,
+  FavoriteArtist,
+  MediaTrack,
+  MusicAlbumSummary,
+  MusicArtistSummary,
+  MusicPlaylistSummary,
+  YouTubeAccountPlaylist,
+  YouTubeAccountStatus,
+} from "./types";
+import {
+  addTrackToRemoteYouTubePlaylist,
+  checkYouTubeConnectStatus,
+  createRemoteYouTubePlaylist,
+  disconnectYouTubeAccount,
+  fetchYouTubeAccountState,
+  fetchYouTubePlaylistItems,
+  fetchYouTubePlaylists,
+  removeTrackFromRemoteYouTubePlaylist,
+  startYouTubeConnect,
+  syncYouTubeTrackLike,
+} from "./youtube-account";
 
 /** The Now Playing screen's modes. Stage is the artwork-led one. */
 type Mode = "stage" | "lyrics" | "queue" | "library";
@@ -128,6 +164,13 @@ export function MusicPlayer() {
   const [query, setQuery] = React.useState("");
   const [tracks, setTracks] = React.useState<MediaTrack[]>([]);
   const [explicitKnown, setExplicitKnown] = React.useState(true);
+  const [topArtist, setTopArtist] = React.useState<MusicArtistSummary | null>(null);
+  const [searchArtists, setSearchArtists] = React.useState<MusicArtistSummary[]>([]);
+  const [searchAlbums, setSearchAlbums] = React.useState<MusicAlbumSummary[]>([]);
+  const [searchPlaylists, setSearchPlaylists] = React.useState<MusicPlaylistSummary[]>([]);
+  const [searchFilter, setSearchFilter] = React.useState<SearchCategoryFilter>("all");
+  const [inlineArtistProfile, setInlineArtistProfile] = React.useState<ArtistProfile | null>(null);
+  const [loadingInlineArtist, setLoadingInlineArtist] = React.useState(false);
   const [hasSearched, setHasSearched] = React.useState(false);
   const [searching, setSearching] = React.useState(false);
   const [searchError, setSearchError] = React.useState<string | null>(null);
@@ -150,10 +193,36 @@ export function MusicPlayer() {
   const [selectedPlaylistId, setSelectedPlaylistId] = React.useState<string | null>(null);
 
   const [similarTrackState, setSimilarTrackState] = React.useState<{ id: string; tracks: MediaTrack[] } | null>(null);
-  const [activeArtist, setActiveArtist] = React.useState<{ name: string; artworkUrl?: string | null } | null>(null);
-  const [artistTracks, setArtistTracks] = React.useState<MediaTrack[]>([]);
+  const [activeArtist, setActiveArtist] = React.useState<{ name: string; artworkUrl?: string | null; browseId?: string } | null>(null);
+  const [rawArtistProfile, setRawArtistProfile] = React.useState<ArtistProfile | null>(null);
+  const [rawArtistTracks, setRawArtistTracks] = React.useState<MediaTrack[]>([]);
   const [loadingArtistTracks, setLoadingArtistTracks] = React.useState(false);
   const [artistModalOpen, setArtistModalOpen] = React.useState(false);
+
+  const [activeCollection, setActiveCollection] = React.useState<{
+    browseId: string;
+    kind: "album" | "playlist";
+    title: string;
+    subtitle: string;
+    artist: string;
+    artworkUrl: string | null;
+    isRemoteAccount: boolean;
+    explicitKnown: boolean;
+    rawTracks: CollectionTrackItem[];
+  } | null>(null);
+  const [collectionLoading, setCollectionLoading] = React.useState(false);
+
+  const [ytStatus, setYtStatus] = React.useState<YouTubeAccountStatus>({
+    connected: false,
+    pending: false,
+    status: null,
+    accountEmail: null,
+  });
+  const [ytPlaylists, setYtPlaylists] = React.useState<YouTubeAccountPlaylist[]>([]);
+  const [ytModalOpen, setYtModalOpen] = React.useState(false);
+  const [ytBusy, setYtBusy] = React.useState(false);
+  const [ytError, setYtError] = React.useState<string | null>(null);
+
   const [libraryTab, setLibraryTab] = React.useState<LibraryTab>("all");
 
   const [favoriteArtists, setFavoriteArtists] = React.useState<FavoriteArtist[]>([]);
@@ -161,6 +230,7 @@ export function MusicPlayer() {
   const [submittedQuery, setSubmittedQuery] = React.useState("");
   const liveSearchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSearchedTermRef = React.useRef("");
+  const searchRequestIdRef = React.useRef(0);
 
   React.useEffect(() => {
     if (!sleepTimerEndsAt) return;
@@ -228,6 +298,112 @@ export function MusicPlayer() {
   );
   const visibleCurrent = current && !isContentHidden(current, stablePolicy) ? current : null;
 
+  const filterArtistProfile = React.useCallback(
+    (profile: ArtistProfile | null): ArtistProfile | null => {
+      if (!profile || isArtistHidden(profile.name, stablePolicy)) return null;
+      return {
+        ...profile,
+        topSongs: visibleTracks(profile.topSongs, stablePolicy),
+        albums: profile.albums.filter((a) => !isAlbumHidden(a, stablePolicy)),
+        singles: profile.singles.filter((a) => !isAlbumHidden(a, stablePolicy)),
+        playlists: profile.playlists.filter((p) => !isPlaylistHidden(p, stablePolicy)),
+        relatedArtists: profile.relatedArtists.filter((r) => !isArtistHidden(r.name, stablePolicy)),
+      };
+    },
+    [stablePolicy]
+  );
+
+  const visibleTopArtist = React.useMemo(
+    () => (topArtist && !isArtistHidden(topArtist.name, stablePolicy) ? topArtist : null),
+    [topArtist, stablePolicy]
+  );
+  const visibleSearchArtists = React.useMemo(
+    () => searchArtists.filter((a) => !isArtistHidden(a.name, stablePolicy)),
+    [searchArtists, stablePolicy]
+  );
+  const visibleSearchAlbums = React.useMemo(
+    () => searchAlbums.filter((a) => !isAlbumHidden(a, stablePolicy)),
+    [searchAlbums, stablePolicy]
+  );
+  const visibleSearchPlaylists = React.useMemo(
+    () => searchPlaylists.filter((p) => !isPlaylistHidden(p, stablePolicy)),
+    [searchPlaylists, stablePolicy]
+  );
+  const visibleInlineArtistProfile = React.useMemo(
+    () => filterArtistProfile(inlineArtistProfile),
+    [inlineArtistProfile, filterArtistProfile]
+  );
+  const visibleModalArtistProfile = React.useMemo(
+    () => filterArtistProfile(rawArtistProfile),
+    [rawArtistProfile, filterArtistProfile]
+  );
+  const visibleModalArtistTracks = React.useMemo(() => {
+    if (visibleModalArtistProfile && visibleModalArtistProfile.topSongs.length > 0) {
+      return visibleModalArtistProfile.topSongs;
+    }
+    return visibleTracks(rawArtistTracks, stablePolicy);
+  }, [visibleModalArtistProfile, rawArtistTracks, stablePolicy]);
+
+  const visibleCollectionTracks = React.useMemo(
+    () => (activeCollection ? visibleTracks(activeCollection.rawTracks, stablePolicy) : []),
+    [activeCollection, stablePolicy]
+  );
+  const collectionNote = React.useMemo(() => {
+    if (!activeCollection || collectionLoading) return null;
+    if (visibleCollectionTracks.length > 0) return null;
+    return searchNote({
+      visible: 0,
+      total: activeCollection.rawTracks.length,
+      unrated: countUnrated(activeCollection.rawTracks),
+      explicitKnown: activeCollection.explicitKnown,
+      isParent,
+    });
+  }, [activeCollection, collectionLoading, visibleCollectionTracks.length, isParent]);
+
+  const refreshYouTubeState = React.useCallback(async (syncPlaylistsToo = true) => {
+    try {
+      const state = await fetchYouTubeAccountState();
+      setYtStatus(state);
+      if (state.connected && syncPlaylistsToo) {
+        const list = await fetchYouTubePlaylists();
+        setYtPlaylists(list);
+      } else if (!state.connected) {
+        setYtPlaylists([]);
+      }
+    } catch {
+      // YouTube account integration is optional; never block music UI.
+    }
+  }, []);
+
+  React.useEffect(() => {
+    let alive = true;
+    void fetchYouTubeAccountState()
+      .then(async (state) => {
+        if (!alive) return;
+        setYtStatus(state);
+        if (state.connected) {
+          const list = await fetchYouTubePlaylists();
+          if (alive) setYtPlaylists(list);
+        } else {
+          setYtPlaylists([]);
+        }
+      })
+      .catch(() => {
+        // YouTube account integration is optional; never block music UI.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isParent]);
+
+  const visibleYouTubePlaylists = React.useMemo(
+    () =>
+      ytStatus.connected
+        ? ytPlaylists.filter((pl) => !isPlaylistHidden({ title: pl.title, author: "" }, stablePolicy))
+        : [],
+    [ytStatus.connected, ytPlaylists, stablePolicy]
+  );
+
   const selectedPlaylist = React.useMemo(
     () => visiblePlaylists.find((p) => p.id === selectedPlaylistId) ?? null,
     [visiblePlaylists, selectedPlaylistId]
@@ -279,26 +455,120 @@ export function MusicPlayer() {
   );
 
   const openArtistProfile = React.useCallback(
-    async (artistName: string, artworkUrl?: string | null) => {
+    async (artistName: string, artworkUrl?: string | null, browseId?: string) => {
       const trimmed = artistName.trim();
       if (!trimmed) return;
-      setActiveArtist({ name: trimmed, artworkUrl: artworkUrl ?? null });
+      setActiveArtist({ name: trimmed, artworkUrl: artworkUrl ?? null, browseId });
+      setRawArtistProfile(null);
+      setRawArtistTracks([]);
       setLoadingArtistTracks(true);
       setArtistModalOpen(true);
       try {
-        const outcome = await engineSearch(trimmed, 25);
-        const vis = visibleTracks(outcome.tracks, policy);
-        setArtistTracks(vis);
-        if (vis.length > 0 && typeof prefetchAudio === "function") {
-          void prefetchAudio(vis[0].id);
+        let resolvedBrowseId = browseId;
+        let fallbackTracks: MediaTrack[] = [];
+        if (!resolvedBrowseId) {
+          const outcome = await engineSearch(trimmed, 20);
+          fallbackTracks = outcome.tracks;
+          if (outcome.topArtist?.browseId && !isArtistHidden(outcome.topArtist.name, stablePolicy)) {
+            resolvedBrowseId = outcome.topArtist.browseId;
+          } else {
+            const firstMatch = outcome.artists?.find((a) => !isArtistHidden(a.name, stablePolicy));
+            if (firstMatch) resolvedBrowseId = firstMatch.browseId;
+          }
+        }
+        let loadedProfile: ArtistProfile | null = null;
+        if (resolvedBrowseId && typeof browseArtist === "function" && !isArtistHidden(trimmed, stablePolicy)) {
+          loadedProfile = await browseArtist(resolvedBrowseId);
+        }
+        if (loadedProfile) {
+          setRawArtistProfile(loadedProfile);
+          const vis = visibleTracks(loadedProfile.topSongs, stablePolicy);
+          if (vis.length > 0 && typeof prefetchAudio === "function") {
+            void prefetchAudio(vis[0].id);
+          }
+        } else {
+          if (fallbackTracks.length === 0) {
+            const outcome = await engineSearch(trimmed, 25);
+            fallbackTracks = outcome.tracks;
+          }
+          setRawArtistTracks(fallbackTracks);
+          const vis = visibleTracks(fallbackTracks, stablePolicy);
+          if (vis.length > 0 && typeof prefetchAudio === "function") {
+            void prefetchAudio(vis[0].id);
+          }
         }
       } catch {
-        setArtistTracks([]);
+        setRawArtistTracks([]);
+        setRawArtistProfile(null);
       } finally {
         setLoadingArtistTracks(false);
       }
     },
-    [policy]
+    [stablePolicy]
+  );
+
+  const openCollection = React.useCallback(
+    async (args: {
+      browseId: string;
+      kind: "album" | "playlist";
+      title: string;
+      subtitle: string;
+      artist: string;
+      artworkUrl: string | null;
+      isRemoteAccount?: boolean;
+    }) => {
+      const isRemote = args.isRemoteAccount === true;
+      setActiveCollection({
+        browseId: args.browseId,
+        kind: args.kind,
+        title: args.title,
+        subtitle: args.subtitle,
+        artist: args.artist,
+        artworkUrl: args.artworkUrl,
+        isRemoteAccount: isRemote,
+        explicitKnown: true,
+        rawTracks: [],
+      });
+      setCollectionLoading(true);
+      try {
+        if (isRemote) {
+          const items = await fetchYouTubePlaylistItems(args.browseId);
+          setActiveCollection((prev) =>
+            prev && prev.browseId === args.browseId
+              ? { ...prev, explicitKnown: true, rawTracks: items }
+              : prev
+          );
+          const vis = visibleTracks(items, stablePolicy);
+          if (vis.length > 0 && typeof prefetchAudio === "function") {
+            void prefetchAudio(vis[0].id);
+          }
+        } else if (typeof browseCollection === "function") {
+          const detail = await browseCollection(args.browseId);
+          if (detail) {
+            setActiveCollection({
+              browseId: detail.browseId,
+              kind: detail.kind,
+              title: detail.title || args.title,
+              subtitle: detail.subtitle || args.subtitle,
+              artist: detail.artist || args.artist,
+              artworkUrl: detail.artworkUrl ?? args.artworkUrl,
+              isRemoteAccount: false,
+              explicitKnown: detail.explicitKnown,
+              rawTracks: detail.tracks,
+            });
+            const vis = visibleTracks(detail.tracks, stablePolicy);
+            if (vis.length > 0 && typeof prefetchAudio === "function") {
+              void prefetchAudio(vis[0].id);
+            }
+          }
+        }
+      } catch {
+        // Collection remains open with honest empty note.
+      } finally {
+        setCollectionLoading(false);
+      }
+    },
+    [stablePolicy]
   );
 
   const handleCreateStation = async (track: MediaTrack) => {
@@ -372,9 +642,25 @@ export function MusicPlayer() {
   );
 
   const unrated = countUnrated(tracks);
+  const inlineSongCount = visibleInlineArtistProfile?.topSongs.length ?? 0;
+  const hasAnyVisibleRichContent =
+    visible.length > 0 ||
+    inlineSongCount > 0 ||
+    visibleTopArtist !== null ||
+    visibleSearchArtists.length > 0 ||
+    visibleSearchAlbums.length > 0 ||
+    visibleSearchPlaylists.length > 0;
   const note =
     hasSearched && !searching && !searchError
-      ? searchNote({ visible: visible.length, total: tracks.length, unrated, explicitKnown, isParent })
+      ? hasAnyVisibleRichContent && (tracks.length === 0 || visible.length > 0 || inlineSongCount > 0)
+        ? null
+        : searchNote({
+            visible: Math.max(visible.length, inlineSongCount),
+            total: tracks.length,
+            unrated,
+            explicitKnown,
+            isParent,
+          })
       : null;
 
   React.useEffect(() => {
@@ -398,6 +684,7 @@ export function MusicPlayer() {
         clearTimeout(liveSearchTimerRef.current);
         liveSearchTimerRef.current = null;
       }
+      const reqId = ++searchRequestIdRef.current;
       lastSearchedTermRef.current = term;
       if (options?.markSubmitted !== false) {
         setSubmittedQuery(term);
@@ -407,25 +694,68 @@ export function MusicPlayer() {
       }
       setSearching(true);
       setSearchError(null);
+      setInlineArtistProfile(null);
+      setLoadingInlineArtist(false);
       try {
         const outcome = await engineSearch(term, 20);
+        if (reqId !== searchRequestIdRef.current) return;
         setTracks(outcome.tracks);
         setExplicitKnown(outcome.explicitKnown);
+        setTopArtist(outcome.topArtist ?? null);
+        setSearchArtists(outcome.artists ?? []);
+        setSearchAlbums(outcome.albums ?? []);
+        setSearchPlaylists(outcome.playlists ?? []);
+        setSearchFilter("all");
         setHasSearched(true);
-        const vis = visibleTracks(outcome.tracks, policy);
+
+        const vis = visibleTracks(outcome.tracks, stablePolicy);
         if (vis.length > 0 && typeof prefetchAudio === "function") {
           void prefetchAudio(vis[0].id);
         }
+
+        const hero = outcome.topArtist;
+        if (
+          hero?.browseId &&
+          !isArtistHidden(hero.name, stablePolicy) &&
+          typeof browseArtist === "function"
+        ) {
+          setLoadingInlineArtist(true);
+          void browseArtist(hero.browseId)
+            .then((profile) => {
+              if (reqId !== searchRequestIdRef.current) return;
+              setInlineArtistProfile(profile);
+              if (profile) {
+                const topVis = visibleTracks(profile.topSongs, stablePolicy);
+                if (topVis.length > 0 && typeof prefetchAudio === "function") {
+                  void prefetchAudio(topVis[0].id);
+                }
+              }
+            })
+            .catch(() => {})
+            .finally(() => {
+              if (reqId === searchRequestIdRef.current) {
+                setLoadingInlineArtist(false);
+              }
+            });
+        }
       } catch (e) {
+        if (reqId !== searchRequestIdRef.current) return;
         setSearchError(e instanceof Error ? e.message : "search_failed");
         setTracks([]);
+        setTopArtist(null);
+        setSearchArtists([]);
+        setSearchAlbums([]);
+        setSearchPlaylists([]);
+        setInlineArtistProfile(null);
         setExplicitKnown(false);
         setHasSearched(true);
       } finally {
-        setSearching(false);
+        if (reqId === searchRequestIdRef.current) {
+          setSearching(false);
+        }
       }
     },
-    [policy]
+    [stablePolicy]
   );
 
   const search = async () => {
@@ -437,10 +767,18 @@ export function MusicPlayer() {
       clearTimeout(liveSearchTimerRef.current);
       liveSearchTimerRef.current = null;
     }
+    searchRequestIdRef.current += 1;
     lastSearchedTermRef.current = "";
     setSubmittedQuery("");
     setQuery("");
     setTracks([]);
+    setTopArtist(null);
+    setSearchArtists([]);
+    setSearchAlbums([]);
+    setSearchPlaylists([]);
+    setSearchFilter("all");
+    setInlineArtistProfile(null);
+    setLoadingInlineArtist(false);
     setHasSearched(false);
     setSearchError(null);
   };
@@ -538,6 +876,18 @@ export function MusicPlayer() {
     setCreatePlaylistSeed(seedTracks);
     setCreatePlaylistOpen(true);
   };
+
+  const handleToggleLikeWithSync = React.useCallback(
+    (track: MediaTrack) => {
+      if (!toggleLike) return;
+      const currentlyLiked = isLiked ? isLiked(track.id) : visibleLiked.some((t) => t.id === track.id);
+      toggleLike(track);
+      if (isParent && ytStatus.connected) {
+        void syncYouTubeTrackLike(track.id, !currentlyLiked);
+      }
+    },
+    [toggleLike, isLiked, visibleLiked, isParent, ytStatus.connected]
+  );
 
   const activeToggleHandler = casting ? (cast.playing ? cast.pause : cast.play) : toggle;
   const activeNextHandler = casting ? () => void cast.advance(false) : () => void next();
@@ -789,18 +1139,53 @@ export function MusicPlayer() {
               <Text style={{ color: colors["color-accent-rose"], ...TYPOGRAPHY.body }}>{searchError}</Text>
             ) : null}
 
-            {visible.length > 0 ? (
+            {hasAnyVisibleRichContent ? (
               <SearchResults
                 tracks={visible}
                 tokens={tokens}
                 isParent={isParent}
                 denied={policy.denied ?? []}
+                topArtist={visibleTopArtist}
+                artists={visibleSearchArtists}
+                albums={visibleSearchAlbums}
+                playlists={visibleSearchPlaylists}
+                artistProfile={visibleInlineArtistProfile}
+                loadingArtistProfile={loadingInlineArtist}
+                searchFilter={searchFilter}
+                onChangeFilter={setSearchFilter}
+                isFavoriteArtistFn={(name) => isFavoriteArtist(favoriteArtists, name)}
+                onToggleFavoriteArtist={(name, art) => handleToggleFavoriteArtist(name, art)}
+                onSelectArtist={(art) => void openArtistProfile(art.name, art.artworkUrl, art.browseId)}
+                onSelectAlbum={(alb) =>
+                  void openCollection({
+                    browseId: alb.browseId,
+                    kind: "album",
+                    title: alb.title,
+                    subtitle: alb.subtitle,
+                    artist: alb.artist,
+                    artworkUrl: alb.artworkUrl,
+                  })
+                }
+                onSelectPlaylist={(pl) =>
+                  void openCollection({
+                    browseId: pl.browseId,
+                    kind: "playlist",
+                    title: pl.title,
+                    subtitle: pl.subtitle,
+                    artist: pl.author,
+                    artworkUrl: pl.artworkUrl,
+                  })
+                }
                 onPlay={(track, list) => void play(track, list)}
                 onQueue={(track) => addToQueue(track)}
                 onPlayNext={playNext ? (track) => playNext(track) : undefined}
                 isLiked={isLiked}
-                onToggleLike={toggleLike ? (track) => toggleLike(track) : undefined}
-                onAddToPlaylist={addTrackToPlaylist ? (track) => setAddToPlaylistTrack(track) : undefined}
+                onToggleLike={toggleLike ? handleToggleLikeWithSync : undefined}
+                onAddToPlaylist={
+                  addTrackToPlaylist || (isParent && ytStatus.connected)
+                    ? (track) => setAddToPlaylistTrack(track)
+                    : undefined
+                }
               />
             ) : null}
 
@@ -938,12 +1323,14 @@ export function MusicPlayer() {
                     handleToggleFavoriteArtist(visibleCurrent.artist, visibleCurrent.artworkUrl)
                   }
                   isLiked={currentTrackLiked}
-                  onToggleLike={toggleLike ? () => toggleLike(visibleCurrent) : undefined}
+                  onToggleLike={toggleLike ? () => handleToggleLikeWithSync(visibleCurrent) : undefined}
                   sleepRemainingMinutes={sleepRemainingMinutes}
                   onOpenLyrics={() => setMode("lyrics")}
                   onOpenQueue={() => setMode("queue")}
                   onOpenAddToPlaylist={
-                    addTrackToPlaylist ? () => setAddToPlaylistTrack(visibleCurrent) : undefined
+                    addTrackToPlaylist || (isParent && ytStatus.connected)
+                      ? () => setAddToPlaylistTrack(visibleCurrent)
+                      : undefined
                   }
                   onOpenSleepTimer={setSleepTimer ? () => setSleepModalOpen(true) : undefined}
                   onCreateStation={() => void handleCreateStation(visibleCurrent)}
@@ -1043,6 +1430,9 @@ export function MusicPlayer() {
                     mixes={FAMILY_MIXES}
                     likedCount={visibleLiked.length}
                     customPlaylists={visiblePlaylists}
+                    youtubeConnected={ytStatus.connected}
+                    youtubePlaylists={visibleYouTubePlaylists}
+                    isParent={isParent}
                     tokens={tokens}
                     onSelectMix={(m) => void selectMix(m)}
                     onPlayLikedSongs={() => {
@@ -1053,6 +1443,18 @@ export function MusicPlayer() {
                     }}
                     onOpenPlaylist={(pl) => setSelectedPlaylistId(pl.id)}
                     onOpenCreatePlaylist={createPlaylist ? () => openPlaylistCreator([]) : undefined}
+                    onOpenYouTubeConnect={isParent ? () => setYtModalOpen(true) : undefined}
+                    onOpenYouTubePlaylist={(ytPl) =>
+                      void openCollection({
+                        browseId: ytPl.id,
+                        kind: "playlist",
+                        title: ytPl.title,
+                        subtitle: `${ytPl.itemCount} songs`,
+                        artist: ytStatus.accountEmail ?? "YouTube Account",
+                        artworkUrl: ytPl.artworkUrl,
+                        isRemoteAccount: true,
+                      })
+                    }
                   />
                 ) : null}
 
@@ -1112,6 +1514,9 @@ export function MusicPlayer() {
                   mixes={FAMILY_MIXES}
                   likedCount={visibleLiked.length}
                   customPlaylists={visiblePlaylists}
+                  youtubeConnected={ytStatus.connected}
+                  youtubePlaylists={visibleYouTubePlaylists}
+                  isParent={isParent}
                   tokens={tokens}
                   onSelectMix={(m) => void selectMix(m)}
                   onPlayLikedSongs={() => {
@@ -1122,6 +1527,18 @@ export function MusicPlayer() {
                   }}
                   onOpenPlaylist={(pl) => setSelectedPlaylistId(pl.id)}
                   onOpenCreatePlaylist={createPlaylist ? () => openPlaylistCreator([]) : undefined}
+                  onOpenYouTubeConnect={isParent ? () => setYtModalOpen(true) : undefined}
+                  onOpenYouTubePlaylist={(ytPl) =>
+                    void openCollection({
+                      browseId: ytPl.id,
+                      kind: "playlist",
+                      title: ytPl.title,
+                      subtitle: `${ytPl.itemCount} songs`,
+                      artist: ytStatus.accountEmail ?? "YouTube Account",
+                      artworkUrl: ytPl.artworkUrl,
+                      isRemoteAccount: true,
+                    })
+                  }
                 />
 
                 <FavoriteArtistsShelf
@@ -1156,22 +1573,32 @@ export function MusicPlayer() {
           visible={artistModalOpen}
           artistName={activeArtist.name}
           artworkUrl={activeArtist.artworkUrl}
-          tracks={artistTracks}
+          tracks={visibleModalArtistTracks}
+          profile={visibleModalArtistProfile}
           loading={loadingArtistTracks}
           isFavorite={isFavoriteArtist(favoriteArtists, activeArtist.name)}
+          isParent={isParent}
+          denied={policy.denied ?? []}
           tokens={tokens}
+          isLiked={isLiked}
+          onToggleLike={toggleLike ? handleToggleLikeWithSync : undefined}
+          onAddToPlaylist={
+            addTrackToPlaylist || (isParent && ytStatus.connected)
+              ? (track) => setAddToPlaylistTrack(track)
+              : undefined
+          }
           onClose={() => setArtistModalOpen(false)}
           onToggleFavorite={() => handleToggleFavoriteArtist(activeArtist.name, activeArtist.artworkUrl)}
           onPlayAll={() => {
-            if (artistTracks.length > 0) {
-              void play(artistTracks[0], artistTracks);
+            if (visibleModalArtistTracks.length > 0) {
+              void play(visibleModalArtistTracks[0], visibleModalArtistTracks);
               setArtistModalOpen(false);
               setMode("stage");
             }
           }}
           onShuffle={() => {
-            if (artistTracks.length > 0) {
-              const shuffled = [...artistTracks].sort(() => Math.random() - 0.5);
+            if (visibleModalArtistTracks.length > 0) {
+              const shuffled = [...visibleModalArtistTracks].sort(() => Math.random() - 0.5);
               void play(shuffled[0], shuffled);
               setArtistModalOpen(false);
               setMode("stage");
@@ -1183,7 +1610,7 @@ export function MusicPlayer() {
               setSearching(true);
               try {
                 const outcome = await engineSearch(`${activeArtist.name} radio`, 25);
-                const vis = visibleTracks(outcome.tracks, policy);
+                const vis = visibleTracks(outcome.tracks, stablePolicy);
                 if (vis.length > 0) {
                   await play(vis[0], vis);
                   setMode("stage");
@@ -1194,7 +1621,7 @@ export function MusicPlayer() {
             })();
           }}
           onPlayTrack={(track) => {
-            void play(track, artistTracks);
+            void play(track, visibleModalArtistTracks);
             setArtistModalOpen(false);
             setMode("stage");
           }}
@@ -1202,6 +1629,120 @@ export function MusicPlayer() {
             addToQueue(track);
           }}
           onPlayNextTrack={playNext ? (track) => playNext(track) : undefined}
+          onSelectAlbum={(alb) => {
+            setArtistModalOpen(false);
+            void openCollection({
+              browseId: alb.browseId,
+              kind: "album",
+              title: alb.title,
+              subtitle: alb.subtitle,
+              artist: alb.artist || activeArtist.name,
+              artworkUrl: alb.artworkUrl,
+            });
+          }}
+          onSelectPlaylist={(pl) => {
+            setArtistModalOpen(false);
+            void openCollection({
+              browseId: pl.browseId,
+              kind: "playlist",
+              title: pl.title,
+              subtitle: pl.subtitle,
+              artist: pl.author || activeArtist.name,
+              artworkUrl: pl.artworkUrl,
+            });
+          }}
+          onSelectArtist={(sim) => void openArtistProfile(sim.name, sim.artworkUrl, sim.browseId)}
+        />
+      ) : null}
+
+      {activeCollection ? (
+        <CollectionDetailModal
+          visible={true}
+          title={activeCollection.title}
+          subtitle={activeCollection.subtitle}
+          artist={activeCollection.artist}
+          kind={activeCollection.kind}
+          artworkUrl={activeCollection.artworkUrl}
+          tracks={visibleCollectionTracks}
+          noteText={collectionNote?.text ?? null}
+          loading={collectionLoading}
+          isRemoteAccount={activeCollection.isRemoteAccount}
+          isParent={isParent}
+          denied={policy.denied ?? []}
+          tokens={tokens}
+          isLiked={isLiked}
+          onPlayAll={() => {
+            if (visibleCollectionTracks.length > 0) {
+              void play(visibleCollectionTracks[0], visibleCollectionTracks);
+              setActiveCollection(null);
+              setMode("stage");
+            }
+          }}
+          onShuffle={() => {
+            if (visibleCollectionTracks.length > 0) {
+              const shuffled = [...visibleCollectionTracks].sort(() => Math.random() - 0.5);
+              void play(shuffled[0], shuffled);
+              setActiveCollection(null);
+              setMode("stage");
+            }
+          }}
+          onQueueAll={() => {
+            visibleCollectionTracks.forEach((t) => addToQueue(t));
+            setActiveCollection(null);
+          }}
+          onSaveToHousehold={
+            createPlaylist && !activeCollection.isRemoteAccount
+              ? () => {
+                  setActiveCollection(null);
+                  openPlaylistCreator(visibleCollectionTracks);
+                }
+              : undefined
+          }
+          onRefreshRemote={
+            activeCollection.isRemoteAccount
+              ? () =>
+                  void openCollection({
+                    browseId: activeCollection.browseId,
+                    kind: "playlist",
+                    title: activeCollection.title,
+                    subtitle: activeCollection.subtitle,
+                    artist: activeCollection.artist,
+                    artworkUrl: activeCollection.artworkUrl,
+                    isRemoteAccount: true,
+                  })
+              : undefined
+          }
+          onPlayTrack={(track) => {
+            void play(track, visibleCollectionTracks);
+            setActiveCollection(null);
+            setMode("stage");
+          }}
+          onQueueTrack={(track) => addToQueue(track)}
+          onPlayNextTrack={playNext ? (track) => playNext(track) : undefined}
+          onToggleLike={toggleLike ? handleToggleLikeWithSync : undefined}
+          onAddToPlaylist={
+            addTrackToPlaylist || (isParent && ytStatus.connected)
+              ? (track) => setAddToPlaylistTrack(track)
+              : undefined
+          }
+          onRemoveRemoteTrack={
+            isParent && activeCollection.isRemoteAccount
+              ? (playlistItemId) => {
+                  const plId = activeCollection.browseId;
+                  void removeTrackFromRemoteYouTubePlaylist(plId, playlistItemId)
+                    .then(() => {
+                      setActiveCollection((prev) =>
+                        prev && prev.browseId === plId
+                          ? { ...prev, rawTracks: prev.rawTracks.filter((r) => r.playlistItemId !== playlistItemId) }
+                          : prev
+                      );
+                      void refreshYouTubeState(true);
+                    })
+                    .catch(() => {});
+                }
+              : undefined
+          }
+          onClose={() => setActiveCollection(null)}
         />
       ) : null}
 
@@ -1217,8 +1758,19 @@ export function MusicPlayer() {
         visible={createPlaylistOpen}
         tokens={tokens}
         initialTrackCount={createPlaylistSeed.length}
-        onCreate={(name, emoji) => {
+        canCreateOnYouTube={isParent && ytStatus.connected}
+        onCreate={(name, emoji, alsoYouTube) => {
           createPlaylist?.(name, emoji, createPlaylistSeed);
+          if (alsoYouTube && isParent && ytStatus.connected) {
+            void createRemoteYouTubePlaylist(name)
+              .then(async (remotePl) => {
+                for (const t of createPlaylistSeed) {
+                  await addTrackToRemoteYouTubePlaylist(remotePl.id, t.id).catch(() => {});
+                }
+                await refreshYouTubeState(true);
+              })
+              .catch(() => {});
+          }
         }}
         onClose={() => {
           setCreatePlaylistOpen(false);
@@ -1230,15 +1782,90 @@ export function MusicPlayer() {
         visible={addToPlaylistTrack !== null}
         track={addToPlaylistTrack}
         playlists={visiblePlaylists}
+        isParent={isParent}
+        youtubeConnected={ytStatus.connected}
+        youtubePlaylists={visibleYouTubePlaylists}
         tokens={tokens}
         onSelectPlaylist={(playlistId, track) => {
           addTrackToPlaylist?.(playlistId, track);
+        }}
+        onSelectYouTubePlaylist={async (playlistId, track) => {
+          await addTrackToRemoteYouTubePlaylist(playlistId, track.id);
+          await refreshYouTubeState(true);
         }}
         onOpenCreateNew={() => {
           openPlaylistCreator(addToPlaylistTrack ? [addToPlaylistTrack] : []);
         }}
         onClose={() => setAddToPlaylistTrack(null)}
       />
+
+      {isParent ? (
+        <YouTubeAccountModal
+          visible={ytModalOpen}
+          status={ytStatus}
+          busy={ytBusy}
+          error={ytError}
+          tokens={tokens}
+          onStartConnect={() => {
+            setYtBusy(true);
+            setYtError(null);
+            void startYouTubeConnect()
+              .then(async ({ authUrl }) => {
+                setYtStatus((prev) => ({ ...prev, pending: true, status: "INITIATED" }));
+                await Linking.openURL(authUrl);
+              })
+              .catch((e: unknown) => {
+                setYtError(e instanceof Error ? e.message : "Could not start YouTube connection.");
+              })
+              .finally(() => setYtBusy(false));
+          }}
+          onCheckStatus={() => {
+            setYtBusy(true);
+            setYtError(null);
+            void checkYouTubeConnectStatus()
+              .then(async (nextState) => {
+                setYtStatus(nextState);
+                if (nextState.connected) {
+                  const list = await fetchYouTubePlaylists();
+                  setYtPlaylists(list);
+                }
+              })
+              .catch((e: unknown) => {
+                setYtError(e instanceof Error ? e.message : "Could not check YouTube status.");
+              })
+              .finally(() => setYtBusy(false));
+          }}
+          onSyncNow={() => {
+            setYtBusy(true);
+            setYtError(null);
+            void refreshYouTubeState(true)
+              .catch((e: unknown) => {
+                setYtError(e instanceof Error ? e.message : "Could not sync playlists.");
+              })
+              .finally(() => setYtBusy(false));
+          }}
+          onDisconnect={() => {
+            setYtBusy(true);
+            setYtError(null);
+            void disconnectYouTubeAccount()
+              .then(() => {
+                setYtStatus({ connected: false, pending: false, status: null, accountEmail: null });
+                setYtPlaylists([]);
+                setYtModalOpen(false);
+              })
+              .catch((e: unknown) => {
+                setYtError(e instanceof Error ? e.message : "Could not disconnect YouTube.");
+              })
+              .finally(() => setYtBusy(false));
+          }}
+          onClose={() => {
+            if (!ytBusy) {
+              setYtError(null);
+              setYtModalOpen(false);
+            }
+          }}
+        />
+      ) : null}
 
       <PlaylistDetailModal
         visible={selectedPlaylist !== null}

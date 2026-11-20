@@ -15,6 +15,8 @@
 import {
   artworkBlurred,
   artworkColors,
+  browseArtist,
+  browseCollection,
   clearEngineCaches,
   lastStreamFormat,
   prefetchAudio,
@@ -39,6 +41,8 @@ const native = {
   artworkBlurred: jest.fn(),
   resolveAudio: jest.fn(),
   search: jest.fn(),
+  browseArtist: jest.fn(),
+  browseCollection: jest.fn(),
   related: jest.fn(),
 };
 
@@ -48,6 +52,8 @@ beforeEach(() => {
   native.artworkBlurred.mockReset();
   native.resolveAudio.mockReset();
   native.search.mockReset();
+  native.browseArtist.mockReset();
+  native.browseCollection.mockReset();
   native.related.mockReset();
   jest
     .spyOn(ExpoModulesCore, "requireNativeModule")
@@ -361,5 +367,59 @@ describe("resolveAudio", () => {
     await related("t1");
     await related("t1");
     expect(native.related).toHaveBeenCalledTimes(1);
+  });
+
+  it("caches rich search metadata, browseArtist, and browseCollection and degrades safely on native errors", async () => {
+    native.search.mockResolvedValue({
+      tracks: [],
+      explicitKnown: true,
+      topArtist: {
+        browseId: "UChYPL8XRXNqerL5hLkd9E9g",
+        name: "Vicente Fernández",
+        subtitle: "Artist • 47.4M monthly audience",
+        artworkUrl: "https://img/v.jpg",
+      },
+      artists: [],
+      albums: [
+        {
+          browseId: "MPREb_ckLfEPIIv5v",
+          title: "Por Tu Maldito Amor",
+          artist: "Vicente Fernández",
+          year: "1990",
+          albumType: "Album",
+          subtitle: "Album • Vicente Fernández • 1990",
+          artworkUrl: null,
+          explicit: false,
+        },
+      ],
+      playlists: [],
+    });
+
+    const outcome = await search("Vicente Fernandez", 20);
+    expect(outcome.topArtist?.name).toBe("Vicente Fernández");
+    expect(outcome.albums).toHaveLength(1);
+    await search("vicente fernandez", 20);
+    expect(native.search).toHaveBeenCalledTimes(1);
+
+    native.browseArtist.mockResolvedValue({
+      browseId: "UChYPL8XRXNqerL5hLkd9E9g",
+      name: "Vicente Fernández",
+      subtitle: "47.4M monthly audience",
+      description: "",
+      artworkUrl: null,
+      topSongs: [],
+      albums: [],
+      singles: [],
+      playlists: [],
+      relatedArtists: [],
+      explicitKnown: true,
+    });
+    const prof = await browseArtist("UChYPL8XRXNqerL5hLkd9E9g");
+    expect(prof?.name).toBe("Vicente Fernández");
+    await browseArtist("UChYPL8XRXNqerL5hLkd9E9g");
+    expect(native.browseArtist).toHaveBeenCalledTimes(1);
+
+    native.browseCollection.mockRejectedValue(new Error("offline"));
+    await expect(browseCollection("MPREb_ckLfEPIIv5v")).resolves.toBeNull();
   });
 });

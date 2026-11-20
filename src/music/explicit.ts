@@ -110,6 +110,32 @@ export function visibleTracks<T extends Pick<MediaTrack, "explicit" | "artist" |
   return tracks.filter((track) => !isContentHidden(track, policy));
 }
 
+/** Whether an artist should be hidden under the family's deny-list. */
+export function isArtistHidden(artistName: string, policy: ContentPolicy): boolean {
+  if (policy.isParent) return false;
+  return isDeniedTerm({ artist: artistName, title: "" }, policy.denied ?? []);
+}
+
+/** Whether an album or single card should be hidden from a kid role. */
+export function isAlbumHidden(
+  album: { title: string; artist: string; explicit: boolean | null },
+  policy: ContentPolicy
+): boolean {
+  if (policy.isParent) return false;
+  if (isDeniedTerm({ artist: album.artist, title: album.title }, policy.denied ?? [])) return true;
+  if (!policy.filterOn) return false;
+  return album.explicit === true;
+}
+
+/** Whether a playlist summary card matches the family's deny-list. */
+export function isPlaylistHidden(
+  playlist: { title: string; author: string },
+  policy: ContentPolicy
+): boolean {
+  if (policy.isParent) return false;
+  return isDeniedTerm({ artist: playlist.author, title: playlist.title }, policy.denied ?? []);
+}
+
 /**
  * The first track the viewer may see, scanning from `start`.
  *

@@ -91,4 +91,28 @@ export interface FamilyPlaylist {
   updatedAt: number;
 }
 
+export type {
+  ArtistProfile,
+  MusicAlbumSummary,
+  MusicArtistSummary,
+  MusicCollectionDetail,
+  MusicPlaylistSummary,
+} from "../../modules/youtube-engine/src/types";
+
+export interface YouTubeAccountStatus {
+  connected: boolean;
+  pending: boolean;
+  status: string | null;
+  accountEmail: string | null;
+}
+
+export interface YouTubeAccountPlaylist {
+  id: string;
+  title: string;
+  description: string;
+  itemCount: number;
+  artworkUrl: string | null;
+  privacyStatus: string | null;
+}
+
 export type SleepTimerMinutes = 15 | 30 | 45 | 60;

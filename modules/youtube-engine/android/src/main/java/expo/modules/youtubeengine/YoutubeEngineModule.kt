@@ -14,6 +14,12 @@ class YoutubeEngineModule : Module() {
     AsyncFunction("search") { query: String, limit: Int, promise: Promise ->
       Engine.searchAsync(query, limit, promise)
     }
+    AsyncFunction("browseArtist") { browseId: String, promise: Promise ->
+      Engine.browseArtistAsync(browseId, promise)
+    }
+    AsyncFunction("browseCollection") { browseId: String, promise: Promise ->
+      Engine.browseCollectionAsync(browseId, promise)
+    }
     AsyncFunction("resolveAudio") { id: String, promise: Promise ->
       Engine.resolveAudioAsync(id, promise)
     }

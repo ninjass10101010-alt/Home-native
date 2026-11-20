@@ -1,5 +1,14 @@
 import { requireNativeModule } from "expo-modules-core";
-import type { ArtworkColors, MediaTrack, ResolvedAudio } from "./src/types";
+import type {
+  ArtistProfile,
+  ArtworkColors,
+  MediaTrack,
+  MusicAlbumSummary,
+  MusicArtistSummary,
+  MusicCollectionDetail,
+  MusicPlaylistSummary,
+  ResolvedAudio,
+} from "./src/types";
 
 /**
  * The native module is resolved LAZILY, at call time.
@@ -27,6 +36,10 @@ export interface SearchOutcome {
   tracks: MediaTrack[];
   /** false when the engine fell back and ratings are unknown. */
   explicitKnown: boolean;
+  topArtist?: MusicArtistSummary | null;
+  artists?: MusicArtistSummary[];
+  albums?: MusicAlbumSummary[];
+  playlists?: MusicPlaylistSummary[];
 }
 
 const SEARCH_CACHE_LIMIT = 50;
@@ -34,9 +47,65 @@ const SEARCH_CACHE_TTL_MS = 5 * 60 * 1000;
 const searchCache = new Map<string, { outcome: SearchOutcome; expiresAt: number }>();
 const inFlightSearch = new Map<string, Promise<SearchOutcome>>();
 
+function asArtistSummary(raw: unknown): MusicArtistSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const browseId = typeof r.browseId === "string" ? r.browseId.trim() : "";
+  const name = typeof r.name === "string" ? r.name.trim() : "";
+  if (!browseId || !name) return null;
+  return {
+    browseId,
+    name,
+    subtitle: typeof r.subtitle === "string" ? r.subtitle : "Artist",
+    artworkUrl: typeof r.artworkUrl === "string" ? r.artworkUrl : null,
+  };
+}
+
+function asAlbumSummary(raw: unknown): MusicAlbumSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const browseId = typeof r.browseId === "string" ? r.browseId.trim() : "";
+  const title = typeof r.title === "string" ? r.title.trim() : "";
+  if (!browseId || !title) return null;
+  return {
+    browseId,
+    title,
+    artist: typeof r.artist === "string" ? r.artist : "",
+    year: typeof r.year === "string" ? r.year : "",
+    albumType: typeof r.albumType === "string" ? r.albumType : "Album",
+    subtitle: typeof r.subtitle === "string" ? r.subtitle : "",
+    artworkUrl: typeof r.artworkUrl === "string" ? r.artworkUrl : null,
+    explicit: typeof r.explicit === "boolean" ? r.explicit : null,
+  };
+}
+
+function asPlaylistSummary(raw: unknown): MusicPlaylistSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const browseId = typeof r.browseId === "string" ? r.browseId.trim() : "";
+  const title = typeof r.title === "string" ? r.title.trim() : "";
+  if (!browseId || !title) return null;
+  return {
+    browseId,
+    title,
+    author: typeof r.author === "string" ? r.author : "",
+    subtitle: typeof r.subtitle === "string" ? r.subtitle : "",
+    artworkUrl: typeof r.artworkUrl === "string" ? r.artworkUrl : null,
+  };
+}
+
 export async function search(query: string, limit = 20): Promise<SearchOutcome> {
   const q = query.trim();
-  if (!q) return { tracks: [], explicitKnown: true };
+  if (!q) {
+    return {
+      tracks: [],
+      explicitKnown: true,
+      topArtist: null,
+      artists: [],
+      albums: [],
+      playlists: [],
+    };
+  }
   const cacheKey = `${q.toLowerCase()}#${limit}`;
   const now = Date.now();
   const cached = searchCache.get(cacheKey);
@@ -51,15 +120,35 @@ export async function search(query: string, limit = 20): Promise<SearchOutcome> 
       tracks?: MediaTrack[];
     };
     const tracks = Array.isArray(result?.tracks) ? result.tracks : [];
+    const topArtist = asArtistSummary(result?.topArtist);
+    const artists = Array.isArray(result?.artists)
+      ? result.artists.map(asArtistSummary).filter((x): x is MusicArtistSummary => x !== null)
+      : [];
+    const albums = Array.isArray(result?.albums)
+      ? result.albums.map(asAlbumSummary).filter((x): x is MusicAlbumSummary => x !== null)
+      : [];
+    const playlists = Array.isArray(result?.playlists)
+      ? result.playlists.map(asPlaylistSummary).filter((x): x is MusicPlaylistSummary => x !== null)
+      : [];
     // A shape mismatch (a missing or non-boolean flag) means the ratings are NOT
     // known — never claim authority the native result did not give.
     const outcome: SearchOutcome = {
       tracks,
       explicitKnown: typeof result?.explicitKnown === "boolean" ? result.explicitKnown : false,
+      topArtist,
+      artists,
+      albums,
+      playlists,
     };
     // Cache only authoritative non-empty outcomes so a degraded fallback or transient
     // empty result never sticks in memory.
-    if (outcome.explicitKnown && outcome.tracks.length > 0) {
+    const hasContent =
+      outcome.tracks.length > 0 ||
+      Boolean(outcome.topArtist) ||
+      artists.length > 0 ||
+      albums.length > 0 ||
+      playlists.length > 0;
+    if (outcome.explicitKnown && hasContent) {
       if (searchCache.size >= SEARCH_CACHE_LIMIT) {
         const oldest = searchCache.keys().next().value;
         if (oldest !== undefined) searchCache.delete(oldest);
@@ -285,8 +374,108 @@ export async function related(id: string): Promise<MediaTrack[]> {
   }
 }
 
+const BROWSE_CACHE_LIMIT = 50;
+const BROWSE_CACHE_TTL_MS = 10 * 60 * 1000;
+const artistCache = new Map<string, { profile: ArtistProfile; expiresAt: number }>();
+const inFlightArtist = new Map<string, Promise<ArtistProfile | null>>();
+const collectionCache = new Map<string, { collection: MusicCollectionDetail; expiresAt: number }>();
+const inFlightCollection = new Map<string, Promise<MusicCollectionDetail | null>>();
+
+export async function browseArtist(browseId: string): Promise<ArtistProfile | null> {
+  const key = browseId.trim();
+  if (!key) return null;
+  const cached = artistCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.profile;
+  const existing = inFlightArtist.get(key);
+  if (existing) return existing;
+
+  const task = (async (): Promise<ArtistProfile | null> => {
+    try {
+      const raw = (await native().browseArtist(key)) as Record<string, unknown> | null | undefined;
+      if (!raw || typeof raw !== "object") return null;
+      const profile: ArtistProfile = {
+        browseId: typeof raw.browseId === "string" && raw.browseId ? raw.browseId : key,
+        name: typeof raw.name === "string" ? raw.name : "",
+        subtitle: typeof raw.subtitle === "string" ? raw.subtitle : "Artist",
+        description: typeof raw.description === "string" ? raw.description : "",
+        artworkUrl: typeof raw.artworkUrl === "string" ? raw.artworkUrl : null,
+        topSongs: Array.isArray(raw.topSongs) ? (raw.topSongs as MediaTrack[]) : [],
+        albums: Array.isArray(raw.albums)
+          ? raw.albums.map(asAlbumSummary).filter((x): x is MusicAlbumSummary => x !== null)
+          : [],
+        singles: Array.isArray(raw.singles)
+          ? raw.singles.map(asAlbumSummary).filter((x): x is MusicAlbumSummary => x !== null)
+          : [],
+        playlists: Array.isArray(raw.playlists)
+          ? raw.playlists.map(asPlaylistSummary).filter((x): x is MusicPlaylistSummary => x !== null)
+          : [],
+        relatedArtists: Array.isArray(raw.relatedArtists)
+          ? raw.relatedArtists.map(asArtistSummary).filter((x): x is MusicArtistSummary => x !== null)
+          : [],
+        explicitKnown: typeof raw.explicitKnown === "boolean" ? raw.explicitKnown : false,
+      };
+      if (artistCache.size >= BROWSE_CACHE_LIMIT) {
+        const oldest = artistCache.keys().next().value;
+        if (oldest !== undefined) artistCache.delete(oldest);
+      }
+      artistCache.set(key, { profile, expiresAt: Date.now() + BROWSE_CACHE_TTL_MS });
+      return profile;
+    } catch {
+      return null;
+    }
+  })();
+
+  inFlightArtist.set(key, task);
+  try {
+    return await task;
+  } finally {
+    inFlightArtist.delete(key);
+  }
+}
+
+export async function browseCollection(browseId: string): Promise<MusicCollectionDetail | null> {
+  const key = browseId.trim();
+  if (!key) return null;
+  const cached = collectionCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.collection;
+  const existing = inFlightCollection.get(key);
+  if (existing) return existing;
+
+  const task = (async (): Promise<MusicCollectionDetail | null> => {
+    try {
+      const raw = (await native().browseCollection(key)) as Record<string, unknown> | null | undefined;
+      if (!raw || typeof raw !== "object") return null;
+      const collection: MusicCollectionDetail = {
+        browseId: typeof raw.browseId === "string" && raw.browseId ? raw.browseId : key,
+        kind: raw.kind === "album" ? "album" : "playlist",
+        title: typeof raw.title === "string" ? raw.title : "",
+        subtitle: typeof raw.subtitle === "string" ? raw.subtitle : "",
+        artist: typeof raw.artist === "string" ? raw.artist : "",
+        artworkUrl: typeof raw.artworkUrl === "string" ? raw.artworkUrl : null,
+        tracks: Array.isArray(raw.tracks) ? (raw.tracks as MediaTrack[]) : [],
+        explicitKnown: typeof raw.explicitKnown === "boolean" ? raw.explicitKnown : false,
+      };
+      if (collectionCache.size >= BROWSE_CACHE_LIMIT) {
+        const oldest = collectionCache.keys().next().value;
+        if (oldest !== undefined) collectionCache.delete(oldest);
+      }
+      collectionCache.set(key, { collection, expiresAt: Date.now() + BROWSE_CACHE_TTL_MS });
+      return collection;
+    } catch {
+      return null;
+    }
+  })();
+
+  inFlightCollection.set(key, task);
+  try {
+    return await task;
+  } finally {
+    inFlightCollection.delete(key);
+  }
+}
+
 /**
- * Clears in-memory search, related, and resolved-stream caches (used by tests
+ * Clears in-memory search, related, artist, collection, and resolved-stream caches (used by tests
  * or on explicit cache reset).
  */
 export function clearEngineCaches(): void {
@@ -296,6 +485,10 @@ export function clearEngineCaches(): void {
   inFlightAudio.clear();
   relatedCache.clear();
   inFlightRelated.clear();
+  artistCache.clear();
+  inFlightArtist.clear();
+  collectionCache.clear();
+  inFlightCollection.clear();
 }
 
 /**
@@ -358,7 +551,16 @@ export async function artworkColors(url: string): Promise<ArtworkColors> {
   return answer;
 }
 
-export type { ArtworkColors, MediaTrack, ResolvedAudio } from "./src/types";
+export type {
+  ArtistProfile,
+  ArtworkColors,
+  MediaTrack,
+  MusicAlbumSummary,
+  MusicArtistSummary,
+  MusicCollectionDetail,
+  MusicPlaylistSummary,
+  ResolvedAudio,
+} from "./src/types";
 
 /**
  * The blurred artwork's radius, in the image's own pixels.
