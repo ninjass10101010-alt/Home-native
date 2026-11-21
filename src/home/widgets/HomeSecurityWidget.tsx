@@ -58,6 +58,11 @@ export function HomeSecurityWidget({ onOpenHomeControls }: HomeSecurityWidgetPro
       id="homeSecurity"
       icon="🛡️"
       title="Home Security"
+      onHeaderPress={() => {
+        if (onOpenHomeControls) onOpenHomeControls();
+        else router.push(resolveRoute("/ha", "House") as never);
+      }}
+      headerPressLabel="Open Home controls"
       status={loaded ? (error && states.length === 0 ? "error" : "ready") : "loading"}
       failure={error && states.length === 0 ? "error" : null}
       hasData={states.length > 0}

@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { api } from "../../api/client";
 import type { DbListEnvelope } from "../../api/types";
 import { useTheme } from "../../theme/ThemeProvider";
+import { hapticTap } from "../../theme/haptics";
 import { TYPOGRAPHY, RADII } from "../../theme/tokens";
 import { mix } from "../../theme/mix";
 import { WidgetFrame } from "./WidgetFrame";
@@ -41,6 +42,7 @@ export function ScheduleWidget({ span = 1, shape, now: injectedNow }: ScheduleWi
   const cyanInk = colors["color-accent-ink-cyan"] ?? cyan;
   const router = useRouter();
   const isWide = shape === "2x1";
+  const openCalendar = React.useCallback(() => router.push("/calendar" as never), [router]);
 
   const { status, data, failure, stale, retry } = useWidgetData<ScheduleData>(
     async () => {
@@ -149,6 +151,9 @@ export function ScheduleWidget({ span = 1, shape, now: injectedNow }: ScheduleWi
       icon="🕐"
       title="Daily Schedule"
       description={countLabel}
+      onHeaderPress={openCalendar}
+      headerPressLabel="Open calendar"
+      showHeaderChevron
       status={status}
       failure={failure}
       hasData={Boolean(data)}
@@ -198,13 +203,24 @@ export function ScheduleWidget({ span = 1, shape, now: injectedNow }: ScheduleWi
 
         {/* Content Rows or Empty State */}
         {todayRoutines.length === 0 ? (
-          <EmptyState
-            flat
-            icon="🕐"
-            title="No routines"
-            body="No routines are scheduled for today."
-            style={{ flex: 1 }}
-          />
+          <Pressable
+            testID="schedule-empty-open"
+            accessibilityRole="button"
+            accessibilityLabel="No routines — open calendar"
+            onPress={() => {
+              hapticTap();
+              openCalendar();
+            }}
+            style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.78 : 1 })}
+          >
+            <EmptyState
+              flat
+              icon="🕐"
+              title="No routines"
+              body="No routines are scheduled for today."
+              style={{ flex: 1 }}
+            />
+          </Pressable>
         ) : upcomingRoutines.length === 0 ? (
           <View style={{ flex: 1, justifyContent: "center" }}>
             <EmptyState
@@ -248,10 +264,16 @@ export function ScheduleWidget({ span = 1, shape, now: injectedNow }: ScheduleWi
                     const col = (tokenKey && colors[tokenKey]) || cyan;
                     const firstName = routine.member ? routine.member.split(" ")[0] : null;
                     return (
-                      <View
+                      <Pressable
                         key={routine.id}
                         testID={`schedule-row-${routine.id}`}
-                        style={{
+                        accessibilityRole="button"
+                        accessibilityLabel={`${routine.time || "All day"} ${routine.title}. Open calendar`}
+                        onPress={() => {
+                          hapticTap();
+                          openCalendar();
+                        }}
+                        style={({ pressed }) => ({
                           flex: 1,
                           minWidth: 0,
                           flexDirection: "row",
@@ -263,7 +285,8 @@ export function ScheduleWidget({ span = 1, shape, now: injectedNow }: ScheduleWi
                           paddingHorizontal: 9,
                           paddingVertical: 7,
                           gap: 6,
-                        }}
+                          opacity: pressed ? 0.78 : 1,
+                        })}
                       >
                         <View
                           style={{
@@ -320,7 +343,7 @@ export function ScheduleWidget({ span = 1, shape, now: injectedNow }: ScheduleWi
                             </Text>
                           </View>
                         ) : null}
-                      </View>
+                      </Pressable>
                     );
                   })}
                   {pair.length === 1 ? <View style={{ flex: 1 }} /> : null}
@@ -337,10 +360,16 @@ export function ScheduleWidget({ span = 1, shape, now: injectedNow }: ScheduleWi
               const firstName = routine.member ? routine.member.split(" ")[0] : null;
 
               return (
-                <View
+                <Pressable
                   key={routine.id}
                   testID={`schedule-row-${routine.id}`}
-                  style={{
+                  accessibilityRole="button"
+                  accessibilityLabel={`${routine.time || "All day"} ${routine.title}. Open calendar`}
+                  onPress={() => {
+                    hapticTap();
+                    openCalendar();
+                  }}
+                  style={({ pressed }) => ({
                     flexDirection: "row",
                     alignItems: "center",
                     backgroundColor: mix(col, colors["color-surface-1"], 14),
@@ -350,7 +379,8 @@ export function ScheduleWidget({ span = 1, shape, now: injectedNow }: ScheduleWi
                     paddingHorizontal: 10,
                     paddingVertical: 7,
                     gap: 8,
-                  }}
+                    opacity: pressed ? 0.78 : 1,
+                  })}
                 >
                   {/* Glowing left accent bar */}
                   <View
@@ -415,7 +445,7 @@ export function ScheduleWidget({ span = 1, shape, now: injectedNow }: ScheduleWi
                       </Text>
                     </View>
                   ) : null}
-                </View>
+                </Pressable>
               );
             })}
           </View>

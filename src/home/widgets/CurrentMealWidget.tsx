@@ -1,9 +1,11 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { api, ApiError } from "../../api/client";
 import type { DbListEnvelope } from "../../api/types";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
+import { hapticTap } from "../../theme/haptics";
 import { TYPOGRAPHY, RADII } from "../../theme/tokens";
 import { mix } from "../../theme/mix";
 import { AnimatedEmoji } from "../../ui/AnimatedEmoji";
@@ -107,9 +109,11 @@ export interface CurrentMealWidgetProps {
  */
 export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) {
   const { colors, accentColor } = useTheme();
+  const router = useRouter();
   const { member, hydrated } = useAuth();
   const guest = hydrated && !member;
   const [tickNow, setTickNow] = React.useState<Date | null>(null);
+  const openMeals = React.useCallback(() => router.push("/meals" as never), [router]);
 
   // The slot ("it's almost dinner") moves with the wall clock even between
   // data pulses — a 30s tick recomputes selection from the last good rows.
@@ -282,6 +286,9 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
       title={`${theme.label} Time`}
       description={subtitle}
       headerRight={timeChip}
+      onHeaderPress={openMeals}
+      headerPressLabel="Open meals"
+      showHeaderChevron
       status={status}
       failure={failure}
       hasData={data !== null}
@@ -289,8 +296,19 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
       onRetry={retry}
     >
       <View style={{ flex: 1, justifyContent: "center" }}>
-        <View
-          style={{
+        <Pressable
+          testID="currentMeal-open"
+          accessibilityRole="button"
+          accessibilityLabel={
+            meal
+              ? `${meal.name || "Untitled meal"}. Open meals`
+              : `No meal planned yet. Plan ${theme.label.toLowerCase()} in Meals`
+          }
+          onPress={() => {
+            hapticTap();
+            openMeals();
+          }}
+          style={({ pressed }) => ({
             flexDirection: "row",
             alignItems: "center",
             gap: 12,
@@ -299,7 +317,8 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
             borderColor: mix(season.accent, "transparent", 14),
             backgroundColor: mix(season.accent, "transparent", 5),
             padding: 14,
-          }}
+            opacity: pressed ? 0.8 : 1,
+          })}
         >
         {/* The plate well (the web's `meal-emoji-glow`): the seasonal tint
             under a warm ring, never an opaque surface tile — an opaque tile
@@ -369,7 +388,19 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
             </Text>
           )}
         </View>
-        </View>
+        <Text
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          style={{
+            color: colors["color-text-muted"],
+            fontSize: 20,
+            fontWeight: "600",
+            marginLeft: 2,
+          }}
+        >
+          ›
+        </Text>
+        </Pressable>
       </View>
     </WidgetFrame>
   );

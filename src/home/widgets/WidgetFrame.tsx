@@ -10,6 +10,7 @@ import { SHADOW_RGBA, SPECULAR_AT } from "../../theme/materials";
 import { Material } from "../../theme/Material";
 import { AnimatedEmoji } from "../../ui/AnimatedEmoji";
 import { mixAlpha } from "../../ui/SoftButton";
+import { hapticTap } from "../../theme/haptics";
 import { READ_COPY, READ_COPY_STALE, READ_RETRY_LABEL, type ReadFailure } from "./data";
 import { WIDGET_TONES } from "../widgets";
 import { HomeWidgetIcon, widgetIconVariantFor } from "../../ui/HomeWidgetIcon";
@@ -261,6 +262,12 @@ export interface WidgetFrameProps {
   header?: React.ReactNode;
   /** Right-of-header slot (pills, expand chevrons) on the default band. */
   headerRight?: React.ReactNode;
+  /** Optional tap handler for the default widget header (title + subtitle + orb overhang). */
+  onHeaderPress?: () => void;
+  /** Custom accessibility label for the header tap target (defaults to `Open ${title}`). */
+  headerPressLabel?: string;
+  /** Controls the subtle trailing `›` chevron when `onHeaderPress` is set (defaults to `!headerRight`). */
+  showHeaderChevron?: boolean;
   /** Force the identity disc even when a `header` override is passed. */
   showDisc?: boolean;
   /** When true, widget is public/guest-visible and never overrides errors with PIN gates. */
@@ -297,6 +304,9 @@ export function WidgetFrame({
   onRetry,
   header,
   headerRight,
+  onHeaderPress,
+  headerPressLabel,
+  showHeaderChevron,
   showDisc = false,
   guestVisible = false,
   children,
@@ -352,6 +362,21 @@ export function WidgetFrame({
       <WidgetIconOrb id={id} icon={icon} title={title} tone={tone} standalone />
     ) : null;
 
+  const descriptionNode = description ? (
+    <Text
+      numberOfLines={1}
+      style={{
+        color: colors["color-text-secondary"],
+        fontSize: TYPOGRAPHY.label.fontSize,
+        lineHeight: 18,
+        marginTop: 2,
+        textAlign: "left",
+      }}
+    >
+      {description}
+    </Text>
+  ) : null;
+
   const defaultHeader = (
     <View
       style={{
@@ -374,21 +399,72 @@ export function WidgetFrame({
           gap: 6,
         }}
       >
-        <Text
-          numberOfLines={1}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            color: colors["color-text-primary"],
-            fontSize: CARD_TITLE.fontSize,
-            fontWeight: CARD_TITLE.fontWeight,
-            lineHeight: CARD_TITLE.lineHeight,
-            textAlign: "left",
-          }}
-          accessibilityRole="header"
-        >
-          {title}
-        </Text>
+        {onHeaderPress ? (
+          <Pressable
+            testID={`${id}-header-press`}
+            accessibilityRole="button"
+            accessibilityLabel={headerPressLabel ?? `Open ${title}`}
+            hitSlop={{ top: 10, bottom: 26, left: 56, right: 8 }}
+            onPress={() => {
+              hapticTap();
+              onHeaderPress();
+            }}
+            style={({ pressed }) => ({
+              flex: 1,
+              minWidth: 0,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              opacity: pressed ? 0.72 : 1,
+            })}
+          >
+            <Text
+              numberOfLines={1}
+              style={{
+                flexShrink: 1,
+                minWidth: 0,
+                color: colors["color-text-primary"],
+                fontSize: CARD_TITLE.fontSize,
+                fontWeight: CARD_TITLE.fontWeight,
+                lineHeight: CARD_TITLE.lineHeight,
+                textAlign: "left",
+              }}
+              accessibilityRole="header"
+            >
+              {title}
+            </Text>
+            {(showHeaderChevron ?? !headerRight) ? (
+              <Text
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+                style={{
+                  color: colors["color-text-muted"],
+                  fontSize: 18,
+                  lineHeight: 22,
+                  fontWeight: "600",
+                }}
+              >
+                ›
+              </Text>
+            ) : null}
+          </Pressable>
+        ) : (
+          <Text
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              color: colors["color-text-primary"],
+              fontSize: CARD_TITLE.fontSize,
+              fontWeight: CARD_TITLE.fontWeight,
+              lineHeight: CARD_TITLE.lineHeight,
+              textAlign: "left",
+            }}
+            accessibilityRole="header"
+          >
+            {title}
+          </Text>
+        )}
         {headerRight ? (
           <View
             pointerEvents="box-none"
@@ -398,19 +474,21 @@ export function WidgetFrame({
           </View>
         ) : null}
       </View>
-      {description ? (
-        <Text
-          numberOfLines={1}
-          style={{
-            color: colors["color-text-secondary"],
-            fontSize: TYPOGRAPHY.label.fontSize,
-            lineHeight: 18,
-            marginTop: 2,
-            textAlign: "left",
-          }}
-        >
-          {description}
-        </Text>
+      {descriptionNode ? (
+        onHeaderPress ? (
+          <Pressable
+            accessible={false}
+            onPress={() => {
+              hapticTap();
+              onHeaderPress();
+            }}
+            style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+          >
+            {descriptionNode}
+          </Pressable>
+        ) : (
+          descriptionNode
+        )
       ) : null}
     </View>
   );

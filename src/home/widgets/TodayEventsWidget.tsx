@@ -6,6 +6,7 @@ import type { DbListEnvelope } from "../../api/types";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
 import { mix } from "../../theme/mix";
+import { hapticTap } from "../../theme/haptics";
 import { TYPOGRAPHY, MIN_TARGET_DP } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
 import { ListRow } from "../../ui/ListRow";
@@ -335,6 +336,7 @@ export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
 
   const googleKnown = !googleFailure || googleFailure === "not_connected";
   const countKnown = Boolean(data?.familyAnswered && googleKnown);
+  const openCalendar = React.useCallback(() => router.push("/calendar" as never), [router]);
 
   // The wall's KPI band reads THIS widget's count (src/home/wall-stats.ts) —
   // one read, two surfaces, so the "Events · Today" tile can never disagree
@@ -355,6 +357,8 @@ export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
       icon="📅"
       title="Today"
       description={description}
+      onHeaderPress={openCalendar}
+      headerPressLabel="Open calendar"
       status={status}
       failure={failure}
       hasData={data !== null}
@@ -374,7 +378,18 @@ export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
             }))}
         />
         {visible.length === 0 ? (
-          <EmptyState flat icon="🌿" title="Quiet day" body="No events are scheduled for today." style={{ flex: 1 }} />
+          <Pressable
+            testID="todayEvents-empty-open"
+            accessibilityRole="button"
+            accessibilityLabel="Quiet day — open calendar"
+            onPress={() => {
+              hapticTap();
+              openCalendar();
+            }}
+            style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.78 : 1 })}
+          >
+            <EmptyState flat icon="🌿" title="Quiet day" body="No events are scheduled for today." style={{ flex: 1 }} />
+          </Pressable>
         ) : (
           <View style={{ gap: 8 }}>
             {visible.map((event) => {
@@ -384,6 +399,8 @@ export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
                 <ListRow
                   key={event.id}
                   testID={`todayEvents-row-${event.id}`}
+                  accessibilityLabel={`${event.title}, ${event.time}. Open calendar`}
+                  onPress={openCalendar}
                   style={{ minHeight: 52, paddingVertical: 8 }}
                   leading={<Text style={{ fontSize: 20 }}>{event.icon}</Text>}
                   title={event.title}

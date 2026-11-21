@@ -13,6 +13,7 @@ import {
 } from "../../photos/library";
 import { mix } from "../../theme/mix";
 import { useTheme } from "../../theme/ThemeProvider";
+import { hapticTap } from "../../theme/haptics";
 import { MOTION, RADII, TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
 import { READ_COPY, READ_COPY_STALE, READ_RETRY_LABEL, useWidgetData } from "./data";
@@ -250,32 +251,64 @@ export function PhotosWidget() {
           />
         </Animated.View>
         {photos.length > 1 ? (
-          <Pressable
-            testID="photos-pause"
-            accessibilityRole="button"
-            accessibilityLabel="Pause photo rotation"
-            accessibilityState={{ checked: paused }}
-            onPress={(e) => {
-              e?.stopPropagation?.();
-              setPausedByChoice((was) => !(was ?? reduceMotion));
-            }}
-            hitSlop={12}
-            style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: mix(colors["color-monster-ink-blue"], "transparent", 55),
-            }}
-          >
-            <Text style={{ fontSize: 18, color: colors["color-primary-foreground"] }} accessibilityElementsHidden>
-              {paused ? "▶" : "⏸"}
-            </Text>
-          </Pressable>
+          <>
+            <Pressable
+              testID="photos-next"
+              accessibilityRole="button"
+              accessibilityLabel="Next photo"
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                hapticTap();
+                setIndex((i) => i + 1);
+              }}
+              hitSlop={10}
+              style={({ pressed }) => ({
+                position: "absolute",
+                top: 12,
+                right: 64,
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: mix(colors["color-monster-ink-blue"], "transparent", pressed ? 72 : 55),
+              })}
+            >
+              <Text
+                style={{ fontSize: 22, lineHeight: 24, fontWeight: "700", color: colors["color-primary-foreground"] }}
+                accessibilityElementsHidden
+              >
+                ›
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="photos-pause"
+              accessibilityRole="button"
+              accessibilityLabel="Pause photo rotation"
+              accessibilityState={{ checked: paused }}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                hapticTap();
+                setPausedByChoice((was) => !(was ?? reduceMotion));
+              }}
+              hitSlop={12}
+              style={{
+                position: "absolute",
+                top: 12,
+                right: 12,
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: mix(colors["color-monster-ink-blue"], "transparent", 55),
+              }}
+            >
+              <Text style={{ fontSize: 18, color: colors["color-primary-foreground"] }} accessibilityElementsHidden>
+                {paused ? "▶" : "⏸"}
+              </Text>
+            </Pressable>
+          </>
         ) : null}
         {data.settings.showCaption && caption ? (
           <>

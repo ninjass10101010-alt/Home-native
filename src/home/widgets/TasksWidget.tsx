@@ -1,15 +1,18 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useAuth } from "../../state/AuthProvider";
+import { useAuth, pinRequiredFor as modulePinRequiredFor } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
+import { hapticError, hapticSuccess, hapticTap } from "../../theme/haptics";
 import { TYPOGRAPHY, MIN_TARGET_DP } from "../../theme/tokens";
 import { mix } from "../../theme/mix";
 import { EmptyState } from "../../ui/EmptyState";
 import { ListRow } from "../../ui/ListRow";
 import { Chip } from "../../ui/Chip";
+import { useOptionalToast } from "../../ui/Toast";
 import { useSync } from "../../state/SyncManager";
 import { api } from "../../api/client";
+import { submitClaim, taskRefusalCopy } from "../../tasks/claim";
 import { classifyFailure, type ReadFailure } from "./data";
 import { WidgetFrame } from "./WidgetFrame";
 import { publishWallStats, publishWallStatsUnknown } from "../wall-stats";
@@ -50,6 +53,16 @@ function readableTitle(title: string): string {
   return title.replace(/\s*&\s*/g, " & ").trim();
 }
 
+const GENERIC_ASSIGNEES = new Set(["open", "all", "everyone", "family", "crew"]);
+
+function belongsToMember(assignee?: string, memberName?: string): boolean {
+  const a = (assignee ?? "").trim().toLowerCase();
+  const m = (memberName ?? "").trim().toLowerCase();
+  if (!a || !m || GENERIC_ASSIGNEES.has(a)) return false;
+  if (a === m) return true;
+  return a.split(/\s+/)[0] === m.split(/\s+/)[0];
+}
+
 /**
  * Tasks cell — the wall's read-only mirror of the Home tasks widget
  * (Home-ai src/app/page.tsx "tasks" case): pending count, kid rows that admit
@@ -74,13 +87,74 @@ function readableTitle(title: string): string {
 export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
   const { colors, accentColor } = useTheme();
   const router = useRouter();
-  const { role, hydrated } = useAuth();
+  const toast = useOptionalToast();
+  const { member, role, hydrated, pinRequiredFor } = useAuth();
   const rowBudget = wallRowBudget(span);
   // The CAPABILITY role, never the cached display profile: a stale cached
   // parent must not unlock the approval footer, and a cached profile has no
   // live session to read the family's tasks with.
   const isParent = role === "parent";
   const { snapshot, stale: syncStale, syncError, refreshNow } = useSync();
+  const [completingIds, setCompletingIds] = React.useState<ReadonlySet<number>>(() => new Set());
+  const inFlightRef = React.useRef<Set<number>>(new Set());
+  const aliveRef = React.useRef(true);
+  React.useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+  const openTasks = React.useCallback(() => router.push("/tasks" as never), [router]);
+  const pinCheck =
+    typeof pinRequiredFor === "function"
+      ? pinRequiredFor
+      : typeof modulePinRequiredFor === "function"
+        ? modulePinRequiredFor
+        : (m: unknown) => !m;
+  const isPinProtected = pinCheck(member as Parameters<typeof modulePinRequiredFor>[0]);
+  const canQuickComplete = (task: WallTask): boolean =>
+    role !== null &&
+    Boolean(member) &&
+    !isPinProtected &&
+    !task.completed &&
+    !task.pendingApproval &&
+    typeof task.id === "number" &&
+    Number.isSafeInteger(task.id) &&
+    task.id > 0 &&
+    belongsToMember(task.assignee, member?.name);
+
+  const handleQuickComplete = async (task: WallTask) => {
+    const taskId = Number(task.id);
+    if (!Number.isSafeInteger(taskId) || taskId <= 0 || inFlightRef.current.has(taskId)) return;
+    inFlightRef.current.add(taskId);
+    setCompletingIds((prev) => new Set(prev).add(taskId));
+    try {
+      const outcome = await submitClaim({ action: "complete", taskId });
+      if (!aliveRef.current) return;
+      if (outcome.kind === "applied" || outcome.kind === "sending") {
+        hapticSuccess();
+        toast?.show(
+          outcome.kind === "sending" ? "Sent — waiting for sync…" : "Marked done!",
+          { intent: "success" }
+        );
+        void refreshNow();
+      } else {
+        hapticError();
+        toast?.show(taskRefusalCopy(outcome.reason), { intent: "error" });
+        if (outcome.refreshes) void refreshNow();
+      }
+    } finally {
+      inFlightRef.current.delete(taskId);
+      if (aliveRef.current) {
+        setCompletingIds((prev) => {
+          if (!prev.has(taskId)) return prev;
+          const next = new Set(prev);
+          next.delete(taskId);
+          return next;
+        });
+      }
+    }
+  };
 
   // The GUEST model: no live session → no capability. The wall is still a
   // family display, so the chores come from the PUBLIC route.
@@ -246,6 +320,8 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
       icon="✅"
       title="Tasks"
       description={description}
+      onHeaderPress={openTasks}
+      headerPressLabel="Open tasks"
       status={status}
       failure={failure}
       hasData={hasData}
@@ -253,7 +329,18 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
       onRetry={guest ? () => { void readGuestChores(); } : refreshNow}
     >
       {visible.length === 0 ? (
-        <EmptyState flat icon="🎉" title="All caught up" body="No pending tasks right now." style={{ flex: 1 }} />
+        <Pressable
+          testID="tasks-empty-open"
+          accessibilityRole="button"
+          accessibilityLabel="All caught up — open tasks"
+          onPress={() => {
+            hapticTap();
+            openTasks();
+          }}
+          style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.78 : 1 })}
+        >
+          <EmptyState flat icon="🎉" title="All caught up" body="No pending tasks right now." style={{ flex: 1 }} />
+        </Pressable>
       ) : (
         <View style={{ gap: 8 }}>
           {/* Web page.tsx:942: the bare rose clock band above the rows — the
@@ -269,6 +356,8 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
                 <ListRow
                   key={String(task.id)}
                   testID={`tasks-chore-${task.id}`}
+                  accessibilityLabel={`${readableTitle(task.title)}. Open tasks`}
+                  onPress={openTasks}
                   style={{ minHeight: 52, paddingVertical: 8 }}
                   title={readableTitle(task.title)}
                   subtitle={task.assignee || undefined}
@@ -285,14 +374,53 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
                   : colors["color-accent-mint"] ?? accentColor;
             const awaiting = !!task.completed && !!task.pendingApproval;
             const subtitle = [task.assignee, task.due].filter(Boolean).join(" · ");
+            const quickCheck = canQuickComplete(task) ? (
+              <Pressable
+                testID={`tasks-quick-check-${task.id}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Mark ${readableTitle(task.title)} done`}
+                disabled={completingIds.has(Number(task.id))}
+                hitSlop={14}
+                onPress={(e) => {
+                  e?.stopPropagation?.();
+                  void handleQuickComplete(task);
+                }}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: mix(pointsColor, "transparent", 16),
+                  borderWidth: 1.5,
+                  borderColor: mix(pointsColor, "transparent", 55),
+                  opacity: completingIds.has(Number(task.id)) ? 0.5 : 1,
+                }}
+              >
+                <Text
+                  accessibilityElementsHidden
+                  style={{
+                    color: colors["color-text-primary"],
+                    fontSize: 16,
+                    fontWeight: "700",
+                  }}
+                >
+                  {completingIds.has(Number(task.id)) ? "…" : "✓"}
+                </Text>
+              </Pressable>
+            ) : undefined;
             return (
               <ListRow
                 key={String(task.id)}
+                testID={`tasks-row-${task.id}`}
+                accessibilityLabel={`${readableTitle(task.title)}. Open tasks`}
+                onPress={openTasks}
                 style={{
                   minHeight: 52,
                   paddingVertical: 8,
                   borderColor: mix(pointsColor, colors["color-border"] ?? "transparent", 34),
                 }}
+                leading={quickCheck}
                 title={readableTitle(task.title)}
                 subtitle={awaiting ? `Waiting for approval${subtitle ? ` · ${subtitle}` : ""}` : subtitle || undefined}
                 leftRailColor={pointsColor}

@@ -1,5 +1,6 @@
 import React from "react";
 import { Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { useTheme } from "../../theme/ThemeProvider";
 import { TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
@@ -29,6 +30,7 @@ function ClimateEmpty() {
 /** Wall climate tile (web HomeClimateWidget.tsx parity, read-only Wave 1). */
 export function HomeClimateWidget() {
   const { colors } = useTheme();
+  const router = useRouter();
   const { states, loaded, error, refresh } = useHAState();
 
   const climates = entitiesByDomain(states, "climate").slice(0, 3);
@@ -38,6 +40,8 @@ export function HomeClimateWidget() {
       id="homeClimate"
       icon="🌡️"
       title="Home Climate"
+      onHeaderPress={() => router.push("/ha" as never)}
+      headerPressLabel="Open Home controls"
       status={loaded ? (error && states.length === 0 ? "error" : "ready") : "loading"}
       failure={error && states.length === 0 ? "error" : null}
       hasData={states.length > 0}

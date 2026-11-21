@@ -6,6 +6,7 @@ import { readCachedMembers } from "../../api/members";
 import type { DbListEnvelope } from "../../api/types";
 import { useAuth } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
+import { hapticTap } from "../../theme/haptics";
 import { TYPOGRAPHY } from "../../theme/tokens";
 import { mix } from "../../theme/mix";
 import { useSync, type WeekData } from "../../state/SyncManager";
@@ -199,6 +200,7 @@ export function LeaderboardWidget({
     : syncStale;
 
   const onRetry = isGuest && !snapshotWeek ? () => void readGuestWeek() : refreshNow;
+  const openTasks = React.useCallback(() => router.push("/tasks" as never), [router]);
 
   const headerRight = (
     <Pressable
@@ -206,7 +208,7 @@ export function LeaderboardWidget({
       accessibilityRole="link"
       accessibilityLabel="Open leaderboard in tasks"
       hitSlop={{ top: 18, bottom: 18, left: 12, right: 12 }}
-      onPress={() => router.push("/tasks" as never)}
+      onPress={openTasks}
       style={{ paddingHorizontal: 6, paddingVertical: 4 }}
     >
       <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
@@ -222,6 +224,9 @@ export function LeaderboardWidget({
       title="Leaderboard"
       description="This week's points"
       headerRight={headerRight}
+      onHeaderPress={openTasks}
+      headerPressLabel="Open leaderboard in tasks"
+      showHeaderChevron={false}
       status={status}
       failure={failure}
       hasData={hasData}
@@ -229,76 +234,87 @@ export function LeaderboardWidget({
       onRetry={onRetry}
     >
       {hasData ? (
-        ranked.length === 0 ? (
-          // The reference's empty week: crown + the prizes line, NO countdown.
-          <RaceState title={EMPTY_LEADERBOARD} />
-        ) : (
-          <View style={{ gap: 8, alignSelf: "stretch" }}>
-            {ranked.slice(0, visibleLimit).map((r) => {
-              const m = memberFor(r.name);
-              const photo = m?.emoji ? isPhotoUri(m.emoji) : false;
-              const podiumTone =
-                r.rank === 0
-                  ? colors["color-accent-amber"] ?? accentColor
-                  : r.rank === 1
-                    ? colors["color-accent-cyan"] ?? accentColor
-                    : colors["color-accent-rose"] ?? accentColor;
-              return (
-                <View key={r.name} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: mix(podiumTone, colors["color-surface-2"] ?? "", 22),
-                      borderWidth: 1,
-                      borderColor: mix(podiumTone, "transparent", 45),
-                      overflow: "hidden",
-                    }}
-                  >
-                    {photo && m ? (
-                      <Image source={{ uri: m.emoji }} style={{ width: 32, height: 32, borderRadius: 16 }} />
-                    ) : (
-                      <AnimatedEmoji emoji={displayEmoji(m?.emoji)} size={18} />
-                    )}
-                  </View>
-                  <Text
-                    numberOfLines={1}
-                    style={{ flex: 1, color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}
-                  >
-                    {medal(r.rank)} {r.name.split(" ")[0]}
-                  </Text>
-                  <View
-                    style={{
-                      borderRadius: 999,
-                      paddingHorizontal: 9,
-                      paddingVertical: 2,
-                      backgroundColor: mix(podiumTone, "transparent", 18),
-                      borderWidth: 1,
-                      borderColor: mix(podiumTone, "transparent", 36),
-                    }}
-                  >
-                    <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
-                      {r.points} pts
+        <Pressable
+          testID="leaderboard-body-open"
+          accessibilityRole="button"
+          accessibilityLabel="Open leaderboard in tasks"
+          onPress={() => {
+            hapticTap();
+            openTasks();
+          }}
+          style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.8 : 1 })}
+        >
+          {ranked.length === 0 ? (
+            // The reference's empty week: crown + the prizes line, NO countdown.
+            <RaceState title={EMPTY_LEADERBOARD} />
+          ) : (
+            <View style={{ gap: 8, alignSelf: "stretch" }}>
+              {ranked.slice(0, visibleLimit).map((r) => {
+                const m = memberFor(r.name);
+                const photo = m?.emoji ? isPhotoUri(m.emoji) : false;
+                const podiumTone =
+                  r.rank === 0
+                    ? colors["color-accent-amber"] ?? accentColor
+                    : r.rank === 1
+                      ? colors["color-accent-cyan"] ?? accentColor
+                      : colors["color-accent-rose"] ?? accentColor;
+                return (
+                  <View key={r.name} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: mix(podiumTone, colors["color-surface-2"] ?? "", 22),
+                        borderWidth: 1,
+                        borderColor: mix(podiumTone, "transparent", 45),
+                        overflow: "hidden",
+                      }}
+                    >
+                      {photo && m ? (
+                        <Image source={{ uri: m.emoji }} style={{ width: 32, height: 32, borderRadius: 16 }} />
+                      ) : (
+                        <AnimatedEmoji emoji={displayEmoji(m?.emoji)} size={18} />
+                      )}
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={{ flex: 1, color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}
+                    >
+                      {medal(r.rank)} {r.name.split(" ")[0]}
                     </Text>
+                    <View
+                      style={{
+                        borderRadius: 999,
+                        paddingHorizontal: 9,
+                        paddingVertical: 2,
+                        backgroundColor: mix(podiumTone, "transparent", 18),
+                        borderWidth: 1,
+                        borderColor: mix(podiumTone, "transparent", 36),
+                      }}
+                    >
+                      <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+                        {r.points} pts
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              );
-            })}
-            <Text
-              style={{
-                color: colors["color-text-secondary"],
-                fontSize: TYPOGRAPHY.label.fontSize,
-                textAlign: "center",
-                marginTop: 2,
-              }}
-            >
-              Resets in {daysUntilReset()} days
-            </Text>
-          </View>
-        )
+                );
+              })}
+              <Text
+                style={{
+                  color: colors["color-text-secondary"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  textAlign: "center",
+                  marginTop: 2,
+                }}
+              >
+                Resets in {daysUntilReset()} days
+              </Text>
+            </View>
+          )}
+        </Pressable>
       ) : null}
     </WidgetFrame>
   );

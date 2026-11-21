@@ -15,6 +15,10 @@ jest.mock("expo-secure-store", () => ({
   setItemAsync: jest.fn(async () => {}),
   deleteItemAsync: jest.fn(async () => {}),
 }));
+const mockRouterPush = jest.fn();
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ push: mockRouterPush }),
+}));
 
 let mockMember: any = { id: "p1", name: "Rebecca (Mom)", role: "parent", emoji: "🐱", color: "green" };
 jest.mock("../src/state/AuthProvider", () => ({
@@ -140,6 +144,23 @@ describe("PhotosWidget (wall hero)", () => {
     });
     img = await findByTestId("photos-hero-image");
     expect(img.props.source.uri).toContain("ph1");
+  });
+
+  it("next-photo control advances to the next photo without opening /photos", async () => {
+    api.mockImplementation((path: string) => {
+      if (path.startsWith("/api/photos?")) return Promise.resolve({ ok: true, photos: photos(3) });
+      if (path.startsWith("/api/photos/settings"))
+        return Promise.resolve({ ok: true, settings: { rotateSeconds: 75, transition: "cut", order: "shuffle", showCaption: false } });
+      return Promise.reject(new Error("unmapped"));
+    });
+    const { findByTestId, getByTestId } = render(<PhotosWidget />, { wrapper: wrap });
+    let img = await findByTestId("photos-hero-image");
+    expect(img.props.source.uri).toContain("ph0");
+
+    fireEvent.press(getByTestId("photos-next"));
+    img = await findByTestId("photos-hero-image");
+    expect(img.props.source.uri).toContain("ph1");
+    expect(mockRouterPush).not.toHaveBeenCalled();
   });
 
   it("degraded settings fall back to defaults and badge honestly", async () => {

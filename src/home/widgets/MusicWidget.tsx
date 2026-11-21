@@ -58,6 +58,9 @@ export function MusicWidget({ shape }: { span?: WallSpan; shape?: WallShape } = 
       title="Music"
       description="Ad-free YouTube Music"
       headerRight={headerRightLink}
+      onHeaderPress={open}
+      headerPressLabel="Open music"
+      showHeaderChevron={guest}
       status="ready"
       failure={null}
       hasData

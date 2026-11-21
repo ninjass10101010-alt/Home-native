@@ -65,6 +65,8 @@ export function HomeLightsWidget() {
       id="homeLights"
       icon="💡"
       title="Home Lights"
+      onHeaderPress={() => router.push("/ha" as never)}
+      headerPressLabel="Open Home controls"
       status={loaded ? (error && states.length === 0 ? "error" : "ready") : "loading"}
       failure={error && states.length === 0 ? "error" : null}
       hasData={states.length > 0}

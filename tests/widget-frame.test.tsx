@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
-import { StyleSheet, Text } from "react-native";
-import { render, waitFor } from "@testing-library/react-native";
+import { Pressable, StyleSheet, Text } from "react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { AuthProvider } from "../src/state/AuthProvider";
@@ -113,6 +113,33 @@ describe("WidgetFrame default header — left-aligned band + unclipped floating 
     expect(pill).toBeTruthy();
     const band = getByTestId("wf-header");
     expect(StyleSheet.flatten((band.children[0] as any).props.style).flexDirection).toBe("row");
+  });
+
+  it("onHeaderPress makes the default header tappable while preserving Row 1 layout and independent headerRight", () => {
+    const onHeaderPress = jest.fn();
+    const onRightPress = jest.fn();
+    const { getByTestId, getByText } = render(
+      <Frame
+        onHeaderPress={onHeaderPress}
+        headerPressLabel="Open Tasks"
+        headerRight={
+          <Pressable testID="wf-right-btn" onPress={onRightPress}>
+            <Text>Speak</Text>
+          </Pressable>
+        }
+      />,
+      { wrapper: wrap }
+    );
+    const band = getByTestId("wf-header");
+    expect(StyleSheet.flatten((band.children[0] as any).props.style).flexDirection).toBe("row");
+    const headerBtn = getByTestId("wf-header-press");
+    expect(headerBtn.props.accessibilityLabel).toBe("Open Tasks");
+    fireEvent.press(headerBtn);
+    expect(onHeaderPress).toHaveBeenCalledTimes(1);
+    fireEvent.press(getByTestId("wf-right-btn"));
+    expect(onRightPress).toHaveBeenCalledTimes(1);
+    expect(onHeaderPress).toHaveBeenCalledTimes(1);
+    expect(getByText("Tasks")).toBeTruthy();
   });
 
   it("the header override prop still wins over the default band", () => {
