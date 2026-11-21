@@ -1,9 +1,10 @@
 import React from "react";
-import { Image, Pressable, Text, View, ViewStyle } from "react-native";
+import { Image, Platform, Pressable, Text, View, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { MIN_TARGET_DP, PRESS_IN_MS, RADII, SPRING, TYPOGRAPHY } from "../theme/tokens";
 import { hapticTap } from "../theme/haptics";
+import { SHADOW_RGBA, SPECULAR_AT } from "../theme/materials";
 import { accentDeepened, mix } from "../theme/mix";
 import { AnimatedEmoji } from "./AnimatedEmoji";
 import {
@@ -170,7 +171,7 @@ export function MemberRail({
   wrap = true,
   align = "flex-start",
 }: MemberRailProps) {
-  const { colors, theme, accentColor } = useTheme();
+  const { colors, theme, accentColor, boost } = useTheme();
   // Web WallMemberRail parity: sign-out is a 2-tap confirm — the first tap
   // arms ("Sign out?"), the second fires; the armed state auto-resets.
   const [arming, setArming] = React.useState(false);
@@ -182,16 +183,47 @@ export function MemberRail({
   }, [arming]);
 
   const rose = colors["color-accent-rose"] ?? accentColor;
+  const isAndroidRuntime = Platform.OS === "android" && typeof jest === "undefined";
 
-  /* The tile plate. The web draws `border-white/10` over `bg-surface-0/25`:
-     a hairline over a wash that sinks into the canvas, so the rail reads as a
-     row of photos and not a row of cards. The house `color-border` token is
-     that hairline; the wash is the surface token at 25%. On the signed-in
-     tile the web swaps both for the live accent (60% border / 15% wash). */
-  const plateBorder = colors["color-border"];
-  const plateBg = mix(colors["color-surface-0"], "transparent", 25);
-  const selfBorder = mix(accentColor, "transparent", 60);
-  const selfBg = mix(accentColor, "transparent", 15);
+  const plateBorder = theme === "light" ? SPECULAR_AT(0.86) : SPECULAR_AT(0.16);
+  const plateBg =
+    theme === "light"
+      ? mix(colors["color-surface-0"], "transparent", 72)
+      : mix(colors["color-surface-1"], "transparent", 56);
+  const selfBorder = mix(accentColor, "transparent", theme === "light" ? 72 : 78);
+  const selfBg =
+    theme === "light"
+      ? mix(accentColor, colors["color-surface-0"], 18)
+      : mix(accentColor, colors["color-surface-1"], 24);
+  const idleTileShadow =
+    isAndroidRuntime && !boost
+      ? ({
+          boxShadow:
+            theme === "light"
+              ? `0 4px 14px ${SHADOW_RGBA.lightOuter}, 0 1px 3px ${SHADOW_RGBA.lightCrisp}`
+              : `0 6px 18px ${SHADOW_RGBA.darkOuter}`,
+        } as ViewStyle)
+      : undefined;
+  const activeTileShadow =
+    isAndroidRuntime && !boost
+      ? ({
+          boxShadow: `0 0 22px ${mix(accentColor, "transparent", theme === "dark" ? 56 : 42)}, 0 4px 12px ${theme === "dark" ? SHADOW_RGBA.darkOuter : SHADOW_RGBA.lightOuter}`,
+        } as ViewStyle)
+      : undefined;
+  const specularGlint = !boost ? (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: 1,
+        left: 18,
+        right: 18,
+        height: 1.5,
+        borderRadius: 1,
+        backgroundColor: SPECULAR_AT(theme === "light" ? 0.92 : 0.24),
+      }}
+    />
+  ) : null;
   /* The web's Avatar falls back to GREEN for a colour name it cannot resolve
      (Avatar.tsx:28/38) — never to the theme's selected accent, which painted
      all nine rings the same blue and erased the family. */
@@ -235,7 +267,11 @@ export function MemberRail({
           const memberHex = memberAccentHex(colorName, theme, accentColor, fallbackHex);
           const photo = isPhotoUri(m.emoji);
           // The web's `ring-<accent>/30` (violet rides at 40%).
-          const ringColor = mix(memberHex, "transparent", colorName === "violet" ? 40 : 30);
+          const ringColor = mix(
+            memberHex,
+            "transparent",
+            current ? 70 : colorName === "violet" ? 54 : 46
+          );
           // The web's emoji disc wash (`bg-<accent>/20`). It also sits under a
           // photo, so a photo that never loads leaves the member's colour
           // instead of an empty hole.
@@ -257,8 +293,11 @@ export function MemberRail({
                 borderColor: current ? selfBorder : plateBorder,
                 backgroundColor: current ? selfBg : plateBg,
                 gap: NAME_GAP,
+                overflow: "hidden",
+                ...(current ? activeTileShadow : idleTileShadow),
               }}
             >
+              {specularGlint}
               {/* The avatar. The web's `ring-2` is a SPREAD shadow drawn
                   OUTSIDE the 48px circle, over the plate — never over the
                   wash. Painting it inside (RN's borderWidth) composited the
@@ -397,8 +436,11 @@ export function MemberRail({
                 backgroundColor: plateBg,
                 alignItems: "center",
                 justifyContent: "center",
+                overflow: "hidden",
+                ...idleTileShadow,
               }}
             >
+              {specularGlint}
               <Text
                 style={{
                   color: colors["color-text-secondary"],

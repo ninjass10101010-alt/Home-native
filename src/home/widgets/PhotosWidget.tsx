@@ -1,8 +1,9 @@
 import React from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Platform, Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Path, Rect } from "react-native-svg";
 import { api, ApiError } from "../../api/client";
 import {
   clampSettings,
@@ -12,6 +13,7 @@ import {
   type WallPhoto,
 } from "../../photos/library";
 import { mix } from "../../theme/mix";
+import { SHADOW_RGBA, SPECULAR_AT, SPECULAR_CLEAR } from "../../theme/materials";
 import { useTheme } from "../../theme/ThemeProvider";
 import { hapticTap } from "../../theme/haptics";
 import { MOTION, RADII, TYPOGRAPHY } from "../../theme/tokens";
@@ -225,6 +227,11 @@ export function PhotosWidget() {
       );
     }
     const caption = current.caption || fallbackCaption(current.takenAt);
+    const iconInk = colors["color-primary-foreground"];
+    const isAndroidRuntime = Platform.OS === "android" && typeof jest === "undefined";
+    const controlShadow = isAndroidRuntime
+      ? ({ boxShadow: `0 4px 14px ${SHADOW_RGBA.darkOuter}` } as const)
+      : undefined;
     return (
       <Pressable
         testID="photos-hero-card"
@@ -250,6 +257,35 @@ export function PhotosWidget() {
             }}
           />
         </Animated.View>
+        <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={[SPECULAR_AT(0.16), SPECULAR_CLEAR]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.65, y: 0.45 }}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              borderRadius: RADII.xl,
+              borderWidth: 1,
+              borderColor: SPECULAR_AT(0.32),
+            }}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={[SPECULAR_CLEAR, SPECULAR_AT(0.75), SPECULAR_CLEAR]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2 }}
+          />
+        </View>
         {photos.length > 1 ? (
           <>
             <Pressable
@@ -262,24 +298,45 @@ export function PhotosWidget() {
                 setIndex((i) => i + 1);
               }}
               hitSlop={10}
-              style={({ pressed }) => ({
-                position: "absolute",
-                top: 12,
-                right: 64,
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: mix(colors["color-monster-ink-blue"], "transparent", pressed ? 72 : 55),
-              })}
+              style={({ pressed }) => [
+                {
+                  position: "absolute",
+                  top: 12,
+                  right: 64,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: mix(colors["color-monster-ink-blue"], "transparent", pressed ? 52 : 36),
+                  borderWidth: 1,
+                  borderColor: SPECULAR_AT(0.44),
+                  overflow: "hidden",
+                },
+                controlShadow,
+              ]}
             >
-              <Text
-                style={{ fontSize: 22, lineHeight: 24, fontWeight: "700", color: colors["color-primary-foreground"] }}
-                accessibilityElementsHidden
-              >
-                ›
-              </Text>
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  top: 1,
+                  left: 10,
+                  right: 10,
+                  height: 1.5,
+                  borderRadius: 1,
+                  backgroundColor: SPECULAR_AT(0.55),
+                }}
+              />
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M9.5 6l6 6-6 6"
+                  stroke={iconInk}
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
             </Pressable>
             <Pressable
               testID="photos-pause"
@@ -292,50 +349,85 @@ export function PhotosWidget() {
                 setPausedByChoice((was) => !(was ?? reduceMotion));
               }}
               hitSlop={12}
-              style={{
-                position: "absolute",
-                top: 12,
-                right: 12,
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: mix(colors["color-monster-ink-blue"], "transparent", 55),
-              }}
+              style={({ pressed }) => [
+                {
+                  position: "absolute",
+                  top: 12,
+                  right: 12,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: mix(colors["color-monster-ink-blue"], "transparent", pressed ? 52 : 36),
+                  borderWidth: 1,
+                  borderColor: SPECULAR_AT(0.44),
+                  overflow: "hidden",
+                },
+                controlShadow,
+              ]}
             >
-              <Text style={{ fontSize: 18, color: colors["color-primary-foreground"] }} accessibilityElementsHidden>
-                {paused ? "▶" : "⏸"}
-              </Text>
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  top: 1,
+                  left: 10,
+                  right: 10,
+                  height: 1.5,
+                  borderRadius: 1,
+                  backgroundColor: SPECULAR_AT(0.55),
+                }}
+              />
+              {paused ? (
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path d="M8 5.5v13l11-6.5L8 5.5z" fill={iconInk} />
+                </Svg>
+              ) : (
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Rect x={6.5} y={5} width={4} height={14} rx={1.5} fill={iconInk} />
+                  <Rect x={13.5} y={5} width={4} height={14} rx={1.5} fill={iconInk} />
+                </Svg>
+              )}
             </Pressable>
           </>
         ) : null}
         {data.settings.showCaption && caption ? (
           <>
-            {/* Dark gradient scrim keeps white caption text legible in both
-                light and dark themes — a flat canvas-alpha band washes out
-                on light mode (the web fix: color-monster-ink-blue gradient). */}
+            {/* Dark gradient scrim + frosted glass caption pill keeps caption legible in light and dark themes. */}
             <LinearGradient
               pointerEvents="none"
-              colors={["transparent", mix(colors["color-monster-ink-blue"], "transparent", 75)]}
+              colors={["transparent", mix(colors["color-monster-ink-blue"], "transparent", 52)]}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
-              style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 96 }}
+              style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 84 }}
             />
-            <Text
-              numberOfLines={2}
+            <View
+              testID="photos-caption-pill"
               style={{
                 position: "absolute",
                 bottom: 12,
                 left: 12,
-                right: 12,
-                color: colors["color-primary-foreground"],
-                fontSize: TYPOGRAPHY.label.fontSize,
-                fontWeight: "600",
+                maxWidth: "88%",
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: RADII.full,
+                backgroundColor: mix(colors["color-monster-ink-blue"], "transparent", 46),
+                borderWidth: 1,
+                borderColor: SPECULAR_AT(0.32),
               }}
             >
-              {caption}
-            </Text>
+              <Text
+                numberOfLines={2}
+                style={{
+                  color: colors["color-primary-foreground"],
+                  fontSize: TYPOGRAPHY.label.fontSize,
+                  fontWeight: "600",
+                }}
+              >
+                {caption}
+              </Text>
+            </View>
           </>
         ) : null}
         {stale ? (

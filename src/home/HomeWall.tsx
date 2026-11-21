@@ -6,6 +6,7 @@ import { ACCENTS, FONTS, RADII, TYPOGRAPHY } from "../theme/tokens";
 import { useKidCharacter, type KidCharacterSkin } from "../theme/kidCharacter";
 import { CharacterMotifBackdrop, KidCharacterHero } from "../ui/characters/KidCharacterTheme";
 import { Material } from "../theme/Material";
+import { SPECULAR_AT } from "../theme/materials";
 import { mix } from "../theme/mix";
 import { MemberRail, type RailMember } from "../ui/MemberRail";
 import { useAuth } from "../state/AuthProvider";
@@ -192,81 +193,33 @@ const SIGNED_OUT_BANNER_OFFLINE_NO_COPY =
  *      makes it the tallest item in a centre-aligned row. The chip's row
  *      centres both on one baseline, which flattens the strip.
  */
-/**
- * The strip's body — the web's `bg-[accent-amber]/15` over the canvas.
- *
- * The native paints a FLAT body (the web composites over its canvas
- * gradient, which carries a blue cast the canvas token does not), so the
- * share is the one that lands on the reference's MEASURED fill — rgb(43,33,31)
- * in dark, rgb(238,214,192) in light (reference/home/parent-dark.png and
- * parent-light.png, sampled at y=20, x=600). The dark backdrop carries the
- * canvas's blue cast so the body lands warm-neutral like the reference's
- * instead of orange; the light share is higher because the native's light
- * canvas token is a cool near-white where the web's canvas is a warm one.
- */
-const AMBER_SHARE_DARK = 11;
-const AMBER_SHARE_LIGHT = 25;
-/** The web's canvas is navy-tinted; the canvas token is a neutral near-black. */
-const CANVAS_BLUE_CAST = 18;
-
+/** Signed-out notice pill rendered through the frosted thin Material glass shell with amber tone. */
 function WallSignedOutBanner({ copy, onSignIn }: { copy: string; onSignIn: () => void }) {
   const { colors, theme } = useTheme();
   const amber = colors["color-accent-amber"];
   const ink = colors["color-text-primary"];
-  const backdrop =
-    theme === "light"
-      ? colors["color-canvas"]
-      : mix(colors["color-nori-950"], colors["color-canvas"], CANVAS_BLUE_CAST);
-  const body = mix(amber, backdrop, theme === "light" ? AMBER_SHARE_LIGHT : AMBER_SHARE_DARK);
-  const rim = mix(amber, "transparent", 40);
+  const rim = mix(amber, "transparent", 42);
   return (
     <View
       testID="wall-signed-out-banner"
       accessibilityLiveRegion="polite"
-      style={{
-        marginHorizontal: 16,
-        marginTop: 12,
-        minHeight: 66,
-        borderRadius: RADII.xl,
-        borderWidth: 1,
-        borderColor: rim,
-        backgroundColor: body,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-      }}
+      style={{ marginHorizontal: 16, marginTop: 12 }}
     >
-      <Text
+      <Material
+        tier="thin"
+        tone={amber}
         style={{
-          color: ink,
-          fontSize: TYPOGRAPHY.label.fontSize,
-          lineHeight: TYPOGRAPHY.label.lineHeight,
-          fontWeight: "600",
-          flexShrink: 1,
-        }}
-      >
-        {copy}
-      </Text>
-      <Pressable
-        onPress={onSignIn}
-        accessibilityRole="link"
-        accessibilityLabel="Sign in with your PIN"
-        hitSlop={10}
-        style={({ pressed }) => ({
-          minHeight: 44,
-          paddingHorizontal: 14,
-          paddingVertical: 8,
-          borderRadius: RADII.full,
-          borderWidth: 1,
+          minHeight: 66,
+          borderRadius: RADII.xl,
           borderColor: rim,
-          backgroundColor: mix(amber, "transparent", pressed ? 30 : 22),
+          backgroundColor: mix(amber, "transparent", theme === "light" ? 16 : 14),
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
-          flexShrink: 0,
-        })}
+          gap: 8,
+        }}
       >
         <Text
           style={{
@@ -274,11 +227,45 @@ function WallSignedOutBanner({ copy, onSignIn }: { copy: string; onSignIn: () =>
             fontSize: TYPOGRAPHY.label.fontSize,
             lineHeight: TYPOGRAPHY.label.lineHeight,
             fontWeight: "600",
+            flexShrink: 1,
           }}
         >
-          Sign in with your PIN →
+          {copy}
         </Text>
-      </Pressable>
+        <Pressable
+          onPress={onSignIn}
+          accessibilityRole="link"
+          accessibilityLabel="Sign in with your PIN"
+          hitSlop={10}
+          style={({ pressed }) => ({
+            minHeight: 44,
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            borderRadius: RADII.full,
+            borderWidth: 1,
+            borderColor:
+              theme === "light" ? mix(amber, SPECULAR_AT(0.9), 48) : mix(amber, "transparent", 48),
+            backgroundColor:
+              theme === "light"
+                ? mix(amber, colors["color-surface-0"], pressed ? 28 : 18)
+                : mix(amber, "transparent", pressed ? 32 : 22),
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          })}
+        >
+          <Text
+            style={{
+              color: ink,
+              fontSize: TYPOGRAPHY.label.fontSize,
+              lineHeight: TYPOGRAPHY.label.lineHeight,
+              fontWeight: "600",
+            }}
+          >
+            Sign in with your PIN →
+          </Text>
+        </Pressable>
+      </Material>
     </View>
   );
 }

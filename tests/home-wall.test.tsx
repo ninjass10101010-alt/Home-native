@@ -421,4 +421,13 @@ describe("widget registry", () => {
     }
   });
 
+  it("renders wall-signed-out-banner as a frosted Material glass surface when signed out", () => {
+    const { getByTestId } = render(
+      <HomeWall members={members} onSelectMember={() => {}} />,
+      { wrapper: wrap }
+    );
+    const banner = getByTestId("wall-signed-out-banner");
+    expect(banner.findAll((n: any) => n.type === "ExpoLinearGradient").length).toBeGreaterThan(0);
+  });
+
 });

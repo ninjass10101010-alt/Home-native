@@ -1,14 +1,13 @@
 import React from "react";
-import { LayoutChangeEvent, Pressable, Text, View, ViewStyle } from "react-native";
+import { LayoutChangeEvent, Platform, Pressable, Text, View, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme/ThemeProvider";
 import { Material } from "../theme/Material";
-import { SPECULAR_AT } from "../theme/materials";
+import { SHADOW_RGBA, SPECULAR_AT } from "../theme/materials";
 import { accentDeepened, mix } from "../theme/mix";
 import { MOTION, PRESS_IN_MS, SPRING, TYPOGRAPHY } from "../theme/tokens";
-import { hapticSelect } from "../theme/haptics";
+import { hapticSelect, hapticTap } from "../theme/haptics";
 import { NavIcon } from "../ui/NavIcon";
-import { SoftButton } from "../ui/SoftButton";
 import {
   NavIconKey,
   NavRole,
@@ -148,9 +147,10 @@ const CapsuleDockInner = React.memo(function CapsuleDockInner({
   style,
   testID,
 }: Omit<CapsuleDockProps, "hydrated" | "isRoot">) {
-  const { colors, accentColor, reduceMotion } = useTheme();
+  const { colors, accentColor, reduceMotion, theme, boost } = useTheme();
   const caps = navItemsForRole(role);
   const activeIndex = caps.findIndex((item) => isNavItemActive(pathname, item));
+  const isAndroidRuntime = Platform.OS === "android" && typeof jest === "undefined";
 
   const [boxes, setBoxes] = React.useState<{ x: number; w: number }[]>([]);
   const hasMeasuredRef = React.useRef(false);
@@ -190,14 +190,17 @@ const CapsuleDockInner = React.memo(function CapsuleDockInner({
     opacity: pillOpacity.value,
   }));
 
-  const activeBg = mix(accentColor, "transparent", 20);
-  const activeBorder = mix(accentColor, "transparent", 38);
+  const activeBg = mix(accentColor, "transparent", theme === "light" ? 18 : 24);
+  const activeBorder = mix(accentColor, "transparent", theme === "light" ? 44 : 52);
   const activeDiscBg = colors["color-nav-active-fill"] ?? accentDeepened(accentColor, 28);
   // transparent ring (web CapsuleNav parity): the old 55%-accent ring read as
   // a bruised halo around the active disc in light mode.
   const activeDiscBorder = "transparent";
-  const idleDiscBg = mix(colors["color-surface-2"], "transparent", 58);
-  const idleDiscBorder = mix(colors["color-text-primary"], "transparent", 12);
+  const idleDiscBg =
+    theme === "light"
+      ? mix(colors["color-surface-0"], "transparent", 68)
+      : mix(colors["color-surface-2"], "transparent", 50);
+  const idleDiscBorder = theme === "light" ? SPECULAR_AT(0.75) : SPECULAR_AT(0.14);
 
   return (
     <View
@@ -225,12 +228,12 @@ const CapsuleDockInner = React.memo(function CapsuleDockInner({
     >
       <Material
         tier="thick"
+        glow
         style={{
           borderRadius: 9999,
           paddingHorizontal: CAP_PAD,
           paddingVertical: CAP_PAD,
-          backgroundColor: mix(colors["color-surface-0"], "transparent", 82),
-          borderColor: mix(colors["color-text-primary"], "transparent", 14),
+          borderColor: theme === "light" ? SPECULAR_AT(0.88) : SPECULAR_AT(0.2),
         }}
       >
         <View
@@ -259,6 +262,11 @@ const CapsuleDockInner = React.memo(function CapsuleDockInner({
                 borderWidth: 1,
                 borderColor: activeBorder,
                 backgroundColor: activeBg,
+                ...(isAndroidRuntime && !boost
+                  ? ({
+                      boxShadow: `0 0 20px ${mix(accentColor, "transparent", theme === "dark" ? 42 : 28)}`,
+                    } as ViewStyle)
+                  : {}),
               },
               pillStyle,
             ]}
@@ -271,6 +279,10 @@ const CapsuleDockInner = React.memo(function CapsuleDockInner({
                 iconKey={item.iconKey as NavIconKey}
                 label={item.label}
                 active={active}
+                accentColor={accentColor}
+                theme={theme}
+                boost={boost}
+                isAndroidRuntime={isAndroidRuntime}
                 showFallbackActiveChrome={active && !hasPillLayout}
                 activeBg={activeBg}
                 activeBorder={activeBorder}
@@ -312,6 +324,10 @@ interface DockCapProps {
   iconKey: NavIconKey;
   label: string;
   active: boolean;
+  accentColor: string;
+  theme: "dark" | "light";
+  boost: boolean;
+  isAndroidRuntime: boolean;
   showFallbackActiveChrome: boolean;
   activeBg: string;
   activeBorder: string;
@@ -333,6 +349,10 @@ const DockCap = React.memo(function DockCap({
   iconKey,
   label,
   active,
+  accentColor,
+  theme,
+  boost,
+  isAndroidRuntime,
   showFallbackActiveChrome,
   activeBg,
   activeBorder,
@@ -405,6 +425,9 @@ const DockCap = React.memo(function DockCap({
             overflow: "hidden",
             // The circle must not shrink when the row is tight: it IS the cap.
             flexShrink: 0,
+            ...(isAndroidRuntime && active && !boost
+              ? { boxShadow: `0 4px 16px ${mix(accentColor, "transparent", theme === "dark" ? 48 : 34)}` }
+              : {}),
           }}
         >
           {active ? (
@@ -417,7 +440,7 @@ const DockCap = React.memo(function DockCap({
                 right: 16,
                 height: 1.5,
                 borderRadius: 1,
-                backgroundColor: SPECULAR_AT(0.35),
+                backgroundColor: SPECULAR_AT(0.45),
               }}
             />
           ) : null}
@@ -454,34 +477,72 @@ const DockCap = React.memo(function DockCap({
 export default CapsuleDock;
 
 /**
- * The Home "More…" trigger (web page.tsx MoreButton parity): the secondary
- * destinations live in the More — sheet, and the web opens it from Home's
- * own action row, NOT the dock (the dock is the 7 primary caps only).
+ * The Home "More…" trigger (web page.tsx MoreButton parity): rendered in the
+ * same Warm Glass surface system as the wall's cards and dock while preserving
+ * the ≥64dp floor (72dp pill).
  */
 export const MoreButton = React.memo(function MoreButton({ onPress, style }: { onPress: () => void; style?: ViewStyle }) {
-  const { colors } = useTheme();
+  const { colors, theme, boost, reduceMotion } = useTheme();
+  const scale = useSharedValue(1);
+  const aStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const isAndroidRuntime = Platform.OS === "android" && typeof jest === "undefined";
+
   return (
-    <SoftButton
-      variant="secondary"
-      onPress={onPress}
-      accessibilityLabel="More"
-      testID="home-more"
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 10,
-        paddingHorizontal: 22,
-        ...(style ?? {}),
-      }}
-    >
-      <NavIcon iconKey="more" size={20} color={colors["color-text-primary"]} />
-      {/* hidden emoji a11y fallback — absolute so Yoga does not insert a
-          phantom flex gap next to the (zero-size) glyph */}
-      <Text style={{ position: "absolute", fontSize: 14, width: 0, height: 0, opacity: 0 }}>{NAV_ICONS.more}</Text>
-      <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
-        More…
-      </Text>
-    </SoftButton>
+    <Animated.View style={[aStyle, style]}>
+      <Material
+        tier="thick"
+        glow
+        blur={false}
+        style={{
+          borderRadius: 24,
+          minHeight: 72,
+          borderColor: theme === "light" ? SPECULAR_AT(0.88) : SPECULAR_AT(0.22),
+          ...(isAndroidRuntime && !boost
+            ? ({
+                boxShadow:
+                  theme === "light"
+                    ? `0 6px 20px ${SHADOW_RGBA.lightOuter}, 0 2px 6px ${SHADOW_RGBA.lightCrisp}`
+                    : `0 8px 24px ${SHADOW_RGBA.darkOuter}`,
+              } as ViewStyle)
+            : {}),
+        }}
+      >
+        <Pressable
+          onPress={() => {
+            hapticTap();
+            onPress();
+          }}
+          onPressIn={() => {
+            if (!reduceMotion) {
+              // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+              scale.value = withTiming(0.96, { duration: PRESS_IN_MS });
+            }
+          }}
+          onPressOut={() => {
+            // eslint-disable-next-line react-hooks/immutability -- Reanimated shared-value write
+            scale.value = reduceMotion ? 1 : withSpring(1, SPRING.press);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="More"
+          testID="home-more"
+          style={{
+            minHeight: 72,
+            paddingHorizontal: 22,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+          }}
+        >
+          <NavIcon iconKey="more" size={20} color={colors["color-text-primary"]} />
+          {/* hidden emoji a11y fallback — absolute so Yoga does not insert a
+              phantom flex gap next to the (zero-size) glyph */}
+          <Text style={{ position: "absolute", fontSize: 14, width: 0, height: 0, opacity: 0 }}>{NAV_ICONS.more}</Text>
+          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>
+            More…
+          </Text>
+        </Pressable>
+      </Material>
+    </Animated.View>
   );
 });

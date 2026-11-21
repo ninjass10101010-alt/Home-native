@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
-import { AccessibilityInfo, Text } from "react-native";
+import { AccessibilityInfo, StyleSheet, Text } from "react-native";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { Modal } from "../src/ui/Modal";
 import { ToastProvider, useToast } from "../src/ui/Toast";
@@ -292,5 +292,16 @@ describe("MemberRail", () => {
     expect(images).toHaveLength(1);
     expect(images[0].props.source).toEqual({ uri: "data:image/jpeg;base64,AAAA" });
     expect(queryByText("data:image/jpeg;base64,AAAA")).toBeNull();
+  });
+
+  it("signed-in member plate carries distinct frosted accent border and wash vs idle plates", () => {
+    const { getByLabelText } = render(
+      <MemberRail members={members} currentName="Emily" onSelect={() => {}} />,
+      { wrapper: wrap }
+    );
+    const activeStyle = StyleSheet.flatten(getByLabelText("Signed in as Emily").props.style);
+    const idleStyle = StyleSheet.flatten(getByLabelText("Sign in as Rebecca (Mom)").props.style);
+    expect(activeStyle.borderColor).not.toBe(idleStyle.borderColor);
+    expect(activeStyle.backgroundColor).not.toBe(idleStyle.backgroundColor);
   });
 });

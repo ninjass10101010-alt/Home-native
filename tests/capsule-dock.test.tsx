@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
+import { StyleSheet } from "react-native";
 import { fireEvent, render } from "@testing-library/react-native";
 import { ThemeProvider } from "../src/theme/ThemeProvider";
 import { CapsuleDock, MoreButton } from "../src/nav/CapsuleDock";
 import { MoreSheet } from "../src/nav/MoreSheet";
 import { mix } from "../src/theme/mix";
-import { ACCENTS } from "../src/theme/tokens";
+import { ACCENTS, TOKENS } from "../src/theme/tokens";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -98,6 +99,16 @@ describe("CapsuleDock", () => {
     fireEvent.press(getByLabelText("Home"));
     expect(onNavigate).not.toHaveBeenCalled();
   });
+
+  it("floating dock lets Material blur/glass gradient shine through without an 82% opaque slab", () => {
+    const { toJSON } = render(
+      <CapsuleDock role="parent" hydrated pathname="/" onNavigate={() => {}} />,
+      { wrapper: wrap }
+    );
+    const dockStr = JSON.stringify(toJSON());
+    expect(dockStr).not.toContain(mix(TOKENS.light["color-surface-0"], "transparent", 82));
+    expect(dockStr).toContain("ExpoLinearGradient");
+  });
 });
 
 describe("MoreSheet", () => {
@@ -144,5 +155,13 @@ describe("MoreButton (web page.tsx MoreButton parity)", () => {
     )[0];
     expect(hidden).toBeTruthy();
     expect(hidden.props.style.position).toBe("absolute");
+  });
+
+  it("renders MoreButton inside a Warm Glass Material wrapper", () => {
+    const { toJSON } = render(<MoreButton onPress={() => {}} />, { wrapper: wrap });
+    const raw = JSON.stringify(toJSON());
+    expect(raw).toContain("ExpoLinearGradient");
+    const btnFlat = StyleSheet.flatten(toJSON() as any);
+    expect(btnFlat).toBeTruthy();
   });
 });

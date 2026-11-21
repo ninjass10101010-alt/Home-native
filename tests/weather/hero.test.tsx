@@ -1,6 +1,7 @@
 // Home-native/tests/weather/hero.test.tsx
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
+import { StyleSheet } from "react-native";
 import { render } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../../src/theme/ThemeProvider";
@@ -76,6 +77,14 @@ describe("WeatherPoster (the monster hero)", () => {
     expect(card.props.accessibilityRole).toBe("button");
     expect(card.props.accessibilityHint).toContain("gallery");
     expect(getByTestId("wx-poster")).toBeTruthy(); // the gradient carries wx-poster in cell mode too
+  });
+
+  it("cell size wears Warm Glass diagonal sheen, frosted header pills, and frosted forecast tray", () => {
+    const { getByTestId } = render(<WeatherPoster size="cell" data={SNAPSHOT} />, { wrapper: wrap });
+    expect(getByTestId("wx-glass-sheen")).toBeTruthy();
+    expect(StyleSheet.flatten(getByTestId("wx-place-pill").props.style).borderWidth).toBe(1);
+    expect(StyleSheet.flatten(getByTestId("wx-details-pill").props.style).borderWidth).toBe(1);
+    expect(StyleSheet.flatten(getByTestId("wx-forecast-tray").props.style).borderWidth).toBe(1);
   });
 });
 

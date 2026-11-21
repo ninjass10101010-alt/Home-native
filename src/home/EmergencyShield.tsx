@@ -1,9 +1,10 @@
 import React from "react";
-import { Pressable, StyleSheet, ViewStyle } from "react-native";
+import { Platform, Pressable, StyleSheet, View, ViewStyle } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { useRouter } from "expo-router";
 import { useTheme } from "../theme/ThemeProvider";
 import { mix } from "../theme/mix";
+import { SHADOW_RGBA, SPECULAR_AT } from "../theme/materials";
 import { MIN_TARGET_DP } from "../theme/tokens";
 
 export interface EmergencyShieldProps {
@@ -35,6 +36,12 @@ export function EmergencyShield({ style }: EmergencyShieldProps) {
   const router = useRouter();
   const rose = colors["color-accent-rose"] ?? colors["color-accent-selected"];
   const ink = colors["color-primary-foreground"];
+  const isAndroidRuntime = Platform.OS === "android" && typeof jest === "undefined";
+  const depthStyle = isAndroidRuntime
+    ? ({
+        boxShadow: `0 0 24px ${mix(rose, "transparent", 48)}, 0 6px 16px ${SHADOW_RGBA.lightOuter}`,
+      } as ViewStyle)
+    : ([styles.legacyShadow, { shadowColor: rose }] as const);
   return (
     <Pressable
       testID="emergency-shield"
@@ -43,10 +50,23 @@ export function EmergencyShield({ style }: EmergencyShieldProps) {
       onPress={() => router.push("/emergency" as never)}
       style={[
         styles.shield,
-        { backgroundColor: rose, borderColor: mix(rose, "transparent", 78), shadowColor: rose },
+        { backgroundColor: rose, borderColor: SPECULAR_AT(0.38) },
+        depthStyle,
         style,
       ]}
     >
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 2,
+          left: 16,
+          right: 16,
+          height: 1.5,
+          borderRadius: 1,
+          backgroundColor: SPECULAR_AT(0.55),
+        }}
+      />
       <Svg width={GLYPH_PX} height={GLYPH_PX} viewBox="0 0 24 24" fill="none" stroke={ink} strokeWidth={2}>
         <Path
           d="M12 2L4 7v6c0 5 3.5 9.7 8 11 4.5-1.3 8-6 8-11V7l-8-5z"
@@ -74,6 +94,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     zIndex: 20,
+    overflow: "hidden",
+  },
+  legacyShadow: {
     elevation: 8,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,

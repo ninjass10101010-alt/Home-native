@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../theme/ThemeProvider";
 import { mix } from "../theme/mix";
+import { SPECULAR_AT, SPECULAR_CLEAR } from "../theme/materials";
 import { RADII, TYPOGRAPHY } from "../theme/tokens";
 import { ListRow } from "../ui/ListRow";
 import { Modal } from "../ui/Modal";
@@ -227,11 +228,16 @@ export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
   const padT = isPoster ? 28 : 16;
   const padB = isPoster ? 28 : 14;
   const gap = isPoster ? 12 : 0;
-  // The glass sheen over the whole card on the full poster page only.
+  // The glass sheen over the whole card (full poster and wall cell).
   const sheenFill: [string, string, string] = [
     mix(glint, "transparent", 15),
     mix(glint, "transparent", 0),
     mix(glint, "transparent", 5),
+  ];
+  const cellSheenFill: [string, string, string] = [
+    SPECULAR_AT(darkField ? 0.16 : 0.28),
+    SPECULAR_CLEAR,
+    SPECULAR_AT(darkField ? 0.04 : 0.08),
   ];
 
   const temperature =
@@ -291,42 +297,78 @@ export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
         cardH={cell.h}
       />
 
-      {/* 3 — on full poster page only: scrim and sheen */}
+      {/* 3 — poster scrim + Warm Glass diagonal sheen & subtle cell rim */}
       {isPoster ? <PosterScrim scene={scene} /> : null}
-      {isPoster ? (
-        <LinearGradient
-          colors={sheenFill}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
+      <LinearGradient
+        testID="wx-glass-sheen"
+        colors={isPoster ? sheenFill : cellSheenFill}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      {!isPoster && !boost ? (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 15 }]}>
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                borderRadius: RADII.xl,
+                borderWidth: 1,
+                borderColor: SPECULAR_AT(darkField ? 0.22 : 0.52),
+              },
+            ]}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={[SPECULAR_CLEAR, SPECULAR_AT(darkField ? 0.42 : 0.85), SPECULAR_CLEAR]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2 }}
+          />
+        </View>
       ) : null}
 
       {/* 4 — Card Content */}
       <View style={{ flex: 1, paddingHorizontal: padH, paddingTop: padT, paddingBottom: padB, gap, zIndex: 20 }}>
-        {/* Header Row: Flat Place Chip (Left) + Flat Details Pill (Right) */}
+        {/* Header Row: Frosted Place Pill (Left) + Frosted Details Pill (Right) */}
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 8,
-            height: isPoster ? undefined : 28,
+            height: isPoster ? undefined : 32,
           }}
         >
           <View
             testID="wx-place-pill"
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 5,
-            }}
+            style={[
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+              },
+              !isPoster
+                ? {
+                    flexShrink: 1,
+                    minWidth: 0,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: RADII.full,
+                    backgroundColor: darkField ? SPECULAR_AT(0.14) : SPECULAR_AT(0.38),
+                    borderWidth: 1,
+                    borderColor: darkField ? SPECULAR_AT(0.24) : SPECULAR_AT(0.58),
+                  }
+                : null,
+            ]}
           >
             <MapPinGlyph color={pinInk} size={isPoster ? 18 : 14} />
             <Text
               numberOfLines={1}
               style={{
+                flexShrink: 1,
                 color: washInk,
                 fontFamily: isPoster ? undefined : "Oswald",
                 fontSize: isPoster ? type.place.fontSize : 14,
@@ -346,10 +388,12 @@ export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 3,
-                paddingHorizontal: 8,
-                paddingVertical: 3,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
                 borderRadius: RADII.full,
-                backgroundColor: mix(washInk, "transparent", 12),
+                backgroundColor: darkField ? SPECULAR_AT(0.18) : SPECULAR_AT(0.44),
+                borderWidth: 1,
+                borderColor: darkField ? SPECULAR_AT(0.3) : SPECULAR_AT(0.68),
               }}
             >
               <Text
@@ -528,18 +572,21 @@ export function WeatherPoster({ size, data, span = 1 }: WeatherPosterProps) {
               ) : null}
             </View>
 
-            {/* 5-Day Forecast Row directly on the card! */}
+            {/* 5-Day Forecast Row in a frosted glass tray directly on the card */}
             {data.days && data.days.length > 0 ? (
               <View
+                testID="wx-forecast-tray"
                 style={{
                   flexDirection: "row",
                   justifyContent: "space-between",
                   alignItems: "flex-end",
                   width: "100%",
-                  paddingTop: 8,
-                  paddingBottom: 2,
-                  borderTopWidth: 1,
-                  borderTopColor: mix(washInk, "transparent", 18),
+                  borderRadius: RADII.lg,
+                  paddingHorizontal: 8,
+                  paddingVertical: 8,
+                  backgroundColor: darkField ? SPECULAR_AT(0.1) : SPECULAR_AT(0.26),
+                  borderWidth: 1,
+                  borderColor: darkField ? SPECULAR_AT(0.2) : SPECULAR_AT(0.48),
                 }}
               >
                 {data.days.slice(0, 5).map((d) => (

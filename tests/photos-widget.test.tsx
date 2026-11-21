@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import React from "react";
+import { StyleSheet } from "react-native";
 import { act, fireEvent, render } from "@testing-library/react-native";
 
 import { ThemeProvider } from "../src/theme/ThemeProvider";
@@ -161,6 +162,30 @@ describe("PhotosWidget (wall hero)", () => {
     img = await findByTestId("photos-hero-image");
     expect(img.props.source.uri).toContain("ph1");
     expect(mockRouterPush).not.toHaveBeenCalled();
+  });
+
+  it("renders frosted SVG controls and a frosted caption pill without orange emoji", async () => {
+    api.mockImplementation((path: string) => {
+      if (path.startsWith("/api/photos?")) return Promise.resolve({ ok: true, photos: photos(3) });
+      if (path.startsWith("/api/photos/settings"))
+        return Promise.resolve({ ok: true, settings: { rotateSeconds: 75, transition: "cut", order: "shuffle", showCaption: true } });
+      return Promise.reject(new Error("unmapped"));
+    });
+    const { findByTestId, getByTestId, queryByText } = render(<PhotosWidget />, { wrapper: wrap });
+    await findByTestId("photos-hero-image");
+
+    const pauseBtn = getByTestId("photos-pause");
+    const nextBtn = getByTestId("photos-next");
+    expect(StyleSheet.flatten(pauseBtn.props.style).borderWidth).toBe(1);
+    expect(StyleSheet.flatten(nextBtn.props.style).borderWidth).toBe(1);
+    expect(pauseBtn.findAll((n: any) => n.type === "Svg")).toHaveLength(1);
+    expect(nextBtn.findAll((n: any) => n.type === "Svg")).toHaveLength(1);
+    expect(queryByText("⏸")).toBeNull();
+    expect(queryByText("▶")).toBeNull();
+
+    const pill = getByTestId("photos-caption-pill");
+    expect(pill).toBeTruthy();
+    expect(StyleSheet.flatten(pill.props.style).borderWidth).toBe(1);
   });
 
   it("degraded settings fall back to defaults and badge honestly", async () => {
