@@ -27,9 +27,27 @@ export interface WidgetDef {
 }
 
 export type WallSpan = 1 | 2;
+export type WallShape = "1x1" | "1x2" | "2x1";
+
+export function shapeCells(shape: WallShape): WallSpan {
+  return shape === "1x1" ? 1 : 2;
+}
+
+export function shapeDims(shape: WallShape): { colSpan: 1 | 2; rowSpan: 1 | 2 } {
+  switch (shape) {
+    case "2x1":
+      return { colSpan: 2, rowSpan: 1 };
+    case "1x2":
+      return { colSpan: 1, rowSpan: 2 };
+    case "1x1":
+    default:
+      return { colSpan: 1, rowSpan: 1 };
+  }
+}
 
 export interface WallWidgetProps {
   span: WallSpan;
+  shape?: WallShape;
 }
 
 /** Port of Home-ai src/lib/layout-config.ts ALL_WIDGETS (verbatim). */
@@ -53,21 +71,21 @@ export const ALL_WIDGETS: WidgetDef[] = [
 
 export const WALL_CONFIGURABLE_WIDGETS: WidgetId[] = [
   "photos",
-  "weather",
   "todayEvents",
+  "weather",
   "tasks",
-  "morningBriefing",
-  "music",
+  "schedule",
   "currentMeal",
   "leaderboard",
-  "schedule",
+  "music",
+  "morningBriefing",
   "homeSecurity",
   "homeClimate",
   "homeLights",
 ];
 
 export const WALL_DEFAULT_HIDDEN_WIDGETS: WidgetId[] = [
-  "schedule",
+  "morningBriefing",
   "homeSecurity",
   "homeClimate",
   "homeLights",
@@ -84,11 +102,18 @@ export const WALL_HIDDEN_WIDGETS: WidgetId[] = [
   ...WALL_LOCKED_HIDDEN_WIDGETS,
 ];
 
+export const WALL_SHAPES: Partial<Record<WidgetId, WallShape>> = {
+  photos: "1x2",
+  weather: "1x2",
+  schedule: "2x1",
+  music: "2x1",
+};
+
 export const WALL_SPANS: Partial<Record<WidgetId, WallSpan>> = {
   photos: 2,
   weather: 2,
-  todayEvents: 2,
-  tasks: 2,
+  schedule: 2,
+  music: 2,
 };
 
 export function wallRowBudget(span: WallSpan): 2 | 4 {
@@ -121,34 +146,111 @@ export const WIDGET_TONES: Record<WidgetId, string> = {
 export const WALL_COLS = 3;
 export const WALL_ROWS = 4;
 
+export interface WallPlacement {
+  def: WidgetDef;
+  row: number;
+  col: number;
+  rowSpan: 1 | 2;
+  colSpan: 1 | 2;
+  shape: WallShape;
+}
+
+function findFirstSlot(
+  occupied: Set<string>,
+  rowSpan: 1 | 2,
+  colSpan: 1 | 2,
+): { row: number; col: number } | null {
+  for (let r = 0; r < WALL_ROWS; r++) {
+    for (let c = 0; c < WALL_COLS; c++) {
+      if (r + rowSpan > WALL_ROWS || c + colSpan > WALL_COLS) continue;
+      let free = true;
+      for (let dr = 0; dr < rowSpan && free; dr++) {
+        for (let dc = 0; dc < colSpan; dc++) {
+          if (occupied.has(`${r + dr},${c + dc}`)) {
+            free = false;
+            break;
+          }
+        }
+      }
+      if (free) return { row: r, col: c };
+    }
+  }
+  return null;
+}
+
 /**
- * Dense row-major placement — the web's `grid-flow-dense` port. A span-2
- * widget anchors in the first free slot whose next row cell is also free
- * (the photo hero → col-1 rows 1–2); every other widget fills the next free
- * slot. Returns one widget list per column (top→bottom). Exactly WALL_ROWS
- * cells per column when the layout sums to WALL_COLS × WALL_ROWS.
- *
- * The span map is the USER'S (src/home/wallLayout.ts): the board's sizes are
- * a per-device preference, not a constant.
+ * Dense 2D row-major bento placement (3 columns × 4 rows = 12 cells).
+ * Symmetrical Bookends + Wide Strips v3 places Photos (1×2) & Weather (1×2)
+ * framing Today (1×1) + Tasks (1×1), with wide Daily Schedule (2×1) + Dinner (1×1)
+ * on row 3, and Leaderboard (1×1) + wide Music (2×1) on row 4.
+ */
+export function wallPlacements(
+  defs: WidgetDef[] = visibleOnWall(),
+  shapes: Partial<Record<WidgetId, WallShape>> = WALL_SHAPES,
+  opts?: { strict?: boolean },
+): { placements: WallPlacement[]; fitsAll: boolean } {
+  const occupied = new Set<string>();
+  const placements: WallPlacement[] = [];
+  let fitsAll = true;
+  const strict = Boolean(opts?.strict);
+
+  for (const def of defs) {
+    const preferred = shapes[def.id] ?? WALL_SHAPES[def.id] ?? "1x1";
+    const candidates: WallShape[] = strict
+      ? [preferred]
+      : preferred === "2x1"
+        ? ["2x1", "1x2", "1x1"]
+        : preferred === "1x2"
+          ? ["1x2", "2x1", "1x1"]
+          : ["1x1"];
+
+    let placed: WallPlacement | null = null;
+    for (const shape of candidates) {
+      const dims = shapeDims(shape);
+      const slot = findFirstSlot(occupied, dims.rowSpan, dims.colSpan);
+      if (slot) {
+        for (let dr = 0; dr < dims.rowSpan; dr++) {
+          for (let dc = 0; dc < dims.colSpan; dc++) {
+            occupied.add(`${slot.row + dr},${slot.col + dc}`);
+          }
+        }
+        placed = {
+          def,
+          row: slot.row,
+          col: slot.col,
+          rowSpan: dims.rowSpan,
+          colSpan: dims.colSpan,
+          shape,
+        };
+        break;
+      }
+    }
+    if (!placed) {
+      fitsAll = false;
+    } else {
+      placements.push(placed);
+    }
+  }
+  return { placements, fitsAll };
+}
+
+/**
+ * Legacy column projection over `wallPlacements`. Kept so column-based helpers
+ * and tests continue to inspect per-column membership cleanly.
  */
 export function wallColumns(
   defs: WidgetDef[] = visibleOnWall(),
-  spans: Partial<Record<WidgetId, WallSpan>> = WALL_SPANS
+  spans: Partial<Record<WidgetId, WallSpan>> = WALL_SPANS,
 ): WidgetDef[][] {
-  const occupied = new Set<string>();
-  const cols: WidgetDef[][] = Array.from({ length: WALL_COLS }, () => []);
+  const shapes: Partial<Record<WidgetId, WallShape>> = {};
   for (const def of defs) {
     const span = spans[def.id] ?? WALL_SPANS[def.id] ?? 1;
-    outer: for (let r = 0; r < WALL_ROWS; r++) {
-      for (let c = 0; c < WALL_COLS; c++) {
-        if (occupied.has(`${r},${c}`)) continue;
-        if (span === 2 && (r + 1 >= WALL_ROWS || occupied.has(`${r + 1},${c}`))) continue;
-        occupied.add(`${r},${c}`);
-        if (span === 2) occupied.add(`${r + 1},${c}`);
-        cols[c].push(def);
-        break outer;
-      }
-    }
+    shapes[def.id] = span === 2 ? (WALL_SHAPES[def.id] ?? "1x2") : "1x1";
+  }
+  const { placements } = wallPlacements(defs, shapes);
+  const cols: WidgetDef[][] = Array.from({ length: WALL_COLS }, () => []);
+  for (const p of placements) {
+    cols[p.col].push(p.def);
   }
   return cols;
 }

@@ -296,6 +296,15 @@ describe("NotificationsCard", () => {
       body: expect.objectContaining({ enabled: true }),
     });
 
+    const muteToggle = await findByTestId("speaker-mute-tablet-toggle");
+    await act(async () => {
+      fireEvent.press(muteToggle);
+    });
+    expect(mockApi).toHaveBeenCalledWith("/api/ha/speakers", {
+      method: "POST",
+      body: expect.objectContaining({ muteTabletAudio: false }),
+    });
+
     const kitchenRow = await findByTestId("speaker-target-media_player.kitchen_speaker");
     expect(await findByText("Downstairs Group")).toBeTruthy();
     await act(async () => {

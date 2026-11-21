@@ -198,4 +198,27 @@ describe("ScheduleWidget", () => {
     expect(await findByText("Dinner: Tacos al Pastor")).toBeTruthy();
     expect(await findByText("Take Dogs Out")).toBeTruthy();
   });
+
+  it("renders 6 routines in a 2-column grid when shape is 2x1", async () => {
+    const sixSchedules = Array.from({ length: 6 }, (_, i) => ({
+      id: `wide_${i}`,
+      title: `Wide Routine ${i + 1}`,
+      time: "23:59",
+      days: "mon,tue,wed,thu,fri,sat,sun",
+      icon: "⏰",
+      color: "cyan",
+    }));
+
+    jest.spyOn(client, "api").mockResolvedValue({ items: sixSchedules } as any);
+
+    const { findByText, findByTestId } = render(<ScheduleWidget span={2} shape="2x1" />, {
+      wrapper: wrap,
+    });
+    expect(await findByText("Daily Schedule")).toBeTruthy();
+    for (let i = 0; i < 6; i++) {
+      expect(await findByText(`Wide Routine ${i + 1}`)).toBeTruthy();
+      expect(await findByTestId(`schedule-row-s_wide_${i}`)).toBeTruthy();
+    }
+    expect(await findByTestId("schedule-announce-btn")).toBeTruthy();
+  });
 });

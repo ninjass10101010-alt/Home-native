@@ -3,7 +3,7 @@ import { Platform, StyleProp, StyleSheet, View, ViewStyle } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "./ThemeProvider";
-import { MATERIALS, MaterialTier, SPECULAR_AT, SPECULAR_CLEAR } from "./materials";
+import { GLASS_GRADIENT, GLASS_INNER_RING, MATERIALS, MaterialTier, SHADOW_RGBA, SPECULAR_AT, SPECULAR_CLEAR } from "./materials";
 import { mix, parseColor, toCss } from "./mix";
 import { perfTier } from "./perf";
 
@@ -147,6 +147,30 @@ const IS_JEST = typeof jest !== "undefined";
  * RN 0.86 New Architecture supports CSS `boxShadow` cleanly without that artifact,
  * so Android runtime renders crisp `boxShadow` depth while Jest/iOS keep shadow props.
  */
+export function buildAndroidBoxShadow(
+  theme: "dark" | "light",
+  _tier: MaterialTier,
+  tone: string | undefined,
+  baseShadowCss: string | undefined,
+  boost: boolean,
+  glow?: boolean,
+): string | undefined {
+  if (boost) {
+    return baseShadowCss ? baseShadowCss.split(/,\s*inset/i)[0].trim() : undefined;
+  }
+  if (tone) {
+    return theme === "light"
+      ? `0 0 28px ${mix(tone, "transparent", 40)}, 0 0 10px ${mix(tone, "transparent", 24)}, 0 10px 28px ${SHADOW_RGBA.lightOuter}, 0 2px 6px ${SHADOW_RGBA.lightCrisp}`
+      : `0 0 32px ${mix(tone, "transparent", 46)}, 0 0 12px ${mix(tone, "transparent", 30)}, 0 14px 38px ${SHADOW_RGBA.darkOuter}, 0 2px 8px ${SHADOW_RGBA.darkCrisp}`;
+  }
+  if (glow) {
+    return theme === "light"
+      ? `0 12px 30px ${SHADOW_RGBA.lightOuter}, 0 2px 8px ${SHADOW_RGBA.lightCrisp}`
+      : `0 16px 40px ${SHADOW_RGBA.darkOuter}, 0 4px 12px ${SHADOW_RGBA.darkCrisp}`;
+  }
+  return baseShadowCss ? baseShadowCss.split(/,\s*inset/i)[0].trim() : undefined;
+}
+
 function shadowOf(css: string | undefined): ViewStyle | undefined {
   if (!css) return undefined;
   const outer = css.split(/,\s*inset/i)[0].trim();
@@ -182,6 +206,14 @@ export interface MaterialProps {
    */
   tone?: string;
   /**
+   * Enables soft elevation shadow on untoned/full-bleed surfaces on Android runtime.
+   */
+  glow?: boolean;
+  /**
+   * Unclipped foreground overlay rendered outside the `overflow: "hidden"` glass box.
+   */
+  overlay?: React.ReactNode;
+  /**
    * On Android hardware, live BlurView is reserved for floating chrome (tier="thick"
    * or blur={true}) to stay well within the RK3576 GPU memory budget.
    */
@@ -194,14 +226,14 @@ export function blurToIntensity(cssBlurPx: number): number {
   return Math.max(0, Math.min(100, Math.round(cssBlurPx * 2.5)));
 }
 
-export function Material({ tier, children, style, background, tone, blur, testID }: MaterialProps) {
+export function Material({ tier, children, style, background, tone, glow, overlay, blur, testID }: MaterialProps) {
   const { colors, boost, theme } = useTheme();
   const d = MATERIALS[theme][tier];
 
   const toneBorderColor = tone
     ? theme === "dark"
       ? mix(tone, "transparent", 35)
-      : mix(tone, colors["color-border"], 24)
+      : mix(tone, colors["color-border"], 32)
     : d.border;
 
   const border: ViewStyle = {
@@ -212,7 +244,10 @@ export function Material({ tier, children, style, background, tone, blur, testID
   const specularOverlay = (
     <LinearGradient
       pointerEvents="none"
-      colors={[SPECULAR_AT(d.specular), SPECULAR_CLEAR]}
+      colors={[
+        SPECULAR_AT(!IS_JEST ? (theme === "light" ? 0.36 : 0.12) : d.specular),
+        SPECULAR_CLEAR,
+      ]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.6, y: 0.45 }}
       style={ABS}
@@ -234,7 +269,7 @@ export function Material({ tier, children, style, background, tone, blur, testID
   ) : (
     <LinearGradient
       pointerEvents="none"
-      colors={[SPECULAR_CLEAR, SPECULAR_AT(theme === "dark" ? 0.14 : 0.72), SPECULAR_CLEAR]}
+      colors={[SPECULAR_CLEAR, SPECULAR_AT(theme === "dark" ? 0.3 : 0.94), SPECULAR_CLEAR]}
       start={{ x: 0, y: 0.5 }}
       end={{ x: 1, y: 0.5 }}
       style={{
@@ -242,10 +277,20 @@ export function Material({ tier, children, style, background, tone, blur, testID
         top: 0,
         left: 0,
         right: 0,
-        height: 1.5,
+        height: 2,
       }}
     />
   );
+
+  const cornerAura = tone && !IS_JEST ? (
+    <LinearGradient
+      pointerEvents="none"
+      colors={[mix(tone, "transparent", theme === "dark" ? 24 : 14), "transparent"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0.65, y: 0.55 }}
+      style={ABS}
+    />
+  ) : null;
 
   const toneWashOverlay = tone ? (
     <LinearGradient
@@ -261,12 +306,38 @@ export function Material({ tier, children, style, background, tone, blur, testID
     />
   ) : null;
 
-  const shadow = shadowOf(d.shadow);
+  const androidShadowCss =
+    Platform.OS === "android" && !IS_JEST
+      ? buildAndroidBoxShadow(theme, tier, tone, d.shadow, boost, glow)
+      : undefined;
+  const shadow: ViewStyle | undefined =
+    Platform.OS === "android" && !IS_JEST
+      ? androidShadowCss
+        ? ({ boxShadow: androidShadowCss } as ViewStyle)
+        : undefined
+      : shadowOf(d.shadow);
+
   const flatStyle = StyleSheet.flatten(style) as ViewStyle | undefined;
   const { outerLayoutStyle, innerContentStyle, callerBg } = splitShadowStyles(flatStyle);
   const styleWithoutBg: ViewStyle = { ...outerLayoutStyle, ...innerContentStyle };
   const radius: ViewStyle =
     typeof flatStyle?.borderRadius === "number" ? { borderRadius: flatStyle.borderRadius } : {};
+  const innerRadius =
+    typeof flatStyle?.borderRadius === "number" ? Math.max(0, flatStyle.borderRadius - 1) : 0;
+
+  const innerRing = !IS_JEST && !boost ? (
+    <View
+      pointerEvents="none"
+      style={[
+        ABS,
+        {
+          borderWidth: 1,
+          borderColor: GLASS_INNER_RING[theme],
+          borderRadius: innerRadius,
+        },
+      ]}
+    />
+  ) : null;
 
   /**
    * The tone wash is the wall's per-widget `tone` (HomeWall hands it over as a
@@ -310,26 +381,39 @@ export function Material({ tier, children, style, background, tone, blur, testID
     // (WS-0 round 2 D-8/D-9).
     const [r, g, b, a] = rgbaOf(d.background);
     const baked = `rgba(${r},${g},${b},${a})`;
+    const useFrostedGradient = perfTier() === "full" && !IS_JEST;
     innerBaseStyle = [{ overflow: "hidden" }, border];
     coreStyle = [innerBaseStyle, styleWithoutBg];
     layers = (
       <>
         {useLiveBlur ? <BlurView intensity={blurToIntensity(d.blur)} tint={theme} style={ABS} /> : null}
         {toneWashUnderGlass ? callerLayer : null}
-        <View
-          pointerEvents="none"
-          style={[ABS, { backgroundColor: useLiveBlur ? d.background : baked }]}
-        />
+        {useFrostedGradient ? (
+          <LinearGradient
+            pointerEvents="none"
+            colors={GLASS_GRADIENT[theme][tier]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={ABS}
+          />
+        ) : (
+          <View
+            pointerEvents="none"
+            style={[ABS, { backgroundColor: useLiveBlur ? d.background : baked }]}
+          />
+        )}
         {!toneWashUnderGlass ? callerLayer : null}
+        {cornerAura}
         {toneWashOverlay}
         {specularOverlay}
+        {innerRing}
         {topRim}
         {children}
       </>
     );
   }
 
-  if (!shadow) {
+  if (!shadow && !overlay) {
     return (
       <View testID={testID} style={coreStyle}>
         {layers}
@@ -340,6 +424,7 @@ export function Material({ tier, children, style, background, tone, blur, testID
   return (
     <View testID={testID} style={[outerLayoutStyle, shadow, radius]}>
       <View style={[{ flexGrow: 1, flexShrink: 1 }, innerBaseStyle, innerContentStyle]}>{layers}</View>
+      {overlay ?? null}
     </View>
   );
 }

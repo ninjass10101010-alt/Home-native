@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.mock factories */
 import { render } from "@testing-library/react-native";
 import React from "react";
-import { StyleSheet, Text } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { MATERIALS, specularOpacity, SPECULAR_AT, type MaterialTier } from "../src/theme/materials";
-import { Material } from "../src/theme/Material";
+import { buildAndroidBoxShadow, Material } from "../src/theme/Material";
 import { perfTier } from "../src/theme/perf";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
 import { TOKENS } from "../src/theme/tokens";
@@ -371,7 +371,7 @@ describe("<Material> tone (.widget-card from Home-ai globals.css)", () => {
     const surface = findNodeByStyle(json, (s) => s.borderWidth === 1);
     expect(surface).toBeTruthy();
     expect(StyleSheet.flatten(surface.props.style).borderColor).toBe(
-      mix(toneLight, TOKENS.light["color-border"], 24)
+      mix(toneLight, TOKENS.light["color-border"], 32)
     );
     const wash = gradientNodes(json).find(
       (n) =>
@@ -480,5 +480,45 @@ describe("<Material> caller backgroundColor extraction", () => {
     }
     // …and the alpha is preserved (a mix() would have made it an opaque fill)
     expect(painted!.a).toBeCloseTo(0.1, 3);
+  });
+});
+
+describe("<Material> warm glass outer glow + unclipped overlay", () => {
+  it("buildAndroidBoxShadow adds colored tone glow in both themes and elevation glow for full-bleed cards", () => {
+    const toneLight = TOKENS.light["color-accent-violet"];
+    const toneDark = TOKENS.dark["color-accent-violet"];
+
+    const lightGlow = buildAndroidBoxShadow("light", "regular", toneLight, MATERIALS.light.regular.shadow, false);
+    expect(lightGlow).toContain(mix(toneLight, "transparent", 40));
+    expect(lightGlow).toContain("0 10px 28px");
+
+    const darkGlow = buildAndroidBoxShadow("dark", "regular", toneDark, MATERIALS.dark.regular.shadow, false);
+    expect(darkGlow).toContain(mix(toneDark, "transparent", 46));
+    expect(darkGlow).toContain("0 14px 38px");
+
+    const fullBleedLight = buildAndroidBoxShadow("light", "regular", undefined, MATERIALS.light.regular.shadow, false, true);
+    expect(fullBleedLight).toContain("0 12px 30px");
+
+    const boostLight = buildAndroidBoxShadow("light", "regular", toneLight, MATERIALS.light.regular.shadow, true);
+    expect(boostLight).toBe(MATERIALS.light.regular.shadow);
+  });
+
+  it("renders overlay sibling outside the overflow:hidden glass box", () => {
+    const { getByTestId } = render(
+      <Material
+        tier="regular"
+        tone={TOKENS.dark["color-accent-cyan"]}
+        overlay={<View testID="unclipped-orb" />}
+        testID="glass-shell"
+      >
+        <Text>inside</Text>
+      </Material>,
+      { wrapper: wrapTheme("dark") }
+    );
+    const outer: any = getByTestId("glass-shell");
+    expect(outer.children.length).toBe(2);
+    const innerStyle = StyleSheet.flatten(outer.children[0].props.style);
+    expect(innerStyle.overflow).toBe("hidden");
+    expect(outer.children[1].props.testID).toBe("unclipped-orb");
   });
 });

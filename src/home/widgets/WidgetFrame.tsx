@@ -6,7 +6,7 @@ import { ACCENTS, RADII, TYPOGRAPHY } from "../../theme/tokens";
 import { useTheme } from "../../theme/ThemeProvider";
 import { useAuth } from "../../state/AuthProvider";
 import { mix } from "../../theme/mix";
-import { SPECULAR_AT } from "../../theme/materials";
+import { SHADOW_RGBA, SPECULAR_AT } from "../../theme/materials";
 import { Material } from "../../theme/Material";
 import { AnimatedEmoji } from "../../ui/AnimatedEmoji";
 import { mixAlpha } from "../../ui/SoftButton";
@@ -47,84 +47,144 @@ import { HomeWidgetIcon, widgetIconVariantFor } from "../../ui/HomeWidgetIcon";
  * card's content area and clips the Tasks list's last line — so the band
  * keeps the depth the wall's widgets are laid out against.
  */
-export const HEADER_BAND_H = 58;
+export const HEADER_BAND_H = 60;
 
 /**
- * The card-title ramp (critic round 2, finding 5).
- *
- * The web's wall card title is the SectionCard `centeredHeader` heading, whose
- * size is set by the wall-mode rule
- *   `html[data-wall="true"] .widget-card .text-sm { font-size: 1.125rem }`
- * (Home-ai/src/app/globals.css) — 18px, `font-bold` (700). Probed live on the
- * production reference at 1080×1920: "Today" / "Tasks" / "Home Security" /
- * "Home Climate" / "Home Lights" / "Quick ask" / "This Week" all compute to
- * font-size 18px, font-weight 700, line-height 25.71px.
- *
- * The shared frame was rendering the title at TYPOGRAPHY.title (20sp/700), so
- * every card title was ~11% wider and a stem heavier than the reference, and
- * the long ones ("This Week's Leaderboard") wrapped onto two centred lines
- * where the reference fits one.
- *
- * The 18sp lives HERE, not in tokens.ts: TYPOGRAPHY.title is the app's
- * in-card heading level and other surfaces read it. The tokens.ts change to
- * report: `title` should be 18sp (the wall's card-title size), or a new
- * `cardTitle` level should be added at 18/28/700.
- *
- * The lineHeight is the web's measured 25.71px (Tailwind v4's unitless
- * `text-sm` leading at the wall's 18px), rounded to 26 — the header band
- * below is sized from it.
+ * The card-title ramp — 18sp bold left-aligned beside the floating glass orb.
  */
-const CARD_TITLE = { fontSize: 18, lineHeight: 26, fontWeight: "700" } as const;
+const CARD_TITLE = { fontSize: 18, lineHeight: 24, fontWeight: "700" } as const;
+
+export const DISC_SIZE = 64;
+export const DISC_ART = 72;
+export const DISC_OVERHANG = -8;
 
 /**
- * The identity badge (critic round 2, finding 4 → round 3, finding 1).
- *
- * The web seats a 56px glass disc on the card's top-left corner
- * (Home-ai/src/components/patterns/WidgetCard.tsx: `absolute z-30 -top-1
- * -left-1 grid h-14 w-14 place-items-center rounded-full`) and drops the
- * clay artwork (HomeWidgetIcon size="lg" = 64px) INSIDE it.
- *
- * Two details of that seat are easy to miss and both are load-bearing:
- *
- *   1. THE ARTWORK IS NOT CENTRED IN THE DISC. The badge is a grid whose
- *      track sizes to its 64px child, so the artwork sits at the badge's
- *      TOP-LEFT and overflows the 56px disc to the right and down. The
- *      artwork's own top-left corner is the badge's top-left corner.
- *   2. THE BADGE SITS 3px OUTSIDE THE CARD'S BORDER BOX (`-top-1 -left-1`
- *      is 4px out from the card's PADDING box, and the border is 1px), so
- *      the disc's rim crosses the card's left border and the card's corner
- *      arc shorn the badge.
- *
- * MEASURED on the reference (reference/home/parent-dark.png, 1080×1920):
- * the "Today" card's border box starts at x371/y691 and its clay calendar's
- * ink starts at x376/y698 — 5px inside the left border, 7px below the top.
- * The "This Week" tail's card border is at x16 and its badge at x13, the
- * same 3px out.
- *
- * The native's frame content starts 15px inside the card (the Material's 1px
- * border + the cell's 14dp padding), so the badge has to sit 18px out from
- * the content origin to land on the card's corner. The disc's ELEMENT keeps
- * the offset the frame contract pins (DISC_OFFSET) and the seat rides on it
- * as a transform, so the element's MEASURED box is the artwork's box — the
- * wall's paint gate samples that box, and the frame's own suite pins the
- * offset.
- *
- * The Material clips its content (overflow hidden + the card's 28px radius),
- * so the card's corner arc does the shaving the web's overflow:visible
- * cannot: the badge's overhang is cut by the card's own rounded edge instead
- * of floating 10px inside it as a sticker.
+ * Published by HomeWall when `Material` paints the unclipped `WidgetIconOrb`
+ * outside the card's `overflow: "hidden"` glass shell so WidgetFrame does not
+ * draw a duplicate clipped disc inside.
  */
-const DISC_SIZE = 56; // the web's badge (h-14 w-14)
-const DISC_ART = 64; // the web's HomeWidgetIcon "lg" (h-16 w-16)
-/** The disc ELEMENT's offset from the frame's content origin (frame contract). */
-const DISC_OFFSET = -10;
-/**
- * The badge's seat: the extra offset that carries the disc (and the artwork
- * with it) onto the card's corner. −18 from the content origin = −3 from the
- * card's BORDER box, which is exactly where the web's `-top-1 -left-1` puts
- * the badge's top-left corner.
- */
-const DISC_SEAT = -8;
+export const WallBadgeOverlayContext = React.createContext<boolean>(false);
+
+export interface WidgetIconOrbProps {
+  id: string;
+  icon: string;
+  title: string;
+  tone?: string;
+  standalone?: boolean;
+}
+
+export function WidgetIconOrb({
+  id,
+  icon,
+  title,
+  tone: toneProp,
+  standalone = false,
+}: WidgetIconOrbProps) {
+  const { colors, theme, accentColor, boost } = useTheme();
+  const tone =
+    toneProp ??
+    ACCENTS[theme]?.[WIDGET_TONES[id as keyof typeof WIDGET_TONES] ?? "nori"] ??
+    accentColor;
+  const variant = widgetIconVariantFor(id);
+  const orbInset = (DISC_ART - DISC_SIZE) / 2;
+  const isAndroidRuntime = Platform.OS === "android" && typeof jest === "undefined";
+  const orbShadowStyle =
+    isAndroidRuntime && !boost
+      ? ({
+          boxShadow: `0 6px 22px ${mix(tone, "transparent", theme === "dark" ? 56 : 44)}, 0 2px 6px ${SHADOW_RGBA.orbDrop}`,
+        } as const)
+      : undefined;
+
+  return (
+    <View
+      testID={`${id}-icon-disc`}
+      style={{
+        position: "absolute",
+        top: standalone ? -12 : DISC_OVERHANG,
+        left: standalone ? -12 : DISC_OVERHANG,
+        width: DISC_ART,
+        height: DISC_ART,
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10,
+      }}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+    >
+      <View
+        style={[
+          {
+            position: "absolute",
+            top: orbInset,
+            left: orbInset,
+            width: DISC_SIZE,
+            height: DISC_SIZE,
+            borderRadius: DISC_SIZE / 2,
+            borderWidth: 1.5,
+            borderColor:
+              theme === "light"
+                ? mix(tone, SPECULAR_AT(0.75), 52)
+                : mix(tone, "transparent", 55),
+            overflow: "hidden",
+            zIndex: 0,
+          },
+          orbShadowStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={
+            theme === "dark"
+              ? [
+                  mix(tone, colors["color-surface-1"], 36),
+                  mix(tone, colors["color-surface-1"], 18),
+                  mix(tone, colors["color-surface-1"], 32),
+                ]
+              : [
+                  mix(tone, colors["color-surface-0"], 26),
+                  mix(tone, colors["color-surface-0"], 12),
+                  mix(tone, colors["color-surface-0"], 22),
+                ]
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.35, y: 1 }}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 1,
+            left: 12,
+            right: 12,
+            height: 1.5,
+            borderRadius: 1,
+            backgroundColor: SPECULAR_AT(theme === "dark" ? 0.38 : 0.85),
+          }}
+        />
+      </View>
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1,
+        }}
+        pointerEvents="none"
+      >
+        {variant ? (
+          <HomeWidgetIcon variant={variant} size={DISC_ART} title={title} />
+        ) : (
+          <AnimatedEmoji emoji={icon} size={34} />
+        )}
+      </View>
+    </View>
+  );
+}
 
 /**
  * The gate/read-state pill (critic round 2, findings 6 + 18).
@@ -285,155 +345,68 @@ export function WidgetFrame({
   const amber = colors["color-accent-amber"] ?? accentColor;
   const inkAmber = colors["color-accent-ink-amber"] ?? amber;
   const rose = colors["color-accent-rose"] ?? accentColor;
+  const hasExternalBadge = React.useContext(WallBadgeOverlayContext);
 
-  // 3-stop seated badge (warm-glass web reference): tone-on-surface wash with
-  // a 42%-transparent ring, seated ON the card's corner so the card's own
-  // rounded edge shorn it — the web's `overflow: visible` badge, as close as
-  // the clipped Material allows.
-  const disc = !header || showDisc ? (
-    <View
-      testID={`${id}-icon-disc`}
-      style={{
-        position: "absolute",
-        top: DISC_OFFSET,
-        left: DISC_OFFSET,
-        width: DISC_ART,
-        height: DISC_ART,
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 3,
-        // The seat: −8 on top of the element's own offset puts the badge's
-        // top-left corner 3px outside the card's border box (the web's
-        // `-top-1 -left-1`). It is a transform, not a re-offset, so the
-        // element's measured box IS the badge's box.
-        transform: [{ translateX: DISC_SEAT }, { translateY: DISC_SEAT }],
-      }}
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      // The web's badge is `pointer-events-none` — it is decoration, and it
-      // now overhangs the card's corner, so it must never eat a tap.
-      pointerEvents="none"
-    >
-      {/* The web's badge: a 56px seated glass disc (tone-on-surface wash + a
-          42% tone ring). It sits at the badge's TOP-LEFT, where the web's
-          grid track puts the 64px artwork — the artwork is NOT centred in
-          the disc (see the note above). */}
-      <View
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: DISC_SIZE,
-          height: DISC_SIZE,
-          borderRadius: DISC_SIZE / 2,
-          borderWidth: 1,
-          borderColor: mix(tone, "transparent", 42),
-          overflow: "hidden",
-          zIndex: 0,
-        }}
-      >
-        <LinearGradient
-          colors={[
-            mix(tone, colors["color-surface-1"], 34),
-            mix(tone, colors["color-surface-1"], 20),
-            mix(tone, colors["color-surface-1"], 30),
-          ]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0.35, y: 1 }}
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 0 }}
-        />
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 1,
-            left: 10,
-            right: 10,
-            height: 1.5,
-            borderRadius: 1,
-            backgroundColor: SPECULAR_AT(theme === "dark" ? 0.3 : 0.65),
-          }}
-        />
-      </View>
-      {/* The wash is OPAQUE, and on react-native-web a positioned descendant
-          paints ABOVE in-flow content — so an in-flow <Svg> underneath it
-          vanishes entirely (every wall disc rendered as an empty tinted
-          circle). The artwork rides its own positioned layer at zIndex 1,
-          which is what makes it visible over the wash. */}
-      <View
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 1,
-        }}
-        pointerEvents="none"
-      >
-        {widgetIconVariantFor(id) ? (
-          <HomeWidgetIcon variant={widgetIconVariantFor(id)!} size={DISC_ART} title={title} />
-        ) : (
-          <AnimatedEmoji emoji={icon} size={30} />
-        )}
-      </View>
-    </View>
-  ) : null;
+  const disc =
+    !hasExternalBadge && (!header || showDisc) ? (
+      <WidgetIconOrb id={id} icon={icon} title={title} tone={tone} standalone />
+    ) : null;
 
   const defaultHeader = (
     <View
       style={{
-        alignItems: "center",
-        paddingLeft: 48,
-        paddingRight: 48,
-        // The title's FIXED offset from the band's top — the web's
-        // `centeredHeader` seats the heading at the same offset whether or not
-        // a description follows it, so a card without a second line cannot
-        // slide its title down (and break the row's shared title baseline).
-        //
-        // Constant band height: the header RULE has to land on the same y in
-        // every sibling cell or the wall reads as a broken baseline. The
-        // description's line box is RESERVED either way, so a card without a
-        // description keeps the same band height (and the same rule) as its
-        // neighbours; the spare space falls BELOW the title, where the web
-        // puts its bottom padding.
-        paddingTop: 6,
+        justifyContent: "center",
+        paddingLeft: 56,
+        paddingRight: 4,
+        paddingTop: 4,
         paddingBottom: 8,
         minHeight: HEADER_BAND_H,
-        justifyContent: "flex-start",
         borderBottomWidth: 1,
         borderBottomColor: colors["color-border"],
       }}
       testID={`${id}-header`}
     >
-      <Text
+      <View
         style={{
-          color: colors["color-text-primary"],
-          fontSize: CARD_TITLE.fontSize,
-          fontWeight: CARD_TITLE.fontWeight,
-          lineHeight: CARD_TITLE.lineHeight,
-          textAlign: "center",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 6,
         }}
-        accessibilityRole="header"
       >
-        {title}
-      </Text>
+        <Text
+          numberOfLines={1}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            color: colors["color-text-primary"],
+            fontSize: CARD_TITLE.fontSize,
+            fontWeight: CARD_TITLE.fontWeight,
+            lineHeight: CARD_TITLE.lineHeight,
+            textAlign: "left",
+          }}
+          accessibilityRole="header"
+        >
+          {title}
+        </Text>
+        {headerRight ? (
+          <View
+            pointerEvents="box-none"
+            style={{ flexShrink: 0, alignItems: "flex-end", justifyContent: "center" }}
+          >
+            {headerRight}
+          </View>
+        ) : null}
+      </View>
       {description ? (
         <Text
           numberOfLines={1}
           style={{
             color: colors["color-text-secondary"],
             fontSize: TYPOGRAPHY.label.fontSize,
-            // The web's description is `text-xs` — Tailwind v4's unitless
-            // leading at the wall's 14px (≈18.7px, and 1rem=16px before the
-            // wall's font-size override). The native's label ramp carries a
-            // 20px line box, which would push the description 4px below the
-            // reference's; the band is sized from this line box.
-            lineHeight: 16,
+            lineHeight: 18,
             marginTop: 2,
-            textAlign: "center",
+            textAlign: "left",
           }}
         >
           {description}
@@ -446,7 +419,7 @@ export function WidgetFrame({
     <View pointerEvents="box-none">
       {disc}
       {header ?? defaultHeader}
-      {headerRight ? (
+      {header && headerRight ? (
         <View pointerEvents="box-none" style={{ position: "absolute", top: 0, right: 0, zIndex: 10 }}>
           {headerRight}
         </View>

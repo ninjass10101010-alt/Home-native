@@ -6,10 +6,18 @@ import { useTheme } from "../theme/ThemeProvider";
 import { mix } from "../theme/mix";
 import { Chip } from "../ui/Chip";
 import { Toggle } from "../ui/Toggle";
-import { ALL_WIDGETS, WALL_CONFIGURABLE_WIDGETS, type WidgetId, type WallSpan } from "../home/widgets";
+import {
+  ALL_WIDGETS,
+  WALL_CONFIGURABLE_WIDGETS,
+  shapeCells,
+  type WidgetId,
+  type WallShape,
+  type WallSpan,
+} from "../home/widgets";
 import {
   layoutCells,
-  layoutSpan,
+  layoutFits,
+  layoutShape,
   useWallLayout,
   WALL_CELLS,
   type WallLayout,
@@ -32,9 +40,10 @@ import { formatHour, useScreensaverPrefs } from "../home/idle";
  * bottom of the wall.
  */
 
-const SIZE_OPTIONS: { span: WallSpan; label: string }[] = [
-  { span: 1, label: "1 cell" },
-  { span: 2, label: "2 cells" },
+const SIZE_OPTIONS: { shape: WallShape; span: WallSpan; label: string; suffix: string }[] = [
+  { shape: "1x1", span: 1, label: "1 cell", suffix: "1" },
+  { shape: "1x2", span: 2, label: "Tall", suffix: "2" },
+  { shape: "2x1", span: 2, label: "Wide", suffix: "wide" },
 ];
 
 function widgetLabel(id: WidgetId): string {
@@ -54,8 +63,13 @@ export function HomeSection() {
   /** Apply a new layout, and say why it was refused when it does not fit. */
   const apply = (next: WallLayout): boolean => setLayout(next);
 
-  const setSpan = (id: WidgetId, span: WallSpan) => {
-    apply({ ...layout, spans: { ...layout.spans, [id]: span } });
+  const setShape = (id: WidgetId, shape: WallShape) => {
+    const span = shapeCells(shape);
+    apply({
+      ...layout,
+      spans: { ...layout.spans, [id]: span },
+      shapes: { ...layout.shapes, [id]: shape },
+    });
   };
 
   const setHidden = (id: WidgetId, hidden: boolean) => {
@@ -404,12 +418,25 @@ export function HomeSection() {
         <View style={{ gap: 10 }}>
           {WALL_CONFIGURABLE_WIDGETS.map((id) => {
             const hidden = layout.hidden.includes(id);
-            const span = layoutSpan(layout, id);
-            // A size change is only offered when the board can carry it.
-            const trial = { ...layout, spans: { ...layout.spans, [id]: span === 1 ? 2 : 1 } };
-            const trialCells = layoutCells(trial);
-            const blocked = trialCells.used > WALL_CELLS;
-            const cannotShow = hidden && cells.free < span;
+            const currentShape = layoutShape(layout, id);
+            const span = shapeCells(currentShape);
+            const canGrow =
+              hidden ||
+              layoutFits({
+                ...layout,
+                spans: { ...layout.spans, [id]: 2 },
+                shapes: { ...layout.shapes, [id]: "1x2" },
+              }) ||
+              layoutFits({
+                ...layout,
+                spans: { ...layout.spans, [id]: 2 },
+                shapes: { ...layout.shapes, [id]: "2x1" },
+              });
+            const blocked = !canGrow;
+            const cannotShow = hidden && (cells.free < span || !layoutFits({
+              ...layout,
+              hidden: layout.hidden.filter((x) => x !== id),
+            }));
             return (
               <View
                 key={id}
@@ -442,17 +469,26 @@ export function HomeSection() {
                   ) : null}
                 </View>
                 <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-                  {SIZE_OPTIONS.map((option) => (
-                    <Chip
-                      key={option.span}
-                      testID={`wall-layout-size-${id}-${option.span}`}
-                      label={option.label}
-                      tone={span === option.span ? "accent" : "neutral"}
-                      selected={span === option.span}
-                      disabled={!hidden && option.span !== span && blocked}
-                      onPress={() => setSpan(id, option.span)}
-                    />
-                  ))}
+                  {SIZE_OPTIONS.map((option) => {
+                    const trial: WallLayout = {
+                      ...layout,
+                      spans: { ...layout.spans, [id]: option.span },
+                      shapes: { ...layout.shapes, [id]: option.shape },
+                    };
+                    const optionDisabled =
+                      !hidden && option.shape !== currentShape && !layoutFits(trial);
+                    return (
+                      <Chip
+                        key={option.shape}
+                        testID={`wall-layout-size-${id}-${option.suffix}`}
+                        label={option.label}
+                        tone={currentShape === option.shape ? "accent" : "neutral"}
+                        selected={currentShape === option.shape}
+                        disabled={optionDisabled}
+                        onPress={() => setShape(id, option.shape)}
+                      />
+                    );
+                  })}
                 </View>
                 <Toggle
                   testID={`wall-layout-visible-${id}`}

@@ -64,38 +64,12 @@ type ToneKey = "accent" | "success" | "warning" | "danger";
  * reflowing as answers land.
  */
 const KPI_TILE_H = 75;
-/** The web's `p-3` — the tile's inner inset on all four sides. */
 const KPI_PAD = 12;
-/** The web's icon chip: `h-7 w-7` (28px) around the 32px HomeWidgetIcon,
- *  whose artwork deliberately overflows the chip by 2px a side. */
-const KPI_ICON_PX = 28;
-/** The web's `gap-x-3` — the gap between the icon chip and the numeral. */
+const KPI_ICON_PX = 44;
 const KPI_ICON_GAP = 12;
-/** Grid row 1 is as tall as the icon chip (the web's `row-start-1` cells). */
-const KPI_LABEL_ROW1 = 28;
-/** Grid row 2 carries the detail line (the native's 14sp label floor). */
-const KPI_LABEL_ROW2 = 20;
-/** The web's `gap-y-0.5`. */
-const KPI_ROW_GAP = 2;
-/** The two label rows + the gap — the tile's content height. */
-const KPI_CONTENT_H = KPI_LABEL_ROW1 + KPI_ROW_GAP + KPI_LABEL_ROW2;
-/**
- * The web's value size: `sm:text-[1.7rem]` = 27.2px at the wall width
- * (`xl:text-[2.75rem]` needs a 1280px viewport — the wall is 1080).
- */
-const KPI_NUMERAL_SIZE = 27.2;
-/**
- * The web's `.text-numeral-hero` tracking: -0.04em (letter-spacing is px in
- * React Native, so the em value is resolved here).
- */
+const KPI_CONTENT_H = KPI_TILE_H - KPI_PAD * 2;
+const KPI_NUMERAL_SIZE = 30;
 const KPI_NUMERAL_TRACKING = -0.04 * KPI_NUMERAL_SIZE;
-/**
- * The unknown-value glyph's width. The web's em dash is a MONOSPACE advance
- * (0.6em ≈ 16px, ink ≈ 15px) in the 27.2px hero face; the app's own face is
- * proportional (Fredoka's em dash inks 17.5px), so the placeholder is
- * compressed back to the reference's 15px tick. The bar is 5px tall there
- * against the reference's 4px — one pixel, and it is the same glyph.
- */
 const KPI_DASH_SCALE = 15 / 17.5;
 
 /** The web's `grid gap-3 sm:gap-4` on the KPI band — 16px at the wall width. */
@@ -227,49 +201,28 @@ function StatTile({ label, detail, value, pending, stale, icon, widgetId, tone, 
           }}
           testID={testID}
         >
-          {/* The web's 2-row grid: the chip in row 1, the value spanning both
-              rows, the label/detail pair in column 3. `alignItems: flex-start`
-              reproduces the web's `alignContent: start` (the rows start at the
-              content's top edge). */}
-          <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-            {/* The icon is the web's clay HomeWidgetIcon at `size="sm"` — the
-                same artwork, and the same round glow halo behind it. The web
-                seats it in a `rounded-xl bg-white/7%` chip; on the wall that
-                chip is invisible, so the native paints the artwork on the
-                card instead of tinting a square behind it (which read as a
-                flat sticker, not a disc). The chip BOX is the web's 28px
-                `h-7 w-7` — the 32px artwork overflows it by 2px a side,
-                exactly as it does on the web. */}
+          <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
             <View
               style={{
                 width: KPI_ICON_PX,
                 height: KPI_ICON_PX,
-                borderRadius: 10,
-                backgroundColor: mix(toneColor, "transparent", 12),
+                borderRadius: 14,
+                backgroundColor: mix(toneColor, "transparent", 16),
                 borderWidth: 1,
-                borderColor: mix(toneColor, "transparent", 24),
+                borderColor: mix(toneColor, "transparent", 34),
                 alignItems: "center",
                 justifyContent: "center",
+                overflow: "hidden",
               }}
             >
               {variant ? (
-                <HomeWidgetIcon variant={variant} size="sm" />
+                <HomeWidgetIcon variant={variant} size={40} />
               ) : (
-                <AnimatedEmoji emoji={icon} size={22} />
+                <AnimatedEmoji emoji={icon} size={26} />
               )}
             </View>
-            {/* The value column: the numeral spans rows 1-2, so it is centred on
-                the tile's CONTENT height (the web's `row-span-2`), which is what
-                puts the icon 9px above it. */}
             <View style={{ marginLeft: KPI_ICON_GAP, height: KPI_CONTENT_H, justifyContent: "center", flexShrink: 0 }}>
               {pending ? (
-                /* The numeral slot while its read is unanswered: the WEB's own
-                   unknown-value glyph — the em dash the reference shows on a tile
-                   whose source has not answered. It wears the same primary ink as
-                   a real numeral (the reference's dash is white, not dimmed) but
-                   is unmistakably a GLYPH, not a slab, so the tile never reads as
-                   a hole. Static, too: a pulsing dash would flicker the floor it
-                   is supposed to sit under. */
                 <Text
                   testID={`${testID}-pending`}
                   accessibilityLabel="Not known yet"
@@ -277,7 +230,7 @@ function StatTile({ label, detail, value, pending, stale, icon, widgetId, tone, 
                     color: colors["color-text-primary"],
                     fontFamily: FONTS.rounded,
                     fontSize: KPI_NUMERAL_SIZE,
-                    lineHeight: KPI_NUMERAL_SIZE,
+                    lineHeight: KPI_NUMERAL_SIZE + 2,
                     fontWeight: "700",
                     transform: [{ scaleX: KPI_DASH_SCALE }],
                     transformOrigin: "left center",
@@ -292,7 +245,7 @@ function StatTile({ label, detail, value, pending, stale, icon, widgetId, tone, 
                       color: colors["color-text-primary"],
                       fontFamily: FONTS.rounded,
                       fontSize: KPI_NUMERAL_SIZE,
-                      lineHeight: KPI_NUMERAL_SIZE,
+                      lineHeight: KPI_NUMERAL_SIZE + 2,
                       fontWeight: "700",
                       letterSpacing: KPI_NUMERAL_TRACKING,
                       fontVariant: ["tabular-nums"],
@@ -303,38 +256,24 @@ function StatTile({ label, detail, value, pending, stale, icon, widgetId, tone, 
                 </Animated.View>
               )}
             </View>
-            {/* The label block hugs the tile's right edge (the web's
-                `md:col-start-3 md:justify-self-end md:text-right`), label over
-                detail, both in the tone ink. The label sits in grid row 1 — as
-                tall as the icon chip — and the detail in row 2, which is what
-                gives the pair the reference's 25-26px pitch. */}
-            <View style={{ flex: 1, alignItems: "flex-end" }}>
-              <View style={{ height: KPI_LABEL_ROW1, justifyContent: "center" }}>
-                <Text
-                  style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "500" }}
-                  numberOfLines={1}
-                >
-                  {label}
-                </Text>
-              </View>
-              <View style={{ height: KPI_LABEL_ROW2, justifyContent: "center", marginTop: KPI_ROW_GAP }}>
-                <Text
-                  style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight }}
-                  numberOfLines={1}
-                >
-                  {detail}
-                  {/* The tile carries the staleness of its OWN number: the count
-                      above is the last-good copy the card below is also showing
-                      (badged there), and the band can never publish it as a live
-                      figure. The marker rides the detail line so the numeral
-                      stays the loudest thing on the tile. */}
-                  {stale ? (
-                    <Text testID={`${testID}-stale`} style={{ color: staleInk, fontWeight: "600" }}>
-                      {` · ${STALE_MARK}`}
-                    </Text>
-                  ) : null}
-                </Text>
-              </View>
+            <View style={{ flex: 1, alignItems: "flex-end", justifyContent: "center", gap: 2 }}>
+              <Text
+                style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight, fontWeight: "600" }}
+                numberOfLines={1}
+              >
+                {label}
+              </Text>
+              <Text
+                style={{ color: ink, fontSize: TYPOGRAPHY.label.fontSize, lineHeight: TYPOGRAPHY.label.lineHeight }}
+                numberOfLines={1}
+              >
+                {detail}
+                {stale ? (
+                  <Text testID={`${testID}-stale`} style={{ color: staleInk, fontWeight: "600" }}>
+                    {` · ${STALE_MARK}`}
+                  </Text>
+                ) : null}
+              </Text>
             </View>
           </View>
         </Material>

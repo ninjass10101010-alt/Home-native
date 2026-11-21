@@ -22,10 +22,11 @@ import {
   getEffectiveNotificationVolume,
   loadNotificationPreferences,
 } from "../../native/notificationPrefs";
-import type { WallSpan } from "../widgets";
+import type { WallShape, WallSpan } from "../widgets";
 
 export interface ScheduleWidgetProps {
   span?: WallSpan;
+  shape?: WallShape;
   now?: Date;
 }
 
@@ -34,10 +35,12 @@ interface ScheduleData {
   meals: MealPlanEntryRow[] | null;
 }
 
-export function ScheduleWidget({ span = 1, now: injectedNow }: ScheduleWidgetProps) {
-  const { colors, accentColor } = useTheme();
-  const cyan = colors["color-accent-cyan"];
+export function ScheduleWidget({ span = 1, shape, now: injectedNow }: ScheduleWidgetProps) {
+  const { colors, theme, accentColor } = useTheme();
+  const cyan = colors["color-accent-cyan"] ?? accentColor;
+  const cyanInk = colors["color-accent-ink-cyan"] ?? cyan;
   const router = useRouter();
+  const isWide = shape === "2x1";
 
   const { status, data, failure, stale, retry } = useWidgetData<ScheduleData>(
     async () => {
@@ -158,19 +161,18 @@ export function ScheduleWidget({ span = 1, now: injectedNow }: ScheduleWidgetPro
             onPress={handleAnnounceSchedule}
             accessibilityRole="button"
             accessibilityLabel="Announce daily schedule out loud"
-            hitSlop={8}
+            hitSlop={{ top: 14, bottom: 14, left: 12, right: 12 }}
             style={({ pressed }) => ({
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-              borderRadius: RADII.sm,
-              backgroundColor: pressed ? mix(cyan, "transparent", 30) : mix(cyan, "transparent", 15),
+              minHeight: 36,
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: RADII.full,
+              backgroundColor: pressed ? mix(cyan, "transparent", 28) : mix(cyan, "transparent", 16),
               borderWidth: 1,
-              borderColor: mix(cyan, "transparent", 35),
+              borderColor: mix(cyan, "transparent", 36),
               flexDirection: "row",
               alignItems: "center",
-              gap: 4,
-              marginTop: 4,
-              marginRight: 6,
+              gap: 5,
             })}
           >
             <Text style={{ fontSize: 14 }}>🔊</Text>
@@ -178,7 +180,7 @@ export function ScheduleWidget({ span = 1, now: injectedNow }: ScheduleWidgetPro
               style={{
                 fontSize: 14,
                 fontWeight: "700",
-                color: cyan,
+                color: cyanInk,
                 letterSpacing: 0.3,
               }}
             >
@@ -188,10 +190,10 @@ export function ScheduleWidget({ span = 1, now: injectedNow }: ScheduleWidgetPro
         ) : null
       }
     >
-      <View testID="schedule-widget" style={{ flex: 1, paddingHorizontal: 12, paddingBottom: 10 }}>
+      <View testID="schedule-widget" style={{ flex: 1 }}>
         {/* The household clock DayLine */}
-        <View style={{ marginBottom: 12 }}>
-          <DayLine tone={cyan} markers={markers} />
+        <View style={{ marginBottom: isWide ? 8 : 10 }}>
+          <DayLine tone={cyan} markers={markers} marginBottom={0} />
         </View>
 
         {/* Content Rows or Empty State */}
@@ -226,12 +228,105 @@ export function ScheduleWidget({ span = 1, now: injectedNow }: ScheduleWidgetPro
                 style={{
                   fontSize: TYPOGRAPHY.label.fontSize,
                   fontWeight: "600",
-                  color: colors["color-accent-cyan"],
+                  color: cyanInk,
                 }}
               >
                 {"See today's schedule →"}
               </Text>
             </Pressable>
+          </View>
+        ) : isWide ? (
+          <View style={{ flex: 1, gap: 6 }}>
+            {[0, 2, 4].map((startIdx) => {
+              const pair = visibleRoutines.slice(startIdx, startIdx + 2);
+              if (!pair.length) return null;
+              return (
+                <View key={`sched-row-${startIdx}`} style={{ flexDirection: "row", gap: 10 }}>
+                  {pair.map((routine) => {
+                    const raw = data?.schedules.find((s) => `s_${String(s.id)}` === routine.id);
+                    const tokenKey = raw?.color ? SCHEDULE_RAIL_TOKENS[raw.color.toLowerCase()] : null;
+                    const col = (tokenKey && colors[tokenKey]) || cyan;
+                    const firstName = routine.member ? routine.member.split(" ")[0] : null;
+                    return (
+                      <View
+                        key={routine.id}
+                        testID={`schedule-row-${routine.id}`}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          backgroundColor: mix(col, colors["color-surface-0"], theme === "dark" ? 18 : 14),
+                          borderColor: mix(col, "transparent", theme === "dark" ? 32 : 24),
+                          borderWidth: 1,
+                          borderRadius: RADII.lg,
+                          paddingHorizontal: 9,
+                          paddingVertical: 7,
+                          gap: 6,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 3,
+                            height: 22,
+                            borderRadius: RADII.sm,
+                            backgroundColor: col,
+                          }}
+                        />
+                        <Text
+                          style={{
+                            fontSize: TYPOGRAPHY.label.fontSize,
+                            lineHeight: TYPOGRAPHY.label.lineHeight,
+                            fontFamily: "SpaceGrotesk-Medium",
+                            fontVariant: ["tabular-nums"],
+                            color: colors["color-text-secondary"],
+                            width: 58,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {routine.time || "All day"}
+                        </Text>
+                        <Text style={{ fontSize: 16 }}>{routine.icon || "⏰"}</Text>
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            flex: 1,
+                            fontSize: TYPOGRAPHY.label.fontSize,
+                            lineHeight: TYPOGRAPHY.label.lineHeight,
+                            color: colors["color-text-primary"],
+                            fontWeight: "600",
+                          }}
+                        >
+                          {routine.title}
+                        </Text>
+                        {firstName ? (
+                          <View
+                            style={{
+                              backgroundColor: mix(col, colors["color-surface-2"], 28),
+                              paddingHorizontal: 7,
+                              paddingVertical: 2,
+                              borderRadius: RADII.pill,
+                              flexShrink: 0,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: TYPOGRAPHY.label.fontSize,
+                                fontWeight: "600",
+                                color: colors["color-text-primary"],
+                              }}
+                            >
+                              {firstName}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                  {pair.length === 1 ? <View style={{ flex: 1 }} /> : null}
+                </View>
+              );
+            })}
           </View>
         ) : (
           <View style={{ flex: 1, gap: 6 }}>
@@ -332,8 +427,9 @@ export function ScheduleWidget({ span = 1, now: injectedNow }: ScheduleWidgetPro
             onPress={() => router.push("/calendar")}
             accessibilityRole="button"
             accessibilityLabel={`+${remainingCount} more routines. Open calendar.`}
+            hitSlop={12}
             style={({ pressed }) => ({
-              paddingTop: 6,
+              paddingTop: 4,
               alignItems: "center",
               opacity: pressed ? 0.7 : 1,
             })}
@@ -342,7 +438,7 @@ export function ScheduleWidget({ span = 1, now: injectedNow }: ScheduleWidgetPro
               style={{
                 fontSize: TYPOGRAPHY.label.fontSize,
                 fontWeight: "600",
-                color: colors["color-accent-cyan"],
+                color: cyanInk,
               }}
             >
               +{remainingCount} more · See all →

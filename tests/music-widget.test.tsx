@@ -244,27 +244,37 @@ it("the deny rule holds even with the explicit filter off", () => {
 describe("the wall card's geometry", () => {
   const styleOf = (node: any) => StyleSheet.flatten(node.props.style) as Record<string, any>;
 
-  it("keeps the identity disc's seat — the painted disc does not move", () => {
+  it("keeps the identity disc's seat — upgraded 72dp orb", () => {
     const { getByTestId } = render(<MusicWidget />, { wrapper: wrap });
-    // The disc is hidden from the a11y tree (it is decoration), so the
-    // query has to ask for it explicitly.
     const style = styleOf(getByTestId("music-icon-disc", { includeHiddenElements: true }));
-    // The frame's badge contract: a 64dp box, seated 10dp out of the
-    // content origin (the wall's shared disc geometry).
-    expect(style.width).toBe(64);
-    expect(style.height).toBe(64);
-    expect(style.top).toBe(-10);
-    expect(style.left).toBe(-10);
+    expect(style.width).toBe(72);
+    expect(style.height).toBe(72);
+    expect(style.top).toBe(-12);
+    expect(style.left).toBe(-12);
     const svg = getByTestId("music-icon-disc", { includeHiddenElements: true }).findAll((n: any) => n.type === "Svg")[0];
     expect(svg).toBeTruthy();
-    expect(svg.props.width).toBe(64);
-    expect(svg.props.height).toBe(64);
+    expect(svg.props.width).toBe(72);
+    expect(svg.props.height).toBe(72);
   });
 
   it("keeps the header band at the shared height — the row's rule does not move", () => {
     const { getByTestId } = render(<MusicWidget />, { wrapper: wrap });
-    const style = styleOf(getByTestId("music-widget-header"));
+    const style = styleOf(getByTestId("music-header"));
     expect(style.minHeight).toBe(HEADER_BAND_H);
+  });
+
+  it("renders the horizontal Now Playing bar in 2x1 wide shape", () => {
+    mockState = {
+      current: { id: "abc12345678", title: "Wide Horizon", artist: "M83", artworkUrl: "https://img/wide.jpg", explicit: false },
+      playing: true,
+    };
+    const { getByTestId, getByText } = render(<MusicWidget span={2} shape="2x1" />, { wrapper: wrap });
+    const chipStyle = styleOf(getByTestId("music-widget-art-chip"));
+    expect(chipStyle.width).toBe(92);
+    expect(chipStyle.height).toBe(92);
+    expect(getByText("Now playing")).toBeTruthy();
+    expect(getByTestId("music-widget-title").props.children).toBe("Wide Horizon");
+    expect(getByTestId("music-widget-open-link")).toBeTruthy();
   });
 
   it("the card's own frame is the shared wall frame", () => {

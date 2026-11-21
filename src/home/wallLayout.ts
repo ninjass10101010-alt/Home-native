@@ -6,24 +6,39 @@ import {
   WALL_CONFIGURABLE_WIDGETS,
   WALL_DEFAULT_HIDDEN_WIDGETS,
   WALL_LOCKED_HIDDEN_WIDGETS,
+  WALL_SHAPES,
   WALL_SPANS,
+  shapeCells,
+  visibleOnWall,
+  wallPlacements,
+  type WallShape,
   type WidgetId,
   type WallSpan,
 } from "./widgets";
 
 export const WALL_LAYOUT_STORAGE_KEY = "consuela-wall-layout";
-export const WALL_LAYOUT_VERSION = 2;
+export const WALL_LAYOUT_VERSION = 3;
 export const WALL_CELLS = 12;
 
 export interface WallLayout {
   version: number;
   spans: Partial<Record<WidgetId, WallSpan>>;
+  shapes?: Partial<Record<WidgetId, WallShape>>;
   hidden: WidgetId[];
   autoArrange?: boolean;
 }
 
 const ALL_IDS = new Set<WidgetId>(ALL_WIDGETS.map((widget) => widget.id));
 const CONFIGURABLE_IDS = new Set<WidgetId>(WALL_CONFIGURABLE_WIDGETS);
+
+function defaultShapes(): Partial<Record<WidgetId, WallShape>> {
+  const shapes: Partial<Record<WidgetId, WallShape>> = {};
+  for (const id of WALL_CONFIGURABLE_WIDGETS) {
+    const shape = WALL_SHAPES[id];
+    if (shape) shapes[id] = shape;
+  }
+  return shapes;
+}
 
 function defaultSpans(): Partial<Record<WidgetId, WallSpan>> {
   const spans: Partial<Record<WidgetId, WallSpan>> = {};
@@ -38,6 +53,7 @@ function cloneDefaultLayout(): WallLayout {
   return {
     version: WALL_LAYOUT_VERSION,
     spans: defaultSpans(),
+    shapes: defaultShapes(),
     hidden: [...WALL_DEFAULT_HIDDEN_WIDGETS],
   };
 }
@@ -52,8 +68,19 @@ export function layoutWidgets(layout: WallLayout): WidgetId[] {
   return WALL_CONFIGURABLE_WIDGETS.filter((id) => !hidden.has(id));
 }
 
+export function layoutShape(layout: WallLayout, id: WidgetId): WallShape {
+  const explicitShape = layout.shapes?.[id];
+  if (explicitShape === "1x1" || explicitShape === "1x2" || explicitShape === "2x1") {
+    return explicitShape;
+  }
+  const explicitSpan = layout.spans[id];
+  if (explicitSpan === 1) return "1x1";
+  if (explicitSpan === 2) return WALL_SHAPES[id] ?? "1x2";
+  return WALL_SHAPES[id] ?? "1x1";
+}
+
 export function layoutSpan(layout: WallLayout, id: WidgetId): WallSpan {
-  return layout.spans[id] ?? WALL_SPANS[id] ?? 1;
+  return shapeCells(layoutShape(layout, id));
 }
 
 export function layoutCells(layout: WallLayout): { used: number; free: number } {
@@ -65,7 +92,16 @@ export function layoutCells(layout: WallLayout): { used: number; free: number } 
 }
 
 export function layoutFits(layout: WallLayout): boolean {
-  return layoutCells(layout).used <= WALL_CELLS;
+  if (layoutCells(layout).used > WALL_CELLS) return false;
+  const visibleDefs = visibleOnWall([
+    ...layout.hidden,
+    ...WALL_LOCKED_HIDDEN_WIDGETS,
+  ]);
+  const shapes: Partial<Record<WidgetId, WallShape>> = {};
+  for (const def of visibleDefs) {
+    shapes[def.id] = layoutShape(layout, def.id);
+  }
+  return wallPlacements(visibleDefs, shapes, { strict: true }).fitsAll;
 }
 
 function repairLayout(raw: unknown): WallLayout | null {
@@ -73,6 +109,7 @@ function repairLayout(raw: unknown): WallLayout | null {
   const candidate = raw as {
     version?: unknown;
     spans?: unknown;
+    shapes?: unknown;
     hidden?: unknown;
   };
   if (candidate.version !== WALL_LAYOUT_VERSION) return null;
@@ -84,6 +121,21 @@ function repairLayout(raw: unknown): WallLayout | null {
       if (!ALL_IDS.has(id as WidgetId)) continue;
       if (span !== 1 && span !== 2) continue;
       spans[id as WidgetId] = span;
+    }
+  }
+
+  const shapes: Partial<Record<WidgetId, WallShape>> = {};
+  if (candidate.shapes && typeof candidate.shapes === "object") {
+    const rawShapes = candidate.shapes as Record<string, unknown>;
+    for (const [id, shape] of Object.entries(rawShapes)) {
+      if (!ALL_IDS.has(id as WidgetId)) continue;
+      if (shape !== "1x1" && shape !== "1x2" && shape !== "2x1") continue;
+      shapes[id as WidgetId] = shape;
+      spans[id as WidgetId] = shapeCells(shape);
+    }
+  } else {
+    for (const [id, span] of Object.entries(spans) as [WidgetId, WallSpan][]) {
+      shapes[id] = span === 1 ? "1x1" : (WALL_SHAPES[id] ?? "1x2");
     }
   }
 
@@ -102,6 +154,7 @@ function repairLayout(raw: unknown): WallLayout | null {
   const layout: WallLayout = {
     version: WALL_LAYOUT_VERSION,
     spans,
+    ...(Object.keys(shapes).length > 0 ? { shapes } : {}),
     hidden: WALL_CONFIGURABLE_WIDGETS.filter((id) => hiddenIds.has(id)),
     ...(hasAutoArrange ? { autoArrange } : {}),
   };

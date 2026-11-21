@@ -46,39 +46,36 @@ function Frame(props: Partial<React.ComponentProps<typeof WidgetFrame>>) {
   );
 }
 
-describe("WidgetFrame default header (U13.7) — left-aligned band + protruding top-left disc", () => {
-  it("renders the identity disc overlapping the band's top edge (web WidgetCard/SectionCard parity)", () => {
+describe("WidgetFrame default header — left-aligned band + unclipped floating orb", () => {
+  it("renders the upgraded 72dp orb overlapping the band's top-left corner", () => {
     const { getByTestId, getByText, getByRole } = render(<Frame />, { wrapper: wrap });
     // The disc is decorative (aria-hidden on web): the title carries identity,
     // so the glyph is excluded from the a11y tree — query with hidden elements.
     const disc = getByTestId("wf-icon-disc", { includeHiddenElements: true });
-    // The web's badge geometry (Home-ai src/components/patterns/WidgetCard.tsx:
-    // `h-14 w-14` at `xl:-top-2 xl:-left-2`), with the clay artwork at the
-    // web's "lg" size (h-16 w-16) breaking the card's corner behind it.
     expect(disc.props.style).toMatchObject({
       position: "absolute",
-      top: -10,
-      left: -10,
-      width: 64,
-      height: 64,
+      top: -12,
+      left: -12,
+      width: 72,
+      height: 72,
     });
     // 3-stop LinearGradient wash inside the disc (tone-on-surface stops).
     const gradient = disc.findAll((n: any) => n.type === "ExpoLinearGradient")[0];
     expect(gradient).toBeTruthy();
     expect(gradient.props.colors).toHaveLength(3);
-    expect(getByText("✅", { includeHiddenElements: true })).toBeTruthy(); // the glyph lives on the disc…
+    expect(getByText("✅", { includeHiddenElements: true })).toBeTruthy();
     const title = getByRole("header");
-    expect(title.props.children).toBe("Tasks"); // …and the title is LEFT of it
+    expect(title.props.children).toBe("Tasks");
     expect(getByText("2 pending for the family")).toBeTruthy();
   });
 
-  it("variant widgets render HomeWidgetIcon at the web's lg size (64dp) on the disc", () => {
+  it("variant widgets render HomeWidgetIcon at the upgraded 72dp orb artwork scale", () => {
     const { getByTestId } = render(<Frame id="briefing" icon="🌅" title="Briefing" />, { wrapper: wrap });
     const disc = getByTestId("briefing-icon-disc", { includeHiddenElements: true });
     const svg = disc.findAll((n: any) => n.type === "Svg")[0];
     expect(svg).toBeTruthy();
-    expect(svg.props.width).toBe(64);
-    expect(svg.props.height).toBe(64);
+    expect(svg.props.width).toBe(72);
+    expect(svg.props.height).toBe(72);
   });
 
   it("honors the type floors: title 18sp bold, description 14sp", () => {
@@ -100,25 +97,22 @@ describe("WidgetFrame default header (U13.7) — left-aligned band + protruding 
     expect(long.getAllByText(/very long description/).every((n) => n.props.numberOfLines === 1)).toBe(true);
   });
 
-  it("the default band carries the bottom divider hairline", () => {
+  it("the default band carries left-aligned gutter and bottom divider hairline", () => {
     const { getByTestId } = render(<Frame />, { wrapper: wrap });
     expect(getByTestId("wf-header").props.style).toMatchObject({
       borderBottomWidth: 1,
       paddingBottom: 8,
-      paddingLeft: 48,
-      paddingRight: 48,
+      paddingLeft: 56,
+      paddingRight: 4,
     });
   });
 
-  it("headerRight renders in the band's absolute right slot", () => {
-    const { getByText, UNSAFE_root } = render(<Frame headerRight={<Text>20 items ▼</Text>} />, { wrapper: wrap });
-    expect(getByText("20 items ▼")).toBeTruthy();
-    // the slot wrapper is absolutely positioned at the band's top-right
-    const slot = UNSAFE_root.findAll(
-      (n: any) => n.props.style?.position === "absolute" && (n.props.style?.zIndex === 4 || n.props.style?.zIndex === 10)
-    )[0];
-    expect(slot).toBeTruthy();
-    expect(slot.props.style).toMatchObject({ top: 0, right: 0 });
+  it("headerRight renders cleanly in-flow inside the default band right slot", () => {
+    const { getByText, getByTestId } = render(<Frame headerRight={<Text>20 items ▼</Text>} />, { wrapper: wrap });
+    const pill = getByText("20 items ▼");
+    expect(pill).toBeTruthy();
+    const band = getByTestId("wf-header");
+    expect(StyleSheet.flatten((band.children[0] as any).props.style).flexDirection).toBe("row");
   });
 
   it("the header override prop still wins over the default band", () => {

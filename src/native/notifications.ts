@@ -7,7 +7,8 @@ import {
   resolveTimingPreference,
   type NotificationCategory,
 } from "./notificationPrefs";
-import { playNotificationAudio, resolveVoiceCallout } from "./voiceCallouts";
+import type { NotificationSound } from "./soundEffects";
+import { playNotificationAudio, resolveVoiceCallout, type SoundMode } from "./voiceCallouts";
 import { postActiveNotification } from "./notificationFeed";
 import { TOKENS } from "../theme/tokens";
 
@@ -107,30 +108,63 @@ export function resetRecentDispatchesCache(): void {
   recentDispatches.clear();
 }
 
+export interface SpeakerForwardResult {
+  delivered: number;
+  muteTabletAudio: boolean;
+}
+
 /**
  * Forwards an alert to Home-ai so configured Google speakers announce it too.
- * Never throws or blocks local tablet delivery.
+ * Never throws or blocks local tablet delivery past 3.5 s.
  */
 export async function forwardNotificationToSpeakers(params: {
   category: PostNotificationParams["category"];
   title: string;
   body: string;
   volume?: number;
-}): Promise<void> {
+  sound?: NotificationSound;
+  soundMode?: SoundMode;
+}): Promise<SpeakerForwardResult | null> {
   try {
-    await api("/api/broadcast", {
+    const postPromise = api<{
+      ok?: boolean;
+      broadcast?: {
+        speakers?: {
+          delivered?: number;
+          muteTabletAudio?: boolean;
+        };
+      };
+    }>("/api/broadcast", {
       method: "POST",
       body: {
         message: params.body || params.title,
         title: params.title,
         category: params.category,
         voiceKey: resolveVoiceCallout(params.category, params.title, params.body),
+        ...(params.sound ? { sound: params.sound } : {}),
+        ...(params.soundMode ? { soundMode: params.soundMode } : {}),
         volume: params.volume,
         skipTablet: true,
       },
+    }).catch(() => null);
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<null>((resolve) => {
+      timeoutId = setTimeout(() => resolve(null), 3500);
     });
+
+    const res = await Promise.race([postPromise, timeoutPromise]);
+    if (timeoutId) clearTimeout(timeoutId);
+    if (!res || typeof res !== "object") return null;
+
+    const sp = res.broadcast?.speakers;
+    if (!sp) return null;
+    return {
+      delivered: typeof sp.delivered === "number" ? sp.delivered : 0,
+      muteTabletAudio: sp.muteTabletAudio !== false,
+    };
   } catch {
-    // Speaker broadcast is best-effort; never fail local tablet delivery
+    return null;
   }
 }
 
@@ -162,6 +196,8 @@ export async function dispatchNotification({
 
   let isQuiet = false;
   let effectiveVolume: number | undefined;
+  let pendingAudio: Parameters<typeof playNotificationAudio>[0] | null = null;
+
   if (category !== "emergency" && category !== "general") {
     const prefs = await loadNotificationPreferences();
     const config = prefs[category];
@@ -190,28 +226,28 @@ export async function dispatchNotification({
         if (config.advanceEnabled === false || timingMode === "start_only") return null;
         const sound = config.advanceSound ?? config.sound;
         const soundMode = config.advanceSoundMode ?? config.soundMode ?? "tone_and_voice";
-        void playNotificationAudio({ sound, volume, soundMode, category, title, body });
+        pendingAudio = { sound, volume, soundMode, category, title, body };
       } else if (timing === "start") {
         if (config.startEnabled === false || timingMode === "advance_only") return null;
         const sound = config.startSound ?? config.sound;
         const soundMode = config.startSoundMode ?? config.soundMode ?? "tone_and_voice";
-        void playNotificationAudio({ sound, volume, soundMode, category, title, body });
+        pendingAudio = { sound, volume, soundMode, category, title, body };
       } else {
         // Play category audio respecting soundMode (tone + Sarah voice call-out)
         const soundMode = config.soundMode ?? "tone_and_voice";
-        void playNotificationAudio({ sound: config.sound, volume, soundMode, category, title, body });
+        pendingAudio = { sound: config.sound, volume, soundMode, category, title, body };
       }
     }
   } else if (category === "emergency") {
     effectiveVolume = 1.0;
-    void playNotificationAudio({
+    pendingAudio = {
       sound: "radar",
       volume: 1.0,
       soundMode: "tone_and_voice",
       category: "emergency",
       title,
       body,
-    });
+    };
   }
 
   const notifId = `notif-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -225,13 +261,27 @@ export async function dispatchNotification({
     timestamp: Date.now(),
   });
 
-  if (!isQuiet && data?.skipSpeakers !== true && typeof jest === "undefined") {
-    void forwardNotificationToSpeakers({
+  let suppressedBySpeakers = false;
+  if (
+    !isQuiet &&
+    data?.skipSpeakers !== true &&
+    (typeof jest === "undefined" || data?.enableSpeakersInTest === true)
+  ) {
+    const sp = await forwardNotificationToSpeakers({
       category,
       title,
       body,
       volume: effectiveVolume,
+      sound: pendingAudio?.sound,
+      soundMode: pendingAudio?.soundMode,
     });
+    if (sp && sp.delivered > 0 && sp.muteTabletAudio) {
+      suppressedBySpeakers = true;
+    }
+  }
+
+  if (pendingAudio && !suppressedBySpeakers) {
+    void playNotificationAudio(pendingAudio);
   }
 
   if (AppState.currentState === "active") {

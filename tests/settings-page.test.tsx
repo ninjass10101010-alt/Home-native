@@ -387,7 +387,7 @@ describe("SettingsPage — Safety", () => {
   });
 });
 
-describe("SettingsPage — Home uses the balanced v2 layout", () => {
+describe("SettingsPage — Home uses the balanced v3 layout", () => {
   it("offers configurable home controls and never offers deferred widgets", async () => {
     const { getByTestId, findByText, queryByText, findByTestId, getByLabelText } = render(
       <SettingsPage />,
@@ -416,13 +416,14 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
     expect(copy).toContain("12 of 12");
   });
 
-  it("Reset restores the approved v2 default", async () => {
+  it("Reset restores the approved v3 default", async () => {
     await AsyncStorage.setItem(
       "consuela-wall-layout",
       JSON.stringify({
-        version: 2,
-        spans: { weather: 1 },
-        hidden: ["music", "homeClimate", "homeLights"],
+        version: 3,
+        spans: { weather: 1, schedule: 2, music: 2, photos: 2 },
+        shapes: { weather: "1x1", schedule: "2x1", music: "2x1", photos: "1x2" },
+        hidden: ["morningBriefing", "homeClimate", "homeLights"],
       }),
     );
     const { getByTestId, findByText, findByTestId, getByLabelText } = render(
@@ -442,14 +443,17 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
       const stored = JSON.parse(
         (await AsyncStorage.getItem("consuela-wall-layout")) ?? "null",
       );
-      expect(stored?.version).toBe(2);
+      expect(stored?.version).toBe(3);
       expect(stored?.hidden).toEqual([
-        "schedule",
+        "morningBriefing",
         "homeSecurity",
         "homeClimate",
         "homeLights",
       ]);
       expect(stored?.spans?.weather).toBe(2);
+      expect(stored?.shapes?.weather).toBe("1x2");
+      expect(stored?.shapes?.schedule).toBe("2x1");
+      expect(stored?.shapes?.music).toBe("2x1");
     });
   });
 
@@ -461,7 +465,11 @@ describe("SettingsPage — Home uses the balanced v2 layout", () => {
     await openParentSection(getByTestId, findByTestId, getByLabelText, "home");
     await findByText("Widget layout");
     expect(
-      getByTestId("wall-layout-size-morningBriefing-2").props.accessibilityState
+      getByTestId("wall-layout-size-todayEvents-2").props.accessibilityState
+        ?.disabled,
+    ).toBe(true);
+    expect(
+      getByTestId("wall-layout-size-todayEvents-wide").props.accessibilityState
         ?.disabled,
     ).toBe(true);
     expect(getByTestId("wall-layout-hint")).toBeTruthy();

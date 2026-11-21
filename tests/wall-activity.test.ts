@@ -1,4 +1,4 @@
-import { scoreWidgets, dynamicSpans, activityOrder, hasMoreContent } from "../src/home/wallActivity";
+import { scoreWidgets, dynamicSpans, dynamicShapes, activityOrder, hasMoreContent } from "../src/home/wallActivity";
 import { DEFAULT_WALL_LAYOUT, type WallLayout } from "../src/home/wallLayout";
 import type { WallStats } from "../src/home/wall-stats";
 import type { WidgetId } from "../src/home/widgets";
@@ -33,13 +33,13 @@ const QUIET_STATS: WallStats = {
 
 const DEFAULT_VISIBLE: WidgetId[] = [
   "photos",
-  "weather",
   "todayEvents",
+  "weather",
   "tasks",
-  "morningBriefing",
-  "music",
+  "schedule",
   "currentMeal",
   "leaderboard",
+  "music",
 ];
 
 describe("wallActivity — scoreWidgets", () => {
@@ -147,22 +147,30 @@ describe("wallActivity — dynamicSpans", () => {
 });
 
 describe("wallActivity — hasMoreContent", () => {
-  it("treats 0 and 1 event as small content, 2+ as more content", () => {
+  it("treats 0–2 events as small content, 3+ as more content", () => {
     expect(hasMoreContent("todayEvents", { ...QUIET_STATS, eventsToday: 0 })).toBe(false);
     expect(hasMoreContent("todayEvents", { ...QUIET_STATS, eventsToday: 1 })).toBe(false);
-    expect(hasMoreContent("todayEvents", { ...QUIET_STATS, eventsToday: 2 })).toBe(true);
+    expect(hasMoreContent("todayEvents", { ...QUIET_STATS, eventsToday: 2 })).toBe(false);
+    expect(hasMoreContent("todayEvents", { ...QUIET_STATS, eventsToday: 3 })).toBe(true);
     expect(hasMoreContent("todayEvents", { ...QUIET_STATS, eventsToday: 5 })).toBe(true);
   });
 
-  it("treats 0 and 1 task as small content, 2+ as more content", () => {
+  it("treats 0–2 tasks as small content, 3+ as more content", () => {
     expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 0 })).toBe(false);
     expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 1 })).toBe(false);
-    expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 2 })).toBe(true);
+    expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 2 })).toBe(false);
+    expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 3 })).toBe(true);
     expect(hasMoreContent("tasks", { ...QUIET_STATS, openTasks: 10 })).toBe(true);
   });
 
-  it("treats schedule as having more content for 2-cell expansion", () => {
+  it("treats schedule and music as wide 2-cell candidates in dynamicShapes", () => {
     expect(hasMoreContent("schedule", QUIET_STATS)).toBe(true);
+    expect(hasMoreContent("music", QUIET_STATS)).toBe(true);
+    const activities = scoreWidgets(QUIET_STATS);
+    const shapes = dynamicShapes(DEFAULT_WALL_LAYOUT, activities, DEFAULT_VISIBLE, QUIET_STATS);
+    expect(shapes.photos).toBe("1x2");
+    expect(shapes.weather).toBe("1x2");
+    expect(shapes.schedule).toBe("2x1");
   });
 });
 

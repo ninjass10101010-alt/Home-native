@@ -21,29 +21,6 @@ const EMPTY_LEADERBOARD = "Be the first!";
 const EMPTY_PRIZES = "New week — prizes up for grabs 🥇🥈🥉";
 const VISIBLE_RANKS = 3;
 
-/**
- * The leaderboard's header band, measured against the reference card
- * (reference/home/parent-dark.png, "This Week's Leaderboard").
- *
- * The web's leaderboard is the ONE wall card whose heading does NOT run
- * centred: the trophy disc sits in the card's top-left corner and the title
- * is a SINGLE line that starts immediately to its right. The frame's default
- * band centres the title and wraps it onto two lines, so the card read as a
- * stacked heading instead of the reference's one-liner.
- *
- * The band is rebuilt here (the frame has no left-heading variant) at the
- * reference's geometry:
- *   - the title's ink lands 26px under the card's top edge (the web's own
- *     heading offset — the frame's centred band seats it 41px down);
- *   - the header rule lands 57px under the card's top edge (the web's rule
- *     for a card with NO description line);
- *   - the title clears the 64px identity disc that overhangs the corner.
- */
-const LEADERBOARD_HEADER_H = 46; // card_top → the header rule
-const LEADERBOARD_TITLE_PAD_TOP = 7; // the ink lands 12px under the band's top
-const LEADERBOARD_TITLE_PAD_LEFT = 54; // clears the 64px identity disc
-const CARD_TITLE_SIZE = 18; // the web's wall card heading (globals.css wall rule)
-
 interface Ranked {
   name: string;
   points: number;
@@ -223,63 +200,28 @@ export function LeaderboardWidget({
 
   const onRetry = isGuest && !snapshotWeek ? () => void readGuestWeek() : refreshNow;
 
-  /**
-   * The reference's heading: ONE line, LEFT-aligned, starting immediately to
-   * the right of the identity disc (the web's leaderboard card is the one
-   * wall card with a left heading). The frame's default band centres the
-   * title and wrapped it onto two centred lines, which is not what the
-   * reference shows.
-   */
-  const header = (
-    <View
-      style={{
-        height: LEADERBOARD_HEADER_H,
-        paddingTop: LEADERBOARD_TITLE_PAD_TOP,
-        paddingLeft: LEADERBOARD_TITLE_PAD_LEFT,
-        paddingRight: 4,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        borderBottomWidth: 1,
-        borderBottomColor: colors["color-border"],
-      }}
+  const headerRight = (
+    <Pressable
+      testID="leaderboard-see-all"
+      accessibilityRole="link"
+      accessibilityLabel="Open leaderboard in tasks"
+      hitSlop={{ top: 18, bottom: 18, left: 12, right: 12 }}
+      onPress={() => router.push("/tasks" as never)}
+      style={{ paddingHorizontal: 6, paddingVertical: 4 }}
     >
-      <Text
-        numberOfLines={1}
-        accessibilityRole="header"
-        style={{
-          flex: 1,
-          color: colors["color-text-primary"],
-          fontSize: CARD_TITLE_SIZE,
-          fontWeight: "700",
-          lineHeight: 28,
-          textAlign: "left",
-        }}
-      >
-        This Week&apos;s Leaderboard
+      <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+        See all →
       </Text>
-      <Pressable
-        testID="leaderboard-see-all"
-        accessibilityRole="link"
-        accessibilityLabel="Open leaderboard in tasks"
-        hitSlop={{ top: 18, bottom: 18, left: 12, right: 12 }}
-        onPress={() => router.push("/tasks" as never)}
-        style={{ paddingHorizontal: 6, paddingVertical: 4 }}
-      >
-        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
-          See all →
-        </Text>
-      </Pressable>
-    </View>
+    </Pressable>
   );
 
   return (
     <WidgetFrame
       id="leaderboard"
       icon="🏆"
-      title="This Week's Leaderboard"
-      header={header}
-      showDisc
+      title="Leaderboard"
+      description="This week's points"
+      headerRight={headerRight}
       status={status}
       failure={failure}
       hasData={hasData}
@@ -291,7 +233,7 @@ export function LeaderboardWidget({
           // The reference's empty week: crown + the prizes line, NO countdown.
           <RaceState title={EMPTY_LEADERBOARD} />
         ) : (
-          <View style={{ gap: 4, alignSelf: "stretch" }}>
+          <View style={{ gap: 8, alignSelf: "stretch" }}>
             {ranked.slice(0, visibleLimit).map((r) => {
               const m = memberFor(r.name);
               const photo = m?.emoji ? isPhotoUri(m.emoji) : false;
@@ -305,9 +247,9 @@ export function LeaderboardWidget({
                 <View key={r.name} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                   <View
                     style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 20,
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
                       alignItems: "center",
                       justifyContent: "center",
                       backgroundColor: mix(podiumTone, colors["color-surface-2"] ?? "", 22),
@@ -317,9 +259,9 @@ export function LeaderboardWidget({
                     }}
                   >
                     {photo && m ? (
-                      <Image source={{ uri: m.emoji }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+                      <Image source={{ uri: m.emoji }} style={{ width: 32, height: 32, borderRadius: 16 }} />
                     ) : (
-                      <AnimatedEmoji emoji={displayEmoji(m?.emoji)} size={20} />
+                      <AnimatedEmoji emoji={displayEmoji(m?.emoji)} size={18} />
                     )}
                   </View>
                   <Text

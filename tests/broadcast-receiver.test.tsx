@@ -110,4 +110,43 @@ describe("BroadcastReceiver", () => {
 
     unmount();
   });
+
+  it("shows a silent banner and skips tablet chime + TTS audio when muteAudio is true", async () => {
+    let callCount = 0;
+    (api as jest.Mock).mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          ok: true,
+          broadcasts: [
+            {
+              id: "bc-muted",
+              message: "Girls, mom needs a favor!",
+              title: "Family Announcement 📢",
+              muteAudio: true,
+            },
+          ],
+          latestId: "bc-muted",
+        };
+      }
+      return new Promise((resolve) => setTimeout(() => resolve({ ok: true, broadcasts: [] }), 500));
+    });
+
+    const { unmount } = render(<BroadcastReceiver />);
+
+    await waitFor(() => {
+      expect(postActiveNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "broadcast-bc-muted",
+          body: "Girls, mom needs a favor!",
+        })
+      );
+    });
+
+    expect(playNotificationSound).not.toHaveBeenCalled();
+    expect(createAudioPlayer).not.toHaveBeenCalled();
+    expect(mockPlay).not.toHaveBeenCalled();
+
+    unmount();
+  });
 });

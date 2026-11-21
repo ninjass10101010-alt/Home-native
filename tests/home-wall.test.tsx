@@ -7,11 +7,13 @@ import { HomeWall, greetingFor, GRID_CELL_H, savedFamilyLabel, seasonGlyph } fro
 import { ThisWeekCard } from "../src/home/WallStatsStrip";
 import {
   visibleOnWall,
-  wallColumns,
+  wallPlacements,
   WALL_CONFIGURABLE_WIDGETS,
   WALL_HIDDEN_WIDGETS,
+  WALL_SHAPES,
   WALL_SPANS,
   type WidgetId,
+  type WallShape,
   type WallSpan,
   type WallWidgetProps,
 } from "../src/home/widgets";
@@ -89,20 +91,37 @@ describe("HomeWall (the 12-cell wall bento)", () => {
         expect(getByTestId(`widget-${id}`)).toBeTruthy();
       }
     }
-    // 3 explicit columns (dense placement), 8 cells inside them
+    // 2D Bento placement: 8 cards inside the 3×4 grid
     const grid = getByTestId("wall-grid");
-    expect(grid.children.length).toBe(3);
-    expect(getByTestId("wall-col-0").children.length).toBe(2);
-    expect(getByTestId("wall-col-1").children.length).toBe(3);
-    expect(getByTestId("wall-col-2").children.length).toBe(3);
+    expect(grid.children.length).toBe(8);
   });
 
-  it("dense row-major placement fills the approved 3×4 composition", () => {
-    expect(wallColumns().map((column) => column.map((widget) => widget.id))).toEqual([
-      ["photos", "tasks"],
-      ["weather", "morningBriefing", "currentMeal"],
-      ["todayEvents", "music", "leaderboard"],
+  it("dense 2D placement fills the approved v3 Symmetrical Bookends + Wide Strips layout", () => {
+    expect(
+      wallPlacements().placements.map((p) => `${p.def.id}@(${p.row},${p.col}):${p.shape}`)
+    ).toEqual([
+      "photos@(0,0):1x2",
+      "todayEvents@(0,1):1x1",
+      "weather@(0,2):1x2",
+      "tasks@(1,1):1x1",
+      "schedule@(2,0):2x1",
+      "currentMeal@(2,2):1x1",
+      "leaderboard@(3,0):1x1",
+      "music@(3,1):2x1",
     ]);
+  });
+
+  it("renders unclipped 72dp floating glass icon orbs outside the clipped glass shell for non-full-bleed widgets", () => {
+    const { getByTestId, queryByTestId } = render(
+      <HomeWall members={members} onSelectMember={() => {}} />,
+      { wrapper: wrap }
+    );
+    for (const id of ["todayEvents", "tasks", "schedule", "currentMeal", "leaderboard", "music"]) {
+      const orb = getByTestId(`${id}-icon-disc`, { includeHiddenElements: true });
+      expect(orb.props.style).toMatchObject({ top: -8, left: -8, width: 72, height: 72 });
+    }
+    expect(queryByTestId("photos-icon-disc")).toBeNull();
+    expect(queryByTestId("weather-icon-disc")).toBeNull();
   });
 
   // ── Regression: the light-theme card collapse ────────────────────────────
@@ -113,7 +132,7 @@ describe("HomeWall (the 12-cell wall bento)", () => {
   // there. The Material's OUTER box now carries the flex (see materials.test).
   it("every widget cell's Material fills its cell (flex survives the shadow shell)", () => {
     const { getByTestId } = render(<HomeWall members={members} onSelectMember={() => {}} />, { wrapper: wrap });
-    for (const id of ["photos", "currentMeal", "tasks", "leaderboard"]) {
+    for (const id of ["photos", "currentMeal", "tasks", "leaderboard", "schedule", "music"]) {
       const cell: any = getByTestId(`widget-${id}`);
       const material: any = cell.children[0];
       const outerStyle = Object.assign({}, ...[].concat(material.props.style ?? []).filter(Boolean));
@@ -121,24 +140,37 @@ describe("HomeWall (the 12-cell wall bento)", () => {
     }
   });
 
-  it("the four priority cards each span two rows", () => {
+  it("sizes tall 1x2 bookends, wide 2x1 strips, and 1x1 compact cells accurately", () => {
     expect(WALL_SPANS).toEqual({
       photos: 2,
       weather: 2,
-      todayEvents: 2,
-      tasks: 2,
+      schedule: 2,
+      music: 2,
+    });
+    expect(WALL_SHAPES).toEqual({
+      photos: "1x2",
+      weather: "1x2",
+      schedule: "2x1",
+      music: "2x1",
     });
     const { getByTestId } = render(
       <HomeWall members={members} onSelectMember={() => {}} />,
       { wrapper: wrap }
     );
-    for (const id of ["photos", "weather", "todayEvents", "tasks"]) {
+    for (const id of ["photos", "weather"]) {
       expect(getByTestId(`widget-${id}`).props.style.height).toBe(
         GRID_CELL_H * 2 + 16
       );
     }
-    for (const id of ["morningBriefing", "music", "currentMeal", "leaderboard"]) {
-      expect(getByTestId(`widget-${id}`).props.style.height).toBe(GRID_CELL_H);
+    for (const id of ["schedule", "music"]) {
+      const s = getByTestId(`widget-${id}`).props.style;
+      expect(s.height).toBe(GRID_CELL_H);
+      expect(s.width).toBeGreaterThan(600);
+    }
+    for (const id of ["todayEvents", "tasks", "currentMeal", "leaderboard"]) {
+      const s = getByTestId(`widget-${id}`).props.style;
+      expect(s.height).toBe(GRID_CELL_H);
+      expect(s.width).toBeLessThan(400);
     }
   });
 
@@ -321,23 +353,23 @@ describe("HomeWall KPI band + This Week tail", () => {
 });
 
 describe("widget registry", () => {
-  it("passes each widget its effective span", () => {
-    const seen: Partial<Record<WidgetId, WallSpan>> = {};
+  it("passes each widget its effective span and shape", () => {
+    const seen: Partial<Record<WidgetId, { span: WallSpan; shape?: WallShape }>> = {};
     const ids: WidgetId[] = [
       "photos",
-      "weather",
       "todayEvents",
+      "weather",
       "tasks",
-      "morningBriefing",
-      "music",
+      "schedule",
       "currentMeal",
       "leaderboard",
+      "music",
     ];
     const widgets = ids.reduce<
       Partial<Record<WidgetId, React.ComponentType<WallWidgetProps>>>
     >((registry, id) => {
-      registry[id] = ({ span }: WallWidgetProps) => {
-        seen[id] = span;
+      registry[id] = ({ span, shape }: WallWidgetProps) => {
+        seen[id] = { span, shape };
         return null;
       };
       return registry;
@@ -351,27 +383,27 @@ describe("widget registry", () => {
       { wrapper: wrap }
     );
     expect(seen).toEqual({
-      photos: 2,
-      weather: 2,
-      todayEvents: 2,
-      tasks: 2,
-      morningBriefing: 1,
-      music: 1,
-      currentMeal: 1,
-      leaderboard: 1,
+      photos: { span: 2, shape: "1x2" },
+      todayEvents: { span: 1, shape: "1x1" },
+      weather: { span: 2, shape: "1x2" },
+      tasks: { span: 1, shape: "1x1" },
+      schedule: { span: 2, shape: "2x1" },
+      currentMeal: { span: 1, shape: "1x1" },
+      leaderboard: { span: 1, shape: "1x1" },
+      music: { span: 2, shape: "2x1" },
     });
   });
 
-  it("wall order matches the approved reading order", () => {
+  it("wall order matches the approved v3 reading order", () => {
     expect(visibleOnWall().map((widget) => widget.id)).toEqual([
       "photos",
-      "weather",
       "todayEvents",
+      "weather",
       "tasks",
-      "morningBriefing",
-      "music",
+      "schedule",
       "currentMeal",
       "leaderboard",
+      "music",
     ]);
   });
 

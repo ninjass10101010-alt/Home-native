@@ -25,7 +25,9 @@
 import { type WallStats } from "./wall-stats";
 import {
   type WidgetId,
+  type WallShape,
   type WallSpan,
+  WALL_SHAPES,
   WALL_SPANS,
 } from "./widgets";
 import { type WallLayout } from "./wallLayout";
@@ -132,13 +134,11 @@ export function hasMoreContent(id: WidgetId, stats: WallStats): boolean {
     case "photos":
       return true; // Fixed visual anchor
     case "todayEvents":
-      // 0 or 1 event = small content (fits cleanly in 1 cell with DayLine)
-      // 2+ events = more content, needs 2 cells for full schedule
-      return stats.eventsToday !== null && stats.eventsToday >= 2;
+      // 0–2 events fit cleanly in 1 cell with DayLine; 3+ earns 2 cells
+      return stats.eventsToday !== null && stats.eventsToday >= 3;
     case "tasks":
-      // 0 or 1 task = small content (single chore or caught-up state)
-      // 2+ tasks = more content, needs 2 cells for chore list and assignees
-      return stats.openTasks !== null && stats.openTasks >= 2;
+      // 0–2 tasks fit cleanly in 1 cell without empty voids; 3+ earns 2 cells
+      return stats.openTasks !== null && stats.openTasks >= 3;
     case "currentMeal":
       // 0 or 1 planned day = small content
       // 2+ planned days = more content
@@ -149,8 +149,11 @@ export function hasMoreContent(id: WidgetId, stats: WallStats): boolean {
     case "schedule":
       // Daily schedule with timeline and routines
       return true;
+    case "music":
+      // Music horizontal Now Playing bar shines in a wide 2×1 cell
+      return true;
     default:
-      // Other widgets (music, briefing, leaderboard, home controls) are compact 1-cell cards
+      // Other widgets (briefing, leaderboard, home controls) are compact 1-cell cards
       return false;
   }
 }
@@ -221,6 +224,45 @@ export function dynamicSpans(
   }
 
   return spans;
+}
+
+export function preferredShapeFor(id: WidgetId, span: WallSpan): WallShape {
+  if (span === 1) return "1x1";
+  switch (id) {
+    case "schedule":
+    case "music":
+    case "morningBriefing":
+      return "2x1";
+    case "photos":
+    case "weather":
+    case "tasks":
+    case "todayEvents":
+    default:
+      return WALL_SHAPES[id] ?? "1x2";
+  }
+}
+
+export function dynamicShapes(
+  layout: WallLayout,
+  activities: Map<WidgetId, WidgetActivity>,
+  visibleIds: WidgetId[],
+  stats?: WallStats,
+): Partial<Record<WidgetId, WallShape>> {
+  const spans = dynamicSpans(layout, activities, visibleIds, stats);
+  const shapes: Partial<Record<WidgetId, WallShape>> = {};
+  for (const id of visibleIds) {
+    const span = spans[id] ?? 1;
+    if (span === 1) {
+      shapes[id] = "1x1";
+    } else {
+      const saved = layout.shapes?.[id];
+      shapes[id] =
+        saved === "1x2" || saved === "2x1"
+          ? saved
+          : preferredShapeFor(id, 2);
+    }
+  }
+  return shapes;
 }
 
 /**

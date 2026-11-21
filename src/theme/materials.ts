@@ -145,6 +145,32 @@ export function specularOpacity(
 export const SPECULAR_AT = (a: number) => `rgba(255,255,255,${a})`;
 export const SPECULAR_CLEAR = "rgba(255,255,255,0)";
 
+export const GLASS_GRADIENT: Record<"dark" | "light", Record<MaterialTier, readonly [string, string]>> = {
+  light: {
+    thin: ["rgba(255, 255, 255, 0.72)", "rgba(252, 253, 255, 0.34)"],
+    regular: ["rgba(255, 255, 255, 0.88)", "rgba(250, 252, 255, 0.40)"],
+    thick: ["rgba(255, 255, 255, 0.94)", "rgba(248, 250, 255, 0.62)"],
+  },
+  dark: {
+    thin: ["rgba(44, 50, 66, 0.22)", "rgba(22, 26, 38, 0.10)"],
+    regular: ["rgba(46, 52, 68, 0.52)", "rgba(24, 28, 40, 0.34)"],
+    thick: ["rgba(52, 58, 76, 0.74)", "rgba(28, 33, 46, 0.56)"],
+  },
+};
+
+export const GLASS_INNER_RING = {
+  light: "rgba(255, 255, 255, 0.82)",
+  dark: "rgba(255, 255, 255, 0.14)",
+} as const;
+
+export const SHADOW_RGBA = {
+  lightOuter: "rgba(18, 22, 34, 0.09)",
+  lightCrisp: "rgba(18, 22, 34, 0.04)",
+  darkOuter: "rgba(0, 0, 0, 0.38)",
+  darkCrisp: "rgba(0, 0, 0, 0.22)",
+  orbDrop: "rgba(15, 20, 35, 0.16)",
+} as const;
+
 export const HOME_WIDGET_ICON_VARIANTS = [
   "briefing",
   "ask",

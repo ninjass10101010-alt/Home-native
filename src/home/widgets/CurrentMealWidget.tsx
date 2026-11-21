@@ -235,79 +235,19 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
   // `--widget-accent-strong`): mint ink on the seasonal hairline.
   const mintInk = colors["color-accent-ink-mint"] ?? mint;
 
-  // The identity disc (WidgetFrame) hangs at the card's top-left corner and
-  // is 52dp tall; the reference's title band starts BELOW it (the web seats
-  // the disc over the card edge, the RN cell is inset by the Material's 14dp
-  // padding). This pad keeps the moon glyph clear of the disc — before it,
-  // the disc ate the 🌙.
-  const HEADER_TOP_PAD = 52;
-
-  // The time chip — the web's `meal-time-badge`: a seasonal hairline over a
-  // seasonal wash, with the widget tone's strong ink. It is NOT a solid mint
-  // pill: mint-on-mint was 1.9:1 in the baseline capture. The web's
-  // `rounded-lg` resolves to the app's --radius-lg (20px), so the chip reads
-  // as a soft stadium, not a hard 10px pill.
   const timeChip = (
     <View
       style={{
-        borderRadius: RADII.lg,
+        borderRadius: RADII.full,
         borderWidth: 1,
-        borderColor: mix(season.accent, "transparent", 24),
-        backgroundColor: mix(season.accent, "transparent", 9),
-        paddingHorizontal: 10,
-        paddingVertical: 4,
+        borderColor: mix(season.accent, "transparent", 32),
+        backgroundColor: mix(season.accent, "transparent", 12),
+        paddingHorizontal: 8,
+        paddingVertical: 3,
       }}
     >
       <Text style={{ color: mintInk, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
         {timeStr}
-      </Text>
-    </View>
-  );
-
-  // Header band (reference): a centered row — the slot's glyph, the serif-free
-  // bold slot title, then the compact time chip — with the subtitle under it.
-  const header = (
-    <View style={{ alignItems: "center", paddingTop: HEADER_TOP_PAD }}>
-      {/* The season's floating particle (the web's `meal-float-gentle`
-          corner emoji), seated at the card's top-right like the reference. */}
-      <Text
-        style={{
-          position: "absolute",
-          top: -6,
-          right: -6,
-          fontSize: 30,
-          opacity: 0.16,
-        }}
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      >
-        {season.glyph}
-      </Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <AnimatedEmoji emoji={theme.icon} size={20} />
-        <Text
-          style={{
-            color: colors["color-text-primary"],
-            fontSize: TYPOGRAPHY.title.fontSize,
-            fontWeight: "700",
-            lineHeight: TYPOGRAPHY.title.lineHeight,
-          }}
-          accessibilityRole="header"
-        >
-          {`${theme.label} Time`}
-        </Text>
-        {timeChip}
-      </View>
-      <Text
-        style={{
-          color: colors["color-text-secondary"],
-          fontSize: TYPOGRAPHY.label.fontSize,
-          lineHeight: TYPOGRAPHY.label.lineHeight,
-          marginTop: 4,
-          textAlign: "center",
-        }}
-      >
-        {subtitle}
       </Text>
     </View>
   );
@@ -340,32 +280,27 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
       id="currentMeal"
       icon={theme.icon}
       title={`${theme.label} Time`}
+      description={subtitle}
+      headerRight={timeChip}
       status={status}
       failure={failure}
       hasData={data !== null}
       stale={stale}
       onRetry={retry}
-      header={header}
-      showDisc
     >
-      {/* The day's meal panel (the web's `meal-card-glow`): a COMPACT row —
-          the reference seats it directly under the subtitle with the rest of
-          the card left as deep glass. It used to be `flex: 1`, which let the
-          inner card swallow the whole cell and turned the meal name into a
-          caption floating on a pale wash. */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          // The web's `rounded-2xl` resolves to the app's --radius-2xl (36px).
-          borderRadius: RADII.xxl,
-          borderWidth: 1,
-          borderColor: mix(season.accent, "transparent", 9),
-          backgroundColor: mix(season.accent, "transparent", 4),
-          padding: 14,
-        }}
-      >
+      <View style={{ flex: 1, justifyContent: "center" }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            borderRadius: RADII.xxl,
+            borderWidth: 1,
+            borderColor: mix(season.accent, "transparent", 14),
+            backgroundColor: mix(season.accent, "transparent", 5),
+            padding: 14,
+          }}
+        >
         {/* The plate well (the web's `meal-emoji-glow`): the seasonal tint
             under a warm ring, never an opaque surface tile — an opaque tile
             turned the white 🍽️ into a white blob on a white card. The web's
@@ -433,6 +368,7 @@ export function CurrentMealWidget({ now: injectedNow }: CurrentMealWidgetProps) 
               Plan {theme.label.toLowerCase()} in the Kitchen tab
             </Text>
           )}
+        </View>
         </View>
       </View>
     </WidgetFrame>

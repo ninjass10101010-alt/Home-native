@@ -128,14 +128,22 @@ describe("notifications foreground suppression & speaker forwarding", () => {
     });
   });
 
-  it("forwardNotificationToSpeakers posts message, voiceKey, and skipTablet: true to /api/broadcast", async () => {
-    await forwardNotificationToSpeakers({
+  it("forwardNotificationToSpeakers posts message, voiceKey, sound, soundMode, and skipTablet: true to /api/broadcast", async () => {
+    (api as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      broadcast: { speakers: { delivered: 1, muteTabletAudio: true } },
+    });
+
+    const result = await forwardNotificationToSpeakers({
       category: "routines",
       title: "Routine Starting",
       body: "Time to take the dogs out!",
       volume: 0.4,
+      sound: "harp",
+      soundMode: "tone_and_voice",
     });
 
+    expect(result).toEqual({ delivered: 1, muteTabletAudio: true });
     expect(api).toHaveBeenCalledWith("/api/broadcast", {
       method: "POST",
       body: {
@@ -143,9 +151,46 @@ describe("notifications foreground suppression & speaker forwarding", () => {
         title: "Routine Starting",
         category: "routines",
         voiceKey: "routine_dogs",
+        sound: "harp",
+        soundMode: "tone_and_voice",
         volume: 0.4,
         skipTablet: true,
       },
     });
+  });
+
+  it("dispatchNotification skips local tablet audio when speakers deliver with muteTabletAudio and falls back on speaker failure", async () => {
+    Object.defineProperty(AppState, "currentState", { value: "active", configurable: true });
+    (api as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      broadcast: { speakers: { delivered: 1, muteTabletAudio: true } },
+    });
+
+    await dispatchNotification({
+      category: "routines",
+      title: "Routine Starting",
+      body: "Bedtime",
+      timing: "start",
+      data: { enableSpeakersInTest: true },
+    });
+
+    expect(postSpy).toHaveBeenCalledTimes(1);
+    expect(audioSpy).not.toHaveBeenCalled();
+
+    (api as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      broadcast: { speakers: { delivered: 0, muteTabletAudio: true } },
+    });
+
+    await dispatchNotification({
+      category: "routines",
+      title: "Routine Starting",
+      body: "Take Dogs Out",
+      timing: "start",
+      data: { enableSpeakersInTest: true },
+    });
+
+    expect(postSpy).toHaveBeenCalledTimes(2);
+    expect(audioSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -340,12 +340,54 @@ export function Atmosphere() {
         />
       ) : null}
       {warmWash ? (
-        <View
-          testID="atmosphere-warm-wash"
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: mix(warmWash, "transparent", LIGHT_WARM_WASH_ALPHA) },
+        <View testID="atmosphere-warm-wash" style={StyleSheet.absoluteFill}>
+          <LinearGradient
+            colors={[
+              mix(warmWash, "transparent", 44),
+              mix(warmWash, "transparent", 24),
+              mix(colors["color-surface-1"] ?? warmWash, "transparent", 12),
+            ]}
+            start={{ x: 0.05, y: 0 }}
+            end={{ x: 0.95, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={[
+              mix(colors["color-accent-apricot"] ?? warmWash, "transparent", 14),
+              "transparent",
+            ]}
+            start={{ x: 0, y: 1 }}
+            end={{ x: 0.65, y: 0.35 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={[
+              mix(colors["color-accent-cyan"] ?? warmWash, "transparent", 9),
+              "transparent",
+            ]}
+            start={{ x: 0.95, y: 0.35 }}
+            end={{ x: 0.25, y: 0.7 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={[
+              mix(colors["color-accent-rose"] ?? warmWash, "transparent", 7),
+              "transparent",
+            ]}
+            start={{ x: 0.5, y: 0.95 }}
+            end={{ x: 0.5, y: 0.45 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+      ) : theme === "dark" ? (
+        <LinearGradient
+          colors={[
+            mix(colors["color-accent-cyan"] ?? accentColor, "transparent", 4),
+            "transparent",
           ]}
+          start={{ x: 1, y: 1 }}
+          end={{ x: 0.3, y: 0.35 }}
+          style={StyleSheet.absoluteFill}
         />
       ) : null}
     </View>

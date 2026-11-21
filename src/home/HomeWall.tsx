@@ -11,19 +11,24 @@ import { MemberRail, type RailMember } from "../ui/MemberRail";
 import { useAuth } from "../state/AuthProvider";
 import { EmergencyShield } from "./EmergencyShield";
 import {
+  shapeCells,
   visibleOnWall,
+  WALL_COLS,
+  WALL_ROWS,
+  wallPlacements,
   WidgetId,
   WidgetPlaceholder,
   WIDGET_TONES,
-  wallColumns,
+  type WallShape,
   type WallSpan,
   type WallWidgetProps,
 } from "./widgets";
-import { layoutSpan, layoutWidgets, useWallLayout } from "./wallLayout";
+import { layoutShape, layoutWidgets, useWallLayout } from "./wallLayout";
 import { WallStatStrip } from "./WallStatsStrip";
 import { MoreButton } from "../nav/CapsuleDock";
 import { useWallStats } from "./wall-stats";
-import { scoreWidgets, dynamicSpans, activityOrder } from "./wallActivity";
+import { activityOrder, dynamicShapes, scoreWidgets } from "./wallActivity";
+import { WallBadgeOverlayContext, WidgetIconOrb } from "./widgets/WidgetFrame";
 
 /* ── The wall's frame ──────────────────────────────────────────────────────────
    Every number below is MEASURED against the production web wall captured at
@@ -402,13 +407,13 @@ function HomeWallInner({
   const visibleIds = useMemo(() => layoutWidgets(layout), [layout]);
   const activities = useMemo(() => scoreWidgets(wallStats), [wallStats]);
 
-  const spans = useMemo(() => {
+  const shapes = useMemo<Partial<Record<WidgetId, WallShape>>>(() => {
     if (!isAutoArrange) {
-      const out: Partial<Record<WidgetId, WallSpan>> = {};
-      for (const id of visibleIds) out[id] = layoutSpan(layout, id);
+      const out: Partial<Record<WidgetId, WallShape>> = {};
+      for (const id of visibleIds) out[id] = layoutShape(layout, id);
       return out;
     }
-    return dynamicSpans(layout, activities, visibleIds, wallStats);
+    return dynamicShapes(layout, activities, visibleIds, wallStats);
   }, [isAutoArrange, layout, activities, visibleIds, wallStats]);
 
   const defs = useMemo(() => {
@@ -416,14 +421,20 @@ function HomeWallInner({
     if (!isAutoArrange) {
       return allVisible.filter((widget) => visibleIds.includes(widget.id));
     }
-    const sortedVisibleIds = activityOrder(visibleIds, activities, spans);
+    const spansForOrder: Partial<Record<WidgetId, WallSpan>> = {};
+    for (const id of visibleIds) {
+      spansForOrder[id] = shapeCells(shapes[id] ?? "1x1");
+    }
+    const sortedVisibleIds = activityOrder(visibleIds, activities, spansForOrder);
     const idToWidget = new Map(allVisible.map((w) => [w.id, w]));
     return sortedVisibleIds
       .map((id) => idToWidget.get(id))
       .filter((w): w is NonNullable<typeof w> => !!w);
-  }, [isAutoArrange, layout.hidden, visibleIds, activities, spans]);
+  }, [isAutoArrange, layout.hidden, visibleIds, activities, shapes]);
 
-  const columns = wallColumns(defs, spans);
+  const { placements } = useMemo(() => wallPlacements(defs, shapes), [defs, shapes]);
+  const [gridW, setGridW] = React.useState(1080 - GRID_H_PAD * 2);
+  const colW = (gridW - GRID_GAP * (WALL_COLS - 1)) / WALL_COLS;
   const { width: winW, height: winH } = useWindowDimensions();
   const effectiveWallH =
     typeof jest === "undefined" && Platform.OS === "android" && winW >= 960 && winH > WALL_HEIGHT
@@ -578,43 +589,67 @@ function HomeWallInner({
         <WallStatStrip />
       </View>
 
-      {/* 12-cell bento: three explicit columns (web grid-flow-dense port) so
-          photos can span rows 1–2 in col-1 while cols 2–3 fill beside it.
-          Total height = 4×cellH + 3×GRID_GAP = WALL_HEIGHT − header − dock. */}
+      {/* 12-cell 2D bento grid (3 cols × 4 rows) with unclipped floating glass orbs. */}
       <View style={{ paddingHorizontal: GRID_H_PAD, paddingBottom: DOCK_CLEAR }}>
-        <View style={{ flexDirection: "row", gap: GRID_GAP, marginTop: GRID_TOP }} testID="wall-grid">
-          {columns.map((col, ci) => (
-            <View key={`col-${ci}`} style={{ flex: 1, gap: GRID_GAP }} testID={`wall-col-${ci}`}>
-              {col.map((def) => {
-                const span = (spans[def.id] ?? 1) as WallSpan;
-                const Cell = widgets[def.id];
-                const isFullBleed = def.id === "photos" || def.id === "weather";
-                // Per-widget tone (web WidgetCard parity): a tone wash + tone
-                // hairline on every card — the wall's most distinctive cue.
-                const tone = (ACCENTS as { dark: Record<string, string>; light: Record<string, string> })[theme]?.[WIDGET_TONES[def.id]] ?? accentColor;
-                return (
-                  <View
-                    key={def.id}
-                    testID={`widget-${def.id}`}
-                    style={{ height: span === 2 ? cellH * 2 + GRID_GAP : cellH }}
+        <WallBadgeOverlayContext.Provider value={true}>
+          <View
+            testID="wall-grid"
+            onLayout={(e) => {
+              const w = e.nativeEvent.layout.width;
+              if (w > 0 && Math.abs(w - gridW) > 1) setGridW(w);
+            }}
+            style={{
+              position: "relative",
+              height: cellH * WALL_ROWS + GRID_GAP * (WALL_ROWS - 1),
+              marginTop: GRID_TOP,
+            }}
+          >
+            {placements.map((p) => {
+              const { def, row, col, rowSpan, colSpan, shape } = p;
+              const span: WallSpan = shapeCells(shape);
+              const Cell = widgets[def.id];
+              const isFullBleed = def.id === "photos" || def.id === "weather";
+              const tone =
+                (ACCENTS as { dark: Record<string, string>; light: Record<string, string> })[theme]?.[
+                  WIDGET_TONES[def.id]
+                ] ?? accentColor;
+              const left = col * (colW + GRID_GAP);
+              const top = row * (cellH + GRID_GAP);
+              const width = colW * colSpan + GRID_GAP * (colSpan - 1);
+              const height = cellH * rowSpan + GRID_GAP * (rowSpan - 1);
+              return (
+                <View
+                  key={def.id}
+                  testID={`widget-${def.id}`}
+                  style={{ position: "absolute", left, top, width, height }}
+                >
+                  <Material
+                    tier="regular"
+                    tone={isFullBleed ? undefined : tone}
+                    glow={isFullBleed}
+                    overlay={
+                      !isFullBleed ? (
+                        <WidgetIconOrb
+                          id={def.id}
+                          icon={def.emoji}
+                          title={def.label}
+                          tone={tone}
+                        />
+                      ) : undefined
+                    }
+                    style={{
+                      flex: 1,
+                      borderRadius: 28,
+                      padding: isFullBleed ? 0 : 14,
+                    }}
                   >
-                    <Material
-                      tier="regular"
-                      tone={isFullBleed ? undefined : tone}
-                      style={{
-                        flex: 1,
-                        borderRadius: 28,
-                        padding: isFullBleed ? 0 : 14,
-                      }}
-                    >
-                      {Cell ? <Cell span={span} /> : <WidgetPlaceholder def={def} />}
-                    </Material>
-                  </View>
-                );
-              })}
-            </View>
-          ))}
-        </View>
+                    {Cell ? <Cell span={span} shape={shape} /> : <WidgetPlaceholder def={def} />}
+                  </Material>
+                </View>
+              );
+            })}
+          </View>
+        </WallBadgeOverlayContext.Provider>
       </View>
     </View>
   );

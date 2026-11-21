@@ -51,6 +51,7 @@ interface SpeakerBroadcastConfig {
   announceRoutines: boolean;
   announceCalendar: boolean;
   announceWeather: boolean;
+  muteTabletAudio: boolean;
   volume: number | null;
 }
 
@@ -61,6 +62,7 @@ const DEFAULT_SPEAKER_CONFIG: SpeakerBroadcastConfig = {
   announceRoutines: true,
   announceCalendar: true,
   announceWeather: true,
+  muteTabletAudio: true,
   volume: null,
 };
 
@@ -425,6 +427,15 @@ function SpeakerBroadcastSection() {
                   })}
                 </View>
               </View>
+
+              <Toggle
+                testID="speaker-mute-tablet-toggle"
+                value={config.muteTabletAudio}
+                onChange={(muteTabletAudio) => void persistPatch({ muteTabletAudio })}
+                label="Mute tablet audio when speakers play"
+                description="Shows a silent banner on this panel while your Google speakers play the chime and voice — prevents echo."
+                accessibilityLabel="Mute tablet audio when speakers play"
+              />
 
               <SoftButton
                 variant="secondary"

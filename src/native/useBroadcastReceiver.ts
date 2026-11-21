@@ -12,6 +12,7 @@ export interface BroadcastItem {
   title?: string;
   sender?: string;
   audioUrl?: string;
+  muteAudio?: boolean;
   createdAt?: string;
 }
 
@@ -41,11 +42,13 @@ export function useBroadcastReceiver(): void {
         if (first) seenIdsRef.current.delete(first);
       }
 
-      // 1. Play attention chime
-      try {
-        await playNotificationSound("chime", 0.9);
-      } catch {
-        // ignore sound errors
+      // 1. Play attention chime unless speakers already handled audio
+      if (item.muteAudio !== true) {
+        try {
+          await playNotificationSound("chime", 0.9);
+        } catch {
+          // ignore sound errors
+        }
       }
 
       // 2. Post visual announcement to MusicIsland / notification banner
@@ -57,8 +60,8 @@ export function useBroadcastReceiver(): void {
         timestamp: Date.now(),
       });
 
-      // 3. Play voice speech via Piper TTS
-      if (item.audioUrl && Platform.OS !== "web") {
+      // 3. Play voice speech via Piper TTS unless speakers already handled audio
+      if (item.muteAudio !== true && item.audioUrl && Platform.OS !== "web") {
         try {
           if (currentPlayerRef.current) {
             try {
