@@ -121,6 +121,9 @@ export default function HomePlaceholder() {
       leaderboard: ({ span }: WallWidgetProps) => (
         <LeaderboardWidget span={span} members={wallRoster.map((m) => ({ name: m.name, emoji: m.emoji }))} />
       ),
+      tasks: ({ span }: WallWidgetProps) => (
+        <TasksWidget span={span} members={wallRoster.map((m) => ({ name: m.name, emoji: m.emoji }))} />
+      ),
       // House's own footer route: resolveRoute keeps the manifest's honest
       // /soon fallback (dock alive) instead of a toast dead end.
       homeSecurity: () => (

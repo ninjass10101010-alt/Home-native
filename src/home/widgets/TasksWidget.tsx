@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth, pinRequiredFor as modulePinRequiredFor } from "../../state/AuthProvider";
 import { useTheme } from "../../theme/ThemeProvider";
@@ -10,9 +10,12 @@ import { EmptyState } from "../../ui/EmptyState";
 import { ListRow } from "../../ui/ListRow";
 import { Chip } from "../../ui/Chip";
 import { useOptionalToast } from "../../ui/Toast";
+import { isPhotoUri } from "../../ui/MemberRail";
 import { useSync } from "../../state/SyncManager";
 import { api } from "../../api/client";
-import { submitClaim, taskRefusalCopy } from "../../tasks/claim";
+import { getCachedMembersSync, readCachedMembers } from "../../api/members";
+import { rosterMemberFor } from "../../tasks/board";
+import { displayEmoji, submitClaim, taskRefusalCopy } from "../../tasks/claim";
 import { classifyFailure, type ReadFailure } from "./data";
 import { WidgetFrame } from "./WidgetFrame";
 import { publishWallStats, publishWallStatsUnknown } from "../wall-stats";
@@ -53,7 +56,13 @@ function readableTitle(title: string): string {
   return title.replace(/\s*&\s*/g, " & ").trim();
 }
 
+interface TasksRosterMember {
+  name: string;
+  emoji: string;
+}
+
 const GENERIC_ASSIGNEES = new Set(["open", "all", "everyone", "family", "crew"]);
+const SHARED_FAMILY_ASSIGNEES = new Set(["all", "everyone", "family", "crew"]);
 
 function belongsToMember(assignee?: string, memberName?: string): boolean {
   const a = (assignee ?? "").trim().toLowerCase();
@@ -61,6 +70,75 @@ function belongsToMember(assignee?: string, memberName?: string): boolean {
   if (!a || !m || GENERIC_ASSIGNEES.has(a)) return false;
   if (a === m) return true;
   return a.split(/\s+/)[0] === m.split(/\s+/)[0];
+}
+
+/**
+ * Leading badge for a Tasks wall row: roster-first photo-aware avatar when
+ * the assignee resolves to a member (`data:image/...` URIs strictly via
+ * `<Image>`, never `<Text>`), or a subtle shared/open glyph badge otherwise.
+ * Plain-object style carries numeric `width` + string `backgroundColor` so
+ * `ListRow` mounts it directly without double-wrapping in a 44dp well.
+ */
+function renderAssigneeAvatar(opts: {
+  taskId: number | string;
+  assignee?: string;
+  roster: readonly TasksRosterMember[];
+  tone: string;
+  surfaceBg?: string;
+}): React.ReactElement {
+  const testID = `tasks-avatar-${opts.taskId}`;
+  const rawAssignee = (opts.assignee ?? "").trim();
+  const memberMatch = rawAssignee ? rosterMemberFor(opts.roster, rawAssignee) : undefined;
+
+  if (memberMatch) {
+    const hasPhoto = memberMatch.emoji ? isPhotoUri(memberMatch.emoji) : false;
+    return (
+      <View
+        testID={testID}
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: 17,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: mix(opts.tone, opts.surfaceBg ?? "transparent", 20),
+          borderWidth: 1,
+          borderColor: mix(opts.tone, "transparent", 42),
+          overflow: "hidden",
+        }}
+      >
+        {hasPhoto ? (
+          <Image
+            testID={`${testID}-photo`}
+            source={{ uri: memberMatch.emoji }}
+            style={{ width: 30, height: 30, borderRadius: 15 }}
+            resizeMode="cover"
+          />
+        ) : (
+          <Text style={{ fontSize: 18 }}>{displayEmoji(memberMatch.emoji)}</Text>
+        )}
+      </View>
+    );
+  }
+
+  const fallbackGlyph = SHARED_FAMILY_ASSIGNEES.has(rawAssignee.toLowerCase()) ? "👥" : "✨";
+  return (
+    <View
+      testID={testID}
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: mix(opts.tone, "transparent", 14),
+        borderWidth: 1,
+        borderColor: mix(opts.tone, "transparent", 34),
+      }}
+    >
+      <Text style={{ fontSize: 16 }}>{fallbackGlyph}</Text>
+    </View>
+  );
 }
 
 /**
@@ -84,12 +162,36 @@ function belongsToMember(assignee?: string, memberName?: string): boolean {
  * Sync failure keeps the shared honest error/stale vocabulary with a real
  * retry.
  */
-export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
+export function TasksWidget({
+  span = 1,
+  members = [],
+}: {
+  span?: WallSpan;
+  members?: readonly TasksRosterMember[];
+}) {
   const { colors, accentColor } = useTheme();
   const router = useRouter();
   const toast = useOptionalToast();
   const { member, role, hydrated, pinRequiredFor } = useAuth();
   const rowBudget = wallRowBudget(span);
+  const [cachedRoster, setCachedRoster] = React.useState<TasksRosterMember[]>(() => {
+    const syncCached = typeof getCachedMembersSync === "function" ? getCachedMembersSync() : [];
+    return syncCached.map((c) => ({ name: c.name, emoji: c.emoji }));
+  });
+  React.useEffect(() => {
+    if (members.length > 0) return;
+    let alive = true;
+    void readCachedMembers()
+      .then((cached) => {
+        if (!alive || !Array.isArray(cached) || cached.length === 0) return;
+        setCachedRoster(cached.map((c) => ({ name: c.name, emoji: c.emoji })));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [members.length]);
+  const rosterMembers = members.length > 0 ? members : cachedRoster;
   // The CAPABILITY role, never the cached display profile: a stale cached
   // parent must not unlock the approval footer, and a cached profile has no
   // live session to read the family's tasks with.
@@ -358,8 +460,27 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
                   testID={`tasks-chore-${task.id}`}
                   accessibilityLabel={`${readableTitle(task.title)}. Open tasks`}
                   onPress={openTasks}
-                  style={{ minHeight: 52, paddingVertical: 8 }}
-                  title={readableTitle(task.title)}
+                  style={{ minHeight: 56, paddingVertical: 8, paddingLeft: 18, paddingRight: 10, gap: 10 }}
+                  leading={renderAssigneeAvatar({
+                    taskId: task.id,
+                    assignee: task.assignee,
+                    roster: rosterMembers,
+                    tone: accentColor,
+                    surfaceBg: colors["color-surface-2"],
+                  })}
+                  title={
+                    <Text
+                      numberOfLines={2}
+                      style={{
+                        color: colors["color-text-primary"],
+                        fontSize: TYPOGRAPHY.body.fontSize,
+                        lineHeight: 20,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {readableTitle(task.title)}
+                    </Text>
+                  }
                   subtitle={task.assignee || undefined}
                   leftRailColor={accentColor}
                 />
@@ -409,6 +530,13 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
                 </Text>
               </Pressable>
             ) : undefined;
+            const avatarLeading = renderAssigneeAvatar({
+              taskId: task.id,
+              assignee: task.assignee,
+              roster: rosterMembers,
+              tone: pointsColor,
+              surfaceBg: colors["color-surface-2"],
+            });
             return (
               <ListRow
                 key={String(task.id)}
@@ -416,12 +544,27 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
                 accessibilityLabel={`${readableTitle(task.title)}. Open tasks`}
                 onPress={openTasks}
                 style={{
-                  minHeight: 52,
+                  minHeight: 56,
                   paddingVertical: 8,
+                  paddingLeft: 18,
+                  paddingRight: 10,
+                  gap: 10,
                   borderColor: mix(pointsColor, colors["color-border"] ?? "transparent", 34),
                 }}
-                leading={quickCheck}
-                title={readableTitle(task.title)}
+                leading={quickCheck ?? avatarLeading}
+                title={
+                  <Text
+                    numberOfLines={2}
+                    style={{
+                      color: colors["color-text-primary"],
+                      fontSize: TYPOGRAPHY.body.fontSize,
+                      lineHeight: 20,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {readableTitle(task.title)}
+                  </Text>
+                }
                 subtitle={awaiting ? `Waiting for approval${subtitle ? ` · ${subtitle}` : ""}` : subtitle || undefined}
                 leftRailColor={pointsColor}
                 trailing={
@@ -432,8 +575,8 @@ export function TasksWidget({ span = 1 }: { span?: WallSpan }) {
                       style={{
                         minHeight: 28,
                         borderRadius: 999,
-                        paddingHorizontal: 10,
-                        paddingVertical: 4,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
                         backgroundColor: mix(pointsColor, "transparent", 20),
                         borderWidth: 1,
                         borderColor: mix(pointsColor, "transparent", 40),

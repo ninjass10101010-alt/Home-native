@@ -199,13 +199,25 @@ describe("TasksWidget interactions and quick-complete gates", () => {
       "/api/tasks/claim": { success: true, reconciled: true },
     });
 
-    const { getByTestId, queryByTestId, findByText } = render(<TasksWidget span={2} />, { wrapper: wrap });
+    const { getByTestId, queryByTestId, findByText } = render(
+      <TasksWidget
+        span={2}
+        members={[
+          { name: "Aurora", emoji: "data:image/png;base64,iVBORw0KGgo=" },
+          { name: "Caspian", emoji: "🦕" },
+        ]}
+      />,
+      { wrapper: wrap }
+    );
     const checkBtn = getByTestId("tasks-quick-check-1");
     expect(checkBtn).toBeTruthy();
     expect(StyleSheet.flatten(checkBtn.props.style).width).toBe(36);
     expect(checkBtn.props.hitSlop).toBe(14); // 36 + 14*2 = 64dp floor
     expect(queryByTestId("tasks-quick-check-2")).toBeNull();
     expect(queryByTestId("tasks-quick-check-3")).toBeNull();
+    // Other assignees render roster-first avatars rather than quick-check
+    expect(getByTestId("tasks-avatar-2")).toBeTruthy();
+    expect(getByTestId("tasks-avatar-3")).toBeTruthy();
 
     await act(async () => {
       fireEvent.press(checkBtn);

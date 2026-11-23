@@ -916,7 +916,7 @@ function SafetySection({ member }: { member: ServerMember | null }) {
 }
 
 function AppearanceSection() {
-  const { colors, theme, boost, accent, setTheme, setBoost, setAccent } = useTheme();
+  const { colors, theme, themeMode, boost, accent, setTheme, setThemeMode, setBoost, setAccent } = useTheme();
   const { member, role } = useAuth();
   const [screensaverPrefs, setScreensaverPrefs] = useScreensaverPrefs();
   const [characterPrefs, setCharacterPrefs] = useCharacterTheme();
@@ -960,7 +960,7 @@ function AppearanceSection() {
               Theme
             </Text>
             <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 2 }}>
-              Light or dark on the wall
+              {themeMode === "auto" ? "Following day & night schedule" : "Light or dark on the wall"}
             </Text>
           </View>
           <SoftButton
@@ -973,6 +973,13 @@ function AppearanceSection() {
             {theme === "dark" ? "Dark 🌙" : "Light ☀️"}
           </SoftButton>
         </View>
+        <Toggle
+          value={themeMode === "auto"}
+          onChange={(on) => setThemeMode(on ? "auto" : theme)}
+          label="Auto day & night"
+          description="Light 7 AM – 7 PM · Dark at night"
+          testID="settings-theme-auto-toggle"
+        />
         <Toggle
           value={boost}
           onChange={setBoost}

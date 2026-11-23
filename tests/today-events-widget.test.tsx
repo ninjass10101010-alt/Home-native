@@ -414,4 +414,18 @@ describe("TodayEventsWidget — wall stats", () => {
     await waitFor(() => expect(publish).toHaveBeenCalledWith({ eventsToday: 1 }));
     expect(publishUnknown).not.toHaveBeenCalled();
   });
+
+  it("drops the redundant leading icon badge and allows 2-line titles for roomier rows", async () => {
+    route({
+      "/api/db/events": {
+        items: [{ id: "e1", title: "Bailey & Emily late afternoon soccer tournament", date: today, time: "17:30", member: "Aurora", icon: "📅" }],
+      },
+      "/api/google-calendar": googleOk([]),
+    });
+    const { findByText, queryByTestId, getByText } = render(<TodayEventsWidget />, { wrapper: wrap });
+    await findByText("1 event on the family calendar");
+    expect(queryByTestId("listrow-leading-badge")).toBeNull();
+    expect(getByText("Bailey & Emily late afternoon soccer tournament").props.numberOfLines).toBe(2);
+    expect(getByText("Aurora")).toBeTruthy();
+  });
 });

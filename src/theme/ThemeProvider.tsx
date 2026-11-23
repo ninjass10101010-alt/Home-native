@@ -6,16 +6,26 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { AccessibilityInfo, useColorScheme } from "react-native";
+import { AccessibilityInfo, AppState, useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { TOKENS, ACCENTS, ACCENTS_RGB } from "./tokens";
 import { mix } from "./mix";
 
 export type AccentName = string;
 export type ThemeName = "light" | "dark";
+export type ThemeMode = "auto" | "light" | "dark";
+
+export const AUTO_LIGHT_START_HOUR = 7;
+export const AUTO_DARK_START_HOUR = 19;
+
+/** Schedule rule for Auto Day/Night mode: light from 7 AM to 7 PM, dark overnight. */
+export function themeForHour(hour: number): ThemeName {
+  return hour >= AUTO_LIGHT_START_HOUR && hour < AUTO_DARK_START_HOUR ? "light" : "dark";
+}
 
 export interface ThemeValue {
   theme: ThemeName;
+  themeMode: ThemeMode;
   boost: boolean;
   accent: AccentName;
   /** Resolved flat color map: base theme + boost overrides + accent-selected. */
@@ -25,6 +35,7 @@ export interface ThemeValue {
   /** Android reduce-motion a11y setting (kills all scale/translate motion). */
   reduceMotion: boolean;
   setTheme: (t: ThemeName) => void;
+  setThemeMode: (m: ThemeMode) => void;
   setBoost: (b: boolean) => void;
   setAccent: (a: AccentName) => void;
 }
@@ -34,12 +45,13 @@ const Ctx = createContext<ThemeValue | null>(null);
 const K_THEME = "consuela-theme";
 const K_BOOST = "consuela-boost";
 const K_ACCENT = "consuela-accent";
+const AUTO_TICK_MS = 60_000;
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const system = useColorScheme();
-  const [theme, setThemeState] = useState<ThemeName>(
-    typeof jest !== "undefined" && system === "light" ? "light" : "dark"
-  );
+  const initialTheme: ThemeName = typeof jest !== "undefined" && system === "light" ? "light" : "dark";
+  const [theme, setThemeState] = useState<ThemeName>(initialTheme);
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(initialTheme);
   const [boost, setBoostState] = useState(false);
   const [accent, setAccentState] = useState<AccentName>("nori");
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -55,7 +67,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(K_ACCENT),
         ]);
         if (!alive) return;
-        if (t === "light" || t === "dark") setThemeState(t);
+        if (t === "auto") {
+          setThemeModeState("auto");
+          setThemeState(themeForHour(new Date().getHours()));
+        } else if (t === "light" || t === "dark") {
+          setThemeModeState(t);
+          setThemeState(t);
+        }
         if (b === "1" || b === "0") setBoostState(b === "1");
         if (a && (ACCENTS.dark[a] || ACCENTS.light[a])) setAccentState(a);
       } catch {
@@ -66,6 +84,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       alive = false;
     };
   }, []);
+
+  // Auto Day/Night clock watcher when themeMode === "auto".
+  useEffect(() => {
+    if (themeMode !== "auto") return;
+    let alive = true;
+    const syncClock = () => {
+      if (!alive) return;
+      const next = themeForHour(new Date().getHours());
+      setThemeState((prev) => (prev === next ? prev : next));
+    };
+    void Promise.resolve().then(syncClock);
+    const timer = setInterval(syncClock, AUTO_TICK_MS);
+    const sub = AppState?.addEventListener?.("change", (state) => {
+      if (state === "active") syncClock();
+    });
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      sub?.remove?.();
+    };
+  }, [themeMode]);
 
   // Android reduce-motion accessibility setting, live.
   useEffect(() => {
@@ -84,8 +123,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setTheme = useCallback((t: ThemeName) => {
+    setThemeModeState(t);
     setThemeState(t);
     AsyncStorage.setItem(K_THEME, t).catch(() => {});
+  }, []);
+  const setThemeMode = useCallback((m: ThemeMode) => {
+    setThemeModeState(m);
+    if (m === "auto") {
+      setThemeState(themeForHour(new Date().getHours()));
+    } else {
+      setThemeState(m);
+    }
+    AsyncStorage.setItem(K_THEME, m).catch(() => {});
   }, []);
   const setBoost = useCallback((b: boolean) => {
     setBoostState(b);
@@ -100,16 +149,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const { colors, accentColor } = buildThemeColors(theme, boost, accent);
     return {
       theme,
+      themeMode,
       boost,
       accent,
       reduceMotion,
       colors,
       accentColor,
       setTheme,
+      setThemeMode,
       setBoost,
       setAccent,
     };
-  }, [theme, boost, accent, reduceMotion, setTheme, setBoost, setAccent]);
+  }, [theme, themeMode, boost, accent, reduceMotion, setTheme, setThemeMode, setBoost, setAccent]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

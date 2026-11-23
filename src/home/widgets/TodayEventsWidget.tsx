@@ -61,8 +61,8 @@ function MemberChip({ label, color }: { label: string; color: string }) {
       accessibilityLabel={`${label} event`}
       style={{
         borderRadius: 999,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingHorizontal: 9,
+        paddingVertical: 4,
         backgroundColor: mix(color, "transparent", 40),
         borderWidth: 1,
         borderColor: mix(color, "transparent", 55),
@@ -401,9 +401,20 @@ export function TodayEventsWidget({ span = 1 }: { span?: WallSpan }) {
                   testID={`todayEvents-row-${event.id}`}
                   accessibilityLabel={`${event.title}, ${event.time}. Open calendar`}
                   onPress={openCalendar}
-                  style={{ minHeight: 52, paddingVertical: 8 }}
-                  leading={<Text style={{ fontSize: 20 }}>{event.icon}</Text>}
-                  title={event.title}
+                  style={{ minHeight: 56, paddingVertical: 8, paddingLeft: 18, paddingRight: 10, gap: 8 }}
+                  title={
+                    <Text
+                      numberOfLines={2}
+                      style={{
+                        color: colors["color-text-primary"],
+                        fontSize: TYPOGRAPHY.body.fontSize,
+                        lineHeight: 20,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {event.title}
+                    </Text>
+                  }
                   subtitle={event.time}
                   leftRailColor={railColor}
                   trailing={chipLabel ? <MemberChip label={chipLabel} color={railColor} /> : undefined}

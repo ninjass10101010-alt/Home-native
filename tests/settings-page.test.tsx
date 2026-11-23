@@ -329,6 +329,22 @@ describe("SettingsPage — Appearance (live writes)", () => {
     ).toBe(true);
   });
 
+  it("auto day/night Toggle persists 'auto' to consuela-theme and manual toggle exits auto", async () => {
+    mockMember = null;
+    const { getByTestId, findByText } = render(<SettingsPage />, { wrapper: wrap });
+    await flush();
+    fireEvent.press(getByTestId("settings-section-appearance"));
+    fireEvent.press(getByTestId("settings-theme-auto-toggle"));
+    expect(await findByText("Following day & night schedule")).toBeTruthy();
+    expect(setItemMock().mock.calls.some(([k, v]) => k === "consuela-theme" && v === "auto")).toBe(true);
+
+    fireEvent.press(getByTestId("settings-theme-toggle"));
+    expect(await findByText("Light or dark on the wall")).toBeTruthy();
+    expect(
+      setItemMock().mock.calls.some(([k, v]) => k === "consuela-theme" && (v === "light" || v === "dark"))
+    ).toBe(true);
+  });
+
   it("all ten accent chips render and a pick persists consuela-accent", async () => {
     mockMember = null;
     const { getByTestId } = render(<SettingsPage />, { wrapper: wrap });

@@ -2,7 +2,8 @@
 import React from "react";
 import { renderHook, act, waitFor } from "@testing-library/react-native";
 import { AccessibilityInfo } from "react-native";
-import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ThemeProvider, themeForHour, useTheme } from "../src/theme/ThemeProvider";
 import { TOKENS, ACCENTS, ACCENTS_RGB } from "../src/theme/tokens";
 import { contrastRatio } from "../src/lib/contrast";
 import { mix } from "../src/theme/mix";
@@ -138,5 +139,33 @@ describe("ThemeProvider", () => {
       }
     });
     expect(result.current).toMatch(/useTheme must be used within ThemeProvider/);
+  });
+
+  it("themeForHour switches cleanly between daytime light (7–18) and nighttime dark (19–6)", () => {
+    expect(themeForHour(6)).toBe("dark");
+    expect(themeForHour(7)).toBe("light");
+    expect(themeForHour(12)).toBe("light");
+    expect(themeForHour(18)).toBe("light");
+    expect(themeForHour(19)).toBe("dark");
+    expect(themeForHour(0)).toBe("dark");
+  });
+
+  it("setThemeMode('auto') tracks local clock schedule, persists 'auto', and manual setTheme exits auto", async () => {
+    const spy = jest.spyOn(Date.prototype, "getHours").mockReturnValue(21);
+    const { result, unmount } = renderHook(() => useTheme(), { wrapper: wrap });
+    act(() => result.current.setThemeMode("auto"));
+    expect(result.current.themeMode).toBe("auto");
+    expect(result.current.theme).toBe("dark");
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith("consuela-theme", "auto");
+
+    spy.mockReturnValue(10);
+    act(() => result.current.setThemeMode("auto"));
+    expect(result.current.theme).toBe("light");
+
+    act(() => result.current.setTheme("dark"));
+    expect(result.current.themeMode).toBe("dark");
+    expect(result.current.theme).toBe("dark");
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith("consuela-theme", "dark");
+    unmount();
   });
 });

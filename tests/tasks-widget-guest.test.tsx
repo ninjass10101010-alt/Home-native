@@ -258,4 +258,33 @@ describe("TasksWidget — the signed-out wall reads the family's chores", () => 
     expect(queryByText(/pts/)).toBeNull();
     expect(queryByTestId("tasks-approval-footer")).toBeNull();
   });
+
+  it("renders roster-first photo <Image> avatars on chore rows and never raw data-URIs as text", async () => {
+    const PHOTO_URI = "data:image/png;base64,iVBORw0KGgo=";
+    route({
+      "/api/tasks/family": {
+        ok: true,
+        chores: [
+          { id: 1, title: "Dishes", assignee: "Aurora Garcia", done: false },
+          { id: 2, title: "Trash", assignee: "Open", done: false },
+        ],
+      },
+    });
+    const { findByText, getByTestId, queryByText, queryByTestId } = render(
+      <TasksWidget
+        members={[
+          { name: "Aurora", emoji: PHOTO_URI },
+          { name: "Caspian", emoji: "🦕" },
+        ]}
+      />,
+      { wrapper: wrap },
+    );
+
+    await findByText("2 pending for the family");
+    const photo = getByTestId("tasks-avatar-1-photo");
+    expect(photo.props.source).toEqual({ uri: PHOTO_URI });
+    expect(queryByText(PHOTO_URI)).toBeNull();
+    expect(getByTestId("tasks-avatar-2")).toBeTruthy();
+    expect(queryByTestId("tasks-avatar-2-photo")).toBeNull();
+  });
 });
