@@ -1,7 +1,8 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../theme/ThemeProvider";
+import { hapticTap } from "../../theme/haptics";
 import { TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
 import { useHAState, entitiesByDomain } from "./ha-state";
@@ -16,14 +17,25 @@ import { WidgetFrame } from "./WidgetFrame";
  * The block is TOP-aligned (not centred): the reference seats the glyph ~22px
  * under the header rule and leaves the lower half of the card empty.
  */
-function ClimateEmpty() {
+function ClimateEmpty({ onPress }: { onPress: () => void }) {
   return (
-    <EmptyState
-      flat
-      icon="🌡️"
-      title="No climate data"
-      style={{ flex: 1, justifyContent: "flex-start", paddingTop: 0 }}
-    />
+    <Pressable
+      testID="homeClimate-empty-open"
+      accessibilityRole="button"
+      accessibilityLabel="No climate data — open House controls"
+      onPress={() => {
+        hapticTap();
+        onPress();
+      }}
+      style={({ pressed }) => ({ flex: 1, width: "100%", opacity: pressed ? 0.78 : 1 })}
+    >
+      <EmptyState
+        flat
+        icon="🌡️"
+        title="No climate data"
+        style={{ flex: 1, justifyContent: "flex-start", paddingTop: 0 }}
+      />
+    </Pressable>
   );
 }
 
@@ -49,11 +61,11 @@ export function HomeClimateWidget() {
       onRetry={refresh}
     >
       {states.length === 0 && loaded ? (
-        <ClimateEmpty />
+        <ClimateEmpty onPress={() => router.push("/ha" as never)} />
       ) : (
-        <View style={{ gap: 8, alignItems: "flex-start" }}>
+        <View style={{ gap: 8, alignItems: "flex-start", flex: 1 }}>
           {climates.length === 0 ? (
-            <ClimateEmpty />
+            <ClimateEmpty onPress={() => router.push("/ha" as never)} />
           ) : (
             climates.map((c) => {
               const attrs = c.attributes ?? {};

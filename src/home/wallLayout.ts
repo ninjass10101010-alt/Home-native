@@ -60,6 +60,22 @@ function cloneDefaultLayout(): WallLayout {
 
 export const DEFAULT_WALL_LAYOUT: WallLayout = cloneDefaultLayout();
 
+/** Full 12/12 Smart Home preset: swaps Daily Schedule out for Home Climate + Home Lights. */
+export const SMART_HOME_WALL_LAYOUT: WallLayout = {
+  version: WALL_LAYOUT_VERSION,
+  spans: {
+    photos: 2,
+    weather: 2,
+    music: 2,
+  },
+  shapes: {
+    photos: "1x2",
+    weather: "1x2",
+    music: "2x1",
+  },
+  hidden: ["schedule", "morningBriefing", "homeSecurity"],
+};
+
 export function layoutWidgets(layout: WallLayout): WidgetId[] {
   const hidden = new Set<WidgetId>([
     ...layout.hidden,

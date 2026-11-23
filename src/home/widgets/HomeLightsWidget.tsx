@@ -2,9 +2,10 @@ import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../../theme/ThemeProvider";
+import { hapticTap } from "../../theme/haptics";
 import { TYPOGRAPHY } from "../../theme/tokens";
 import { EmptyState } from "../../ui/EmptyState";
-import { useToast } from "../../ui/Toast";
+import { useOptionalToast } from "../../ui/Toast";
 import { useAuth } from "../../state/AuthProvider";
 import { useHAState, controllableLights, applyOptimisticHA, refreshHAState } from "./ha-state";
 import { callHAService, haErrorToastMessage } from "../../ha/actions";
@@ -19,14 +20,25 @@ import { WidgetFrame } from "./WidgetFrame";
  * The block is TOP-aligned (not centred): the reference seats the glyph ~22px
  * under the header rule and leaves the lower half of the card empty.
  */
-function LightsEmpty() {
+function LightsEmpty({ onPress }: { onPress: () => void }) {
   return (
-    <EmptyState
-      flat
-      icon="💡"
-      title="No lights found"
-      style={{ flex: 1, justifyContent: "flex-start", paddingTop: 0 }}
-    />
+    <Pressable
+      testID="homeLights-empty-open"
+      accessibilityRole="button"
+      accessibilityLabel="No lights found — open House controls"
+      onPress={() => {
+        hapticTap();
+        onPress();
+      }}
+      style={({ pressed }) => ({ flex: 1, width: "100%", opacity: pressed ? 0.78 : 1 })}
+    >
+      <EmptyState
+        flat
+        icon="💡"
+        title="No lights found"
+        style={{ flex: 1, justifyContent: "flex-start", paddingTop: 0 }}
+      />
+    </Pressable>
   );
 }
 
@@ -36,7 +48,7 @@ export function HomeLightsWidget() {
   const { colors } = useTheme();
   const { role } = useAuth();
   const router = useRouter();
-  const toast = useToast();
+  const toast = useOptionalToast();
   const { states, loaded, error, refresh } = useHAState();
 
   // The CAPABILITY role — a cached parent profile grants no control.
@@ -54,7 +66,7 @@ export function HomeLightsWidget() {
     try {
       await callHAService({ domain, service: "toggle", entity_id: entityId });
     } catch (e) {
-      toast.show(haErrorToastMessage(e), { intent: "error" });
+      toast?.show(haErrorToastMessage(e), { intent: "error" });
     } finally {
       await refreshHAState();
     }
@@ -74,11 +86,11 @@ export function HomeLightsWidget() {
       onRetry={refresh}
     >
       {states.length === 0 && loaded ? (
-        <LightsEmpty />
+        <LightsEmpty onPress={() => router.push("/ha" as never)} />
       ) : (
-        <View style={{ gap: 6, alignItems: "flex-start" }}>
+        <View style={{ gap: 6, alignItems: "flex-start", flex: 1 }}>
           {lights.length === 0 ? (
-            <LightsEmpty />
+            <LightsEmpty onPress={() => router.push("/ha" as never)} />
           ) : (
             <>
               <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "600" }}>

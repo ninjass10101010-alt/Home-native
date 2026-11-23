@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
   DEFAULT_WALL_LAYOUT,
+  SMART_HOME_WALL_LAYOUT,
   WALL_LAYOUT_STORAGE_KEY,
   WALL_LAYOUT_VERSION,
   layoutCells,
@@ -21,6 +22,7 @@ import {
   WALL_LOCKED_HIDDEN_WIDGETS,
   WALL_SHAPES,
   WALL_SPANS,
+  expandTrailingRowGaps,
   wallColumns,
   wallPlacements,
   wallRowBudget,
@@ -255,5 +257,28 @@ describe("wall layout — v1/v2 reset once and v3 customizations persist", () =>
     expect(layoutFits(custom)).toBe(true);
     expect(layoutCells(custom)).toEqual({ used: 11, free: 1 });
     expect(normalizeWallLayout(custom)).toEqual(custom);
+  });
+
+  it("expands trailing empty row cells so partially filled rows sit flush across 3 columns", () => {
+    const partial = L(
+      { photos: 2, weather: 2, music: 2 },
+      ["schedule", "morningBriefing", "homeSecurity", "homeClimate"],
+      { photos: "1x2", weather: "1x2", music: "2x1" },
+    );
+    const defs = visibleOnWall([...partial.hidden, ...WALL_LOCKED_HIDDEN_WIDGETS]);
+    const raw = wallPlacements(defs, partial.shapes ?? {});
+    const filled = expandTrailingRowGaps(raw.placements);
+    const music = filled.find((p) => p.def.id === "music");
+    expect(music).toMatchObject({ row: 3, col: 0, rowSpan: 1, colSpan: 3 });
+
+    // Full 12/12 default layout is completely unchanged
+    const full = wallPlacements().placements;
+    expect(expandTrailingRowGaps(full)).toEqual(full);
+  });
+
+  it("SMART_HOME_WALL_LAYOUT fills all 12 cells cleanly", () => {
+    expect(layoutCells(SMART_HOME_WALL_LAYOUT)).toEqual({ used: 12, free: 0 });
+    expect(layoutFits(SMART_HOME_WALL_LAYOUT)).toBe(true);
+    expect(normalizeWallLayout(SMART_HOME_WALL_LAYOUT)).toEqual(SMART_HOME_WALL_LAYOUT);
   });
 });

@@ -151,7 +151,7 @@ export interface WallPlacement {
   row: number;
   col: number;
   rowSpan: 1 | 2;
-  colSpan: 1 | 2;
+  colSpan: 1 | 2 | 3;
   shape: WallShape;
 }
 
@@ -232,6 +232,36 @@ export function wallPlacements(
     }
   }
   return { placements, fitsAll };
+}
+
+/**
+ * Horizontally stretches single-row tiles into immediately trailing empty cells
+ * on the same row so partially filled custom layouts render flush without
+ * an orphaned bottom-right hole.
+ */
+export function expandTrailingRowGaps(placements: WallPlacement[]): WallPlacement[] {
+  const occupied = new Set<string>();
+  for (const p of placements) {
+    for (let dr = 0; dr < p.rowSpan; dr++) {
+      for (let dc = 0; dc < p.colSpan; dc++) {
+        occupied.add(`${p.row + dr},${p.col + dc}`);
+      }
+    }
+  }
+  return placements.map((p) => {
+    if (p.rowSpan !== 1) return p;
+    let nextColSpan: 1 | 2 | 3 = p.colSpan;
+    while (p.col + nextColSpan < WALL_COLS && !occupied.has(`${p.row},${p.col + nextColSpan}`)) {
+      occupied.add(`${p.row},${p.col + nextColSpan}`);
+      nextColSpan = (nextColSpan + 1) as 1 | 2 | 3;
+    }
+    if (nextColSpan === p.colSpan) return p;
+    return {
+      ...p,
+      colSpan: nextColSpan,
+      shape: nextColSpan >= 2 ? "2x1" : p.shape,
+    };
+  });
 }
 
 /**

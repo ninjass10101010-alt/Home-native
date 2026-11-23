@@ -354,18 +354,24 @@ describe("LeaderboardWidget and HA widget interactions", () => {
     expect(mockPush).toHaveBeenCalledWith("/tasks");
   });
 
-  it("HomeClimateWidget and HomeLightsWidget headers open /ha", async () => {
+  it("HomeClimateWidget and HomeLightsWidget headers and empty states open /ha", async () => {
     route({ "/api/ha/sync": { success: true, count: 0, states: [] } });
     const climate = render(<HomeClimateWidget />, { wrapper: wrap });
-    await waitFor(() => expect(climate.getByTestId("homeClimate-header-press")).toBeTruthy());
+    await waitFor(() => expect(climate.getByTestId("homeClimate-empty-open")).toBeTruthy());
     fireEvent.press(climate.getByTestId("homeClimate-header-press"));
+    expect(mockPush).toHaveBeenCalledWith("/ha");
+    mockPush.mockClear();
+    fireEvent.press(climate.getByTestId("homeClimate-empty-open"));
     expect(mockPush).toHaveBeenCalledWith("/ha");
     climate.unmount();
 
     mockPush.mockClear();
     const lights = render(<HomeLightsWidget />, { wrapper: wrap });
-    await waitFor(() => expect(lights.getByTestId("homeLights-header-press")).toBeTruthy());
+    await waitFor(() => expect(lights.getByTestId("homeLights-empty-open")).toBeTruthy());
     fireEvent.press(lights.getByTestId("homeLights-header-press"));
+    expect(mockPush).toHaveBeenCalledWith("/ha");
+    mockPush.mockClear();
+    fireEvent.press(lights.getByTestId("homeLights-empty-open"));
     expect(mockPush).toHaveBeenCalledWith("/ha");
   });
 });

@@ -518,6 +518,22 @@ describe("SettingsPage — Home uses the balanced v3 layout", () => {
     expect(getByTestId("screensaver-start-hour-text").props.children).toBe("11:00 PM");
     expect(getByTestId("screensaver-end-hour-text").props.children).toBe("4:00 AM");
   });
+
+  it("Home section applies Smart Home (12/12) and Family Default (12/12) quick presets", async () => {
+    const { getByTestId, findByText, findByTestId, getByLabelText } = render(<SettingsPage />, { wrapper: wrap });
+    await openParentSection(getByTestId, findByTestId, getByLabelText, "home");
+    await findByText("Widget layout");
+    fireEvent.press(getByTestId("wall-layout-preset-smarthome"));
+    await waitFor(async () => {
+      const stored = JSON.parse((await AsyncStorage.getItem("consuela-wall-layout")) ?? "null");
+      expect(stored?.hidden).toEqual(["schedule", "morningBriefing", "homeSecurity"]);
+    });
+    fireEvent.press(getByTestId("wall-layout-preset-default"));
+    await waitFor(async () => {
+      const stored = JSON.parse((await AsyncStorage.getItem("consuela-wall-layout")) ?? "null");
+      expect(stored?.hidden).toEqual(["morningBriefing", "homeSecurity", "homeClimate", "homeLights"]);
+    });
+  });
 });
 
 describe("SettingsPage — Family is real; Home and System stay deferred (parent)", () => {

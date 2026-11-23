@@ -15,9 +15,11 @@ import {
   type WallSpan,
 } from "../home/widgets";
 import {
+  DEFAULT_WALL_LAYOUT,
   layoutCells,
   layoutFits,
   layoutShape,
+  SMART_HOME_WALL_LAYOUT,
   useWallLayout,
   WALL_CELLS,
   type WallLayout,
@@ -83,6 +85,17 @@ export function HomeSection() {
     resetLayout();
   };
 
+  const isDefaultPreset =
+    DEFAULT_WALL_LAYOUT.hidden.length === layout.hidden.length &&
+    DEFAULT_WALL_LAYOUT.hidden.every((id) => layout.hidden.includes(id)) &&
+    layoutShape(layout, "schedule") === "2x1" &&
+    layoutShape(layout, "music") === "2x1";
+  const isSmartHomePreset =
+    !layout.hidden.includes("homeLights") &&
+    !layout.hidden.includes("homeClimate") &&
+    layout.hidden.includes("schedule") &&
+    layoutShape(layout, "music") === "2x1";
+
   return (
     <View style={{ gap: 16 }}>
       <Material tier="regular" style={{ borderRadius: 28, padding: 24, gap: 18 }}>
@@ -131,6 +144,26 @@ export function HomeSection() {
             ? "The board is full. Turn a widget off to give another one more room."
             : `${cells.free} ${cells.free === 1 ? "cell is" : "cells are"} free — a widget can grow into it.`}
         </Text>
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+            Quick presets:
+          </Text>
+          <Chip
+            testID="wall-layout-preset-default"
+            label="Family Default (12/12)"
+            tone={isDefaultPreset ? "accent" : "neutral"}
+            selected={isDefaultPreset}
+            onPress={reset}
+          />
+          <Chip
+            testID="wall-layout-preset-smarthome"
+            label="Smart Home (12/12)"
+            tone={isSmartHomePreset ? "accent" : "neutral"}
+            selected={isSmartHomePreset}
+            onPress={() => apply({ ...SMART_HOME_WALL_LAYOUT, autoArrange: layout.autoArrange })}
+          />
+        </View>
 
         {/* Dynamic Activity Layout Toggle */}
         <View

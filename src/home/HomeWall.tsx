@@ -12,6 +12,7 @@ import { MemberRail, type RailMember } from "../ui/MemberRail";
 import { useAuth } from "../state/AuthProvider";
 import { EmergencyShield } from "./EmergencyShield";
 import {
+  expandTrailingRowGaps,
   shapeCells,
   visibleOnWall,
   WALL_COLS,
@@ -419,7 +420,10 @@ function HomeWallInner({
       .filter((w): w is NonNullable<typeof w> => !!w);
   }, [isAutoArrange, layout.hidden, visibleIds, activities, shapes]);
 
-  const { placements } = useMemo(() => wallPlacements(defs, shapes), [defs, shapes]);
+  const placements = useMemo(
+    () => expandTrailingRowGaps(wallPlacements(defs, shapes).placements),
+    [defs, shapes],
+  );
   const [gridW, setGridW] = React.useState(1080 - GRID_H_PAD * 2);
   const colW = (gridW - GRID_GAP * (WALL_COLS - 1)) / WALL_COLS;
   const { width: winW, height: winH } = useWindowDimensions();
