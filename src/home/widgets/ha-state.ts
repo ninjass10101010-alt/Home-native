@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, type NativeEventSubscription } from "react-native";
 import { api, ApiError } from "../../api/client";
 import { getSessionCookie } from "../../api/session";
 
@@ -15,6 +16,12 @@ export interface HAState {
   last_updated: string;
 }
 
+interface OptimisticOverride {
+  state?: string;
+  attributes?: Record<string, unknown>;
+  expiresAt: number;
+}
+
 let sharedStates: HAState[] = [];
 let sharedError: string | null = null;
 let sharedLoaded = false;
@@ -22,16 +29,70 @@ let lastFetchAt = 0;
 let fetchInFlight = false;
 
 const subscribers = new Set<() => void>();
+const pendingOptimistic = new Map<string, OptimisticOverride>();
+const settleTimers = new Set<ReturnType<typeof setTimeout>>();
+
 const MIN_REFETCH_GAP_MS = 5_000;
-/** Web useHAState.ts:12 — the store polls on this cadence. */
-const POLL_INTERVAL_MS = 60_000;
+const POLL_INTERVAL_MS = 15_000;
+const OPTIMISTIC_TTL_MS = 6_000;
+const SETTLE_DELAYS_MS = [1_200, 3_000, 6_200] as const;
+
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let appStateSub: NativeEventSubscription | null = null;
+
+function clearSettleTimers(): void {
+  for (const t of Array.from(settleTimers)) {
+    clearTimeout(t);
+  }
+  settleTimers.clear();
+}
+
+function attributesMatch(
+  serverAttrs: Record<string, unknown> | undefined,
+  expectedAttrs: Record<string, unknown>
+): boolean {
+  for (const [k, v] of Object.entries(expectedAttrs)) {
+    if (serverAttrs?.[k] !== v) return false;
+  }
+  return true;
+}
+
+function reconcileIncomingStates(incoming: HAState[]): HAState[] {
+  if (pendingOptimistic.size === 0) return incoming;
+  const now = Date.now();
+  return incoming.map((s) => {
+    const pend = pendingOptimistic.get(s.entity_id);
+    if (!pend) return s;
+    const stateMatches = pend.state === undefined || s.state === pend.state;
+    const attrsMatch = !pend.attributes || attributesMatch(s.attributes, pend.attributes);
+    if (now >= pend.expiresAt || (stateMatches && attrsMatch)) {
+      pendingOptimistic.delete(s.entity_id);
+      return s;
+    }
+    const mergedAttrs = pend.attributes
+      ? { ...s.attributes, ...pend.attributes }
+      : s.attributes;
+    return {
+      ...s,
+      ...(pend.state !== undefined ? { state: pend.state } : {}),
+      attributes: mergedAttrs,
+    };
+  });
+}
 
 function ensureStoreLoop(): void {
-  if (pollTimer) return;
-  pollTimer = setInterval(() => {
-    void fetchStates();
-  }, POLL_INTERVAL_MS);
+  if (!pollTimer) {
+    pollTimer = setInterval(() => {
+      void fetchStates();
+    }, POLL_INTERVAL_MS);
+  }
+  if (typeof jest === "undefined" && !appStateSub && typeof AppState?.addEventListener === "function") {
+    appStateSub = AppState.addEventListener("change", (next) => {
+      if (next === "active") {
+        void fetchStates(true);
+      }
+    });
+  }
 }
 
 function teardownStoreLoopIfIdle(): void {
@@ -39,6 +100,11 @@ function teardownStoreLoopIfIdle(): void {
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
+  }
+  clearSettleTimers();
+  if (appStateSub) {
+    appStateSub.remove();
+    appStateSub = null;
   }
 }
 
@@ -63,7 +129,8 @@ async function fetchStates(force = false): Promise<void> {
     if (!res || res.success !== true) {
       sharedError = "Home Assistant sync failed";
     } else {
-      sharedStates = Array.isArray(res.states) ? res.states : [];
+      const raw = Array.isArray(res.states) ? res.states : [];
+      sharedStates = reconcileIncomingStates(raw);
       sharedError = null;
     }
   } catch (e) {
@@ -140,7 +207,19 @@ const SYSTEM_SWITCH_PREFIXES = [
   "switch.ssh_",
 ];
 
-const SYSTEM_SWITCH_PARTS = ["_poe", "_dns", "_enabled", "_pre_release", "_child_lock"];
+const SYSTEM_SWITCH_PARTS = [
+  "_poe",
+  "_dns",
+  "_enabled",
+  "_pre_release",
+  "_child_lock",
+  "_nightlight",
+  "_sync_send",
+  "_sync_receive",
+  "_audio_reactive",
+  "_reverse",
+  "_freeze",
+];
 
 /** True for real/demo lighting entities and household outlet/light switches (excludes UniFi/HA/sim switches). */
 export function isControllableLightOrSwitch(s: HAState): boolean {
@@ -285,17 +364,73 @@ export function alarmPanel(states: HAState[]): HAState | undefined {
   return states.find((s) => s.entity_id.startsWith("alarm_control_panel."));
 }
 
-/** Immutably apply an optimistic patch to one entity's state. Notifies subscribers. */
-export function applyOptimisticHA(entityId: string, patch: Partial<HAState>): void {
+export function lightGlyphFor(s: HAState): string {
+  const id = s.entity_id.toLowerCase();
+  const friendly =
+    typeof s.attributes?.friendly_name === "string" ? s.attributes.friendly_name.toLowerCase() : "";
+  if (id.includes("plant") || friendly.includes("plant")) return "🪴";
+  if (id.includes("wled") || friendly.includes("wled") || id.includes("strip") || friendly.includes("led")) {
+    return "✨";
+  }
+  if (id.startsWith("switch.")) return "🔌";
+  return "💡";
+}
+
+export function sortLightsForDisplay(lights: HAState[]): HAState[] {
+  return lights
+    .map((item, idx) => ({ item, idx }))
+    .sort((a, b) => {
+      const aTest = a.item.entity_id === "light.test_light_delete_me";
+      const bTest = b.item.entity_id === "light.test_light_delete_me";
+      if (aTest !== bTest) return aTest ? 1 : -1;
+      const aOn = a.item.state === "on";
+      const bOn = b.item.state === "on";
+      if (aOn !== bOn) return aOn ? -1 : 1;
+      return a.idx - b.idx;
+    })
+    .map((entry) => entry.item);
+}
+
+/** Immutably apply an optimistic patch to one entity's state with a protective TTL
+ *  so cloud-backed switches (e.g. Tuya) don't snap back on early refreshes. */
+export function applyOptimisticHA(
+  entityId: string,
+  patch: Partial<HAState>,
+  ttlMs = OPTIMISTIC_TTL_MS
+): void {
+  const prev = pendingOptimistic.get(entityId);
+  const patchAttrs =
+    patch && patch.attributes && typeof patch.attributes === "object" && !Array.isArray(patch.attributes)
+      ? (patch.attributes as Record<string, unknown>)
+      : undefined;
+  pendingOptimistic.set(entityId, {
+    state: patch.state !== undefined ? patch.state : prev?.state,
+    attributes: patchAttrs ? { ...(prev?.attributes ?? {}), ...patchAttrs } : prev?.attributes,
+    expiresAt: Date.now() + ttlMs,
+  });
+
   sharedStates = sharedStates.map((s) => {
     if (s.entity_id !== entityId) return s;
-    const mergedAttrs =
-      patch && patch.attributes && typeof patch.attributes === "object" && !Array.isArray(patch.attributes)
-        ? { ...s.attributes, ...(patch.attributes as Record<string, unknown>) }
-        : s.attributes;
+    const mergedAttrs = patchAttrs ? { ...s.attributes, ...patchAttrs } : s.attributes;
     return { ...s, ...patch, attributes: mergedAttrs };
   });
   notifySubscribers();
+}
+
+export function clearOptimisticHA(entityId: string): void {
+  pendingOptimistic.delete(entityId);
+}
+
+export function scheduleHASettleRefresh(): void {
+  clearSettleTimers();
+  for (const delay of SETTLE_DELAYS_MS) {
+    const t = setTimeout(() => {
+      settleTimers.delete(t);
+      if (pendingOptimistic.size === 0 || subscribers.size === 0) return;
+      void fetchStates(true);
+    }, delay);
+    settleTimers.add(t);
+  }
 }
 
 /** Re-fetch the HA states (force) and emit the result to subscribers. */
@@ -310,9 +445,15 @@ export function _resetHAStore() {
   sharedLoaded = false;
   lastFetchAt = 0;
   fetchInFlight = false;
+  pendingOptimistic.clear();
+  clearSettleTimers();
   subscribers.clear();
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
+  }
+  if (appStateSub) {
+    appStateSub.remove();
+    appStateSub = null;
   }
 }

@@ -156,15 +156,16 @@ describe("HA trio (shared single-fetch store)", () => {
       ],
     });
     const { findByText } = render(<HomeLightsWidget />, { wrapper: wrap });
-    expect(await findByText("💡 1 on of 2")).toBeTruthy();
-    expect(await findByText(/Garage \(off\)/)).toBeTruthy();
+    expect(await findByText("1 on of 2")).toBeTruthy();
+    expect(await findByText("Garage")).toBeTruthy();
+    expect(await findByText("Off")).toBeTruthy();
   });
 
   it("lights: on-count + first names + overflow", async () => {
     api.mockResolvedValue({ success: true, count: haStates.length, states: haStates });
     const { findByText } = render(<HomeLightsWidget />, { wrapper: wrap });
-    expect(await findByText(/2 on of 3/)).toBeTruthy();
-    expect(await findByText(/Kitchen/)).toBeTruthy();
+    expect(await findByText("2 on of 3")).toBeTruthy();
+    expect(await findByText("Kitchen")).toBeTruthy();
   });
 });
 

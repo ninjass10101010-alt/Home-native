@@ -271,6 +271,106 @@ describe("HousePage", () => {
       });
     });
   });
+
+  it("sends explicit turn_on/turn_off for plant light, protects optimistic state from stale sync, and reverts on error", async () => {
+    let serverPlantOn = false;
+    let failCall = false;
+    const plantStates = [
+      {
+        entity_id: "switch.plant_light_socket",
+        state: "off",
+        attributes: { device_class: "outlet", friendly_name: "Living Room Plant Light", area_id: "Living Room" },
+        last_updated: "",
+      },
+      {
+        entity_id: "light.kitchen_wled",
+        state: "off",
+        attributes: { friendly_name: "WLED", area_id: "Kitchen" },
+        last_updated: "",
+      },
+      {
+        entity_id: "switch.kitchen_wled_nightlight",
+        state: "off",
+        attributes: { friendly_name: "WLED Nightlight" },
+        last_updated: "",
+      },
+      {
+        entity_id: "switch.kitchen_wled_sync_send",
+        state: "off",
+        attributes: { friendly_name: "WLED Sync send" },
+        last_updated: "",
+      },
+    ];
+
+    api.mockImplementation(async (path: string) => {
+      if (path === "/api/ha/health") return { ok: true, wsConnected: true };
+      if (path === "/api/ha/sync") {
+        return {
+          success: true,
+          count: plantStates.length,
+          states: plantStates.map((s) =>
+            s.entity_id === "switch.plant_light_socket" ? { ...s, state: serverPlantOn ? "on" : "off" } : s
+          ),
+        };
+      }
+      if (path === "/api/ha/call-service") {
+        if (failCall) throw new ApiError({ message: "down", status: 502, code: "server_error" });
+        return { success: true };
+      }
+      return { success: true };
+    });
+
+    const { findByTestId, findByText, queryByText } = render(<HousePage />, { wrapper: wrap });
+    expect(await findByText("Living Room Plant Light")).toBeTruthy();
+    expect(queryByText("WLED Nightlight")).toBeNull();
+    expect(queryByText("WLED Sync send")).toBeNull();
+
+    // 1. Tap plant light when off -> calls switch.turn_on (never toggle) & flips immediately to On
+    const tileBtn = await findByTestId("light-tile-press-switch.plant_light_socket");
+    fireEvent.press(tileBtn);
+
+    await waitFor(() => {
+      const call = api.mock.calls.find((c: any[]) => c[0] === "/api/ha/call-service");
+      expect(call).toBeTruthy();
+      expect((call![1] as any).body).toMatchObject({
+        domain: "switch",
+        service: "turn_on",
+        entity_id: "switch.plant_light_socket",
+      });
+    });
+    expect(await findByText("Living Room · On")).toBeTruthy();
+
+    // 2. Even if HA returns stale "off" during Tuya cloud lag, UI remains On
+    const { refreshHAState } = require("../src/home/widgets/ha-state");
+    await refreshHAState();
+    expect(await findByText("Living Room · On")).toBeTruthy();
+
+    // 3. Server catches up to "on"; next tap calls switch.turn_off
+    serverPlantOn = true;
+    await refreshHAState();
+    fireEvent.press(await findByTestId("light-tile-press-switch.plant_light_socket"));
+    await waitFor(() => {
+      const calls = api.mock.calls.filter((c: any[]) => c[0] === "/api/ha/call-service");
+      expect((calls[calls.length - 1][1] as any).body).toMatchObject({
+        domain: "switch",
+        service: "turn_off",
+        entity_id: "switch.plant_light_socket",
+      });
+    });
+    expect(await findByText("Living Room · Off")).toBeTruthy();
+
+    // 4. Failed call reverts optimistic state back to server state ("On") and shows error toast
+    serverPlantOn = true;
+    const { clearOptimisticHA } = require("../src/home/widgets/ha-state");
+    clearOptimisticHA("switch.plant_light_socket");
+    await refreshHAState();
+    expect(await findByText("Living Room · On")).toBeTruthy();
+
+    failCall = true;
+    fireEvent.press(await findByTestId("light-tile-press-switch.plant_light_socket"));
+    expect(await findByText("Home Assistant is offline — changes won't apply.")).toBeTruthy();
+    expect(await findByText("Living Room · On")).toBeTruthy();
+  });
 });
 
 describe("HA actions call-site contract", () => {

@@ -374,4 +374,57 @@ describe("LeaderboardWidget and HA widget interactions", () => {
     fireEvent.press(lights.getByTestId("homeLights-empty-open"));
     expect(mockPush).toHaveBeenCalledWith("/ha");
   });
+
+  it("HomeLightsWidget renders tactile tiles, toggles with explicit turn_on/turn_off, supports All off, and adapts to 2x1", async () => {
+    route({
+      "/api/ha/sync": {
+        success: true,
+        count: 2,
+        states: [
+          {
+            entity_id: "switch.plant_light_socket",
+            state: "off",
+            attributes: { device_class: "outlet", friendly_name: "Living Room Plant Light", area_id: "Living Room" },
+            last_updated: "",
+          },
+          {
+            entity_id: "light.kitchen_main_light",
+            state: "on",
+            attributes: { friendly_name: "Kitchen Main Light", area_id: "Kitchen", supported_color_modes: ["color_temp"], brightness: 191 },
+            last_updated: "",
+          },
+        ],
+      },
+      "/api/ha/call-service": { success: true },
+    });
+
+    const view = render(<HomeLightsWidget shape="2x1" />, { wrapper: wrap });
+    await view.findByText("Living Room Plant Light");
+    expect(view.getByText("1 on of 2")).toBeTruthy();
+    expect(view.getByTestId("homeLights-all-off")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("homeLights-tile-switch.plant_light_socket"));
+      await Promise.resolve();
+    });
+
+    expect(api).toHaveBeenCalledWith(
+      "/api/ha/call-service",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.objectContaining({
+          domain: "switch",
+          service: "turn_on",
+          entity_id: "switch.plant_light_socket",
+        }),
+      })
+    );
+    expect(view.getByText("2 on of 2")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("homeLights-all-off"));
+      await Promise.resolve();
+    });
+    expect(view.getByText("0 on of 2")).toBeTruthy();
+  });
 });

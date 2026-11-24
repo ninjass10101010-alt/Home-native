@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
-import { mix } from "../theme/mix";
+import { accentDeepened, mix } from "../theme/mix";
+import { hapticTap } from "../theme/haptics";
 import { FONTS, MIN_TARGET_DP, TYPOGRAPHY } from "../theme/tokens";
+import { Material } from "../theme/Material";
 import { useAuth } from "../state/AuthProvider";
 import { useToast } from "../ui/Toast";
 import { Chip } from "../ui/Chip";
@@ -12,11 +14,12 @@ import { PinPad } from "../ui/PinPad";
 import { SoftButton } from "../ui/SoftButton";
 import { Stepper } from "../ui/Stepper";
 import { Toggle } from "../ui/Toggle";
-import { Surface } from "../ui/Surface";
 import {
   useHAState,
   entitiesByDomain,
   controllableLights,
+  sortLightsForDisplay,
+  lightGlyphFor,
   doorWindowSensors,
   motionSensors,
   resolveEntityArea,
@@ -27,6 +30,8 @@ import {
   openSensors,
   alarmPanel,
   applyOptimisticHA,
+  clearOptimisticHA,
+  scheduleHASettleRefresh,
   refreshHAState,
   type HAState,
 } from "../home/widgets/ha-state";
@@ -86,13 +91,23 @@ function compareAreas(a: string, b: string): number {
   return a.localeCompare(b);
 }
 
+function kelvinTileTint(
+  colors: Record<string, string | undefined>,
+  fallback: string,
+  kelvin: number
+): string {
+  if (kelvin <= 2450) return colors["color-accent-apricot"] ?? fallback;
+  if (kelvin <= 3200) return colors["color-accent-amber"] ?? fallback;
+  if (kelvin <= 4000) return fallback;
+  if (kelvin <= 5200) return colors["color-accent-cyan"] ?? fallback;
+  return colors["color-accent-nori"] ?? fallback;
+}
+
 export function HousePage() {
-  const { colors, accentColor } = useTheme();
+  const { colors, theme, accentColor } = useTheme();
   const { role } = useAuth();
   const toast = useToast();
-  const { states, error } = useHAState();
-  // The CAPABILITY role — the house controls are parent-only, so a cached
-  // parent profile must not unlock them.
+  const { states, error, refresh } = useHAState();
   const isParent = role === "parent";
 
   const [health, setHealth] = useState<{ ok?: boolean; wsConnected?: boolean; configured?: boolean } | null>(null);
@@ -102,6 +117,10 @@ export function HousePage() {
   const [pendingAlarm, setPendingAlarm] = useState<"arm_home" | "disarm" | null>(null);
   const [alarmPinError, setAlarmPinError] = useState<string | null>(null);
   const [alarmBusy, setAlarmBusy] = useState(false);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   useEffect(() => {
     let alive = true;
@@ -120,7 +139,7 @@ export function HousePage() {
     };
   }, []);
 
-  const allLights = React.useMemo(() => controllableLights(states), [states]);
+  const allLights = React.useMemo(() => sortLightsForDisplay(controllableLights(states)), [states]);
   const allDoors = React.useMemo(() => doorWindowSensors(states), [states]);
   const allMotion = React.useMemo(() => motionSensors(states), [states]);
   const allClimates = React.useMemo(() => entitiesByDomain(states, "climate"), [states]);
@@ -135,6 +154,17 @@ export function HousePage() {
     return Array.from(set).sort(compareAreas);
   }, [allLights, allDoors, allMotion, allClimates]);
 
+  const onCountByArea = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const l of allLights) {
+      if (l.state === "on") {
+        const r = resolveEntityArea(l);
+        counts.set(r, (counts.get(r) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [allLights]);
+
   const inSelectedArea = (s: HAState) => area === "all" || resolveEntityArea(s) === area;
 
   const domainLights = allLights.filter(inSelectedArea);
@@ -148,16 +178,24 @@ export function HousePage() {
   const filteredStates = area === "all" ? states : states.filter(inSelectedArea);
   const activeOpenSensors = openSensors(filteredStates);
 
+  const amber = colors["color-accent-amber"] ?? accentColor;
+  const amberInk = theme === "light" ? accentDeepened(amber, 32) : amber;
+
   const toggleLight = async (entityId: string) => {
     if (!isParent) return;
     const entity = allLights.find((l) => l.entity_id === entityId);
-    const next = entity?.state === "on" ? "off" : "on";
+    if (!entity) return;
+    const domain = entityId.split(".")[0] || "light";
+    const next = entity.state === "on" ? "off" : "on";
+    const service = next === "on" ? "turn_on" : "turn_off";
+    hapticTap();
     applyOptimisticHA(entityId, { state: next });
     try {
-      await callHAService({ domain: entityId.split(".")[0] || "light", service: "toggle", entity_id: entityId });
+      await callHAService({ domain, service, entity_id: entityId });
+      scheduleHASettleRefresh();
     } catch (e) {
+      clearOptimisticHA(entityId);
       toast.show(haErrorToastMessage(e), { intent: "error" });
-    } finally {
       await refreshHAState();
     }
   };
@@ -185,9 +223,10 @@ export function HousePage() {
           service_data: { brightness_pct: clamped },
         });
       }
+      scheduleHASettleRefresh();
     } catch (e) {
+      clearOptimisticHA(entity.entity_id);
       toast.show(haErrorToastMessage(e), { intent: "error" });
-    } finally {
       await refreshHAState();
     }
   };
@@ -209,9 +248,35 @@ export function HousePage() {
         entity_id: entity.entity_id,
         service_data: { color_temp_kelvin: kelvin },
       });
+      scheduleHASettleRefresh();
     } catch (e) {
+      clearOptimisticHA(entity.entity_id);
       toast.show(haErrorToastMessage(e), { intent: "error" });
-    } finally {
+      await refreshHAState();
+    }
+  };
+
+  const turnRoomOn = async () => {
+    if (!isParent) return;
+    const offEntities = domainLights.filter((l) => l.state !== "on");
+    if (offEntities.length === 0) return;
+    hapticTap();
+    const byDomain = new Map<string, string[]>();
+    for (const item of offEntities) {
+      applyOptimisticHA(item.entity_id, { state: "on" });
+      const dom = item.entity_id.split(".")[0] || "light";
+      const list = byDomain.get(dom) ?? [];
+      list.push(item.entity_id);
+      byDomain.set(dom, list);
+    }
+    try {
+      for (const [dom, ids] of byDomain.entries()) {
+        await callHAService({ domain: dom, service: "turn_on", service_data: { entity_id: ids } });
+      }
+      scheduleHASettleRefresh();
+    } catch (e) {
+      for (const item of offEntities) clearOptimisticHA(item.entity_id);
+      toast.show(haErrorToastMessage(e), { intent: "error" });
       await refreshHAState();
     }
   };
@@ -220,6 +285,7 @@ export function HousePage() {
     if (!isParent) return;
     const onEntities = domainLights.filter((l) => l.state === "on");
     if (onEntities.length === 0) return;
+    hapticTap();
     const byDomain = new Map<string, string[]>();
     for (const item of onEntities) {
       applyOptimisticHA(item.entity_id, { state: "off" });
@@ -232,9 +298,10 @@ export function HousePage() {
       for (const [dom, ids] of byDomain.entries()) {
         await callHAService({ domain: dom, service: "turn_off", service_data: { entity_id: ids } });
       }
+      scheduleHASettleRefresh();
     } catch (e) {
+      for (const item of onEntities) clearOptimisticHA(item.entity_id);
       toast.show(haErrorToastMessage(e), { intent: "error" });
-    } finally {
       await refreshHAState();
     }
   };
@@ -248,9 +315,11 @@ export function HousePage() {
     applyOptimisticHA(simEntityId, { state: next });
     try {
       await callHAService({ domain: "switch", service: "toggle", entity_id: simEntityId });
+      scheduleHASettleRefresh();
     } catch (e) {
+      clearOptimisticHA(sensor.entity_id);
+      clearOptimisticHA(simEntityId);
       toast.show(haErrorToastMessage(e), { intent: "error" });
-    } finally {
       await refreshHAState();
     }
   };
@@ -259,10 +328,16 @@ export function HousePage() {
     if (!isParent || !climate) return;
     applyOptimisticHA(climate.entity_id, { attributes: { ...climate.attributes, temperature } });
     try {
-      await callHAService({ domain: "climate", service: "set_temperature", entity_id: climate.entity_id, service_data: { temperature } });
+      await callHAService({
+        domain: "climate",
+        service: "set_temperature",
+        entity_id: climate.entity_id,
+        service_data: { temperature },
+      });
+      scheduleHASettleRefresh();
     } catch (e) {
+      clearOptimisticHA(climate.entity_id);
       toast.show(haErrorToastMessage(e), { intent: "error" });
-    } finally {
       await refreshHAState();
     }
   };
@@ -271,10 +346,16 @@ export function HousePage() {
     if (!isParent || !climate) return;
     applyOptimisticHA(climate.entity_id, { attributes: { ...climate.attributes, hvac_mode: mode }, state: mode });
     try {
-      await callHAService({ domain: "climate", service: "set_hvac_mode", entity_id: climate.entity_id, service_data: { hvac_mode: mode } });
+      await callHAService({
+        domain: "climate",
+        service: "set_hvac_mode",
+        entity_id: climate.entity_id,
+        service_data: { hvac_mode: mode },
+      });
+      scheduleHASettleRefresh();
     } catch (e) {
+      clearOptimisticHA(climate.entity_id);
       toast.show(haErrorToastMessage(e), { intent: "error" });
-    } finally {
       await refreshHAState();
     }
   };
@@ -299,50 +380,158 @@ export function HousePage() {
   const loaded = !healthLoading;
 
   const climateAttrs = climate?.attributes ?? {};
-  const currentTemp = typeof climateAttrs.current_temperature === "number" ? (climateAttrs.current_temperature as number) : null;
-  const targetTemp = typeof climateAttrs.temperature === "number" ? (climateAttrs.temperature as number) : (currentTemp ?? 70);
-  const humidity = typeof climateAttrs.current_humidity === "number" ? (climateAttrs.current_humidity as number) : (typeof climateAttrs.humidity === "number" ? (climateAttrs.humidity as number) : null);
+  const currentTemp =
+    typeof climateAttrs.current_temperature === "number" ? (climateAttrs.current_temperature as number) : null;
+  const targetTemp =
+    typeof climateAttrs.temperature === "number" ? (climateAttrs.temperature as number) : (currentTemp ?? 70);
+  const humidity =
+    typeof climateAttrs.current_humidity === "number"
+      ? (climateAttrs.current_humidity as number)
+      : typeof climateAttrs.humidity === "number"
+        ? (climateAttrs.humidity as number)
+        : null;
   const mode = typeof climateAttrs.hvac_mode === "string" ? (climateAttrs.hvac_mode as string) : (climate?.state ?? "");
 
+  const allOnCount = allLights.filter((l) => l.state === "on").length;
   const onCount = domainLights.filter((l) => l.state === "on").length;
+  const offCount = domainLights.length - onCount;
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 220 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 220 }}>
+        {/* Header */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 4 }}>
-          <View style={{ width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: mix(accentColor, "transparent", 18) }}>
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 16,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: mix(accentColor, colors["color-surface-2"], 22),
+              borderWidth: 1,
+              borderColor: mix(accentColor, "transparent", 45),
+            }}
+          >
             <Text style={{ fontSize: 24 }}>🏠</Text>
           </View>
-          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", fontFamily: FONTS.display }}>Home Controls</Text>
-          <View style={{ flex: 1 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", fontFamily: FONTS.display }}>
+              Home Controls
+            </Text>
+            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>
+              Lights, climate, security &amp; sensors — organized by room
+            </Text>
+          </View>
           <View
             testID="ha-connection-pill"
-            style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: colors["color-surface-2"] }}
+            style={{
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 999,
+              backgroundColor: colors["color-surface-2"],
+              borderWidth: 1,
+              borderColor: colors["color-border"] ?? "transparent",
+            }}
           >
-            <Text style={{ color: connected ? colors["color-accent-mint"] ?? accentColor : colors["color-accent-rose"] ?? accentColor, fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+            <Text
+              style={{
+                color: connected ? colors["color-accent-mint"] ?? accentColor : colors["color-accent-rose"] ?? accentColor,
+                fontSize: TYPOGRAPHY.label.fontSize,
+                fontWeight: "700",
+              }}
+            >
               {healthLabel}
             </Text>
           </View>
         </View>
-        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize, marginBottom: 12, marginLeft: 60 }}>
-          Lights, climate, security & sensors — organized by room
-        </Text>
+
+        {/* 3-Tile House Status KPI Strip */}
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 14, marginBottom: 14 }}>
+          <Material
+            tier="thin"
+            tone={allOnCount > 0 ? amber : undefined}
+            style={{ flex: 1, borderRadius: 20, padding: 14, gap: 4 }}
+          >
+            <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+              💡 LIGHTS ON
+            </Text>
+            <Text
+              style={{
+                color: allOnCount > 0 ? amberInk : colors["color-text-primary"],
+                fontSize: TYPOGRAPHY.title.fontSize,
+                fontWeight: "800",
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {allOnCount}/{allLights.length}
+            </Text>
+          </Material>
+
+          <Material tier="thin" style={{ flex: 1, borderRadius: 20, padding: 14, gap: 4 }}>
+            <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+              🌡️ INDOOR
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={{
+                color: colors["color-text-primary"],
+                fontSize: TYPOGRAPHY.title.fontSize,
+                fontWeight: "800",
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {currentTemp !== null ? `${Math.round(currentTemp)}°` : "—"}{" "}
+              <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "600" }}>
+                {mode || ""}
+              </Text>
+            </Text>
+          </Material>
+
+          <Material tier="thin" style={{ flex: 1, borderRadius: 20, padding: 14, gap: 4 }}>
+            <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize, fontWeight: "700" }}>
+              🛡️ SECURITY
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={{
+                color: activeOpenSensors.length > 0 || alarmed
+                  ? colors["color-accent-rose"] ?? accentColor
+                  : colors["color-accent-mint"] ?? accentColor,
+                fontSize: TYPOGRAPHY.title.fontSize,
+                fontWeight: "800",
+              }}
+            >
+              {alarm ? (alarm.state === "disarmed" ? "Disarmed" : "Armed") : "—"}
+            </Text>
+          </Material>
+        </View>
 
         {!isParent ? (
-          <Surface variant="warm" radius="xl" padding="md" style={{ marginBottom: 12 }}>
+          <Material tier="regular" style={{ borderRadius: 22, padding: 16, marginBottom: 12 }}>
             <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize }}>{PARENT_GATE_COPY}</Text>
-          </Surface>
+          </Material>
         ) : null}
 
         {loaded && Boolean(error) ? (
-          <Surface variant="warm" radius="xl" padding="lg" style={{ marginBottom: 12 }}>
-            <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>Home Assistant is offline</Text>
-            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 4 }}>{OFFLINE_COPY}</Text>
-          </Surface>
+          <Material tier="regular" style={{ borderRadius: 24, padding: 18, marginBottom: 12 }}>
+            <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }}>
+              Home Assistant is offline
+            </Text>
+            <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 4 }}>
+              {OFFLINE_COPY}
+            </Text>
+          </Material>
         ) : null}
 
+        {/* Horizontal Room Filter Rail */}
         {areas.length > 0 ? (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+            style={{ marginBottom: 14 }}
+          >
             <Chip
               testID="area-chip-all"
               as="button"
@@ -350,44 +539,62 @@ export function HousePage() {
               tone="neutral"
               selected={area === "all"}
               onPress={() => setArea("all")}
-              label="All Rooms"
+              label={`All Rooms${allOnCount > 0 ? ` · ${allOnCount}💡` : ""}`}
             />
-            {areas.map((a) => (
-              <Chip
-                key={a}
-                testID={`area-chip-${a}`}
-                as="button"
-                size="md"
-                tone="neutral"
-                selected={area === a}
-                onPress={() => setArea(a)}
-                label={a}
-              />
-            ))}
-          </View>
+            {areas.map((a) => {
+              const litInRoom = onCountByArea.get(a) ?? 0;
+              return (
+                <Chip
+                  key={a}
+                  testID={`area-chip-${a}`}
+                  as="button"
+                  size="md"
+                  tone={litInRoom > 0 && area !== a ? "warning" : "neutral"}
+                  selected={area === a}
+                  onPress={() => setArea(a)}
+                  label={litInRoom > 0 ? `${a} · ${litInRoom}💡` : a}
+                />
+              );
+            })}
+          </ScrollView>
         ) : null}
 
-        {/* Lights & Switches */}
-        <Surface variant="warm" radius="xl" padding="lg" style={{ marginBottom: 12 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 12 }}>
+        {/* Lights & Switches — Warm Glass 2-Column Bento Grid */}
+        <Material tier="regular" tone={onCount > 0 ? amber : undefined} style={{ borderRadius: 28, padding: 18, marginBottom: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 10 }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>Lights & Switches</Text>
+              <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700" }}>
+                Lights & Switches
+              </Text>
               {domainLights.length > 0 ? (
                 <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 2 }}>
                   {onCount} on of {domainLights.length}{area !== "all" ? ` in ${area}` : ""}
                 </Text>
               ) : null}
             </View>
-            {isParent && onCount > 0 ? (
-              <SoftButton size="sm" variant="secondary" onPress={() => void turnAllOff()} testID="all-lights-off">
-                All Lights Off
-              </SoftButton>
-            ) : null}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {isParent && area !== "all" && offCount > 0 ? (
+                <SoftButton size="sm" variant="secondary" onPress={() => void turnRoomOn()} testID="room-lights-on">
+                  All On
+                </SoftButton>
+              ) : null}
+              {isParent && onCount > 0 ? (
+                <SoftButton size="sm" variant="secondary" onPress={() => void turnAllOff()} testID="all-lights-off">
+                  All Lights Off
+                </SoftButton>
+              ) : null}
+            </View>
           </View>
+
           {domainLights.length === 0 ? (
-            <EmptyState flat icon="💡" title="No lights found" body="Connect lights or smart outlets to Home Assistant to control them here." />
+            <EmptyState
+              flat
+              icon="💡"
+              title="No lights found"
+              body="Connect lights or smart outlets to Home Assistant to control them here."
+            />
           ) : (
-            <View style={{ gap: 10 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12 }}>
               {domainLights.map((l) => {
                 const isOn = l.state === "on";
                 const canDim = supportsBrightness(l);
@@ -397,56 +604,146 @@ export function HousePage() {
                 const pct = lightBrightnessPct(l);
                 const kelvin = lightColorTempKelvin(l);
                 const roomName = resolveEntityArea(l);
-                const isOutlet = l.entity_id.startsWith("switch.");
                 const metaParts = [roomName, isOn ? "On" : "Off"];
                 if (isOn && canDim) metaParts.push(`${pct}%`);
                 if (isOn && canTemp) metaParts.push(`${kelvin}K`);
+
+                const tileTint = isOn ? (canTemp ? kelvinTileTint(colors, amber, kelvin) : amber) : undefined;
+                const activeInk = tileTint ? (theme === "light" ? accentDeepened(tileTint, 30) : tileTint) : amberInk;
 
                 return (
                   <View
                     key={l.entity_id}
                     testID={`light-card-${l.entity_id}`}
                     style={{
+                      width: showControls ? "100%" : "48.8%",
+                      minHeight: 116,
                       padding: 14,
-                      borderRadius: 18,
-                      backgroundColor: colors["color-surface-2"],
+                      borderRadius: 22,
+                      backgroundColor:
+                        isOn && tileTint
+                          ? mix(tileTint, colors["color-surface-2"], theme === "dark" ? 20 : 14)
+                          : colors["color-surface-2"],
                       borderWidth: 1,
-                      borderColor: isOn ? mix(accentColor, "transparent", 65) : colors["color-border"],
+                      borderColor:
+                        isOn && tileTint
+                          ? mix(tileTint, "transparent", 55)
+                          : colors["color-border"] ?? "transparent",
+                      justifyContent: "space-between",
                       gap: 12,
                     }}
                   >
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.body.fontSize, fontWeight: "700" }} numberOfLines={1}>
-                          {isOutlet ? "🔌 " : "💡 "}
-                          {friendlyName(l)}
-                        </Text>
-                        <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.label.fontSize, marginTop: 2 }} numberOfLines={1}>
-                          {metaParts.join(" · ")}
-                        </Text>
-                      </View>
-                      {isTunable && !isOn ? (
-                        <Chip
-                          as="button"
-                          size="md"
-                          tone="neutral"
-                          selected={Boolean(expandedLights[l.entity_id])}
-                          onPress={() =>
-                            setExpandedLights((prev) => ({ ...prev, [l.entity_id]: !prev[l.entity_id] }))
-                          }
-                          label={expandedLights[l.entity_id] ? "Hide" : "Tune"}
-                        />
-                      ) : null}
-                      <Toggle
-                        value={isOn}
-                        onChange={() => { if (isParent) void toggleLight(l.entity_id); }}
-                        disabled={!isParent}
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <Pressable
+                        testID={`light-tile-press-${l.entity_id}`}
+                        accessibilityRole="button"
                         accessibilityLabel={`Toggle ${friendlyName(l)}`}
-                      />
+                        disabled={!isParent}
+                        onPress={() => {
+                          if (isParent) void toggleLight(l.entity_id);
+                        }}
+                        style={({ pressed }) => ({
+                          flex: 1,
+                          minWidth: 0,
+                          minHeight: MIN_TARGET_DP,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 12,
+                          opacity: pressed ? 0.78 : 1,
+                        })}
+                      >
+                        <View
+                          style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor:
+                              isOn && tileTint
+                                ? mix(tileTint, colors["color-surface-1"], 34)
+                                : colors["color-surface-3"],
+                            borderWidth: 1,
+                            borderColor:
+                              isOn && tileTint
+                                ? mix(tileTint, "transparent", 55)
+                                : colors["color-border"] ?? "transparent",
+                          }}
+                        >
+                          <Text style={{ fontSize: 22 }}>{lightGlyphFor(l)}</Text>
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            style={{
+                              color: colors["color-text-primary"],
+                              fontSize: TYPOGRAPHY.body.fontSize,
+                              fontWeight: "700",
+                            }}
+                            numberOfLines={1}
+                          >
+                            {friendlyName(l)}
+                          </Text>
+                          <Text
+                            style={{
+                              color: isOn ? activeInk : colors["color-text-secondary"],
+                              fontSize: TYPOGRAPHY.label.fontSize,
+                              fontWeight: isOn ? "600" : "500",
+                              marginTop: 2,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {metaParts.join(" · ")}
+                          </Text>
+                        </View>
+                      </Pressable>
+
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        {isTunable && !isOn ? (
+                          <Chip
+                            as="button"
+                            size="md"
+                            tone="neutral"
+                            selected={Boolean(expandedLights[l.entity_id])}
+                            onPress={() =>
+                              setExpandedLights((prev) => ({ ...prev, [l.entity_id]: !prev[l.entity_id] }))
+                            }
+                            label={expandedLights[l.entity_id] ? "Hide" : "Tune"}
+                          />
+                        ) : null}
+                        <Toggle
+                          testID={`light-toggle-${l.entity_id}`}
+                          value={isOn}
+                          onChange={() => {
+                            if (isParent) void toggleLight(l.entity_id);
+                          }}
+                          disabled={!isParent}
+                          accessibilityLabel={`Switch ${friendlyName(l)}`}
+                        />
+                      </View>
                     </View>
 
+                    {isOn && canDim ? (
+                      <View
+                        style={{
+                          height: 4,
+                          borderRadius: 2,
+                          overflow: "hidden",
+                          backgroundColor: colors["color-surface-3"],
+                        }}
+                      >
+                        <View
+                          style={{
+                            height: 4,
+                            borderRadius: 2,
+                            width: `${Math.max(8, pct)}%`,
+                            backgroundColor: tileTint ?? amber,
+                          }}
+                        />
+                      </View>
+                    ) : null}
+
                     {showControls ? (
-                      <View style={{ gap: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors["color-border"] }}>
+                      <View style={{ gap: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors["color-border"] ?? "transparent" }}>
                         {canDim ? (
                           <View style={{ gap: 8 }}>
                             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -555,17 +852,25 @@ export function HousePage() {
               })}
             </View>
           )}
-        </Surface>
+        </Material>
 
         {/* Presence & Sensors */}
-        <Surface variant="warm" radius="xl" padding="lg" style={{ marginBottom: 12 }}>
-          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", marginBottom: 8 }}>Presence & Sensors</Text>
+        <Material tier="regular" style={{ borderRadius: 28, padding: 18, marginBottom: 14 }}>
+          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", marginBottom: 8 }}>
+            Presence & Sensors
+          </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
             {people.length === 0 ? (
               <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>No presence data yet</Text>
             ) : (
               people.map((p) => (
-                <Chip key={p.entity_id} as="span" size="sm" tone={p.state === "home" ? "success" : "neutral"} label={`👤 ${friendlyName(p).split(" ")[0]} · ${p.state === "home" ? "home" : "away"}`} />
+                <Chip
+                  key={p.entity_id}
+                  as="span"
+                  size="sm"
+                  tone={p.state === "home" ? "success" : "neutral"}
+                  label={`👤 ${friendlyName(p).split(" ")[0]} · ${p.state === "home" ? "home" : "away"}`}
+                />
               ))
             )}
           </View>
@@ -612,12 +917,7 @@ export function HousePage() {
                         {resolveEntityArea(s)}
                       </Text>
                     </View>
-                    <Chip
-                      as="span"
-                      size="sm"
-                      tone={isOpen ? "danger" : "success"}
-                      label={isOpen ? "Open" : "Closed"}
-                    />
+                    <Chip as="span" size="sm" tone={isOpen ? "danger" : "success"} label={isOpen ? "Open" : "Closed"} />
                     {isParent && simSwitchId ? (
                       <SoftButton
                         size="sm"
@@ -665,12 +965,7 @@ export function HousePage() {
                         {resolveEntityArea(s)}
                       </Text>
                     </View>
-                    <Chip
-                      as="span"
-                      size="sm"
-                      tone={isMotion ? "warning" : "neutral"}
-                      label={isMotion ? "Motion" : "Clear"}
-                    />
+                    <Chip as="span" size="sm" tone={isMotion ? "warning" : "neutral"} label={isMotion ? "Motion" : "Clear"} />
                     {isParent && simSwitchId ? (
                       <SoftButton
                         size="sm"
@@ -686,17 +981,30 @@ export function HousePage() {
               })}
             </View>
           ) : null}
-        </Surface>
+        </Material>
 
         {/* Security & Alarm */}
-        <Surface variant="warm" radius="xl" padding="lg" style={{ marginBottom: 12 }}>
-          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", marginBottom: 8 }}>Security & Alarm</Text>
+        <Material tier="regular" style={{ borderRadius: 28, padding: 18, marginBottom: 14 }}>
+          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", marginBottom: 8 }}>
+            Security & Alarm
+          </Text>
           {alarm ? (
             <View style={{ gap: 8 }}>
               <Text style={{ color: colors["color-text-secondary"], fontSize: TYPOGRAPHY.body.fontSize }}>
                 {friendlyName(alarm)} ·{" "}
-                <Text style={{ color: alarm.state === "disarmed" ? (colors["color-accent-mint"] ?? accentColor) : (colors["color-accent-rose"] ?? accentColor), fontWeight: "700" }}>
-                  {alarm.state === "disarmed" ? "Disarmed" : alarm.state === "armed_home" ? "Armed home" : alarm.state === "armed_away" ? "Armed away" : alarm.state}
+                <Text
+                  style={{
+                    color: alarm.state === "disarmed" ? colors["color-accent-mint"] ?? accentColor : colors["color-accent-rose"] ?? accentColor,
+                    fontWeight: "700",
+                  }}
+                >
+                  {alarm.state === "disarmed"
+                    ? "Disarmed"
+                    : alarm.state === "armed_home"
+                      ? "Armed home"
+                      : alarm.state === "armed_away"
+                        ? "Armed away"
+                        : alarm.state}
                 </Text>
               </Text>
               {isParent ? (
@@ -712,11 +1020,13 @@ export function HousePage() {
           ) : (
             <EmptyState flat icon="🛡️" title="No alarm panel" body="Connect an alarm control panel to Home Assistant." />
           )}
-        </Surface>
+        </Material>
 
         {/* Climate */}
-        <Surface variant="warm" radius="xl" padding="lg" style={{ marginBottom: 12 }}>
-          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", marginBottom: 8 }}>Climate</Text>
+        <Material tier="regular" style={{ borderRadius: 28, padding: 18, marginBottom: 14 }}>
+          <Text style={{ color: colors["color-text-primary"], fontSize: TYPOGRAPHY.title.fontSize, fontWeight: "700", marginBottom: 8 }}>
+            Climate
+          </Text>
           {climate ? (
             <View style={{ gap: 8 }}>
               <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
@@ -728,7 +1038,9 @@ export function HousePage() {
                 </Text>
               </View>
               {humidity !== null ? (
-                <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>Humidity {Math.round(humidity)}%</Text>
+                <Text style={{ color: colors["color-text-muted"], fontSize: TYPOGRAPHY.label.fontSize }}>
+                  Humidity {Math.round(humidity)}%
+                </Text>
               ) : null}
               {isParent ? (
                 <Stepper value={Math.round(targetTemp)} onChange={(v) => void setClimateTarget(v)} min={55} max={85} step={1} label="Target" />
@@ -753,10 +1065,15 @@ export function HousePage() {
           ) : (
             <EmptyState flat icon="🌡️" title="No climate data" body="Connect a thermostat to Home Assistant to see indoor conditions here." />
           )}
-        </Surface>
+        </Material>
       </ScrollView>
 
-      <Modal visible={pendingAlarm !== null} title={pendingAlarm === "disarm" ? "Disarm alarm" : "Arm alarm"} onClose={() => !alarmBusy && setPendingAlarm(null)} dismissable={!alarmBusy}>
+      <Modal
+        visible={pendingAlarm !== null}
+        title={pendingAlarm === "disarm" ? "Disarm alarm" : "Arm alarm"}
+        onClose={() => !alarmBusy && setPendingAlarm(null)}
+        dismissable={!alarmBusy}
+      >
         <PinPad
           member={{ name: "Parent", emoji: "🔐" }}
           onVerified={(pin) => void handleVerifiedPin(pin)}
